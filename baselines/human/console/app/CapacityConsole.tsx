@@ -47,9 +47,8 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await r.json()) as T;
 }
 
-/** An answer MAPS's remaining flight could not reach: the hint, and the audit session's refusal, read so. */
+/** An answer MAPS's remaining flight could not reach, as the audit session words its refusal. */
 const BUDGET = "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm.";
-const BUDGET_REFUSAL = "MAPS's remaining budget cannot fly to that point";
 
 const objectNo = (c: Candidate | undefined) => (c ? (/(\d+)$/.exec(c.label)?.[1] ?? String(c.id)) : "");
 
@@ -71,7 +70,7 @@ export function CapacityConsole() {
     try {
       const out = await postJson<{ ok: boolean; error?: string; state: State }>("capacity/act", actBody(stRef.current, body));
       setSt(out.state);
-      setFault(out.ok ? null : out.error === BUDGET_REFUSAL ? BUDGET : out.error ?? "refused");
+      setFault(out.ok ? null : out.error ?? "refused");
     } catch (e) {
       setFault(String((e as Error).message ?? e));
     } finally {

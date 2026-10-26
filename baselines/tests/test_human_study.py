@@ -149,6 +149,16 @@ def test_a_session_with_no_raster_selects_by_world_point(tmp_path, monkeypatch) 
     assert s.act({"action": "select", "x": 30.0, "y": 30.0})["ok"] and s.selected == {"candidate": None, "xy": (30.0, 30.0)}
 
 
+def test_a_replacement_maps_could_not_have_flown_is_refused_in_plain_words(tmp_path, monkeypatch) -> None:
+    from benchmarks.citynav.run_benchmark import assets
+
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: type("A", (), {"base_features": {}})())
+    s = audit_console.Session(_root(tmp_path), ["block_0::1#0"], tmp_path / "p01")
+    assert s.act({"action": "select", "x": 0.0, "y": 1e6})["ok"]
+    assert s.act({"action": "replace"}) == {
+        "ok": False, "error": "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm."}
+
+
 def test_with_the_benchmark_labels_the_candidates_are_the_labelled_objects_near_the_run(tmp_path, monkeypatch) -> None:
     from types import SimpleNamespace
 

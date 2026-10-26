@@ -385,7 +385,7 @@ class Session:
             if not self.selected:
                 return {"ok": False, "error": "select a candidate or a point first"}
             if not affordable(self.rows[r.episode_id], self.selected["xy"], self.max_steps):
-                return {"ok": False, "error": "MAPS's remaining budget cannot fly to that point"}
+                return {"ok": False, "error": "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm."}
         decision = {
             "episode_id": r.episode_id, "decision": kind,
             "xy": list(self.selected["xy"]) if kind == "replace" else list(r.maps_xy),
