@@ -249,7 +249,7 @@ export function CapacityConsole() {
       {lost ? (
         <p className="cap-lost" role="alert">
           Lost contact with the study. If the text window that runs the study was closed, start the study again as in
-          READ ME FIRST step 1. Your session's clock keeps running.{" "}
+          READ ME FIRST step 1.{st?.practice ? "" : " Your session's clock keeps running."}{" "}
           <a href="/visit">Back to the study page</a>
         </p>
       ) : null}
