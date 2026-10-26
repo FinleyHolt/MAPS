@@ -21,13 +21,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { placeSplitter } from "@/app/placeNames";
 import { OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState } from "@/app/capacityView";
+import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState, verifyHint } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
   instruction: string; ended_by?: string; maps_pick?: number | null; maps_reason?: string;
   turns?: Turn[]; candidates?: Candidate[]; maps_lonlat?: LonLat; maps_prior_ring?: Ring; stops?: LonLat[];
-  selected?: { candidate: number | null; lonlat: LonLat; affordable: boolean } | null;
+  selected?: { candidate: number | null; lonlat: LonLat; affordable: boolean; refusal?: string | null } | null;
 }
 interface Row { n: number; episode_id: string; status: string; current: boolean }
 interface State {
@@ -49,9 +49,6 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `${path} failed (${r.status})`);
   return (await r.json()) as T;
 }
-
-/** An answer MAPS's remaining flight could not reach, as the audit session words its refusal. */
-const BUDGET = "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm.";
 
 const objectNo = (c: Candidate | undefined) => (c ? (/(\d+)$/.exec(c.label)?.[1] ?? String(c.id)) : "");
 
@@ -318,8 +315,7 @@ export function CapacityConsole() {
                       Pick another <kbd>S</kbd>
                     </button>
                   </div>
-                  <p className="cap-hint">{sel ? (sel.affordable ? "Your point is on the map. Press Pick another to answer with it." : BUDGET)
-                    : "Press Confirm if MAPS's answer is right. If not, click the right place, then press Pick another."}</p>
+                  <p className="cap-hint">{verifyHint(sel)}</p>
                 </>
               ) : (
                 <>

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState } from "./capacityView.ts";
+import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState, verifyHint } from "./capacityView.ts";
 
 const team = { arm: "team", practice: false, remaining_s: 723, over: false, current: { episode_id: "calcity::7#6", mode: "verify" } };
 const practice = { ...team, arm: "solo", practice: true, current: { episode_id: "calcity::1#0", mode: "search" } };
@@ -49,4 +49,12 @@ test("the map takes no click in its first second, where a double-clicked start b
   assert.equal(mapTakesClicks(0, 5000), false);
   assert.equal(mapTakesClicks(4000, 4600), false);
   assert.equal(mapTakesClicks(4000, 5000), true);
+});
+
+test("the verify hint shows the study's own refusal, and none while the point is affordable", () => {
+  const refusal = "MAPS could not have reached that spot.";
+  assert.equal(verifyHint({ affordable: false, refusal }), refusal);
+  assert.match(verifyHint({ affordable: true, refusal: null }), /Press Pick another to answer with it/);
+  assert.match(verifyHint({ affordable: true }), /Press Pick another to answer with it/);
+  assert.match(verifyHint(null), /Press Confirm if MAPS's answer is right/);
 });

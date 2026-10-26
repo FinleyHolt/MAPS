@@ -12,6 +12,13 @@ export const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s
 export const actBody = (st: Pick<SessionView, "current"> | null, body: Record<string, unknown>) =>
   st?.current ? { ...body, episode_id: st.current.episode_id } : null;
 
+/** The line under Confirm and Pick another: the study's refusal of the person's point (null or
+ * absent while MAPS could reach it), or what to do next. */
+export function verifyHint(sel: { refusal?: string | null } | null): string {
+  if (!sel) return "Press Confirm if MAPS's answer is right. If not, click the right place, then press Pick another.";
+  return sel.refusal ?? "Your point is on the map. Press Pick another to answer with it.";
+}
+
 export type KeyCommand = "confirm" | "pick" | "clear" | "street" | "maps";
 
 /** The console's keys; a held key acts once. */
