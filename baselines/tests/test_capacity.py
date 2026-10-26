@@ -110,3 +110,19 @@ def test_practice_draws_only_rows_the_root_never_flew(tmp_path, monkeypatch) -> 
     picked = capacity.practice_root(root, 5, 1, tmp_path / "practice")
     assert sorted(picked) == ["block_0::2#1", "block_0::3#2"]
     assert (tmp_path / "practice" / "practice.txt").read_text().split() == picked
+
+
+def test_a_team_session_with_no_answers_scores_the_results_it_released(tmp_path) -> None:
+    root = _root(tmp_path)
+    row = json.loads((root / "episodes.jsonl").read_text())
+    (root / "episodes.jsonl").write_text(json.dumps({**row, "elapsed_s": 100.0}) + "\n")
+    session = tmp_path / "p01" / "team" / "session.json"
+    session.parent.mkdir(parents=True)
+    session.write_text(json.dumps({"arm": "team", "agents": 1, "session_s": 3600.0, "started_epoch": 0.0,
+                                   "order": ["block_0::1#0"]}))
+    out = tmp_path / "scored"
+    assert team_rows.main(["--maps-root", str(root), "--decisions", str(session.parent / "answers.jsonl"),
+                           "--out-root", str(out)]) == 0
+    (scored,) = [json.loads(ln) for ln in (out / "episodes.jsonl").read_text().splitlines()]
+    assert scored["metrics"]["capacity_source"] == "unchecked"
+    assert (out / "session.json").read_text() == session.read_text()

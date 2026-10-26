@@ -23,7 +23,6 @@ import argparse
 import json
 import math
 import shutil
-import time
 from pathlib import Path
 
 import yaml
@@ -122,16 +121,15 @@ def capacity_row(row: dict, answer: dict, cfg: dict, shape_of=None) -> dict:
 def unchecked_answers(session: dict, answered: set[str], rows: dict[str, dict]) -> list[dict]:
     """A team session's MAPS results that landed before its end and that the person never
     reached: each an ``unchecked`` answer at its release, which counts as MAPS scored it."""
-    from baselines.human.capacity import release_times
+    from baselines.human.capacity import _utc, release_times
 
     order = session.get("order") or []
     if session.get("arm") != "team" or not order:
         return []
-    _starts, ends = release_times([float(rows[e]["elapsed_s"]) for e in order], int(session.get("agents") or 8))
+    _starts, ends = release_times([float(rows[e]["elapsed_s"]) for e in order], int(session["agents"]))
     started, span = float(session["started_epoch"]), float(session["session_s"])
-    stamp = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started + t))
     return [{"episode_id": e, "order_index": i, "arm": "team", "source": "unchecked", "xy": rows[e].get("commit_xy"),
-             "opened_at": None, "answered_at": stamp(end), "answer_s": None, "maps_ready_at": stamp(end),
+             "opened_at": None, "answered_at": _utc(started + end), "answer_s": None, "maps_ready_at": _utc(started + end),
              "maps_ready_at_open": None}
             for i, (e, end) in enumerate(zip(order, ends)) if end <= span and e not in answered]
 
@@ -231,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     # The last decision per episode: a resumed session may have re-judged one.
     decided = {d["episode_id"]: d for d in iter_json_rows(args.decisions)}
     session_file = args.decisions.parent / "session.json"
-    if session_file.is_file() and any("source" in d for d in decided.values()):
+    if session_file.is_file():
         # A capacity session with MAPS: the results it released that the person never reached.
         for d in unchecked_answers(json.loads(session_file.read_text()), set(decided), scored_rows(args.maps_root)):
             decided[d["episode_id"]] = d
