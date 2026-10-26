@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { OsmSearch, OsmToggle, pointFeature, ringFeature, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, keyCommand } from "@/app/capacityView";
+import { actBody, keyCommand, pollState } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
@@ -54,6 +54,7 @@ const objectNo = (c: Candidate | undefined) => (c ? (/(\d+)$/.exec(c.label)?.[1]
 export function CapacityConsole() {
   const [st, setSt] = useState<State | null>(null);
   const [fault, setFault] = useState<string | null>(null);
+  const [lost, setLost] = useState(false);
   const [busy, setBusy] = useState(false);
   const [moreObjects, setMoreObjects] = useState(false);
   const [moreReason, setMoreReason] = useState(false);
@@ -79,9 +80,13 @@ export function CapacityConsole() {
     if (s && !s.over && s.current) void act({ action: "select", lon: at[0], lat: at[1] });
   }, "paper");
 
-  // The list's statuses move on the replay's clock, so the state is asked for every few seconds.
+  // The list's statuses move on the replay's clock, so the state is asked for every few seconds;
+  // a poll the study does not answer says so until one it does.
   useEffect(() => {
-    const poll = () => fetch("capacity/state", { cache: "no-store" }).then((r) => r.json()).then(setSt).catch(() => undefined);
+    const poll = () => pollState<State>(() => fetch("capacity/state", { cache: "no-store" })).then((s) => {
+      setLost(s === null);
+      if (s) setSt(s);
+    });
     void poll();
     const id = window.setInterval(poll, 3000);
     return () => window.clearInterval(id);
@@ -204,6 +209,12 @@ export function CapacityConsole() {
         {st ? <span className="cap-count">{st.answered_n} answered · {st.skipped_n} skipped</span> : null}
         {st ? <span className="cap-clock" title="time left in this session">{clock(st.remaining_s)}</span> : null}
       </header>
+      {lost ? (
+        <p className="cap-lost" role="alert">
+          Lost contact with the study. If the black text window was closed, start the study again, then reload this page.{" "}
+          <a href="/visit">Back to the study page</a>
+        </p>
+      ) : null}
 
       {st?.over ? (
         <div className="judge-done">

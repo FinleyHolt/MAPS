@@ -16,3 +16,13 @@ export function keyCommand(e: { key: string; repeat: boolean }, mode: "verify" |
   if (k === "s") return canPick ? "pick" : null;
   return ({ Escape: "clear", o: "street", m: "maps" } as Record<string, KeyCommand>)[k] ?? null;
 }
+
+/** The session's state, or null when the study did not answer with one. */
+export async function pollState<T>(get: () => Promise<{ ok: boolean; json: () => Promise<unknown> }>): Promise<T | null> {
+  try {
+    const r = await get();
+    return r.ok ? ((await r.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
