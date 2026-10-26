@@ -2620,6 +2620,8 @@ textarea {
 .cap-mission, .cap-arm, .cap-count { font-size: 16px; color: var(--cap-grey); }
 .cap-arm { color: var(--cap-teal); font-weight: 700; }
 .cap-clock { font-size: 22px; font-weight: 700; color: var(--cap-navy); font-variant-numeric: tabular-nums; }
+.cap-continue { display: inline-block; padding: 8px 16px; background: var(--cap-navy); color: #fff; font-weight: 700; text-decoration: none; }
+.cap-bar .cap-continue { padding: 4px 12px; margin-right: 12px; }
 .cap-body { grid-template-columns: 27rem minmax(0, 1fr); }
 .cap-side { display: flex; flex-direction: column; overflow: hidden; background: #fff; border-right: 1px solid var(--cap-sand); }
 .cap-block { padding: 12px 16px; border-bottom: 1px solid var(--cap-sand); }

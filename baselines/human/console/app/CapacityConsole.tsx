@@ -27,7 +27,7 @@ interface Review {
 }
 interface Row { n: number; episode_id: string; status: string; current: boolean }
 interface State {
-  arm: "solo" | "team"; elapsed_s: number; remaining_s: number; over: boolean; total: number;
+  arm: "solo" | "team"; practice?: boolean; elapsed_s: number; remaining_s: number; over: boolean; total: number;
   answered_n: number; skipped_n: number; ready_n: number; list: Row[];
   current: null | { n: number; episode_id: string; instruction: string; mode: "verify" | "search"; point: LonLat | null; review: Review | null };
 }
@@ -198,6 +198,7 @@ export function CapacityConsole() {
         <span className="cap-mission">{cur ? `report ${cur.n}` : st?.over ? "session over" : "loading"}</span>
         <span className="cap-arm">{st?.arm === "team" ? "with MAPS" : st ? "alone" : ""}</span>
         <span className="station-spacer" />
+        {st?.practice && !st.over ? <a className="cap-continue" href="/visit">Done practicing</a> : null}
         {st ? <span className="cap-count">{st.answered_n} answered · {st.skipped_n} skipped</span> : null}
         {st ? <span className="cap-clock" title="time left in this session">{clock(st.remaining_s)}</span> : null}
       </header>
@@ -205,7 +206,8 @@ export function CapacityConsole() {
       {st?.over ? (
         <div className="judge-done">
           <p className="cap-report-text">The session is over: {st.answered_n} answered, {st.skipped_n} skipped.</p>
-          <p className="cap-hint">Every answer is saved. The report open when time ran out is not counted. You can close this page.</p>
+          <p className="cap-hint">Every answer is saved. The report open when time ran out is not counted.</p>
+          <p><a className="cap-continue" href="/visit">Continue</a></p>
         </div>
       ) : (
         <div className="station-body cap-body">
