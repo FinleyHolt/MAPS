@@ -342,6 +342,7 @@ class Visit:
         results = kit / "results"
         found = [p.name for p in results.iterdir() if p.is_dir() and p.name in self.plan] if results.is_dir() else []
         self.participant, self.error = (found[0] if len(found) == 1 else None), ""
+        self.typed = ""
         self.returning = self.participant is not None
         # A session whose clock ran on while the study was closed, until the participant returns to it.
         self.away = self.returning and self.session("first") is not None and "running" in (
@@ -354,6 +355,7 @@ class Visit:
     def set_label(self, label: str) -> None:
         """The participant's label; a change before session 1 discards the old label's practice."""
         label = label.strip().lower()
+        self.typed = label
         if not label:
             self.error = "Type your label, for example p07."
         elif label not in self.plan:
@@ -366,7 +368,7 @@ class Visit:
             if self.participant not in (None, label):
                 shutil.rmtree(self.kit / "results" / self.participant, ignore_errors=True)
                 self.returning = False
-            self.participant, self.error = label, ""
+            self.participant, self.error, self.typed = label, "", ""
 
     def condition(self, step: str) -> str:
         first = self.plan[self.participant]["first"]
@@ -435,7 +437,8 @@ class Visit:
         if self.participant is None or (change and not self.locked()):
             body = (f"<h1>The search study</h1>{err}"
                     "<form action='/visit/label'><p>Your participant label, from the study lead:</p>"
-                    "<input name=label placeholder='like p07' autofocus> <button>Continue</button></form>")
+                    f"<input name=label placeholder='like p07' value='{html.escape(self.typed, quote=True)}' autofocus> "
+                    "<button>Continue</button></form>")
             return PAGE.format(body=body)
         from markdown_it import MarkdownIt
 

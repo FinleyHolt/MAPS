@@ -36,7 +36,7 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     v.set_label("p99")
     page = v.page()
     assert v.participant is None and "That is not a participant label in this study. Labels look like p07" in page
-    assert "p99" not in page and "placeholder='like p07'" in page
+    assert "value='p99'" in page and page.count("p99") == 1 and "placeholder='like p07'" in page
     v.set_label("  ")
     assert "Type your label, for example p07." in v.page()
     v.set_label(" P01 ")
@@ -139,3 +139,13 @@ def test_briefing_markdown(tmp_path) -> None:
     page = v.page()
     assert "<code>Lime Avenue &amp; 88th Street</code>" in page
     assert not re.search(r"</li>\s*<ul>", page)
+
+
+def test_a_mistyped_label_stays_in_the_box(tmp_path) -> None:
+    (tmp_path / "plan").mkdir()
+    (tmp_path / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"first": "team"}}}))
+    v = Visit(tmp_path)
+    v.set_label("p83'")
+    assert "value='p83&#x27;'" in v.page()
+    v.set_label("p01")
+    assert v.typed == ""
