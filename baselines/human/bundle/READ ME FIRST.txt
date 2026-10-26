@@ -37,7 +37,7 @@ you; never type your name anywhere.
 3. Send your results
 
    When you finish, the page offers your results file. Save it and email it to
-   the study lead. It holds your answers and their times, nothing else.
+   {CONTACT}. It holds your answers and their times, nothing else.
 
-Questions about the page or the setup go to the study lead or Ryan Lutz.
+Questions about the page or the setup go to {CONTACT}.
 Nobody can answer questions about a report.

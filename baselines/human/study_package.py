@@ -15,11 +15,12 @@ pictures the console shows and the records MAPS's results are read from. This wr
 
     python -m baselines.human.study_package tiles --raster <map>_rgb.tif --out <dir>/calcity_ortho.mbtiles
     python -m baselines.human.study_package records --maps-root <root> --study <plan dir> --out <dir>
-    python -m baselines.human.study_package bundle --kit <dir> --out MAPS-study.zip
+    python -m baselines.human.study_package bundle --kit <dir> --out <outside the repo>/MAPS-study.zip --contact <email>
 
 ``bundle`` writes the one file a participant downloads: the download above, the console's code
-(the Python only, never the bench's corpus and its targets), the briefing, and a launcher per
-system (``bundle/``) that fetches uv, and with it Python and the console's packages, on the first start.
+(the Python only, never the bench's corpus and its targets), the briefing, the study lead's
+contact address, and a launcher for macOS and one for Windows (``bundle/``) that fetch uv, and
+with it Python and the console's packages, on the first start.
 """
 
 from __future__ import annotations
@@ -149,36 +150,43 @@ def copy_records(maps_root: Path, out: Path) -> int:
 
 REPO = Path(__file__).resolve().parents[2]
 BUNDLE = Path(__file__).with_name("bundle")
-#: The launchers and notes at the bundle's top, by their name in the bundle; ``app/`` holds the rest.
-TOP = {"READ ME FIRST.txt": "READ ME FIRST.txt", "Start study (Mac).command": "mac.command",
-       "Start study (Windows).bat": "windows.bat", "start-study.sh": "linux.sh"}
+#: The launchers at the bundle's top, by their name in the bundle; ``app/`` holds the rest.
+TOP = {"Start study (Mac).command": "mac.command", "Start study (Windows).bat": "windows.bat"}
 #: Already compressed: stored as is, so the zip builds in minutes.
 STORED = (".mbtiles", ".jpg", ".png", ".webp")
 
 
-def build_bundle(kit: Path, out: Path, name: str = "MAPS-study") -> int:
-    """The participant's one download, as a zip whose launchers keep their execute bit."""
+def build_bundle(kit: Path, out: Path, contact: str) -> int:
+    """The participant's one download, as a zip whose launchers keep their execute bit. The
+    READ ME and ``kit/contact.txt`` (which the visit page reads) carry the lead's ``contact``."""
+    name = "MAPS-study"
     code = subprocess.run(["git", "ls-files", "maps", "benchmarks", "baselines"], cwd=REPO, check=True,
                           capture_output=True, text=True).stdout.split()
     code = [f for f in code if f.endswith(".py") and "/tests/" not in f] + ["baselines/human/briefing.md"]
+    texts = {f"{name}/READ ME FIRST.txt": (BUNDLE / "READ ME FIRST.txt").read_text().replace("{CONTACT}", contact),
+             f"{name}/kit/contact.txt": contact + "\n"}
     files = [(f"{name}/{arc}", BUNDLE / src) for arc, src in TOP.items()]
     files += [(f"{name}/app/run.sh", BUNDLE / "run.sh"), (f"{name}/app/requirements.txt", BUNDLE / "requirements.txt")]
     files += [(f"{name}/app/{f}", REPO / f) for f in code]
     files += [(f"{name}/kit/{p.relative_to(kit).as_posix()}", p) for p in sorted(kit.rglob("*"))
               if p.is_file() and p.relative_to(kit).parts[0] not in ("results", "scored")]
+    files = [(arc, src) for arc, src in files if arc not in texts]
+    # Windows' own line endings, so Notepad and cmd read them as lines.
+    crlf = lambda b: b.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
     tmp = out.with_suffix(".partial")
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+        for arc, text in texts.items():
+            z.writestr(arc, crlf(text.encode()))
         for arc, src in files:
-            if arc.endswith((".bat", ".txt")):
-                # Windows' own line endings, so Notepad and cmd read them as lines.
+            if arc.endswith(".bat"):
                 info = zipfile.ZipInfo.from_file(src, arc)
                 info.compress_type = zipfile.ZIP_DEFLATED
-                z.writestr(info, src.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+                z.writestr(info, crlf(src.read_bytes()))
             else:
                 # The file's own mode rides along: the launchers keep their execute bit.
                 z.write(src, arc, zipfile.ZIP_STORED if arc.endswith(STORED) else zipfile.ZIP_DEFLATED)
     tmp.replace(out)
-    return len(files)
+    return len(texts) + len(files)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -194,10 +202,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     b = sub.add_parser("bundle", help="the participant's one download: the kit, the code and the launchers")
     b.add_argument("--kit", type=Path, required=True)
-    b.add_argument("--out", type=Path, required=True)
+    b.add_argument("--out", type=Path, required=True, help="the zip, outside the repository")
+    b.add_argument("--contact", required=True, help="the study lead's email address, for questions and the results")
     args = ap.parse_args(argv)
     if args.cmd == "bundle":
-        print(f"{build_bundle(args.kit, args.out)} files -> {args.out}")
+        print(f"{build_bundle(args.kit, args.out, args.contact)} files -> {args.out}")
         return 0
     if args.cmd == "tiles":
         print(f"{build_tiles(args.raster, args.out, args.workers)} tiles -> {args.out}")
