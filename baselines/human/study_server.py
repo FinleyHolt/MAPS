@@ -243,12 +243,17 @@ def build_app(kit: Path, console: Path, visit: Visit):
         return {"center": {"lon": (w + e) / 2, "lat": (s + n) / 2}, "minzoom": MIN_ZOOM}
 
     @app.get("/visit")
-    def visit_page() -> HTMLResponse:
-        return HTMLResponse(visit.page(), headers={"Cache-Control": "no-store"})
+    def visit_page(change: bool = False) -> HTMLResponse:
+        return HTMLResponse(visit.page(change), headers={"Cache-Control": "no-store"})
 
     @app.get("/visit/label")
     def visit_label(label: str = "") -> Response:
-        visit.set_label(label)
+        with lock:
+            before = visit.participant
+            visit.set_label(label)
+            if visit.participant != before:
+                # The old label's practice is gone: its session with it.
+                box["cap"] = None
         return RedirectResponse("/visit", status_code=303)
 
     @app.post("/visit/start/{step}")
@@ -328,16 +333,29 @@ class Visit:
         found = [p.name for p in results.iterdir() if p.is_dir() and p.name in self.plan] if results.is_dir() else []
         self.participant, self.error = (found[0] if len(found) == 1 else None), ""
         self.returning = self.participant is not None
+        # A session whose clock ran on while the study was closed, until the participant returns to it.
+        self.away = self.returning and self.session("first") is not None and "running" in (
+            self.status("first"), self.status("second"))
+
+    def locked(self) -> bool:
+        """Whether the label is fixed: once session 1 has started, its answers are under it."""
+        return self.participant is not None and self.session("first") is not None
 
     def set_label(self, label: str) -> None:
+        """The participant's label; a change before session 1 discards the old label's practice."""
         label = label.strip().lower()
-        if self.participant is not None and label != self.participant:
-            self.error = (f"This copy of the study is set up for {self.participant}. "
-                          "Another label needs its own copy: ask the study lead.")
-        elif label in self.plan:
-            self.participant, self.error = label, ""
+        if not label:
+            self.error = "Type your label, for example p07."
+        elif label not in self.plan:
+            self.error = ("That is not a participant label in this study. Labels look like p07; "
+                          "check the one the study lead sent you.")
+        elif label != self.participant and self.locked():
+            self.error = (f"You started as {self.participant}. A different label needs a fresh copy of the study: "
+                          "ask the study lead.")
         else:
-            self.error = f"{label or 'That'} is not a participant label on this study. Check it with the study lead."
+            if self.participant not in (None, label):
+                shutil.rmtree(self.kit / "results" / self.participant, ignore_errors=True)
+            self.participant, self.error = label, ""
 
     def condition(self, step: str) -> str:
         first = self.plan[self.participant]["first"]
@@ -374,6 +392,8 @@ class Visit:
                  "second": self.status("first") == "done"}[step]
         if not ahead or (step != "practice" and self.status(step) == "done"):
             return None
+        if step != "practice":
+            self.away = False
         return open_session(self.kit, self.participant, self.condition(step))
 
     def results_zip(self) -> bytes | None:
@@ -389,20 +409,26 @@ class Visit:
                     z.write(f, f"results/{self.participant}/{f.relative_to(folder).as_posix()}")
         return buf.getvalue()
 
-    def page(self) -> str:
+    def name(self, step: str) -> str:
+        """A timed session as the visit page names it, at the length its own clock holds once it has one."""
+        session = self.session(step)
+        minutes = round((float(session["session_s"]) if session else session_s()) / 60)
+        return f"session {STEPS.index(step)} ({CONDITIONS[self.condition(step)]}, {minutes} minutes)"
+
+    def page(self, change: bool = False) -> str:
+        """The visit page; ``change`` asks for the label form while the label can still change.
+        An error shows on the page that follows it, once."""
         err = f"<p class=err>{html.escape(self.error)}</p>" if self.error else ""
-        if self.participant is None:
+        self.error = ""
+        if self.participant is None or (change and not self.locked()):
             body = (f"<h1>The search study</h1>{err}"
                     "<form action='/visit/label'><p>Your participant label, from the study lead:</p>"
-                    "<input name=label placeholder='p01' autofocus> <button>Continue</button></form>")
+                    "<input name=label placeholder='like p07' autofocus> <button>Continue</button></form>")
             return PAGE.format(body=body)
         from markdown_it import MarkdownIt
 
         st = {s: self.status(s) for s in STEPS}
         minutes = round(session_s() / 60)
-
-        def name(step: str) -> str:
-            return f"Session {STEPS.index(step)}: {CONDITIONS[self.condition(step)]}, {minutes} minutes"
 
         def button(step: str, label: str, note: str = "") -> str:
             # Opening a session takes a few seconds: the button says so, and a second click cannot repeat it.
@@ -412,10 +438,12 @@ class Visit:
 
         def running(step: str) -> str:
             session = self.session(step)
-            left = float(session["session_s"]) - (time.time() - float(session["started_epoch"]))
+            left = math.ceil((float(session["session_s"]) - (time.time() - float(session["started_epoch"]))) / 60)
             n = STEPS.index(step)
-            return (f"<h2>{name(step)}, under way</h2><p>About {math.ceil(left / 60)} minutes left. "
-                    f"Its clock kept running while you were away.</p>" + button(step, f"Return to session {n}"))
+            away = " Its clock kept running while you were away." if self.away else ""
+            return (f"<h2>Session {n} ({CONDITIONS[self.condition(step)]}) is under way</h2>"
+                    f"<p>About {left} minute{'' if left == 1 else 's'} left.{away}</p>"
+                    + button(step, f"Return to session {n}"))
 
         clock = f"The {minutes} minutes start when you press the button, so be seated and ready."
         if st["second"] == "done":
@@ -423,22 +451,24 @@ class Visit:
                    "<form action='/visit/results.zip'><button>Save my results file</button></form>"
                    f"<p>Your browser saves maps-study-{self.participant}.zip, usually in your Downloads folder. "
                    f"Attach it to an email to {html.escape(self.contact)}. Then you can close this page and the "
-                   "text window.</p>")
+                   "text window (on a Mac, press Terminate if asked).</p>")
         elif st["second"] == "running":
             now = running("second")
         elif st["first"] == "done":
-            now = (f"<h2>Session 1 is done. Take a five-minute break.</h2><p>Then start {name('second')}.</p>"
+            now = (f"<h2>Session 1 is done. Take a five-minute break.</h2><p>Then start {self.name('second')}.</p>"
                    + button("second", "Start session 2", clock))
         elif st["first"] == "running":
             now = running("first")
         else:
             practiced = st["practice"] == "done"
-            now = ("<h2>Step 1: read the briefing below</h2><h2>Step 2: practice</h2>"
-                   "<p>Four reports that never count. You work them alone. Try the search box, the street map "
-                   "and Measure, then press <b>Done practicing</b> at the top of the console.</p>"
+            now = ("<p class=note><a href='/visit?change=1'>Not your label? Change it</a></p>"
+                   "<h2>Step 1: read the briefing below</h2><h2>Step 2: practice</h2>"
+                   "<p>Four reports that never count, worked alone. Try the search box, the street map and "
+                   "shift-click measuring. Practice ends after the fourth report; <b>Done practicing</b> at the top "
+                   "stops it early.</p>"
                    + button("practice", "Practice again" if practiced else "Start practice")
-                   + f"<h2>Step 3: {name('first')}</h2>" + (button("first", "Start session 1", clock) if practiced
-                                                           else "<p class=note>Opens after practice.</p>"))
+                   + f"<h2>Step 3: {self.name('first')}</h2>" + (button("first", "Start session 1", clock) if practiced
+                                                                 else "<p class=note>Opens after practice.</p>"))
         brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
         who = (f"Welcome back, {self.participant}. Your answers are saved." if self.returning
                else f"Participant {self.participant}")

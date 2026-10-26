@@ -20,7 +20,7 @@ def _client(kit):
     (kit / "console").mkdir(parents=True)
     (kit / "console" / "index.html").write_text("<!doctype html>")
     (kit / "plan").mkdir()
-    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"first": "solo"}}}))
+    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"first": "solo"}, "p02": {"first": "team"}}}))
     db = sqlite3.connect(kit / "calcity_ortho.mbtiles")
     db.execute("CREATE TABLE tiles (zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_data BLOB)")
     db.execute("INSERT INTO tiles VALUES (14, 2900, ?, ?)", (2**14 - 1 - 6514, b"webp"))
@@ -67,6 +67,8 @@ def test_a_select_keeps_its_report(tmp_path, monkeypatch) -> None:
     c.post("/visit/start/practice")
     c.post("/capacity/act", json={"action": "select", "lon": 1.0, "lat": 2.0, "episode_id": "e1"})
     assert acts == [{"action": "select", "episode_id": "e1", "x": 2.0, "y": 4.0}]
+    c.get("/visit/label?label=p02")
+    assert c.get("/capacity/state").status_code == 409
 
 
 def test_osm_kinds_in_plain_words() -> None:
