@@ -1,10 +1,10 @@
 THE SEARCH STUDY
 
 You need: a Mac with macOS 12 or later (macOS 11 or later on Apple silicon) or a
-Windows 10 or 11 computer, 6 GB of free disk space, a mouse, Chrome or Firefox,
-an internet connection for the first start, about 2 hours, and the participant
-label (p01, p02, ...) the study lead sent you. Your label is the only thing that
-identifies you; never type your name anywhere.
+computer with 64-bit Windows 10 or 11, 8 GB of memory, 6 GB of free disk space, a
+mouse, Chrome or Firefox, an internet connection for the first start, about 2
+hours, and the participant label (p01, p02, ...) the study lead sent you. Your
+label is the only thing that identifies you; never type your name anywhere.
 
 A report is a short text that describes one place in California City, CA. In
 the study you find each report's place on an aerial photo.
@@ -21,15 +21,18 @@ the study you find each report's place on an aerial photo.
    Windows: Right-click the zip, choose Properties, tick "Unblock" at the
             bottom if it is there, and press OK. Right-click the zip again,
             choose "Extract All", then "Extract". Unpacking takes several
-            minutes. Open the new "MAPS-study" folder.
+            minutes. Open the new "MAPS-study" folder. If it holds only
+            another "MAPS-study" folder, open that one.
 
 1. Start the study
 
    Mac:     Double-click "Start study (Mac)". The first time, the Mac refuses
-            to open it: press Done. Open System Settings > Privacy & Security,
+            to open it: press Done, Cancel or OK, never "Move to Trash".
+            Within the hour, open System Settings > Privacy & Security (on
+            macOS 12: System Preferences > Security & Privacy > General),
             scroll down, and press "Open Anyway" next to "Start study (Mac)".
-            Enter your Mac password, then press "Open Anyway" once more. If the
-            Mac asks whether Terminal may use your Downloads folder, press
+            Enter your Mac password if asked, then press "Open Anyway" or
+            "Open". If the Mac asks whether Terminal may use a folder, press
             Allow.
 
    Windows: Double-click "Start study (Windows)". If a blue "Windows protected
@@ -43,6 +46,8 @@ the study you find each report's place on an aerial photo.
    address, http://127.0.0.1:8788/, into Chrome or Firefox.
 
    Keep the text window open until you finish. Closing it stops the study.
+   When you finish and close it, a Mac may ask whether to terminate the
+   running process: press "Terminate".
 
 2. Follow the page
 
