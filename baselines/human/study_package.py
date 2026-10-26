@@ -104,6 +104,7 @@ def build_tiles(raster: Path, out: Path, workers: int = 8) -> int:
         for x in range(int((l + MERC_O) // step), int((r + MERC_O) // step) + 1):
             for y in range(int((MERC_O - t) // step), int((MERC_O - b) // step) + 1):
                 jobs.append((str(raster), z, x, y))
+    out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".partial")
     tmp.unlink(missing_ok=True)
     db = sqlite3.connect(tmp)
@@ -181,6 +182,7 @@ def build_bundle(kit: Path, out: Path, contact: str) -> int:
     files = [(arc, src) for arc, src in files if arc not in texts]
     # Windows' own line endings, so Notepad and cmd read them as lines.
     crlf = lambda b: b.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+    out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".partial")
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
         for arc, text in texts.items():

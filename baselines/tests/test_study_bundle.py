@@ -25,8 +25,9 @@ def test_bundle(tmp_path) -> None:
     kit = _kit(tmp_path / "kit")
     (kit / "results" / "p01").mkdir(parents=True)
     (kit / "results" / "p01" / "answers.jsonl").write_text("{}\n")
-    build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
-    z = zipfile.ZipFile(tmp_path / "b.zip")
+    # The output's folder need not exist yet.
+    build_bundle(kit, tmp_path / "new" / "b.zip", contact="lead@example.org")
+    z = zipfile.ZipFile(tmp_path / "new" / "b.zip")
     names = set(z.namelist())
     mode = lambda n: z.getinfo(n).external_attr >> 16
     assert mode("MAPS-study/Start study (Mac).command") & 0o111 and mode("MAPS-study/app/run.sh") & 0o111
