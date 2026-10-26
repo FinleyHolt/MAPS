@@ -1,6 +1,6 @@
 /** The study map's street crossings and distances.
  *
- * Run with `npm test` in have_worlds/station/mission_console/web.
+ * Run with `npm test` in baselines/human/console.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
