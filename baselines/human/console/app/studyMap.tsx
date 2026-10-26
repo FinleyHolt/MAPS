@@ -86,7 +86,7 @@ function paperLayers(layers: object[]): object[] {
     if (id === "stops-line") return [{ ...l, paint: { "line-color": PAPER.white, "line-width": 1.2, "line-dasharray": [2, 2], "line-opacity": 0.8 } }];
     if (id === "osm-lit") return [{ ...l, paint: { "line-color": PAPER.teal, "line-width": 4, "line-opacity": 0.95 } }];
     if (id === "mark-ring") return [{ ...l, paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": PAPER.teal, "circle-stroke-width": 3 } }];
-    if (id === "osm-line") return [{ ...l, paint: { ...(l as { paint: object }).paint, "line-color": ["case", ["==", ["slice", ["get", "kind"], 0, 4], "road"], PAPER.sand, "#f4eee1"] } }];
+    if (id === "osm-line") return [{ ...l, paint: { ...(l as { paint: object }).paint, "line-color": ["case", ["==", ["get", "layer"], "road"], PAPER.sand, "#f4eee1"] } }];
     return [l];
   });
 }
@@ -122,7 +122,7 @@ function baseStudyStyle(): StyleSpecification {
       // Roads solid yellow; everything else (buildings, landuse, lots) a thinner, paler line, so
       // which lines are streets reads at a glance.
       { id: "osm-line", type: "line", source: "osm", layout: { visibility: "none" },
-        paint: { "line-color": ["case", ["==", ["slice", ["get", "kind"], 0, 4], "road"], "#ffd600", "#fff3a8"],
+        paint: { "line-color": ["case", ["==", ["get", "layer"], "road"], "#ffd600", "#fff3a8"],
                  "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.45, 16, 0.85],
                  "line-width": ["interpolate", ["linear"], ["zoom"], 13, ["case", ["get", "lit"], 3, 0.4],
                                 17, ["case", ["get", "lit"], 3.5, 1.2]] } },
@@ -262,7 +262,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
         if (!osmOnRef.current) return;
         // A road under the pointer first; else the smallest outline the pointer is inside.
         const roads = map.queryRenderedFeatures([[e.point.x - 10, e.point.y - 10], [e.point.x + 10, e.point.y + 10]], { layers: ["osm-line"] })
-          .filter((f) => String(f.properties?.kind ?? "").startsWith("road"));
+          .filter((f) => f.properties?.layer === "road");
         const areas = map.queryRenderedFeatures(e.point, { layers: ["osm-area"] });
         const size = (f: GeoJSON.Feature) => {
           const c = (f.geometry as GeoJSON.Polygon).coordinates[0];
@@ -272,7 +272,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
         const hit = roads[0] ?? areas.sort((a, b) => size(a) - size(b))[0];
         if (!hit) { setHover(null); return; }
         const coords = hit.geometry.type === "LineString" ? (hit.geometry.coordinates as LonLat[]) : null;
-        const road = String(hit.properties?.kind ?? "").startsWith("road");
+        const road = hit.properties?.layer === "road";
         const axis = road && coords && coords.length > 1 ? `runs ${axisAt(coords, [e.lngLat.lng, e.lngLat.lat])}` : "";
         const text = [hit.properties?.name, hit.properties?.kind, axis].filter(Boolean).join(" · ");
         setHover(text ? { text, x: e.point.x, y: e.point.y, left: e.point.x > map.getCanvas().clientWidth / 2 } : null);
@@ -304,7 +304,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
           (map.getSource("osm-area") as GeoJSONSource).setData(fc(p.features.flatMap((f) => {
             const c = (f.geometry as GeoJSON.LineString).coordinates;
             const closed = c.length > 3 && c[0][0] === c[c.length - 1][0] && c[0][1] === c[c.length - 1][1];
-            return closed && !String(f.properties?.kind ?? "").startsWith("road")
+            return closed && f.properties?.layer !== "road"
               ? [{ type: "Feature", properties: f.properties, geometry: { type: "Polygon", coordinates: [c] } } as GeoJSON.Feature] : [];
           })));
           setNames(p.names);
@@ -371,7 +371,6 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
     setLitPiece(null);
     setHover(null);
   }, []);
-  /** Features whose kind matches ``q`` (parking, playground, pool, library...), nearest the view's centre first. */
   /** Features whose kind matches ``q`` (parking, pool, a lake is water...), nearest ``street``'s
    * pieces when one is named, else nearest the view; each with the street it is nearest. */
   const kindsNear = useCallback((q: string, street?: string) => {
@@ -400,7 +399,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
 
   /** Light every piece of a named place and frame them all: a street the prior carries in
    * seven pieces is seven pieces on the map, not one point at their mean. */
-  const buildingPoints = () => (osmData.current?.features ?? []).filter((f) => String(f.properties?.kind ?? "").startsWith("building"))
+  const buildingPoints = () => (osmData.current?.features ?? []).filter((f) => f.properties?.layer === "building")
     .map((f) => (f.geometry as GeoJSON.LineString).coordinates[0] as LonLat);
   const [litPiece, setLitPiece] = useState<{ n: number; of: number; buildings: number } | null>(null);
   const frame = (map: MapLibreMap, pts: LonLat[]) => {
@@ -409,7 +408,6 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
                   { padding: 80, maxZoom: FIND_ZOOM, duration: 400 });
   };
-  /** Step through a lit name's pieces one at a time, end to end along the street: walking it. */
   /** Step through a lit name's pieces end to end; ``skipEmpty`` passes over pieces with no
    * building along them (a paper road through empty lots holds no house to find). */
   const stepPiece = useCallback((by: number, skipEmpty = false) => {
