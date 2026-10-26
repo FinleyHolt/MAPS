@@ -200,7 +200,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
     }
     const label = (text: string, at: LonLat) => {
       const el = document.createElement("span");
-      el.className = "judge-label is-prior paper-name";
+      el.className = "judge-label paper-name";
       el.textContent = text;
       osmMarkers.current.push(new maplibre.Marker({ element: el, anchor: "left", offset: [6, 0] }).setLngLat(at).addTo(map));
     };
@@ -356,7 +356,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
     markMarkers.current = [];
     if (map && maplibre && all.length > 1) all.forEach((at, i) => {
       const el = document.createElement("span");
-      el.className = "judge-label is-prior paper-name";
+      el.className = "judge-label paper-name";
       el.textContent = String(i + 1);
       markMarkers.current.push(new maplibre.Marker({ element: el, anchor: "left", offset: [14, 0] }).setLngLat(at).addTo(map));
     });
