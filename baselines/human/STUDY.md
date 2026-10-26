@@ -38,7 +38,7 @@ enough.
 The kit is one folder, here `$KIT`; every command below names it with `--kit`.
 
 ```sh
-KIT=~/datasets/calcity-campaign/study-kit
+KIT=~/datasets/capacity-study/kit
 ```
 
 ### Build and share the download
