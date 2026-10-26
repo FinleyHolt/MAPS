@@ -31,35 +31,47 @@ accuracy both count.
 
 ## The console
 
+The console is the map screen that practice and each session open in.
+
 - **The report** is at the top left. The answer buttons are at the bottom of that column.
 - **The map** is the collected aerial imagery of the area, north up. Tan areas have no
   imagery.
 - **Search box** (top left of the map):
-  - Type a street or place name, then pick a result. Every piece of that street lights up.
-  - A street in several pieces shows ‹ › beside the Street map chip: they step along it piece
-    by piece.
+  - Type a street or place name, then pick a result. Every section of that street lights up.
+  - A street in several sections shows ‹ › beside the Street map chip: they step along it
+    section by section.
   - Type two names joined by `&` (for example `Lime Avenue & 88th Street`) to find where
     they cross.
-  - Type a kind of place (`parking`, `park`, `pool`) to list the nearest ones.
-- **Street map** (the chip, or the O key) shows the map's streets, buildings and their names.
+  - Type a kind of place (`parking`, `park`, `pool`) to list the nearest mapped ones. Backyard
+    pools and most houses are not on the street map: find those on the imagery.
+- **Street map** (the chip reading "Street map: off (O)", or the O key) shows the map's streets, buildings and their names.
   Hovering over a street shows its name and which way it runs.
 - **Shift-click measures:** hold Shift and click two points; the chip over the map reads the
   ruler's length. Click that chip to clear it; Esc clears it and your point.
 - **Your answer:** click the map where the place is, then press **Commit** (or the S key).
 - **Skip this report** is under the answer buttons.
+- **Your reports** lists the session's reports in order, each with a chip:
+  "open" for the one you are on, "answered" or "skipped" once done, and "waiting" for the
+  rest. With MAPS the rest read "not started", "MAPS searching" or "result ready" (MAPS has
+  answered it).
 
 With MAPS, a report MAPS has already answered opens with that answer on the map and why MAPS
 chose it:
 
 - **Go to MAPS's answer** (or the M key) brings the map back to MAPS's answer.
-- Places MAPS names in its reasoning are marked in colour, each drawn on the map in the same
-  colour. Point at one to see it on the map; click it to go there.
+- Places named in **Why MAPS chose it** are drawn on the map in colour, with a small key under
+  the text; places in **MAPS's whole search** are drawn while that section is open. Point at
+  one to see it on the map; click it to go there.
+- **Mapped objects near MAPS's answer** lists the objects on the map closest to it, nearest
+  first. Clicking one picks it as your point and goes there; **number them on the map** shows
+  each one's number on the map.
 - Press **Confirm** (or Enter) to accept MAPS's answer.
+- MAPS works on many reports at once and finishes them in no fixed order, so some later
+  reports may be ready while the open one is not. You always work on the open report.
 - Or click the right place and press **Pick another** (or S). The place you pick must be one
   MAPS could still have reached; when it is too far, the console says so. Choose a place
   nearer MAPS's answer, or press Confirm.
 
 The four practice reports before the first session do not count. You search them alone, with
 no MAPS answers: use them to try the search box, the street map and shift-click measuring.
-Practice ends by itself after the fourth report; **Done practicing** at the top of the console
-ends it early.
+Practice ends after the fourth report; **Done practicing** at the top stops it early.
