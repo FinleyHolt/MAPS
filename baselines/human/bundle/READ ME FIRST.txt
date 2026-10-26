@@ -1,0 +1,43 @@
+THE SEARCH STUDY
+
+You need: a Mac or Windows computer, a mouse, Chrome or Firefox, an internet
+connection for the first start, about 2 hours, and the participant label (p01,
+p02, ...) the study lead sent you. Your label is the only thing that identifies
+you; never type your name anywhere.
+
+1. Start the study
+
+   Mac:     Right-click (or Control-click) "Start study (Mac)" and choose Open.
+            If the Mac says it cannot check the file, choose Open again. If it
+            only offers "Done", open System Settings > Privacy & Security,
+            scroll down, press "Open Anyway", and try again.
+
+   Windows: Double-click "Start study (Windows)". If a blue "Windows protected
+            your PC" box appears, press "More info", then "Run anyway".
+
+   A window with text opens. The first time, it sets up for a few minutes.
+   Then your browser opens the study's page. If it does not, open
+   http://127.0.0.1:8788/ in your browser.
+
+   Keep that text window open until you finish. Closing it stops the study.
+
+2. Follow the page
+
+   Type your label. The page then walks you through everything: the briefing,
+   four practice reports, session 1 (40 minutes), a 5-minute break, and
+   session 2 (40 minutes). Each session's 40 minutes start when you press its
+   button, so start it only when you are seated and ready for 40 minutes
+   without interruptions. During a session use only the study page: no other
+   maps, websites or phones.
+
+   If anything stops (the browser closes, the computer sleeps), start the
+   study again as in step 1. It picks up where you were. A session's clock
+   keeps running while it is stopped.
+
+3. Send your results
+
+   When you finish, the page offers your results file. Save it and email it to
+   the study lead. It holds your answers and their times, nothing else.
+
+Questions about the page or the setup go to the study lead or Ryan Lutz.
+Nobody can answer questions about a report.
