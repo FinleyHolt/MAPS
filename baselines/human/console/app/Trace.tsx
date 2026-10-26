@@ -1,9 +1,12 @@
-/** MAPS's search on a verified report, step by step: its reasoning, the block it ran, what
- * came back, and the frames it looked at (`judge/frames/<sha>.jpg`, as the run saved them). */
+/** MAPS's search on a verified report, step by step: its reasoning (through ``link``, which
+ * links the places it names), the block it ran, what came back, and the frames it looked at
+ * (`judge/frames/<sha>.jpg`, as the run saved them). */
+
+import type { ReactNode } from "react";
 
 export interface Turn { reasoning?: string; said?: string; printed?: string; frames?: string[] }
 
-export function Trace({ instruction, turns }: { instruction: string; turns: Turn[] }) {
+export function Trace({ instruction, turns, link }: { instruction: string; turns: Turn[]; link: (text: string) => ReactNode }) {
   return (
     <div className="transcript-inner">
       <div className="entry" data-who="operator">
@@ -13,7 +16,7 @@ export function Trace({ instruction, turns }: { instruction: string; turns: Turn
       {turns.map((t, i) => (
         <div className="entry" data-who="model" key={i}>
           <p className="entry-label">MAPS <span className="entry-turn">step {i + 1}</span></p>
-          {t.reasoning ? <p className="entry-reasoning">{t.reasoning}</p> : null}
+          {t.reasoning ? <p className="entry-reasoning">{link(t.reasoning)}</p> : null}
           {t.said ? <pre className="entry-code">{t.said}</pre> : null}
           {t.frames?.length ? (
             <div className="entry-frames">

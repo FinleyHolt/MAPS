@@ -9,14 +9,17 @@
  *
  * Its screenshot is a panel of the paper's capacity figure, so it wears the paper's look
  * (studyMap.tsx's "paper" theme and the .capacity styles): one sans face, the figure
- * palette, no orange. ``?capture=1`` hides the cursor and every
- * hover state and exposes ``window.__capture()``: the episode, the map's bounds and the
- * on-screen boxes the figure places its callouts on.
+ * palette, no orange. The street map's places MAPS's reasoning names are links: each is drawn
+ * on the map in its own colour, pointing at the name lights it, clicking frames it.
+ * ``?capture=1`` hides the cursor, every hover state and those places, and exposes
+ * ``window.__capture()``: the episode, the map's bounds and the on-screen boxes the figure
+ * places its callouts on.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import { OsmSearch, OsmToggle, pointFeature, ringFeature, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
+import { placeSplitter } from "@/app/placeNames";
+import { OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
 import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState } from "@/app/capacityView";
 
@@ -61,6 +64,7 @@ export function CapacityConsole() {
   const [moreReason, setMoreReason] = useState(false);
   const [showIds, setShowIds] = useState(false);
   const [askSkip, setAskSkip] = useState(false);
+  const [hot, setHot] = useState<string | null>(null);
   const readyAt = useRef(0);
   const stRef = useRef<State | null>(null);
   stRef.current = st;
@@ -109,6 +113,7 @@ export function CapacityConsole() {
     setMoreObjects(false);
     setMoreReason(false);
     setAskSkip(false);
+    setHot(null);
     m.frameAo(review?.maps_lonlat, 18.5);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur?.episode_id, m.ready]);
@@ -136,6 +141,21 @@ export function CapacityConsole() {
     m.set("sel", review.selected ? [...(selRing ? [ringFeature(selRing, {})] : []), pointFeature(review.selected.lonlat, {})] : []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [st, m.ready, verifying]);
+
+  // The places MAPS's reasoning names, in the order it names them, one colour each.
+  const split = useMemo(() => placeSplitter(CAPTURE ? [] : m.names.map((n) => n.name)), [m.names]);
+  const said = verifying && review ? [...new Set([review.maps_reason ?? "", ...(review.turns ?? []).map((t) => t.reasoning ?? "")]
+    .flatMap(split).flatMap((p) => (typeof p === "string" ? [] : [p.name])))] : [];
+  const colour = (name: string) => SAID[said.indexOf(name) % SAID.length];
+  useEffect(() => {
+    if (m.ready) m.setSaid(said.map((name) => ({ name, colour: colour(name) })), hot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [said.join("|"), hot, m.ready]);
+  const linked = (text: string): ReactNode => split(text).map((p, i) => (typeof p === "string" ? p : (
+    <button type="button" key={i} className="cap-place" style={{ "--place": colour(p.name) } as CSSProperties}
+            onMouseEnter={() => setHot(p.name)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(p.name)} onBlur={() => setHot(null)}
+            onClick={() => m.frameName(p.name)}>{p.text}</button>
+  )));
 
   // Object numbers are off the imagery unless asked for.
   const idMarkers = useRef<import("maplibre-gl").Marker[]>([]);
@@ -240,12 +260,12 @@ export function CapacityConsole() {
             {verifying ? (
               <section className="cap-block">
                 <p className="cap-kicker">Why MAPS chose it</p>
-                <p className={moreReason ? "cap-reason" : "cap-reason is-clamped"}>{review?.maps_reason ?? ""}</p>
+                <p className={moreReason ? "cap-reason" : "cap-reason is-clamped"}>{linked(review?.maps_reason ?? "")}</p>
                 <p className="cap-hint">
-                  <button type="button" className="cap-link" onClick={() => setMoreReason((v) => !v)}>{moreReason ? "less" : "more"}</button>
+                  <button type="button" className="cap-link" onClick={() => { setHot(null); setMoreReason((v) => !v); }}>{moreReason ? "less" : "more"}</button>
                 </p>
                 {moreReason && review ? (
-                  <details className="judge-full"><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} /></details>
+                  <details className="judge-full"><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} link={linked} /></details>
                 ) : null}
               </section>
             ) : null}

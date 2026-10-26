@@ -50,6 +50,8 @@ With MAPS, a report MAPS has already answered opens with that answer on the map 
 chose it:
 
 - **Go to MAPS's answer** (or the M key) brings the map back to MAPS's answer.
+- Places MAPS names in its reasoning are marked in colour, each drawn on the map in the same
+  colour. Point at one to see it on the map; click it to go there.
 - Press **Confirm** (or Enter) to accept MAPS's answer.
 - Or click the right place and press **Pick another** (or S). The place you pick must be one
   MAPS could still have reached; when it is too far, the console says so. Choose a place

@@ -276,6 +276,9 @@ textarea {
 .cap-link { background: none; border: 0; padding: 0; color: var(--cap-teal); font-size: 14px; cursor: pointer; text-decoration: underline; }
 .cap-right { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .cap-reason { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+/* A place MAPS names: a highlighter stroke in the colour it wears on the map. */
+.cap-place { font: inherit; color: inherit; padding: 0 1px; border: 0; cursor: pointer; background: linear-gradient(transparent 55%, var(--place) 55%); }
+.cap-place:hover, .cap-place:focus-visible { outline: 2px solid var(--cap-navy); }
 .cap-reason.is-clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cap-row { display: flex; justify-content: space-between; width: 100%; padding: 3px 4px; border: 0; background: none; font-size: 15px; cursor: pointer; text-align: left; }
 .cap-row[data-on="true"] { outline: 2px solid var(--cap-navy); }

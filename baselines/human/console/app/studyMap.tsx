@@ -58,6 +58,9 @@ export const pointFeature = (at: LonLat, props: Record<string, unknown>): GeoJSO
 export const PAPER = { navy: "#1F3A5F", teal: "#2F6870", sky: "#8FB0D3",
                        sand: "#E9DCC3", grey: "#6B6259", ink: "#1E1B18", white: "#FFFFFF",
                        halo: "rgba(30,27,24,0.55)" };
+/** The places MAPS's reasoning names, one colour each in the order it names them: bright inks,
+ * none the figure's own, each over a dark halo so it reads on imagery and street map alike. */
+export const SAID = ["#ff4fd8", "#ffd60a", "#22e4ff", "#ff8c1a", "#a6ff00", "#b388ff", "#ff5c5c", "#3dffb0"];
 
 /** The paper theme's marks, Fig. 1's: rings with a white halo, thin sky outlines, no text on the imagery. */
 function paperLayers(layers: object[]): object[] {
@@ -110,6 +113,7 @@ function baseStudyStyle(): StyleSpecification {
       stops: { type: "geojson", data: fc([]) },
       sel: { type: "geojson", data: fc([]) },
       mark: { type: "geojson", data: fc([]) },
+      said: { type: "geojson", data: fc([]) },
       ruler: { type: "geojson", data: fc([]) },
     },
     layers: [
@@ -126,6 +130,11 @@ function baseStudyStyle(): StyleSpecification {
                  "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.45, 16, 0.85],
                  "line-width": ["interpolate", ["linear"], ["zoom"], 13, ["case", ["get", "lit"], 3, 0.4],
                                 17, ["case", ["get", "lit"], 3.5, 1.2]] } },
+      // The places MAPS's reasoning names, in their colours; the one pointed at in the text heavier.
+      { id: "said-halo", type: "line", source: "said", layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": PAPER.halo, "line-width": ["case", ["get", "hot"], 10, 5.5] } },
+      { id: "said-line", type: "line", source: "said", layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": ["get", "colour"], "line-width": ["case", ["get", "hot"], 6, 2.5] } },
       { id: "stops-line", type: "line", source: "stops", filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": INK.paper, "line-width": 1.5, "line-dasharray": [2, 2], "line-opacity": 0.9 } },
       { id: "stops-dot", type: "circle", source: "stops", filter: ["==", ["geometry-type"], "Point"],
@@ -447,8 +456,22 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   const set = useCallback((id: string, features: GeoJSON.Feature[]) =>
     (mapRef.current?.getSource(id) as GeoJSONSource | undefined)?.setData(fc(features)), []);
 
+  const piecesNamed = (name: string) => (osmData.current?.features ?? []).filter((f) => f.properties?.name === name);
+  /** Every piece of each place MAPS names, in its colour; the ``hot`` one heavier and on top. */
+  const setSaid = useCallback((said: { name: string; colour: string }[], hot: string | null) => {
+    const ordered = [...said].sort((a, b) => Number(a.name === hot) - Number(b.name === hot));
+    set("said", ordered.flatMap(({ name, colour }) =>
+      piecesNamed(name).map((f) => ({ ...f, properties: { name, colour, hot: name === hot } }))));
+  }, [set]);
+  /** Frame every piece of a named place, no closer than a found name opens. */
+  const frameName = useCallback((name: string) => {
+    const map = mapRef.current;
+    const pts = piecesNamed(name).flatMap((f) => (f.geometry as GeoJSON.LineString).coordinates as LonLat[]);
+    if (map && pts.length) frame(map, pts);
+  }, []);
+
   return { containerRef, mapRef, maplibreRef, ready, names, osmOn, setOsmOn, lit, setLit, hover, showName, flyTo, frameAo, set,
-           ruler, rulerM, setRuler, markSpots, clearFound, nearOf, crossingsOf, approachOf, kindsNear, piecesOf, litPiece, stepPiece };
+           ruler, rulerM, setRuler, markSpots, setSaid, frameName, clearFound, nearOf, crossingsOf, approachOf, kindsNear, piecesOf, litPiece, stepPiece };
 }
 
 /** The street map's toggle, a chip over the map; what the line under the pointer is, beside
