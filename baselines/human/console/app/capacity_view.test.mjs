@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState, verifyHint } from "./capacityView.ts";
+import { actBody, header, keyCommand, mapTakesClicks, objectName, overLines, pollState, verifyHint } from "./capacityView.ts";
 
 const team = { arm: "team", practice: false, remaining_s: 723, over: false, current: { episode_id: "calcity::7#6", mode: "verify" } };
 const practice = { ...team, arm: "solo", practice: true, current: { episode_id: "calcity::1#0", mode: "search" } };
@@ -57,4 +57,14 @@ test("the verify hint shows the study's own refusal, and none while the point is
   assert.match(verifyHint({ affordable: true, refusal: null }), /Press Pick another to answer with it/);
   assert.match(verifyHint({ affordable: true }), /Press Pick another to answer with it/);
   assert.match(verifyHint(null), /Press Confirm if MAPS's answer is right/);
+});
+
+test("a mapped object reads as its kind where the study names one, else as its number", () => {
+  const house = { id: 9, label: "building 568", kind: "house" };
+  assert.equal(objectName(house), "house");
+  assert.equal(objectName(house, true), "a house");
+  assert.equal(objectName({ ...house, kind: "apartments" }, true), "an apartments");
+  assert.equal(objectName({ id: 9, label: "building 568" }), "object 568");
+  assert.equal(objectName({ id: 9, label: "building 568" }, true), "object 568");
+  assert.equal(objectName({ id: 9, label: "x" }), "object 9");
 });

@@ -40,6 +40,16 @@ export function header(st: Pick<SessionView, "arm" | "practice" | "remaining_s">
   return { session: st.arm === "team" ? "Session: with MAPS" : "Session: alone", clock: `${clock(st.remaining_s)} left` };
 }
 
+/** A mapped object's number: its OSM label's, else its id. */
+export const objectNo = (c: { id: number; label: string }) => /(\d+)$/.exec(c.label)?.[1] ?? String(c.id);
+
+/** A mapped object as the console names it: its kind where the study gives one ("a house"),
+ * else its number. */
+export function objectName(c: { id: number; label: string; kind?: string | null }, article = false): string {
+  if (!c.kind) return `object ${objectNo(c)}`;
+  return article ? `${/^[aeiou]/i.test(c.kind) ? "an" : "a"} ${c.kind}` : c.kind;
+}
+
 export function overLines(st: Pick<SessionView, "practice" | "answered_n" | "skipped_n">): string[] {
   if (st.practice) return ["Practice finished. Press Continue to go back to the study page."];
   return [`The session is over: ${st.answered_n} answered, ${st.skipped_n} skipped.`,

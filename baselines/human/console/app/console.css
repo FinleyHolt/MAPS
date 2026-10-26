@@ -269,13 +269,14 @@ textarea {
 .cap-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .cap-btn kbd, .cap-link kbd { font-size: 12px; border: 1px solid currentColor; padding: 0 4px; margin-left: 6px; border-radius: 2px; }
 .cap-hint { margin: 8px 0 0; font-size: 14px; color: var(--cap-grey); }
-.cap-hint.cap-ready { margin: 0 0 6px; }
 .cap-link { background: none; border: 0; padding: 0; color: var(--cap-teal); font-size: 14px; cursor: pointer; text-decoration: underline; }
 .cap-right { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .cap-reason { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
 /* A place MAPS names: a highlighter stroke in the colour it wears on the map. */
 .cap-place { font: inherit; color: inherit; padding: 0 1px; border: 0; cursor: pointer; background: linear-gradient(transparent 55%, var(--place) 55%); }
 .cap-place:hover, .cap-place:focus-visible { outline: 2px solid var(--cap-navy); }
+.cap-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; font-size: 13px; }
+.cap-key-sw { display: inline-block; width: 16px; height: 5px; margin-right: 5px; vertical-align: middle; background: var(--place); box-shadow: 0 0 0 1px rgba(30,27,24,0.55); }
 .cap-reason.is-clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cap-row { display: flex; justify-content: space-between; width: 100%; padding: 3px 4px; border: 0; background: none; font-size: 15px; cursor: pointer; text-align: left; }
 .cap-row[data-on="true"] { outline: 2px solid var(--cap-navy); }

@@ -21,9 +21,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { placeSplitter } from "@/app/placeNames";
 import { OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, header, keyCommand, mapTakesClicks, overLines, pollState, verifyHint } from "@/app/capacityView";
+import { actBody, header, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
 
-interface Candidate { id: number; label: string; dist_m: number; lonlat: LonLat; ring: Ring }
+interface Candidate { id: number; label: string; kind?: string | null; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
   instruction: string; ended_by?: string; maps_pick?: number | null; maps_reason?: string;
   turns?: Turn[]; candidates?: Candidate[]; maps_lonlat?: LonLat; maps_prior_ring?: Ring; stops?: LonLat[];
@@ -32,7 +32,7 @@ interface Review {
 interface Row { n: number; episode_id: string; status: string; current: boolean }
 interface State {
   arm: "solo" | "team"; practice?: boolean; elapsed_s: number; remaining_s: number; over: boolean; total: number;
-  answered_n: number; skipped_n: number; ready_n: number; list: Row[];
+  answered_n: number; skipped_n: number; list: Row[];
   current: null | { n: number; episode_id: string; instruction: string; mode: "verify" | "search"; point: LonLat | null; review: Review | null };
 }
 
@@ -42,6 +42,8 @@ const STATUS: Record<string, string> = {
 };
 /** Mapped objects listed before "show more". */
 const NEAREST = 5;
+/** Where MAPS's answer opens, and where M goes: a few houses and the street they front. */
+const MAPS_ZOOM = 18.5;
 const CAPTURE = new URLSearchParams(window.location.search).has("capture");
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
@@ -50,7 +52,6 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await r.json()) as T;
 }
 
-const objectNo = (c: Candidate | undefined) => (c ? (/(\d+)$/.exec(c.label)?.[1] ?? String(c.id)) : "");
 
 export function CapacityConsole() {
   const [st, setSt] = useState<State | null>(null);
@@ -59,6 +60,7 @@ export function CapacityConsole() {
   const [busy, setBusy] = useState(false);
   const [moreObjects, setMoreObjects] = useState(false);
   const [moreReason, setMoreReason] = useState(false);
+  const [stepsOpen, setStepsOpen] = useState(false);
   const [showIds, setShowIds] = useState(false);
   const [askSkip, setAskSkip] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
@@ -111,9 +113,11 @@ export function CapacityConsole() {
     m.clearFound();
     setMoreObjects(false);
     setMoreReason(false);
+    setStepsOpen(false);
     setAskSkip(false);
     setHot(null);
-    m.frameAo(review?.maps_lonlat, 18.5);
+    if (verifying && review?.maps_lonlat) m.flyTo(review.maps_lonlat, MAPS_ZOOM);
+    else m.frameAo(review?.maps_lonlat, MAPS_ZOOM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur?.episode_id, m.ready]);
 
@@ -141,20 +145,22 @@ export function CapacityConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [st, m.ready, verifying]);
 
-  // The places MAPS's reasoning names, in the order it names them, one colour each.
+  // The places MAPS's reasoning names, in the order it names them, one colour each: those of
+  // "Why MAPS chose it", and those of the whole search's steps while they are open.
   const split = useMemo(() => placeSplitter(CAPTURE ? [] : m.names.map((n) => n.name)), [m.names]);
-  const said = verifying && review ? [...new Set([review.maps_reason ?? "", ...(review.turns ?? []).map((t) => t.reasoning ?? "")]
+  const said = verifying && review ? [...new Set([review.maps_reason ?? "", ...(stepsOpen ? (review.turns ?? []).map((t) => t.reasoning ?? "") : [])]
     .flatMap(split).flatMap((p) => (typeof p === "string" ? [] : [p.name])))] : [];
   const colour = (name: string) => SAID[said.indexOf(name) % SAID.length];
   useEffect(() => {
     if (m.ready) m.setSaid(said.map((name) => ({ name, colour: colour(name) })), hot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [said.join("|"), hot, m.ready]);
-  const linked = (text: string): ReactNode => split(text).map((p, i) => (typeof p === "string" ? p : (
-    <button type="button" key={i} className="cap-place" style={{ "--place": colour(p.name) } as CSSProperties}
-            onMouseEnter={() => setHot(p.name)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(p.name)} onBlur={() => setHot(null)}
-            onClick={() => m.frameName(p.name)}>{p.text}</button>
-  )));
+  const place = (name: string, text: string, key: number | string) => (
+    <button type="button" key={key} className="cap-place" style={{ "--place": colour(name) } as CSSProperties}
+            onMouseEnter={() => setHot(name)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(name)} onBlur={() => setHot(null)}
+            onClick={() => m.frameName(name)}>{text}</button>
+  );
+  const linked = (text: string): ReactNode => split(text).map((p, i) => (typeof p === "string" ? p : place(p.name, p.text, i)));
 
   // Object numbers are off the imagery unless asked for.
   const idMarkers = useRef<import("maplibre-gl").Marker[]>([]);
@@ -185,7 +191,7 @@ export function CapacityConsole() {
       else if (k === "pick") void act({ action: pickVerb });
       else if (k === "clear") { void act({ action: "clear" }); m.setRuler([]); }
       else if (k === "street") m.setOsmOn((on) => !on);
-      else if (k === "maps" && review?.maps_lonlat) m.flyTo(review.maps_lonlat, 18.5);
+      else if (k === "maps" && review?.maps_lonlat) m.flyTo(review.maps_lonlat, MAPS_ZOOM);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -264,10 +270,15 @@ export function CapacityConsole() {
                 <p className="cap-kicker">Why MAPS chose it</p>
                 <p className={moreReason ? "cap-reason" : "cap-reason is-clamped"}>{linked(review?.maps_reason ?? "")}</p>
                 <p className="cap-hint">
-                  <button type="button" className="cap-link" onClick={() => { setHot(null); setMoreReason((v) => !v); }}>{moreReason ? "less" : "more"}</button>
+                  <button type="button" className="cap-link" onClick={() => { setHot(null); setStepsOpen(false); setMoreReason((v) => !v); }}>{moreReason ? "less" : "more"}</button>
                 </p>
+                {said.length ? (
+                  <p className="cap-key">{said.map((name) => (
+                    <span key={name}><span className="cap-key-sw" style={{ "--place": colour(name) } as CSSProperties} />{place(name, name, name)}</span>
+                  ))}</p>
+                ) : null}
                 {moreReason && review ? (
-                  <details className="judge-full"><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} link={linked} /></details>
+                  <details className="judge-full" onToggle={(e) => { setHot(null); setStepsOpen(e.currentTarget.open); }}><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} link={linked} /></details>
                 ) : null}
               </section>
             ) : null}
@@ -279,7 +290,7 @@ export function CapacityConsole() {
                 {(moreObjects ? objects : objects.slice(0, NEAREST)).map((c) => (
                   <button type="button" key={c.id} className="cap-row" data-on={sel?.candidate === c.id} data-maps={c.id === review?.maps_pick}
                           onClick={() => { void act({ action: "candidate", id: c.id }); m.flyTo(c.lonlat); }}>
-                    <span>object {objectNo(c)}{c.id === review?.maps_pick ? " · MAPS" : ""}</span><span className="cap-dim">{c.dist_m} m</span>
+                    <span>{objectName(c)}{c.id === review?.maps_pick ? " · MAPS" : ""}</span><span className="cap-dim">{c.dist_m} m</span>
                   </button>
                 ))}
                 {objects.length > NEAREST ? (
@@ -291,7 +302,6 @@ export function CapacityConsole() {
 
             <section className="cap-block cap-list">
               <p className="cap-kicker">Your reports</p>
-              {st?.arm === "team" ? <p className="cap-hint cap-ready">MAPS answers ready: {st.ready_n} in total</p> : null}
               <div className="cap-rows">
                 {(st?.list ?? []).map((r) => (
                   <div key={r.episode_id} className="cap-listrow" data-current={r.current}>
@@ -309,7 +319,7 @@ export function CapacityConsole() {
               {verifying ? (
                 <>
                   <p className="cap-status"><span className="cap-chip is-ready">result ready</span>
-                    MAPS's answer: {pick ? `object ${objectNo(pick)}` : "the point marked on the map"}</p>
+                    MAPS's answer: {pick ? objectName(pick, true) : "the point marked on the map"}</p>
                   <div className="cap-actions">
                     <button type="button" className="cap-btn cap-confirm" disabled={busy} onClick={() => void act({ action: "confirm" })}>
                       Confirm <kbd>Enter</kbd>
@@ -342,7 +352,7 @@ export function CapacityConsole() {
                 ) : (
                   <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : " (counts as a miss)"}</>
                 )}
-                {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, 18.5)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
+                {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, MAPS_ZOOM)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
               </p>
               {fault ? <p className="judge-fault">{fault}</p> : null}
             </section>
