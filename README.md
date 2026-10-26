@@ -609,9 +609,9 @@ stages and every deviation from upstream.
 ## Run the human study
 
 The capacity study (a person alone, and a person checking MAPS's answers as they arrive)
-needs no GPU and no model: clone this repository, download the study's files, and follow
-[`baselines/human/STUDY.md`](baselines/human/STUDY.md). A participant's visit, setup
-included, takes under two hours.
+needs no GPU, no model and no account: a participant unzips one download, double-clicks its
+launcher and follows the page, setup included in under two hours.
+[`baselines/human/STUDY.md`](baselines/human/STUDY.md) builds the download and scores the results.
 
 ## Fly the method
 

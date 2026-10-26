@@ -1,104 +1,90 @@
-# The capacity study: run it yourself
+# The capacity study
 
-How many reports a person resolves correctly in a fixed session, alone and with MAPS. The
-whole visit runs on one computer, with no GPU and no network once the files are
-downloaded, in under two hours:
+How many reports a person resolves correctly in a fixed session, alone and with MAPS. A
+participant runs the whole visit on their own computer, on their own time, from one zip file:
+no account, no terminal, no GPU.
 
 | Step | Time |
 |---|---|
-| Setup: clone, install, download | about 15 min |
+| Download and unzip; the first start sets itself up | about 15 min |
 | Read the [briefing](briefing.md) | 5 min |
 | Practice: four reports that never count | 10 min |
 | The first condition | 40 min |
 | A break | 5 min |
 | The second condition | 40 min |
-| Send your results | 2 min |
+| Send the results file | 2 min |
 
-MAPS does not run on your machine. It searched every report of the study once, 96 searches
-at a time, and the download holds that run: each answer it committed, its reasoning and the
-pictures it looked at, and how long each search took. With MAPS, the console releases each
-of its answers when that run says it landed, so you meet them in the order and at the rate
-they arrived.
+MAPS does not run on the participant's machine. It searched every report of the study once,
+96 searches at a time, and the download holds that run: each answer it committed, its
+reasoning and the pictures it looked at, and how long each search took. With MAPS, the console
+releases each of its answers when that run says it landed, so the participant meets them in
+the order and at the rate they arrived.
 
-## What you need
+## For participants
 
-- Linux or macOS, 8 GB of memory, 6 GB of free disk.
-- Python 3.12 or newer, and `git`.
-- A desktop browser (Chrome or Firefox) in a window at least 1600 by 1000 pixels, and a mouse.
-- Your participant label (`p01` to `p40`) from the study lead. The label is the only thing
-  that identifies you in any file; never use your name.
-- Access to the study's files on Hugging Face: sign in at
-  [huggingface.co](https://huggingface.co), open
-  [FinleyHolt/maps-capacity-study](https://huggingface.co/datasets/FinleyHolt/maps-capacity-study)
-  and request access. The study lead approves it.
-
-## Setup, once
-
-```sh
-git clone https://github.com/FinleyHolt/MAPS.git && cd MAPS
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e '.[study]'
-
-hf auth login                       # a read token from huggingface.co/settings/tokens
-hf download FinleyHolt/maps-capacity-study maps-study.tar --repo-type dataset --local-dir ~
-tar xf ~/maps-study.tar -C ~ && rm ~/maps-study.tar
-```
-
-`~/maps-study` now holds the imagery, MAPS's run and the plan. Every command below runs
-from the `MAPS` folder with the environment active (`. .venv/bin/activate`). To keep the
-files elsewhere, untar them there and add `--kit <folder>` to each command.
-
-## The visit
-
-With your own label in place of `p07`:
-
-```sh
-python -m baselines.human.study_server p07
-```
-
-The browser opens the study's page (or open <http://127.0.0.1:8788/> yourself). Keep the
-terminal window open until you are done. The page walks the whole visit: the briefing,
-practice, session 1, the break and session 2. Each session's 40 minutes start when you press
-its button, and the console ends the session itself.
-
-During a session, use only the console: no other maps, websites or phones. If the console or
-the browser stops, run the same command again: the page picks up where you were, and a session
-resumes on its own clock, with the lost time counted against it. Never delete a session's
-folder to start it again.
-
-## Send your results
-
-At the end the page offers your results file. Email it to the study lead. It holds your
-answers and when you gave them, and nothing else about you.
+Everything is in `READ ME FIRST.txt` inside the download ([its source](bundle/READ%20ME%20FIRST.txt)).
+In short: double-click the launcher for your system, type your label in the page that opens,
+and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/), and with it
+Python and the console's packages, into the unzipped folder and uv's cache; that needs the
+internet once. A Mac or Windows computer with 8 GB of memory, 6 GB of free disk, Chrome or
+Firefox and a mouse is enough.
 
 ## For the study lead
 
-Each session writes `results/<p>/<condition>/answers.jsonl` (one line per answer: its
-source, `own_search`, `confirm`, `replace` or `skip`, the point, and when the report was
-opened and answered, UTC) and `session.json` (the session's start, length and list).
-
-Score and check a participant's two conditions against the download's MAPS run:
+### Build and share the download
 
 ```sh
+python -m baselines.human.study_package bundle --kit ~/datasets/calcity-campaign/study-kit --out MAPS-study.zip
+```
+
+The zip (about 2.5 GB) holds the kit below, the console's Python code (never the bench's
+corpus and its targets), the briefing, and a launcher per system from [`bundle/`](bundle/):
+`Start study (Mac).command`, `Start study (Windows).bat` and `start-study.sh`.
+
+Upload **the zip file itself** to Google Drive and share it by link. Never share an unzipped
+folder: Drive zips a folder on download and drops the Mac launcher's permission to run. Send
+each participant the link and their label (`p01` to `p40`). The label is the only thing that
+identifies them in any file.
+
+The launchers are unsigned, so macOS and Windows warn on the first start; the READ ME walks
+through both warnings.
+
+### Collect and score
+
+At the end the visit page offers the participant `maps-study-<p>.tgz`, which they email. It
+holds `results/<p>/<condition>/answers.jsonl` (one line per answer: its source, `own_search`,
+`confirm`, `replace` or `skip`, the point, and when the report was opened and answered, UTC)
+and `session.json` (the session's start, length and list). Unpack it into a kit and check it:
+
+```sh
+tar xzf maps-study-p07.tgz -C ~/maps-study
 python -m baselines.human.study_qc p07            # --misses lists every report they got wrong
 ```
 
-It scores each condition with `team_rows` into `~/maps-study/scored/p07-solo` and `p07-team`,
-prints correct finds per session hour, answers by source and how the person met MAPS's answers
-(wrong and confirmed, wrong and fixed, right and replaced with a miss), and exits non-zero when a
-ledger fails a check: a report answered twice, an answer after the session's end, a lost clock.
+`study_qc` scores each condition with `team_rows` into `~/maps-study/scored/p07-solo` and
+`p07-team`, prints correct finds per session hour, answers by source and how the person met
+MAPS's answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), and
+exits non-zero when a ledger fails a check: a report answered twice, an answer after the
+session's end, a lost clock.
 
 The scored root reads like any bench root (`benchmarks.citynav.analysis.run_report`). With
 MAPS it also holds every MAPS answer released within the session that the person never
 reached, scored as MAPS scored it. A skip scores as a miss.
 
-The download is built from the bench's own files by `baselines.human.study_package`: the
-ortho as map tiles, MAPS's run as the verify screens read it, the OSM prior and labelled
-objects, and the plan (`baselines.human.capacity plan` for `p01` to `p40`, halves of equal
-MAPS SR, counterbalanced in groups of four, and `capacity practice`). The console's web
-source is `baselines/human/console` (`npm ci && npm run build`); the download carries the
-built copy.
+### Run it from a clone
 
-The repository ships the corpus with its targets (`benchmarks/calcity/data`), so a
-participant who went looking could find answers. Run sessions where that would be noticed,
-or accept it as the price of a study anyone can rerun.
+From the repository with `pip install -e '.[study]'`, the same visit is
+`python -m baselines.human.study_server [p07] --kit <kit>`; naming a condition after the label
+(`practice`, `first`, `second`, `solo`, `team`) opens that session at once.
+
+### The kit
+
+The kit is built from the bench's own files by `baselines.human.study_package` (`tiles`, then
+`records`): the ortho as map tiles, MAPS's run as the verify screens read it, the OSM prior and
+labelled objects, and the plan (`baselines.human.capacity plan` for `p01` to `p40`, halves of
+equal MAPS SR, counterbalanced in groups of four, and `capacity practice`). The console's web
+source is `baselines/human/console` (`npm ci && npm run build`); the kit carries the built
+copy in `console/`.
+
+Sessions run unsupervised, so nothing enforces the rule against other maps during a session;
+the briefing states it and the answer times show a session that stalled.
