@@ -182,6 +182,16 @@ def test_with_the_benchmark_labels_the_candidates_are_the_labelled_objects_near_
     assert d["candidate"] == 1 and d["xy"] == [1.0, 101.0]
 
 
+def test_a_long_labelled_object_holding_maps_answer_sits_at_that_answer() -> None:
+    from types import SimpleNamespace
+
+    street = SimpleNamespace(id=3, contour=[(0.0, -5.0), (1000.0, -5.0), (1000.0, 5.0), (0.0, 5.0)], kind="road")
+    house = SimpleNamespace(id=4, contour=[(0.0, 20.0), (10.0, 20.0), (10.0, 30.0), (0.0, 30.0)], kind="house")
+    held, apart = audit_console.labelled_candidates([street, house], [(900.0, 0.0), (5.0, 25.0)])
+    assert held.xy == (900.0, 0.0)
+    assert apart.xy != (900.0, 0.0) and audit_console._inside(apart.xy, apart.contour)
+
+
 def test_a_candidate_is_as_near_as_its_outline() -> None:
     strip = audit_console.Candidate(id=0, label="runway", color="", xy=(500.0, 0.0),
                                     contour=[(0.0, -5.0), (1000.0, -5.0), (1000.0, 5.0), (0.0, 5.0)])

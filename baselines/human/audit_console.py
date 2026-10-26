@@ -144,8 +144,9 @@ def candidates_of(attempt: Path) -> list[Candidate]:
 def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m: float = LABELS_NEAR_M) -> list[Candidate]:
     """The benchmark's labelled objects (``cityrefer/objects.json``) near ``points``, as
     candidates: each outline, what it is (``kind``, from ``bench_labels``), and a point inside
-    it to commit at. The labels carry no hint of which one an episode targets."""
-    from shapely.geometry import MultiPoint, Polygon
+    it to commit at: MAPS's answer (``points[0]``) when the outline holds it, so a street's
+    row sits where MAPS answered. The labels carry no hint of which one an episode targets."""
+    from shapely.geometry import MultiPoint, Point, Polygon
 
     if not points:
         return []
@@ -158,7 +159,7 @@ def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m
         poly = Polygon(contour).buffer(0)
         if poly.is_empty or not zone.intersects(poly):
             continue
-        at = poly.representative_point()
+        at = Point(points[0]) if poly.covers(Point(points[0])) else poly.representative_point()
         out.append(Candidate(id=len(out), label=f"labelled object {o.id}", color="", xy=(float(at.x), float(at.y)),
                              contour=contour, kind=getattr(o, "kind", "")))
     return out
