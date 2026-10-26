@@ -166,7 +166,9 @@ def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m
     pick = min(holding, key=lambda poly: poly.area) if holding else None
     out = []
     for o, contour, poly in near:
-        at = answer if poly is pick else poly.representative_point()
+        # An outline around MAPS's pick commits outside it: picking it is another answer.
+        free = poly.difference(pick) if pick is not None and poly is not pick else poly
+        at = answer if poly is pick else (free if not free.is_empty else poly).representative_point()
         out.append(Candidate(id=len(out), label=f"labelled object {o.id}", color="", xy=(float(at.x), float(at.y)),
                              contour=contour, kind=getattr(o, "kind", "")))
     return out

@@ -201,6 +201,10 @@ def test_only_the_smallest_object_holding_maps_answer_sits_at_it() -> None:
     # The store is MAPS's pick and sits at its answer; picking the area around it is another answer.
     assert inner.xy == (50.0, 50.0)
     assert around.xy != (50.0, 50.0) and audit_console._inside(around.xy, around.contour)
+    # Even when the area's own middle lies in the store, picking the area commits outside the store.
+    middle = SimpleNamespace(id=7, contour=[(140.0, 40.0), (160.0, 40.0), (160.0, 60.0), (140.0, 60.0)], kind="store")
+    around, inner = audit_console.labelled_candidates([area, middle], [(150.0, 50.0)])
+    assert inner.xy == (150.0, 50.0) and not audit_console._inside(around.xy, inner.contour)
 
 
 def test_a_candidate_is_as_near_as_its_outline() -> None:
