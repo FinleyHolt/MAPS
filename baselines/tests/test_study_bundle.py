@@ -10,13 +10,19 @@ import zipfile
 
 import pytest
 
-from baselines.human.study_package import BUNDLE, build_bundle, main
+from baselines.human.study_package import BUNDLE, REQUIRED, build_bundle, main
+
+
+def _kit(root):
+    """The four files a kit cannot do without, and a pilot's results."""
+    for rel in REQUIRED:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text("{}")
+    return root
 
 
 def test_bundle(tmp_path) -> None:
-    kit = tmp_path / "kit"
-    (kit / "plan").mkdir(parents=True)
-    (kit / "plan" / "plan.json").write_text("{}")
+    kit = _kit(tmp_path / "kit")
     (kit / "results" / "p01").mkdir(parents=True)
     (kit / "results" / "p01" / "answers.jsonl").write_text("{}\n")
     build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
@@ -35,6 +41,25 @@ def test_bundle(tmp_path) -> None:
     with pytest.raises(SystemExit) as e:
         main(["bundle", "--kit", str(kit), "--out", str(tmp_path / "c.zip")])
     assert e.value.code == 2
+
+
+def test_bundle_refuses_an_incomplete_kit(tmp_path) -> None:
+    kit = _kit(tmp_path / "kit")
+    (kit / "calcity_ortho.mbtiles").unlink()
+    with pytest.raises(SystemExit, match="calcity_ortho.mbtiles"):
+        build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
+    assert not (tmp_path / "b.zip").exists()
+
+
+def test_bundle_follows_a_kit_of_symlinked_folders(tmp_path) -> None:
+    real = _kit(tmp_path / "real")
+    kit = tmp_path / "kit"
+    kit.mkdir()
+    for p in real.iterdir():
+        (kit / p.name).symlink_to(p)
+    build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
+    names = set(zipfile.ZipFile(tmp_path / "b.zip").namelist())
+    assert {f"MAPS-study/kit/{rel}" for rel in REQUIRED} <= names
 
 
 def _unzipped(tmp_path):

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -154,6 +155,8 @@ BUNDLE = Path(__file__).with_name("bundle")
 TOP = {"Start study (Mac).command": "mac.command", "Start study (Windows).bat": "windows.bat"}
 #: Already compressed: stored as is, so the zip builds in minutes.
 STORED = (".mbtiles", ".jpg", ".png", ".webp")
+#: What a kit cannot start without: the console, the plan, the map and MAPS's run.
+REQUIRED = ("console/index.html", "plan/plan.json", "calcity_ortho.mbtiles", "maps_root/episodes.jsonl")
 
 
 def build_bundle(kit: Path, out: Path, contact: str) -> int:
@@ -168,8 +171,13 @@ def build_bundle(kit: Path, out: Path, contact: str) -> int:
     files = [(f"{name}/{arc}", BUNDLE / src) for arc, src in TOP.items()]
     files += [(f"{name}/app/run.sh", BUNDLE / "run.sh"), (f"{name}/app/requirements.txt", BUNDLE / "requirements.txt")]
     files += [(f"{name}/app/{f}", REPO / f) for f in code]
-    files += [(f"{name}/kit/{p.relative_to(kit).as_posix()}", p) for p in sorted(kit.rglob("*"))
-              if p.is_file() and p.relative_to(kit).parts[0] not in ("results", "scored")]
+    # A kit of symlinked folders ships what the links point at.
+    kept = sorted(Path(d, f).relative_to(kit) for d, _, fs in os.walk(kit, followlinks=True) for f in fs)
+    kept = [rel for rel in kept if rel.parts[0] not in ("results", "scored")]
+    missing = [rel for rel in REQUIRED if Path(rel) not in kept]
+    if missing:
+        raise SystemExit(f"{kit} is not a whole kit: it lacks {', '.join(missing)}")
+    files += [(f"{name}/kit/{rel.as_posix()}", kit / rel) for rel in kept]
     files = [(arc, src) for arc, src in files if arc not in texts]
     # Windows' own line endings, so Notepad and cmd read them as lines.
     crlf = lambda b: b.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
