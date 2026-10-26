@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from baselines.human import capacity
+from baselines.tests.test_capacity import _session
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -25,3 +26,13 @@ def test_the_console_loads_and_a_session_opens_without_fcntl(tmp_path) -> None:
             "tmp = Path(sys.argv[1]); root = _root(tmp)\n"
             "assert Capacity(root, ['block_0::1#0'], tmp / 'out', 'solo').state()['current']['mode'] == 'search'\n")
     subprocess.run([sys.executable, "-c", code, str(tmp_path)], check=True, cwd=REPO)
+
+
+def test_an_action_for_a_report_that_already_changed_is_refused(tmp_path, monkeypatch) -> None:
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "solo", now)
+    assert s.act({"action": "skip", "episode_id": "block_0::1#0"})["ok"]
+    stale = s.act({"action": "skip", "episode_id": "block_0::1#0"})
+    assert stale == {"ok": False, "error": "That report already changed. The page now shows the current one."}
+    assert len((tmp_path / "p01" / "solo" / "answers.jsonl").read_text().splitlines()) == 1
+    assert s.act({"action": "skip"})["ok"]

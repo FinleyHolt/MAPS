@@ -197,6 +197,9 @@ class Capacity:
     def act(self, req: dict) -> dict:
         if self.over():
             return {"ok": False, "error": "the session is over"}
+        if req.get("episode_id", self.current) != self.current:
+            # A stale or second tab: its action was meant for a report already answered.
+            return {"ok": False, "error": "That report already changed. The page now shows the current one."}
         kind = req.get("action")
         if kind == "skip":
             return self._answer("skip", None)
