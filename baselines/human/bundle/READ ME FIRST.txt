@@ -1,25 +1,48 @@
 THE SEARCH STUDY
 
-You need: a Mac or Windows computer, a mouse, Chrome or Firefox, an internet
-connection for the first start, about 2 hours, and the participant label (p01,
-p02, ...) the study lead sent you. Your label is the only thing that identifies
-you; never type your name anywhere.
+You need: a Mac with macOS 12 or later (macOS 11 or later on Apple silicon) or a
+Windows 10 or 11 computer, 6 GB of free disk space, a mouse, Chrome or Firefox,
+an internet connection for the first start, about 2 hours, and the participant
+label (p01, p02, ...) the study lead sent you. Your label is the only thing that
+identifies you; never type your name anywhere.
+
+A report is a short text that describes one place in California City, CA. In
+the study you find each report's place on an aerial photo.
+
+0. Download and unzip
+
+   Download MAPS-study.zip from the link (about 2.5 GB). Google Drive says the
+   file is too large to preview and that it cannot scan it for viruses. Both
+   are normal: press "Download anyway".
+
+   Mac:     Double-click the zip if your browser has not unpacked it. Open the
+            new "MAPS-study" folder.
+
+   Windows: Right-click the zip, choose Properties, tick "Unblock" at the
+            bottom if it is there, and press OK. Right-click the zip again,
+            choose "Extract All", then "Extract". Unpacking takes several
+            minutes. Open the new "MAPS-study" folder.
 
 1. Start the study
 
-   Mac:     Right-click (or Control-click) "Start study (Mac)" and choose Open.
-            If the Mac says it cannot check the file, choose Open again. If it
-            only offers "Done", open System Settings > Privacy & Security,
-            scroll down, press "Open Anyway", and try again.
+   Mac:     Double-click "Start study (Mac)". The first time, the Mac refuses
+            to open it: press Done. Open System Settings > Privacy & Security,
+            scroll down, and press "Open Anyway" next to "Start study (Mac)".
+            Enter your Mac password, then press "Open Anyway" once more. If the
+            Mac asks whether Terminal may use your Downloads folder, press
+            Allow.
 
    Windows: Double-click "Start study (Windows)". If a blue "Windows protected
             your PC" box appears, press "More info", then "Run anyway".
 
-   A window with text opens. The first time, it sets up for a few minutes.
-   Then your browser opens the study's page. If it does not, open
-   http://127.0.0.1:8788/ in your browser.
+   A window with text opens. The first start downloads what the study needs:
+   lines of text scroll by for several minutes. Then your browser opens the
+   study page. Later starts take seconds and need no internet.
 
-   Keep that text window open until you finish. Closing it stops the study.
+   Use Chrome or Firefox. If the page opened in another browser, copy its
+   address, http://127.0.0.1:8788/, into Chrome or Firefox.
+
+   Keep the text window open until you finish. Closing it stops the study.
 
 2. Follow the page
 
@@ -30,14 +53,17 @@ you; never type your name anywhere.
    without interruptions. During a session use only the study page: no other
    maps, websites or phones.
 
-   If anything stops (the browser closes, the computer sleeps), start the
-   study again as in step 1. It picks up where you were. A session's clock
-   keeps running while it is stopped.
+   If only the browser closed, open http://127.0.0.1:8788/ in Chrome or
+   Firefox. If the text window closed or the computer restarted, start the
+   study again as in step 1. The page picks up where you were. A session's
+   clock keeps running while the study is stopped.
 
 3. Send your results
 
-   When you finish, the page offers your results file. Save it and email it to
-   {CONTACT}. It holds your answers and their times, nothing else.
+   When you finish, the page shows a "Save my results file" button. Your
+   browser saves maps-study-<your label>.zip, usually in your Downloads
+   folder. Email that file to {CONTACT}. It holds your answers and their
+   times, nothing else.
 
-Questions about the page or the setup go to {CONTACT}.
+Questions about the page or the setup: {CONTACT}.
 Nobody can answer questions about a report.
