@@ -46,3 +46,29 @@ def test_a_torn_last_line_is_repaired_before_the_next_answer(tmp_path, monkeypat
     s = _session(tmp_path, monkeypatch, "solo", [1000.0])
     assert s.act({"action": "skip"})["ok"]
     assert json.loads(ledger.read_text().splitlines()[-1])["episode_id"] == "block_0::1#0"
+
+
+def test_a_relaunch_keeps_the_open_report_as_it_was_opened(tmp_path, monkeypatch) -> None:
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "team", now)
+    assert s.state()["current"]["mode"] == "search"           # MAPS's first result lands at 100 s
+    now[0] += 900
+    s = _relaunch(s, now)           # relaunched mid-search
+    assert s.state()["current"]["mode"] == "search"
+    assert s.act({"action": "select", "x": 0.0, "y": 99.0})["ok"] and s.act({"action": "commit"})["ok"]
+    (a,) = [json.loads(ln) for ln in (tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()]
+    assert (a["source"], a["maps_ready_at_open"], a["opened_at"], a["answer_s"]) == (
+        "own_search", False, capacity._utc(1000.0), 900.0)
+    now[0] += 30
+    s = _relaunch(s, now)           # the next report opened at the answer
+    assert s.opened_at == a["answered_at"] and s.state()["current"]["mode"] == "verify"
+
+
+def test_a_resumed_session_keeps_its_recorded_length(tmp_path, monkeypatch) -> None:
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "solo", now)
+    meta = tmp_path / "p01" / "solo" / "session.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 60.0}))   # a rehearsal's length
+    now[0] += 120
+    s = _relaunch(s, now)           # relaunched with the full length
+    assert s.state()["over"] and not s.act({"action": "skip"})["ok"]

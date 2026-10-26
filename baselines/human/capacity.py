@@ -17,7 +17,7 @@ is searched by hand, and a result landing meanwhile does not interrupt it. Alone
 Each answer lands in ``<out>/answers.jsonl`` with its source (``confirm``,
 ``replace``, ``own_search``, ``skip``), when the report was opened and answered
 and when MAPS's result was ready, in UTC; ``<out>/session.json`` holds the
-session's start and its list, so a restart keeps the clock. ``team_rows`` scores the
+session's start, length and list, so a restart keeps the clock. ``team_rows`` scores the
 ledger, and with MAPS also every result that landed within the session that the person
 never reached: an ``unchecked`` answer, scored as MAPS scored it, since the team's output
 is every MAPS result plus the person's corrections and searches.
@@ -37,6 +37,7 @@ import heapq
 import json
 import random
 import time
+from datetime import datetime
 from pathlib import Path
 
 from baselines.human.audit_console import Session, _jsonl
@@ -127,7 +128,9 @@ class Capacity:
         self.ledger, meta = out / "answers.jsonl", out / "session.json"
         out.mkdir(parents=True, exist_ok=True)
         if meta.is_file():
-            self.started = float(json.loads(meta.read_text())["started_epoch"])
+            # A resumed session keeps its recorded clock and length.
+            session = json.loads(meta.read_text())
+            self.started, self.session_s = float(session["started_epoch"]), float(session["session_s"])
         else:
             self.started = clock()
             meta.write_text(json.dumps({"arm": arm, "agents": agents if arm == "team" else 0, "session_s": self.session_s,
@@ -139,7 +142,9 @@ class Capacity:
                 fh.write("\n")
         self.answered = {a["episode_id"]: a for a in _jsonl(self.ledger)}
         self._cache: dict = {}
-        self._open()
+        # The open report opened at the last answer, or at the start: a relaunch keeps it so.
+        self._open(max([self.started, *(datetime.fromisoformat(a["answered_at"]).timestamp()
+                                        for a in self.answered.values())]))
 
     # -- the clock and the list --------------------------------------------
 
@@ -158,17 +163,18 @@ class Capacity:
         t = self.elapsed()
         return "ready" if t >= self.ends[i] else "searching" if t >= self.starts[i] else "not_started"
 
-    def _open(self) -> None:
-        """The earliest open report: verified if MAPS's result is ready now, searched by hand
-        if not, and kept so until it is answered."""
+    def _open(self, at: float | None = None) -> None:
+        """The earliest open report, opened ``at`` (now by default): verified if MAPS's result
+        was ready then, searched by hand if not, and kept so until it is answered."""
         self.index = next((i for i, e in enumerate(self.order) if e not in self.answered), None)
         self.current = None if self.index is None else self.order[self.index]
         self.review: Session | None = None
         self.point: tuple[float, float] | None = None
         if self.current is None:
             return
-        self.opened, self.opened_at = time.monotonic(), _utc(self.clock())
-        self.verify = self.arm == "team" and self.elapsed() >= self.ends[self.index]
+        self.opened = self.clock() if at is None else at
+        self.opened_at = _utc(self.opened)
+        self.verify = self.arm == "team" and self.opened - self.started >= self.ends[self.index]
         if self.verify:
             self.review = Session(self.maps_root, [self.current], self.out, labels=self.labels, rows=self.rows,
                                   record=self._reviewed, cache=self._cache)
@@ -185,7 +191,7 @@ class Capacity:
         answer = {"episode_id": e, "order_index": i, "arm": self.arm, "source": source,
                   "xy": None if xy is None else [float(xy[0]), float(xy[1])],
                   "opened_at": self.opened_at, "answered_at": _utc(self.clock()),
-                  "answer_s": round(time.monotonic() - self.opened, 1),
+                  "answer_s": round(self.clock() - self.opened, 1),
                   "maps_ready_at": self.ready_at(i), "maps_ready_at_open": self.verify, **more}
         with self.ledger.open("a") as fh:
             fh.write(json.dumps(answer) + "\n")
