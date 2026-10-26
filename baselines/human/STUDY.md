@@ -46,6 +46,10 @@ folder: Drive zips a folder on download and drops the Mac launcher's permission 
 each participant the link and their label (`p01` to `p40`). The label is the only thing that
 identifies them in any file.
 
+To rehearse the whole visit quickly, start a launcher with `MAPS_STUDY_SESSION_S=300` in its
+environment: each session then lasts five minutes. Rehearse in a separate unzip, since a
+session's clock and answers stay in its folder.
+
 The launchers are unsigned, so macOS and Windows warn on the first start; the READ ME walks
 through both warnings.
 

@@ -247,7 +247,7 @@ def build_app(cap: Any, kit: Path, console: Path, visit: Visit | None = None):
 def open_session(kit: Path, participant: str, condition: str, out: Path | None = None) -> Any:
     """The participant's capacity session in one condition, off the download's plan."""
     from baselines.human.audit_console import bench_labels
-    from baselines.human.capacity import Capacity
+    from baselines.human.capacity import SESSION_S, Capacity
 
     if condition == "practice":
         root, order_file, arm = kit / "plan" / "practice", kit / "plan" / "practice" / "practice.txt", "solo"
@@ -261,7 +261,9 @@ def open_session(kit: Path, participant: str, condition: str, out: Path | None =
     elif (out / "session.json").is_file():
         print(f"{participant} {condition} has a session already: resuming its clock")
     order = [ln.strip() for ln in order_file.read_text().splitlines() if ln.strip()]
-    return Capacity(root, order, out, arm, labels=bench_labels())
+    # A rehearsal of the visit shortens the sessions; a real visit never sets it.
+    session_s = float(os.environ.get("MAPS_STUDY_SESSION_S") or SESSION_S)
+    return Capacity(root, order, out, arm, labels=bench_labels(), session_s=session_s)
 
 
 BRIEFING = Path(__file__).with_name("briefing.md")
