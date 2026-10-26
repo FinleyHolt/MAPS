@@ -6,8 +6,8 @@ file carries the answers and no account names; the briefing renders as HTML."""
 import io
 import json
 import re
-import tarfile
 import time
+import zipfile
 
 from baselines.human import study_server
 from baselines.human.study_server import STEPS, Visit
@@ -41,7 +41,7 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     assert v.start("first") is None and v.start("second") is None
     assert v.start("practice") == "practice"
     (tmp_path / "results" / "p01" / "practice").mkdir(parents=True)
-    assert "Start session 1" in v.page() and v.start("first") == "solo"
+    assert "Start session 1" in v.page() and "Opening..." in v.page() and v.start("first") == "solo"
     _session(tmp_path / "results" / "p01" / "solo")
     page = v.page()
     assert v.status("first") == "running" and "Return to session 1" in page
@@ -66,24 +66,24 @@ def test_a_session_ends_when_every_report_has_an_answer(tmp_path) -> None:
 def test_a_relaunch_keeps_the_label(tmp_path) -> None:
     (_kit(tmp_path) / "results" / "p02" / "practice").mkdir(parents=True)
     v = Visit(tmp_path)
-    assert v.participant == "p02"
+    assert v.participant == "p02" and "Welcome back, p02" in v.page()
     v.set_label("p01")
     assert v.participant == "p02" and "set up for p02" in v.page()
 
 
 def test_results_file(tmp_path) -> None:
     v = Visit(_kit(tmp_path, contact="lead@example.org"))
-    assert v.results_tgz() is None
+    assert v.results_zip() is None
     v.set_label("p01")
-    assert v.results_tgz() is None
+    assert v.results_zip() is None
     (tmp_path / "results" / "p01" / "practice").mkdir(parents=True)
     _session(tmp_path / "results" / "p01" / "solo", age_s=2401, answers='{"episode_id": "a"}\n')
     _session(tmp_path / "results" / "p01" / "team", age_s=2401)
     page = v.page()
-    assert "Save my results file" in page and "maps-study-p01.tgz" in page and "lead@example.org" in page
-    members = tarfile.open(fileobj=io.BytesIO(v.results_tgz())).getmembers()
-    assert "results/p01/solo/answers.jsonl" in {m.name for m in members}
-    assert all(m.uname == m.gname == "" and m.uid == m.gid == 0 for m in members)
+    assert "Save my results file" in page and "maps-study-p01.zip" in page and "lead@example.org" in page
+    members = zipfile.ZipFile(io.BytesIO(v.results_zip())).infolist()
+    assert "results/p01/solo/answers.jsonl" in {m.filename for m in members}
+    assert all(m.extra == b"" for m in members)
     (tmp_path / "contact.txt").unlink()
     assert "the study lead" in Visit(tmp_path).page()
 

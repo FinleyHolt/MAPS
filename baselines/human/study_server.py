@@ -32,10 +32,10 @@ import re
 import shutil
 import socket
 import sqlite3
-import tarfile
 import threading
 import time
 import webbrowser
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -237,14 +237,14 @@ def build_app(kit: Path, console: Path, visit: Visit):
             box["cap"], box["practice"] = cap, step == "practice"
         return RedirectResponse("/", status_code=303)
 
-    @app.get("/visit/results.tgz")
+    @app.get("/visit/results.zip")
     def visit_results() -> Response:
-        data = visit.results_tgz()
+        data = visit.results_zip()
         if data is None:
             return HTMLResponse(PAGE.format(body="<h1>No results yet</h1><p>Nothing is saved yet. "
                                                  "<a href='/visit'>Back to the study page</a></p>"), status_code=404)
-        return Response(data, media_type="application/gzip", headers={
-            "Content-Disposition": f'attachment; filename="maps-study-{visit.participant}.tgz"'})
+        return Response(data, media_type="application/zip", headers={
+            "Content-Disposition": f'attachment; filename="maps-study-{visit.participant}.zip"'})
 
     # The static mount below would serve index.html by name too, around the redirect.
     @app.get("/")
@@ -304,6 +304,7 @@ class Visit:
         results = kit / "results"
         found = [p.name for p in results.iterdir() if p.is_dir() and p.name in self.plan] if results.is_dir() else []
         self.participant, self.error = (found[0] if len(found) == 1 else None), ""
+        self.returning = self.participant is not None
 
     def set_label(self, label: str) -> None:
         label = label.strip().lower()
@@ -352,20 +353,17 @@ class Visit:
             return None
         return open_session(self.kit, self.participant, self.condition(step))
 
-    def results_tgz(self) -> bytes | None:
-        """The participant's results folder, with the computer's account names left out."""
+    def results_zip(self) -> bytes | None:
+        """The participant's results folder, as a zip: a zip records no owner, so the computer's
+        account names stay out of it."""
         folder = self.kit / "results" / self.participant if self.participant else None
         if folder is None or not folder.is_dir():
             return None
-
-        def anonymous(info: tarfile.TarInfo) -> tarfile.TarInfo:
-            info.uid = info.gid = 0
-            info.uname = info.gname = ""
-            return info
-
         buf = io.BytesIO()
-        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-            tar.add(folder, arcname=f"results/{self.participant}", filter=anonymous)
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(folder.rglob("*")):
+                if f.is_file():
+                    z.write(f, f"results/{self.participant}/{f.relative_to(folder).as_posix()}")
         return buf.getvalue()
 
     def page(self) -> str:
@@ -384,7 +382,9 @@ class Visit:
             return f"Session {STEPS.index(step)}: {CONDITIONS[self.condition(step)]}, {minutes} minutes"
 
         def button(step: str, label: str, note: str = "") -> str:
-            return (f"<form method=post action='/visit/start/{step}'><button>{label}</button></form>"
+            # Opening a session takes a few seconds: the button says so, and a second click cannot repeat it.
+            return (f"<form method=post action='/visit/start/{step}' onsubmit=\"this.firstChild.disabled=true;"
+                    f"this.firstChild.textContent='Opening...'\"><button>{label}</button></form>"
                     + (f"<p class=note>{note}</p>" if note else ""))
 
         def running(step: str) -> str:
@@ -397,8 +397,8 @@ class Visit:
         clock = f"The {minutes} minutes start when you press the button, so be seated and ready."
         if st["second"] == "done":
             now = ("<h2>Done. One last step: send your results</h2>"
-                   "<form action='/visit/results.tgz'><button>Save my results file</button></form>"
-                   f"<p>Your browser saves maps-study-{self.participant}.tgz, usually in your Downloads folder. "
+                   "<form action='/visit/results.zip'><button>Save my results file</button></form>"
+                   f"<p>Your browser saves maps-study-{self.participant}.zip, usually in your Downloads folder. "
                    f"Attach it to an email to {html.escape(self.contact)}. Then you can close this page and the "
                    "text window.</p>")
         elif st["second"] == "running":
@@ -417,7 +417,9 @@ class Visit:
                    + f"<h2>Step 3: {name('first')}</h2>" + (button("first", "Start session 1", clock) if practiced
                                                            else "<p class=note>Opens after practice.</p>"))
         brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
-        return PAGE.format(body=f"<p class=who>Participant {self.participant}</p>{err}{now}<hr>"
+        who = (f"Welcome back, {self.participant}. Your answers are saved." if self.returning
+               else f"Participant {self.participant}")
+        return PAGE.format(body=f"<p class=who>{who}</p>{err}{now}<hr>"
                                 f"<div class=brief>{brief}</div>")
 
 
