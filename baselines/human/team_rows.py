@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import shutil
 import time
 from pathlib import Path
 
@@ -235,6 +236,9 @@ def main(argv: list[str] | None = None) -> int:
         for d in unchecked_answers(json.loads(session_file.read_text()), set(decided), scored_rows(args.maps_root)):
             decided[d["episode_id"]] = d
     rows = write_root(args.maps_root, list(decided.values()), args.out_root)
+    if session_file.is_file():
+        # The session's length rides with its rows: a reader's per-hour rate divides by it.
+        shutil.copy2(session_file, args.out_root / "session.json")
     print(f"{len(rows)} rows -> {args.out_root / 'episodes.jsonl'}")
     return 0
 
