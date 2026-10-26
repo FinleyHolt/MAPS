@@ -47,6 +47,11 @@ def _session(tmp_path, monkeypatch, arm: str, now: list[float]):
                              session_s=3600, clock=lambda: now[0])
 
 
+def _act(s, action: str, **more) -> dict:
+    """An action as the console sends it: naming the report it was meant for."""
+    return s.act({"action": action, "episode_id": s.current, **more})
+
+
 def test_a_report_is_verified_only_if_maps_had_landed_when_it_opened(tmp_path, monkeypatch) -> None:
     now = [1000.0]
     s = _session(tmp_path, monkeypatch, "team", now)
@@ -54,10 +59,10 @@ def test_a_report_is_verified_only_if_maps_had_landed_when_it_opened(tmp_path, m
     now[0] += 150
     assert s.state()["current"]["mode"] == "search"          # landing meanwhile does not interrupt
     now[0] += 500                                            # the second lands at 600 s; still searching the first
-    assert s.act({"action": "select", "x": 0.0, "y": 99.0})["ok"] and s.act({"action": "commit"})["ok"]
+    assert _act(s, "select", x=0.0, y=99.0)["ok"] and _act(s, "commit")["ok"]
     cur = s.state()["current"]                               # opened after its result landed
     assert cur["mode"] == "verify" and cur["review"]["maps_pick"] == 0 and "target" not in json.dumps(cur)
-    assert s.act({"action": "confirm"})["ok"] and s.state()["over"]
+    assert _act(s, "confirm")["ok"] and s.state()["over"]
     a, b = [json.loads(ln) for ln in (tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()]
     assert (a["source"], a["maps_ready_at_open"], b["source"], b["maps_ready_at_open"]) == ("own_search", False, "confirm", True)
     assert a["opened_at"] <= a["answered_at"] and b["maps_ready_at"] is not None
@@ -66,10 +71,10 @@ def test_a_report_is_verified_only_if_maps_had_landed_when_it_opened(tmp_path, m
 def test_alone_a_skip_is_logged_and_the_session_refuses_answers_after_its_hour(tmp_path, monkeypatch) -> None:
     now = [1000.0]
     s = _session(tmp_path, monkeypatch, "solo", now)
-    assert s.state()["current"]["mode"] == "search" and s.act({"action": "skip"})["ok"]
+    assert s.state()["current"]["mode"] == "search" and _act(s, "skip")["ok"]
     assert s.state()["skipped_n"] == 1 and s.state()["list"][0]["status"] == "skipped"
     now[0] += 3601
-    assert not s.act({"action": "skip"})["ok"] and s.state()["over"] and s.state()["current"] is None
+    assert not _act(s, "skip")["ok"] and s.state()["over"] and s.state()["current"] is None
 
 
 def test_every_source_scores_and_a_skip_is_a_miss() -> None:
@@ -152,7 +157,7 @@ def test_a_session_opened_again_on_the_same_root_does_not_build_the_block_prior_
     now = [1000.0]
     s = _session(tmp_path, monkeypatch, "team", now)
     now[0] += 650
-    assert s.act({"action": "select", "x": 0.0, "y": 99.0})["ok"] and s.act({"action": "commit"})["ok"]
+    assert _act(s, "select", x=0.0, y=99.0)["ok"] and _act(s, "commit")["ok"]
     assert s.state()["current"]["mode"] == "verify" and len(builds) == 1
     again = capacity.Capacity(tmp_path / "root", ["block_0::1#0", "block_0::2#0"], tmp_path / "p01" / "team", "team",
                               agents=1, session_s=3600, clock=lambda: now[0])
