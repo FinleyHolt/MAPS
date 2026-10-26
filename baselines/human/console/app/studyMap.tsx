@@ -599,8 +599,8 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
         {kinds.map((k) => (
           <button type="button" key={`${k.kind}|${k.at.join(",")}`} className="judge-row" onClick={() => take(() => onCross([k.at], 0))}>
             <span>{k.name || k.kind}{k.name ? <span className="judge-dim"> {k.kind}</span> : null}
-              {k.near ? <span className="judge-dim"> · by {k.near}</span> : null}</span>
-            <span className="judge-dim">{k.m < 1000 ? `${k.m.toFixed(0)} m` : `${(k.m / 1000).toFixed(1)} km`} from {ctxStreet && ctx ? ctxStreet : "the map's centre"}</span>
+              {k.near && k.near !== k.name ? <span className="judge-dim"> · by {k.near}</span> : null}</span>
+            <span className="judge-dim">{k.m < 1000 ? `${k.m.toFixed(0)} m` : `${(k.m / 1000).toFixed(1)} km`} from {ctxStreet && ctx ? ctxStreet : "the map's center"}</span>
           </button>
         ))}
         {q && hits.length === 0 && kinds.length === 0 ? <p className="judge-hint">No street, place or kind of place matches.</p> : null}

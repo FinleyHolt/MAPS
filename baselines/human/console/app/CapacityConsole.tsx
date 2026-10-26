@@ -346,7 +346,7 @@ export function CapacityConsole() {
                       Commit <kbd>S</kbd>
                     </button>
                   </div>
-                  <p className="cap-hint">{cur?.point ? "Your point is on the map. Press Commit, or click again to move it." : "Click the map on the place, then press Commit."}</p>
+                  <p className="cap-hint">{cur?.point ? "Your point is on the map. Press Commit, or click again to move it." : "Click the map on the place, then press Commit. A search only shows where to look: click the place itself."}</p>
                 </>
               )}
               <p className="cap-hint">

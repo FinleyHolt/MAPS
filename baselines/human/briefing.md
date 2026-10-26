@@ -53,13 +53,14 @@ The console is the map screen that practice and each session open in.
 - **Your reports** lists the session's reports in order, each with a chip:
   "open" for the one you are on, "answered" or "skipped" once done, and "waiting" for the
   rest. With MAPS the rest read "not started", "MAPS searching" or "result ready" (MAPS has
-  answered it).
+  answered it). The list keeps going past what one session can finish: answer as many as you
+  can, in order.
 
 With MAPS, a report MAPS has already answered opens with that answer on the map and why MAPS
 chose it:
 
 - **Go to MAPS's answer** (or the M key) brings the map back to MAPS's answer.
-- Places named in **Why MAPS chose it** are drawn on the map in colour, with a small key under
+- Places named in **Why MAPS chose it** are drawn on the map in color, with a small key under
   the text; places in **MAPS's whole search** (under **more**) are drawn while that section is
   open. Point at one to see it on the map; click it to go there.
 - **Mapped objects near MAPS's answer** lists the objects on the map closest to it, nearest
