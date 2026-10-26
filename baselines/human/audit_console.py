@@ -68,6 +68,8 @@ class Candidate:
     color: str
     xy: tuple[float, float]
     contour: list[tuple[float, float]]
+    #: What it is in plain words, where the bench's labels say: house, parking lot...
+    kind: str = ""
 
 
 @dataclass
@@ -141,8 +143,8 @@ def candidates_of(attempt: Path) -> list[Candidate]:
 
 def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m: float = LABELS_NEAR_M) -> list[Candidate]:
     """The benchmark's labelled objects (``cityrefer/objects.json``) near ``points``, as
-    candidates: each outline, and a point inside it to commit at. The labels carry no
-    class and no hint of which one an episode targets."""
+    candidates: each outline, what it is (``kind``, from ``bench_labels``), and a point inside
+    it to commit at. The labels carry no hint of which one an episode targets."""
     from shapely.geometry import MultiPoint, Polygon
 
     if not points:
@@ -158,7 +160,7 @@ def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m
             continue
         at = poly.representative_point()
         out.append(Candidate(id=len(out), label=f"labelled object {o.id}", color="", xy=(float(at.x), float(at.y)),
-                             contour=contour))
+                             contour=contour, kind=getattr(o, "kind", "")))
     return out
 
 
@@ -199,12 +201,30 @@ def _area(contour) -> float:
     return 0.5 * float(np.dot(xs, np.roll(ys, 1)) - np.dot(ys, np.roll(xs, 1)))
 
 
-def bench_labels() -> dict:
-    """The selected bench's labelled objects by map. Call after ``select_bench``."""
-    from benchmarks.citynav.adapter import load_objects
-    from benchmarks.citynav.paths import OBJECTS_JSON
+#: Each bench label's object type as the OSM layer its tags are read in, and its word when no tag says more.
+LABEL_TYPES = {"Building": ("building", "building"), "TrafficRoad": ("road", "road"),
+               "HighVegetation": ("landuse", "trees"), "Ground": ("landuse", "open ground"),
+               "Water": ("water", "water"), "Parking": ("poi", "parking lot")}
 
-    return load_objects(OBJECTS_JSON)
+
+def bench_labels() -> dict:
+    """The selected bench's labelled objects by map, each with ``kind``: what it is in plain
+    words, off its object type and OSM tags. Call after ``select_bench``."""
+    from baselines.human.study_server import _kind
+    from benchmarks.citynav import paths
+    from benchmarks.citynav.adapter import load_objects
+
+    raw = json.loads(paths.OBJECTS_JSON.read_text())
+    labels = load_objects(paths.OBJECTS_JSON)
+    for map_name, objects in labels.items():
+        entries = raw.get(map_name) if isinstance(raw, dict) else None
+        by_id = {int(e["id"]): e for e in (entries.values() if isinstance(entries, dict) else entries or [])}
+        for o in objects:
+            e = by_id.get(o.id, {})
+            layer, word = LABEL_TYPES.get(e.get("object_type"), ("", ""))
+            kind = _kind({**(e.get("tags") or {}), "category": layer}) if layer else ""
+            o.kind = word if kind == layer else kind
+    return labels
 
 
 def _inside(xy, contour) -> bool:
@@ -324,7 +344,8 @@ class Session:
                             else f"a mapped {r.maps_prior[1]}" if r.maps_prior is not None else "a point, no object under it"),
             "maps_reason": r.turns[-1]["reasoning"] if r.turns else "",
             "turns": r.turns, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
-            "candidates": [{"id": c.id, "label": c.label, "color": c.color, "dist_m": round(_reach(c, r.maps_xy))}
+            "candidates": [{"id": c.id, "label": c.label, "color": c.color, "dist_m": round(_reach(c, r.maps_xy)),
+                            **({"kind": c.kind} if c.kind else {})}
                            for c in sorted(r.candidates, key=lambda c: _reach(c, r.maps_xy))],
             "selected": None if sel is None else self._selected(sel),
             "landmarks": [{"name": lm.name, "kind": str(lm.tags.get("category") or ""),

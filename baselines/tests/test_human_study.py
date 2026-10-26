@@ -168,12 +168,13 @@ def test_with_the_benchmark_labels_the_candidates_are_the_labelled_objects_near_
 
     monkeypatch.setattr(assets, "load_episode_assets", lambda m: SimpleNamespace(base_features={}))
     square = lambda x, y, h: [(x - h, y - h), (x + h, y - h), (x + h, y + h), (x - h, y + h)]
-    labels = {"block_0": [SimpleNamespace(id=7, contour=square(0.0, 50.0, 3.0)),
-                          SimpleNamespace(id=8, contour=square(0.0, 100.0, 3.0)),
+    labels = {"block_0": [SimpleNamespace(id=7, contour=square(0.0, 50.0, 3.0), kind="house"),
+                          SimpleNamespace(id=8, contour=square(0.0, 100.0, 3.0), kind=""),
                           SimpleNamespace(id=9, contour=square(5000.0, 5000.0, 3.0))]}
     s = audit_console.Session(_root(tmp_path), ["block_0::1#0"], tmp_path / "p01", labels=labels)
     state = s.state()
     assert [c["label"] for c in state["candidates"]] == ["labelled object 7", "labelled object 8"]
+    assert state["candidates"][0]["kind"] == "house" and "kind" not in state["candidates"][1]
     assert state["maps_pick"] == 0 and state["maps_commit"] == "object 0 of the benchmark labels"
     assert s.act({"action": "select", "x": 1.0, "y": 101.0})["ok"] and s.selected == {"candidate": 1, "xy": (1.0, 101.0)}
     assert s.act({"action": "replace"})["ok"]
@@ -210,6 +211,22 @@ def test_a_map_search_commit_is_scored_where_it_lies_with_nothing_flown() -> Non
     assert hit["metrics"]["SR"] == 1 and hit["metrics"]["steps_taken"] == 0 and hit["metrics"]["policy"] == "human_map"
     assert hit["metrics"]["maps_SR"] == 0 and hit["commit_xy"] == [0.0, 95.0] and hit["visited_xy"] == [[0.0, 95.0]]
     assert team_rows.team_row(row, {"decision": "commit", "xy": [0.0, 10.0]}, _CFG)["metrics"]["SR"] == 0
+
+
+def test_the_bench_labels_say_what_each_object_is_in_plain_words(tmp_path, monkeypatch) -> None:
+    from benchmarks.citynav import paths
+
+    square = [[0, 0], [0, 5], [5, 5], [5, 0]]
+    objects = [{"id": 1, "object_type": "Building", "tags": {"building": "house"}},
+               {"id": 2, "object_type": "Parking", "tags": {"amenity": "parking"}},
+               {"id": 3, "object_type": "HighVegetation", "tags": {}},
+               {"id": 4, "object_type": "Ground", "tags": {"leisure": "pitch"}},
+               {"id": 5, "object_type": "Building", "tags": {"building": "yes"}}]
+    (tmp_path / "objects.json").write_text(json.dumps({"block_0": {
+        str(o["id"]): {**o, "position": [0, 0, 0], "dimension": [1, 1, 1], "contour": square} for o in objects}}))
+    monkeypatch.setattr(paths, "OBJECTS_JSON", tmp_path / "objects.json")
+    assert [o.kind for o in audit_console.bench_labels()["block_0"]] == [
+        "house", "parking lot", "trees", "sports field", "building"]
 
 
 def test_both_ledgers_and_their_rows_carry_when_each_episode_was_opened_and_decided(tmp_path, monkeypatch) -> None:

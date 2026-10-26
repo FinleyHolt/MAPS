@@ -59,23 +59,24 @@ def use_kit(kit: Path) -> None:
     benchmarks.calcity.use()
 
 
-#: OSM classes whose tag is not a plain word, by (layer, class); any other reads as its tag.
+#: OSM classes whose tag is not a plain word: by (layer, class) where the word depends on the
+#: layer (a residential road or area), else by class alone (``WORDS``); any other reads as its tag.
 PLAIN = {("road", "residential"): "residential street", ("road", "living_street"): "street",
          ("road", "service"): "service road", ("road", "track"): "dirt road", ("road", "primary"): "main road",
          ("road", "secondary"): "main road", ("road", "tertiary"): "road", ("road", "tertiary_link"): "road",
          ("road", "unclassified"): "road", ("road", "footway"): "footpath", ("road", "cycleway"): "bike path",
-         ("road", "stop"): "stop sign", ("road", "traffic_signals"): "traffic lights",
-         ("landuse", "residential"): "residential area", ("landuse", "tree"): "trees", ("landuse", "pitch"): "sports field",
-         ("landuse", "track"): "running track", ("landuse", "peak"): "hill", ("aeroway", "aerodrome"): "airport",
-         ("poi", None): "place", ("poi", "doityourself"): "hardware store", ("poi", "fuel"): "gas station",
-         ("poi", "tyres"): "tire shop", ("poi", "alcohol"): "liquor store", ("poi", "convenience"): "convenience store",
-         ("poi", "mobile_phone"): "phone shop", ("power", None): "power line",
-         ("landuse", "greenfield"): "building land", ("aeroway", "apron"): "airport apron",
-         ("building", "townhall"): "town hall", ("poi", "tobacco"): "tobacco shop", ("building", "roof"): "shelter roof",
-         ("landuse", "religious"): "church grounds", ("road", "crossing"): "crosswalk",
-         ("barrier", None): "fence or wall", ("landuse", "commercial"): "commercial area",
-         ("landuse", "industrial"): "industrial area", ("landuse", "retail"): "shopping area",
-         ("road", "turning_circle"): "cul-de-sac", ("poi", "veterinary"): "vet"}
+         ("road", "stop"): "stop sign", ("road", "traffic_signals"): "traffic lights", ("road", "crossing"): "crosswalk",
+         ("road", "turning_circle"): "cul-de-sac", ("landuse", "residential"): "residential area",
+         ("landuse", "tree"): "trees", ("landuse", "pitch"): "sports field", ("landuse", "track"): "running track",
+         ("landuse", "peak"): "hill", ("landuse", "religious"): "church grounds",
+         ("landuse", "commercial"): "commercial area", ("landuse", "industrial"): "industrial area",
+         ("landuse", "retail"): "shopping area", ("poi", None): "place", ("power", None): "power line",
+         ("barrier", None): "fence or wall", ("building", "commercial"): "commercial building",
+         ("building", "retail"): "store"}
+WORDS = {"aerodrome": "airport", "apron": "airport apron", "doityourself": "hardware store", "fuel": "gas station",
+         "tyres": "tire shop", "alcohol": "liquor store", "convenience": "convenience store",
+         "mobile_phone": "phone shop", "tobacco": "tobacco shop", "veterinary": "vet", "parking": "parking lot",
+         "greenfield": "building land", "townhall": "town hall", "roof": "shelter roof"}
 
 
 def _layer(row: dict) -> str:
@@ -91,7 +92,7 @@ def _kind(row: dict) -> str:
     sub = (row.get("highway") or row.get("amenity") or row.get("shop") or row.get("leisure") or row.get("aeroway")
            or row.get("landuse") or row.get("natural") or building)
     sub = sub if sub != layer else None
-    return PLAIN.get((layer, sub)) or (sub or layer).replace("_", " ")
+    return PLAIN.get((layer, sub)) or WORDS.get(sub) or (sub or layer).replace("_", " ")
 
 
 def prior_doc(map_name: str, ll) -> dict[str, Any]:
