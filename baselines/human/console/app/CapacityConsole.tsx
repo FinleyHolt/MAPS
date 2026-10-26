@@ -336,11 +336,11 @@ export function CapacityConsole() {
               )}
               <p className="cap-hint">
                 {askSkip ? (
-                  <>Skip this report? It counts as a miss.{" "}
+                  <>Skip this report?{st?.practice ? "" : " It counts as a miss."}{" "}
                     <button type="button" className="cap-link" disabled={busy || !cur} onClick={() => { setAskSkip(false); void act({ action: "skip" }); }}>Yes, skip</button>
                     {" / "}<button type="button" className="cap-link" onClick={() => setAskSkip(false)}>No</button></>
                 ) : (
-                  <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{" "}(counts as a miss)</>
+                  <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : " (counts as a miss)"}</>
                 )}
                 {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, 18.5)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
               </p>

@@ -480,16 +480,16 @@ export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, piec
       <div className="study-layers">
         <button type="button" className="study-chip" data-on={on} aria-pressed={on} onClick={() => onChange(!on)}
                 title="street and building outlines with names">
-          Street map {on ? "on" : "off"} <kbd>O</kbd>
+          Street map: {on ? "on" : "off"} (O)
         </button>
         {lit && onStep ? (
           <span className="study-hover">
-            {lit} · <span className="study-piece">{litPiece ? `piece ${litPiece.n} of ${litPiece.of} · ${litPiece.buildings} building${litPiece.buildings === 1 ? "" : "s"} along it`
-              : `${pieces ?? 1} piece${(pieces ?? 1) > 1 ? "s" : ""}`}</span>
+            {lit} · <span className="study-piece">{litPiece ? `section ${litPiece.n} of ${litPiece.of} · ${litPiece.buildings} building${litPiece.buildings === 1 ? "" : "s"} along it`
+              : `${pieces ?? 1} section${(pieces ?? 1) > 1 ? "s" : ""}`}</span>
             {(pieces ?? 1) > 1 ? (
               <> <button type="button" className="linkish" onClick={() => onStep(-1)}>‹</button>{" "}
                 <button type="button" className="linkish" onClick={() => onStep(1)}>›</button>{" "}
-                <button type="button" className="linkish" title="the next piece with a building along it"
+                <button type="button" className="linkish" title="the next section with a building along it"
                         onClick={() => onStep(1, true)}>next with buildings</button></>
             ) : null}
           </span>
@@ -585,17 +585,17 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
           <button type="button" key={`${n.name}-${n.lonlat.join(",")}`} className="judge-row" data-on={lit === n.name}
                   onClick={() => take(() => onPick(n))}>
             <span>{n.name}</span>
-            <span className="judge-dim">{n.kind}{piecesOf(n.name) > 1 ? ` · ${piecesOf(n.name)} pieces` : ""}</span>
+            <span className="judge-dim">{n.kind}{piecesOf(n.name) > 1 ? ` · ${piecesOf(n.name)} sections` : ""}</span>
           </button>
         ))}
         {kinds.map((k) => (
           <button type="button" key={`${k.kind}|${k.at.join(",")}`} className="judge-row" onClick={() => take(() => onCross([k.at], 0))}>
             <span>{k.name || k.kind}{k.name ? <span className="judge-dim"> {k.kind}</span> : null}
               {k.near ? <span className="judge-dim"> · by {k.near}</span> : null}</span>
-            <span className="judge-dim">{k.m < 1000 ? `${k.m.toFixed(0)} m` : `${(k.m / 1000).toFixed(1)} km`} from {ctxStreet && ctx ? ctxStreet : "view"}</span>
+            <span className="judge-dim">{k.m < 1000 ? `${k.m.toFixed(0)} m` : `${(k.m / 1000).toFixed(1)} km`} from {ctxStreet && ctx ? ctxStreet : "the map's centre"}</span>
           </button>
         ))}
-        {q && hits.length === 0 && kinds.length === 0 ? <p className="judge-hint">no named place or kind matches</p> : null}
+        {q && hits.length === 0 && kinds.length === 0 ? <p className="judge-hint">No street, place or kind of place matches.</p> : null}
       </div>
     </section>
   );
