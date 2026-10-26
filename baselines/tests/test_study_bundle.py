@@ -37,36 +37,63 @@ def test_bundle(tmp_path) -> None:
     assert e.value.code == 2
 
 
-def _unzipped(tmp_path, uv: str | None):
-    """The launchers as the zip lays them out, with a stand-in uv that echoes how it was run."""
+def _unzipped(tmp_path):
+    """The launchers as the zip lays them out, a stand-in curl whose installer drops a stand-in uv
+    that logs how it was run (and fails offline when ``uv/fail`` exists), and a PATH holding it."""
     root = tmp_path / "MAPS study's (1)"
     (root / "app").mkdir(parents=True)
     shutil.copy(BUNDLE / "mac.command", root / "Start study (Mac).command")
     shutil.copy(BUNDLE / "run.sh", root / "app" / "run.sh")
-    if uv is not None:
-        (root / "app" / "uv").mkdir()
-        (root / "app" / "uv" / "uv").write_text(uv)
-        (root / "app" / "uv" / "uv").chmod(0o755)
-    return root
+    uv = ('#!/bin/sh\necho "$PWD|$PYTHONUTF8|$UV_CACHE_DIR|${PYTHONPATH-unset}|$*" >> "$(dirname "$0")/log"\n'
+          'case "$*" in *--offline*) [ ! -f "$(dirname "$0")/fail" ];; esac\n')
+    installer = f"mkdir -p \"$UV_INSTALL_DIR\"\ncat > \"$UV_INSTALL_DIR/uv\" <<'UV'\n{uv}UV\nchmod +x \"$UV_INSTALL_DIR/uv\"\n"
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "curl").write_text(f"#!/bin/sh\ncat <<'SH'\n{installer}SH\n")
+    (tmp_path / "bin" / "curl").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"} | {"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
+    start = lambda: subprocess.run(["sh", str(root / "Start study (Mac).command")], cwd=tmp_path,
+                                   capture_output=True, text=True, env=env)
+    return root, start
 
 
-def test_mac_launcher_once_set_up(tmp_path) -> None:
-    root = _unzipped(tmp_path, '#!/bin/sh\necho "$PWD|$PYTHONUTF8|$*"\n')
-    (root / "app" / "uv" / "ready").touch()
-    out = subprocess.run(["sh", str(root / "Start study (Mac).command")], cwd=tmp_path, capture_output=True,
-                         text=True, check=True).stdout.splitlines()[-1]
-    cwd, utf8, args = out.split("|")
-    assert cwd == str(root) and utf8 == "1" and args.startswith("run --offline ")
-    assert args.endswith(f"--kit {root}/kit")
+def test_mac_launcher_sets_up_once_then_starts_offline(tmp_path) -> None:
+    root, start = _unzipped(tmp_path)
+    assert start().returncode == 0 and (root / "app" / "uv" / "ready").is_file()
+    (root / "app" / "uv" / "log").unlink()
+    (tmp_path / "bin" / "curl").write_text("#!/bin/sh\nexit 6\n")
+    r = start()
+    assert r.returncode == 0 and "First start" not in r.stdout
+    runs = [line.split("|") for line in (root / "app" / "uv" / "log").read_text().splitlines()]
+    assert all(a.startswith("run --offline --managed-python ") for *_, a in runs)
+    cwd, utf8, cache, pythonpath, args = runs[-1]
+    assert cwd == str(root / "app") and utf8 == "1" and cache == str(root / "app" / "uv" / "cache")
+    assert pythonpath == "unset" and args.endswith(f"python -m baselines.human.study_server --kit {root}/kit")
+
+
+def test_mac_launcher_offline_failure_asks_for_an_online_start(tmp_path) -> None:
+    root, start = _unzipped(tmp_path)
+    start()
+    (root / "app" / "uv" / "fail").touch()
+    r = start()
+    assert r.returncode == 1 and not (root / "app" / "uv" / "ready").exists()
+    assert ("The study stopped. Close this window and start the study again; that start needs the internet."
+            in r.stdout)
 
 
 def test_mac_launcher_says_when_setup_did_not_finish(tmp_path) -> None:
-    root = _unzipped(tmp_path, None)
-    (tmp_path / "bin").mkdir()
+    root, start = _unzipped(tmp_path)
     (tmp_path / "bin" / "curl").write_text("#!/bin/sh\nexit 6\n")
-    (tmp_path / "bin" / "curl").chmod(0o755)
-    env = {**os.environ, "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
-    r = subprocess.run(["sh", str(root / "Start study (Mac).command")], cwd=tmp_path, capture_output=True,
-                       text=True, env=env)
+    r = start()
     assert r.returncode == 1 and "Setup did not finish" in r.stdout
     assert not (root / "app" / "uv" / "ready").exists()
+
+
+def test_windows_launcher_lines() -> None:
+    bat = (BUNDLE / "windows.bat").read_text().splitlines()
+    for line in ("setlocal EnableExtensions DisableDelayedExpansion", 'set "PYTHONUTF8=1"',
+                 'set "UV_PYTHON_ARCH=x86_64"', 'set "UV_CACHE_DIR=%~dp0app\\uv\\cache"',
+                 'if not exist "kit\\console\\index.html" goto inzip'):
+        assert line in bat
+    runs = [line for line in bat if line.startswith('"%UV%" run')]
+    assert runs and all("--managed-python" in line for line in runs)
+    assert sum("--offline" in line for line in runs) == 2 and not any("PYTHONPATH" in line for line in bat)
