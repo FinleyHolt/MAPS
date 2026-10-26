@@ -12,7 +12,8 @@ const practice = { ...team, arm: "solo", practice: true, current: { episode_id: 
 
 test("every act names the report it answers", () => {
   assert.deepEqual(actBody(team, { action: "skip" }), { action: "skip", episode_id: "calcity::7#6" });
-  assert.deepEqual(actBody(null, { action: "skip" }), { action: "skip" });
+  assert.equal(actBody(null, { action: "skip" }), null);
+  assert.equal(actBody({ current: null }, { action: "skip" }), null);
 });
 
 test("a held key acts once", () => {

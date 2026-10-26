@@ -70,9 +70,11 @@ export function CapacityConsole() {
   stRef.current = st;
 
   const act = useCallback(async (body: Record<string, unknown>) => {
+    const sent = actBody(stRef.current, body);
+    if (!sent) return;
     setBusy(true);
     try {
-      const out = await postJson<{ ok: boolean; error?: string; state: State }>("capacity/act", actBody(stRef.current, body));
+      const out = await postJson<{ ok: boolean; error?: string; state: State }>("capacity/act", sent);
       setSt(out.state);
       setFault(out.ok ? null : out.error ?? "refused");
     } catch (e) {
@@ -336,10 +338,10 @@ export function CapacityConsole() {
               <p className="cap-hint">
                 {askSkip ? (
                   <>Skip this report? It counts as a miss.{" "}
-                    <button type="button" className="cap-link" disabled={busy} onClick={() => { setAskSkip(false); void act({ action: "skip" }); }}>Yes, skip</button>
+                    <button type="button" className="cap-link" disabled={busy || !cur} onClick={() => { setAskSkip(false); void act({ action: "skip" }); }}>Yes, skip</button>
                     {" / "}<button type="button" className="cap-link" onClick={() => setAskSkip(false)}>No</button></>
                 ) : (
-                  <><button type="button" className="cap-link" disabled={busy} onClick={() => setAskSkip(true)}>skip this report</button>{" "}(counts as a miss)</>
+                  <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{" "}(counts as a miss)</>
                 )}
                 {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, 18.5)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
               </p>

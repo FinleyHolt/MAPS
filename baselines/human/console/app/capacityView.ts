@@ -7,9 +7,10 @@ export interface SessionView {
 
 export const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
-/** An act names the report it answers, so a stale tab cannot answer the next one. */
+/** An act names the report it answers, so a stale tab cannot answer the next one; with no
+ * report open there is nothing to act on (null). */
 export const actBody = (st: Pick<SessionView, "current"> | null, body: Record<string, unknown>) =>
-  st?.current ? { ...body, episode_id: st.current.episode_id } : body;
+  st?.current ? { ...body, episode_id: st.current.episode_id } : null;
 
 export type KeyCommand = "confirm" | "pick" | "clear" | "street" | "maps";
 
