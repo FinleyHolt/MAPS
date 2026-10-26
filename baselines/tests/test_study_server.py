@@ -1,7 +1,7 @@
 """The study console's routes off a download: a tile by its XYZ address out of the MBTiles file
 (whose rows count from the south), the paper tone for a tile it lacks, and the AO, from any
 folder name; a plain answer for every route asked before a session or a label exists; the
-command line; a second start while the first still serves."""
+OSM kinds in plain words; the command line; a second start while the first still serves."""
 
 import json
 import socket
@@ -44,6 +44,16 @@ def test_before_a_session_or_a_label(tmp_path) -> None:
         assert c.get(path, follow_redirects=False).headers["location"] == "/visit"
     r = c.get("/visit/results.zip")
     assert r.status_code == 404 and "/visit" in r.text
+
+
+def test_osm_kinds_in_plain_words() -> None:
+    kind = study_server._kind
+    assert kind({"category": "roads", "highway": "residential"}) == "residential street"
+    assert kind({"category": "landuse", "landuse": "residential"}) == "residential area"
+    assert kind({"category": "landuse", "leisure": "swimming_pool"}) == "swimming pool"
+    assert kind({"category": "pois", "shop": "doityourself"}) == "hardware store"
+    assert kind({"category": "buildings"}) == "building"
+    assert kind({"category": "pois", "amenity": "clinic"}) == "clinic"
 
 
 def test_the_command_line_takes_no_participant() -> None:

@@ -59,14 +59,33 @@ def use_kit(kit: Path) -> None:
     benchmarks.calcity.use()
 
 
+#: OSM classes whose tag is not a plain word, by (layer, class); any other reads as its tag.
+PLAIN = {("road", "residential"): "residential street", ("road", "living_street"): "street",
+         ("road", "service"): "service road", ("road", "track"): "dirt road", ("road", "primary"): "main road",
+         ("road", "secondary"): "main road", ("road", "tertiary"): "road", ("road", "tertiary_link"): "road",
+         ("road", "unclassified"): "road", ("road", "footway"): "footpath", ("road", "cycleway"): "bike path",
+         ("road", "stop"): "stop sign", ("road", "traffic_signals"): "traffic lights",
+         ("landuse", "residential"): "residential area", ("landuse", "tree"): "trees", ("landuse", "pitch"): "sports field",
+         ("landuse", "track"): "running track", ("landuse", "peak"): "hill", ("aeroway", "aerodrome"): "airport",
+         ("poi", None): "place", ("poi", "doityourself"): "hardware store", ("poi", "fuel"): "gas station",
+         ("poi", "tyres"): "tire shop", ("poi", "alcohol"): "liquor store", ("poi", "convenience"): "convenience store",
+         ("poi", "mobile_phone"): "phone shop", ("power", None): "power line"}
+
+
+def _layer(row: dict) -> str:
+    """An OSM row's layer, singular: road, building, landuse, poi..."""
+    return str(row.get("worldkit_layer") or row.get("category") or "").rstrip("s")
+
+
 def _kind(row: dict) -> str:
-    """What an OSM row is, in a word or two: its layer, and its class where it has one (a road's
-    highway, a POI's amenity, a landuse's own tag: farmland, meadow...)."""
-    layer = str(row.get("worldkit_layer") or row.get("category") or "").rstrip("s")
+    """What an OSM row is, in plain words: its class where it has one (a road's highway, a POI's
+    amenity, a landuse's own tag: farmland, meadow...), else its layer."""
+    layer = _layer(row)
     building = row.get("building") if row.get("building") not in (None, "yes") else None
     sub = (row.get("highway") or row.get("amenity") or row.get("shop") or row.get("leisure") or row.get("aeroway")
            or row.get("landuse") or row.get("natural") or building)
-    return f"{layer} · {sub}" if sub and sub != layer else layer
+    sub = sub if sub != layer else None
+    return PLAIN.get((layer, sub)) or (sub or layer).replace("_", " ")
 
 
 def prior_doc(map_name: str, ll) -> dict[str, Any]:
@@ -89,7 +108,8 @@ def prior_doc(map_name: str, ll) -> dict[str, Any]:
                 if geom is None or not hasattr(geom, "exterior"):
                     continue
                 line = list(geom.simplify(PRIOR_SIMPLIFY_M).exterior.coords)
-            shapes.append({"type": "Feature", "properties": {"name": str(r.get("name") or ""), "kind": _kind(r)},
+            shapes.append({"type": "Feature", "properties": {"name": str(r.get("name") or ""), "kind": _kind(r),
+                                                          "layer": _layer(r)},
                            "geometry": {"type": "LineString", "coordinates": ll(line)}})
     names = sorted(({"name": lm.name, "kind": _kind(lm.tags), "lonlat": ll([lm.centroid])[0]}
                     for lm in block_landmarks(features)), key=lambda d: d["name"])
