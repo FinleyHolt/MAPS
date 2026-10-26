@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { OsmSearch, OsmToggle, pointFeature, ringFeature, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
+import { actBody, keyCommand } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
@@ -63,7 +64,7 @@ export function CapacityConsole() {
   const act = useCallback(async (body: Record<string, unknown>) => {
     setBusy(true);
     try {
-      const out = await postJson<{ ok: boolean; error?: string; state: State }>("capacity/act", body);
+      const out = await postJson<{ ok: boolean; error?: string; state: State }>("capacity/act", actBody(stRef.current, body));
       setSt(out.state);
       setFault(out.ok ? null : out.error ?? "refused");
     } catch (e) {
@@ -150,11 +151,12 @@ export function CapacityConsole() {
     const onKey = (e: KeyboardEvent) => {
       const s = stRef.current;
       if (!s || s.over || !s.current || busy || (e.target as HTMLElement)?.tagName === "INPUT") return;
-      if (e.key === "Enter" && s.current.mode === "verify") { e.preventDefault(); void act({ action: "confirm" }); }
-      else if ((e.key === "s" || e.key === "S") && canPick) void act({ action: pickVerb });
-      else if (e.key === "Escape") { void act({ action: "clear" }); m.setRuler([]); }
-      else if (e.key === "o" || e.key === "O") m.setOsmOn((on) => !on);
-      else if ((e.key === "m" || e.key === "M") && review?.maps_lonlat) m.flyTo(review.maps_lonlat, 18.5);
+      const k = keyCommand(e, s.current.mode, canPick);
+      if (k === "confirm") { e.preventDefault(); void act({ action: "confirm" }); }
+      else if (k === "pick") void act({ action: pickVerb });
+      else if (k === "clear") { void act({ action: "clear" }); m.setRuler([]); }
+      else if (k === "street") m.setOsmOn((on) => !on);
+      else if (k === "maps" && review?.maps_lonlat) m.flyTo(review.maps_lonlat, 18.5);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
