@@ -60,17 +60,17 @@ chose it:
 
 - **Go to MAPS's answer** (or the M key) brings the map back to MAPS's answer.
 - Places named in **Why MAPS chose it** are drawn on the map in colour, with a small key under
-  the text; places in **MAPS's whole search** are drawn while that section is open. Point at
-  one to see it on the map; click it to go there.
+  the text; places in **MAPS's whole search** (under **more**) are drawn while that section is
+  open. Point at one to see it on the map; click it to go there.
 - **Mapped objects near MAPS's answer** lists the objects on the map closest to it, nearest
   first. Clicking one picks it as your point and goes there; **number them on the map** shows
   each one's number on the map.
 - Press **Confirm** (or Enter) to accept MAPS's answer.
-- MAPS works on many reports at once and finishes them in no fixed order, so some later
-  reports may be ready while the open one is not. You always work on the open report.
 - Or click the right place and press **Pick another** (or S). The place you pick must be one
   MAPS could still have reached; when it is too far, the console says so. Choose a place
   nearer MAPS's answer, or press Confirm.
+- MAPS works on many reports at once and finishes them in no fixed order, so some later
+  reports may be ready while the open one is not. You always work on the open report.
 
 The four practice reports before the first session do not count. You search them alone, with
 no MAPS answers: use them to try the search box, the street map and shift-click measuring.
