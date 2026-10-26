@@ -34,10 +34,11 @@ export function keyCommand(e: { key: string; repeat: boolean }, mode: "verify" |
  * the second click of a double-clicked start button lands on the map. */
 export const mapTakesClicks = (readyAt: number, now: number) => readyAt > 0 && now - readyAt >= 1000;
 
-/** Which session this is, and its time left; practice runs no clock. */
-export function header(st: Pick<SessionView, "arm" | "practice" | "remaining_s">): { session: string; clock: string | null } {
+/** Which session this is, and its time left ``age_s`` after the study sent ``st``: the clock runs
+ * on between polls and while contact is lost. Practice runs no clock. */
+export function header(st: Pick<SessionView, "arm" | "practice" | "remaining_s">, age_s = 0): { session: string; clock: string | null } {
   if (st.practice) return { session: "Practice", clock: null };
-  return { session: st.arm === "team" ? "Session: with MAPS" : "Session: alone", clock: `${clock(st.remaining_s)} left` };
+  return { session: st.arm === "team" ? "Session: with MAPS" : "Session: alone", clock: `${clock(Math.max(0, st.remaining_s - age_s))} left` };
 }
 
 /** A mapped object's number: its OSM label's, else its id. */

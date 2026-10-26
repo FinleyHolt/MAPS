@@ -54,7 +54,11 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 
 
 export function CapacityConsole() {
-  const [st, setSt] = useState<State | null>(null);
+  const [st, setState] = useState<State | null>(null);
+  // When the study sent ``st``, and a second's tick: the clock runs on between polls.
+  const [stAt, setStAt] = useState(0);
+  const [now, setNow] = useState(0);
+  const setSt = useCallback((s: State) => { setState(s); setStAt(performance.now()); }, []);
   const [fault, setFault] = useState<string | null>(null);
   const [lost, setLost] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,7 +85,7 @@ export function CapacityConsole() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [setSt]);
 
   const m = useStudyMap((at) => {
     const s = stRef.current;
@@ -98,8 +102,9 @@ export function CapacityConsole() {
     });
     void poll();
     const id = window.setInterval(poll, 3000);
-    return () => window.clearInterval(id);
-  }, []);
+    const tick = window.setInterval(() => setNow(performance.now()), 1000);
+    return () => { window.clearInterval(id); window.clearInterval(tick); };
+  }, [setSt]);
 
   const cur = st?.current ?? null;
   const review = cur?.review ?? null;
@@ -225,7 +230,7 @@ export function CapacityConsole() {
     };
   }, [m.mapRef]);
 
-  const head = st ? header(st) : null;
+  const head = st ? header(st, stAt && now > stAt ? (now - stAt) / 1000 : 0) : null;
   const objects = review?.candidates ?? [];
   const pick = objects.find((c) => c.id === review?.maps_pick);
 

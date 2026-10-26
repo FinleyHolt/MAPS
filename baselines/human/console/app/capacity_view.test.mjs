@@ -59,6 +59,11 @@ test("the verify hint shows the study's own refusal, and none while the point is
   assert.match(verifyHint(null), /Press Confirm if MAPS's answer is right/);
 });
 
+test("the clock counts down from the last state the study sent, and stops at zero", () => {
+  assert.deepEqual(header(team, 3.4).clock, "11:59 left");
+  assert.deepEqual(header(team, 5000).clock, "0:00 left");
+});
+
 test("a mapped object reads as its kind where the study names one, else as its number", () => {
   const house = { id: 9, label: "building 568", kind: "house" };
   assert.equal(objectName(house), "house");
