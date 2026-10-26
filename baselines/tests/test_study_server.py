@@ -2,11 +2,13 @@
 (whose rows count from the south), the paper tone for a tile it lacks, and the AO, from any
 folder name; a plain answer for every route asked before a session or a label exists; a map
 click that keeps its report's id; OSM kinds in plain words; the command line; a second start
-while the first still serves."""
+while the first still serves, and another program on the port."""
 
 import json
 import socket
 import sqlite3
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 from fastapi.testclient import TestClient
@@ -88,8 +90,30 @@ def test_the_command_line_takes_no_participant() -> None:
 
 
 def test_a_second_start_points_at_the_first(tmp_path, capsys) -> None:
+    class Study(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<title>The search study</title>")
+
+        def log_message(self, *_args) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Study)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        assert study_server.main(["--kit", str(tmp_path), "--port", str(server.server_port), "--no-browser"]) == 0
+    finally:
+        server.shutdown()
+    out = capsys.readouterr().out
+    assert "already running" in out and "Keep this window open" not in out
+
+
+def test_another_program_on_the_port(tmp_path, capsys) -> None:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         s.listen()
-        assert study_server.main(["--kit", str(tmp_path), "--port", str(s.getsockname()[1]), "--no-browser"]) == 0
-    assert "already running" in capsys.readouterr().out
+        assert study_server.main(["--kit", str(tmp_path), "--port", str(s.getsockname()[1]), "--no-browser"]) == 1
+    out = capsys.readouterr().out
+    assert "is taken by another program. Restart the computer and start the study again." in out
+    assert "already running" not in out

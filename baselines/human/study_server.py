@@ -500,6 +500,17 @@ def _answers(host: str, port: int) -> bool:
         return False
 
 
+def _is_study(url: str) -> bool:
+    """Whether the server at ``url`` is this study, by its visit page."""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(url + "visit", timeout=3) as r:
+            return b"The search study" in r.read()
+    except (OSError, ValueError):
+        return False
+
+
 def _open_when_ready(host: str, port: int, url: str) -> None:
     while not _answers(host, port):
         time.sleep(0.5)
@@ -515,6 +526,9 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     url = f"http://{args.host}:{args.port}/"
     if _answers(args.host, args.port):
+        if not _is_study(url):
+            print(f"Port {args.port} is taken by another program. Restart the computer and start the study again.")
+            return 1
         print("The study is already running in another window. Your browser will show it.")
         if not args.no_browser:
             webbrowser.open(url)
