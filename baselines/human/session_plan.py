@@ -21,6 +21,7 @@ console's ``--episode-allowlist``) and ``<out>/plan.json``.
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import random
@@ -35,9 +36,18 @@ def target_key(episode_id: str) -> str:
 
 
 def scored_rows(maps_root: Path) -> dict[str, dict]:
-    """The last ``ok`` row per episode in a root's ledger: the attempts an auditor can review."""
+    """The last ``ok`` row per episode in a root's ledger: the attempts an auditor can review.
+    Read once per version of the ledger and shared, so callers read the rows and never write them:
+    every session the study server opens on a root would otherwise decode it again."""
+    ledger = (maps_root / "episodes.jsonl").resolve()
+    stat = ledger.stat() if ledger.is_file() else None
+    return _scored_rows(ledger, stat and (stat.st_mtime_ns, stat.st_size))
+
+
+@functools.lru_cache(maxsize=4)
+def _scored_rows(ledger: Path, version: tuple[int, int] | None) -> dict[str, dict]:
     rows: dict[str, dict] = {}
-    for row in iter_json_rows(maps_root / "episodes.jsonl"):
+    for row in iter_json_rows(ledger):
         if row.get("status") == "ok" and row.get("workdir"):
             rows[str(row["episode_id"])] = row
     return rows

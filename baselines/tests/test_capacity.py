@@ -126,3 +126,34 @@ def test_a_team_session_with_no_answers_scores_the_results_it_released(tmp_path)
     (scored,) = [json.loads(ln) for ln in (out / "episodes.jsonl").read_text().splitlines()]
     assert scored["metrics"]["capacity_source"] == "unchecked"
     assert (out / "session.json").read_text() == session.read_text()
+
+
+def test_a_second_session_on_the_same_root_reads_its_ledger_once_until_it_changes(tmp_path, monkeypatch) -> None:
+    from baselines.human import session_plan
+
+    reads = []
+    real = session_plan.iter_json_rows
+    monkeypatch.setattr(session_plan, "iter_json_rows", lambda path: reads.append(path) or real(path))
+    now = [1000.0]
+    _session(tmp_path, monkeypatch, "team", now)
+    root = tmp_path / "root"
+    capacity.Capacity(root, ["block_0::1#0"], tmp_path / "p01" / "solo", "solo", clock=lambda: now[0])
+    assert len(reads) == 1
+    (root / "episodes.jsonl").write_text((root / "episodes.jsonl").read_text().splitlines()[0] + "\n")
+    assert list(session_plan.scored_rows(root)) == ["block_0::1#0"] and len(reads) == 2
+
+
+def test_a_session_opened_again_on_the_same_root_does_not_build_the_block_prior_again(tmp_path, monkeypatch) -> None:
+    from baselines.human import audit_console
+
+    builds = []
+    real = audit_console.block_landmarks
+    monkeypatch.setattr(audit_console, "block_landmarks", lambda features: builds.append(1) or real(features))
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "team", now)
+    now[0] += 650
+    assert s.act({"action": "select", "x": 0.0, "y": 99.0})["ok"] and s.act({"action": "commit"})["ok"]
+    assert s.state()["current"]["mode"] == "verify" and len(builds) == 1
+    again = capacity.Capacity(tmp_path / "root", ["block_0::1#0", "block_0::2#0"], tmp_path / "p01" / "team", "team",
+                              agents=1, session_s=3600, clock=lambda: now[0])
+    assert again.state()["current"]["mode"] == "verify" and len(builds) == 1

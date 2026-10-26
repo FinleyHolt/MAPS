@@ -146,6 +146,7 @@ def build_app(kit: Path, console: Path, visit: Visit):
     from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
     from fastapi.staticfiles import StaticFiles
 
+    from baselines.human.session_plan import scored_rows
     from benchmarks.calcity.data_prep.aoi import AO_BBOX_WGS84
     from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 
@@ -186,6 +187,8 @@ def build_app(kit: Path, console: Path, visit: Visit):
             log.exception("the OSM prior for %s did not build", map_name)
 
     threading.Thread(target=build_prior, daemon=True).start()
+    # MAPS's ledger, decoded before the first session opens on it.
+    threading.Thread(target=scored_rows, args=(kit / "maps_root",), daemon=True).start()
     ortho = sqlite3.connect((kit / "calcity_ortho.mbtiles").resolve().as_uri() + "?mode=ro", uri=True,
                             check_same_thread=False)
 
