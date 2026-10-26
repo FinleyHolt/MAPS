@@ -83,6 +83,7 @@ def test_a_label_changes_until_session_1_starts(tmp_path) -> None:
     assert "placeholder='like p07'" in v.page(change=True)
     v.set_label("p01")
     assert v.participant == "p01" and not (tmp_path / "results" / "p02").exists()
+    assert "Welcome back" not in v.page() and "Participant p01" in v.page()
     _session(tmp_path / "results" / "p01" / "solo")
     v = Visit(tmp_path)
     assert "Change it" not in v.page() and "placeholder" not in v.page(change=True)

@@ -367,6 +367,7 @@ class Visit:
         else:
             if self.participant not in (None, label):
                 shutil.rmtree(self.kit / "results" / self.participant, ignore_errors=True)
+                self.returning = False
             self.participant, self.error = label, ""
 
     def condition(self, step: str) -> str:
