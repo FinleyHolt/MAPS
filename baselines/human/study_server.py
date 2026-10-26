@@ -459,17 +459,22 @@ class Visit:
                     + button(step, f"Return to session {n}"))
 
         clock = f"The {minutes} minutes start when you press the button, so be seated and ready."
+        contact, zipname = html.escape(self.contact), f"maps-study-{self.participant}.zip"
         if st["second"] == "done":
             now = ("<h2>Done. One last step: send your results</h2>"
-                   "<form action='/visit/results.zip'><button>Save my results file</button></form>"
-                   f"<p>Your browser saves maps-study-{self.participant}.zip, usually in your Downloads folder. "
-                   f"Attach it to an email to {html.escape(self.contact)}. Then you can close this page and the "
+                   "<form action='/visit/results.zip' onsubmit=\"document.getElementById('saved').hidden=false\">"
+                   "<button>Save my results file</button></form>"
+                   f"<p id=saved hidden>Saved {zipname}, usually in your Downloads folder. "
+                   f"Now email it to {contact}.</p>"
+                   f"<p>Your browser saves {zipname}, usually in your Downloads folder. "
+                   f"Attach it to an email to {contact}. Then you can close this page and the "
                    "text window (on a Mac, press Terminate if asked).</p>")
         elif st["second"] == "running":
             now = running("second")
         elif st["first"] == "done":
-            now = (f"<h2>Session 1 is done. Take a five-minute break.</h2><p>Then start {self.name('second')}.</p>"
-                   + button("second", "Start session 2", clock))
+            now = (f"<h2>Session 1 is done. Take a five-minute break.</h2>"
+                   "<p id=break hidden>Break: <span id=countdown>5:00</span> left.</p>"
+                   f"<p>Then start {self.name('second')}.</p>" + button("second", "Start session 2", clock) + BREAK_JS)
         elif st["first"] == "running":
             now = running("first")
         else:
@@ -488,6 +493,15 @@ class Visit:
         return PAGE.format(body=f"<p class=who>{who}</p>{err}{now}<hr>"
                                 f"<div class=brief>{brief}</div>")
 
+
+#: The break's countdown, from when the page loads; without script the page reads the same, less the clock.
+BREAK_JS = """<script>
+const end = Date.now() + 300000, el = document.getElementById("countdown");
+document.getElementById("break").hidden = false;
+const tick = () => { const s = Math.max(0, Math.round((end - Date.now()) / 1000));
+  el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); if (s) setTimeout(tick, 1000); };
+tick();
+</script>"""
 
 PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8><title>The search study</title><style>
 :root {{ --ink: #141310; --paper: #fbfaf5; --navy: #1f3a5f; --grey: #6b675d; }}

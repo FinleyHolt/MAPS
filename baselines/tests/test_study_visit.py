@@ -59,7 +59,9 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     assert "About 1 minute left." in v.page()
     _session(tmp_path / "results" / "p01" / "solo", age_s=2401)
     assert v.status("first") == "done" and v.start("first") is None
-    assert "five-minute break" in v.page() and "Then start session 2 (with MAPS, 40 minutes)." in v.page()
+    page = v.page()
+    assert "five-minute break" in page and "Then start session 2 (with MAPS, 40 minutes)." in page
+    assert "<span id=countdown>5:00</span>" in page and "<p id=break hidden>" in page
     assert v.start("second") == "team"
 
 
@@ -120,6 +122,8 @@ def test_results_file(tmp_path) -> None:
     page = v.page()
     assert "Save my results file" in page and "maps-study-p01.zip" in page and "lead@example.org" in page
     assert "the text window (on a Mac, press Terminate if asked)." in page
+    assert ("<p id=saved hidden>Saved maps-study-p01.zip, usually in your Downloads folder. "
+            "Now email it to lead@example.org.</p>") in page
     members = zipfile.ZipFile(io.BytesIO(v.results_zip())).infolist()
     assert "results/p01/solo/answers.jsonl" in {m.filename for m in members}
     assert all(m.extra == b"" for m in members)
