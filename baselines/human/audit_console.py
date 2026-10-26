@@ -144,22 +144,29 @@ def candidates_of(attempt: Path) -> list[Candidate]:
 def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m: float = LABELS_NEAR_M) -> list[Candidate]:
     """The benchmark's labelled objects (``cityrefer/objects.json``) near ``points``, as
     candidates: each outline, what it is (``kind``, from ``bench_labels``), and a point inside
-    it to commit at: MAPS's answer (``points[0]``) when the outline holds it, so a street's
-    row sits where MAPS answered. The labels carry no hint of which one an episode targets."""
+    it to commit at. The smallest outline holding MAPS's answer (``points[0]``), the one the
+    review marks as MAPS's pick, sits at that answer, so a street's row sits where MAPS answered;
+    every other outline at a point of its own, so picking an enclosing object is not MAPS's answer.
+    The labels carry no hint of which one an episode targets."""
     from shapely.geometry import MultiPoint, Point, Polygon
 
     if not points:
         return []
     zone = MultiPoint(points).buffer(near_m)
-    out = []
+    near = []
     for o in objects:
         contour = [(float(x), float(y)) for x, y in o.contour or []]
         if len(contour) < 3:
             continue
         poly = Polygon(contour).buffer(0)
-        if poly.is_empty or not zone.intersects(poly):
-            continue
-        at = Point(points[0]) if poly.covers(Point(points[0])) else poly.representative_point()
+        if not poly.is_empty and zone.intersects(poly):
+            near.append((o, contour, poly))
+    answer = Point(points[0])
+    holding = [poly for _o, _c, poly in near if poly.covers(answer)]
+    pick = min(holding, key=lambda poly: poly.area) if holding else None
+    out = []
+    for o, contour, poly in near:
+        at = answer if poly is pick else poly.representative_point()
         out.append(Candidate(id=len(out), label=f"labelled object {o.id}", color="", xy=(float(at.x), float(at.y)),
                              contour=contour, kind=getattr(o, "kind", "")))
     return out

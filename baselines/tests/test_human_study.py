@@ -192,6 +192,17 @@ def test_a_long_labelled_object_holding_maps_answer_sits_at_that_answer() -> Non
     assert apart.xy != (900.0, 0.0) and audit_console._inside(apart.xy, apart.contour)
 
 
+def test_only_the_smallest_object_holding_maps_answer_sits_at_it() -> None:
+    from types import SimpleNamespace
+
+    area = SimpleNamespace(id=5, contour=[(0.0, 0.0), (300.0, 0.0), (300.0, 100.0), (0.0, 100.0)], kind="shopping area")
+    shop = SimpleNamespace(id=6, contour=[(40.0, 40.0), (60.0, 40.0), (60.0, 60.0), (40.0, 60.0)], kind="store")
+    around, inner = audit_console.labelled_candidates([area, shop], [(50.0, 50.0)])
+    # The store is MAPS's pick and sits at its answer; picking the area around it is another answer.
+    assert inner.xy == (50.0, 50.0)
+    assert around.xy != (50.0, 50.0) and audit_console._inside(around.xy, around.contour)
+
+
 def test_a_candidate_is_as_near_as_its_outline() -> None:
     strip = audit_console.Candidate(id=0, label="runway", color="", xy=(500.0, 0.0),
                                     contour=[(0.0, -5.0), (1000.0, -5.0), (1000.0, 5.0), (0.0, 5.0)])
