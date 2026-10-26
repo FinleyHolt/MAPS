@@ -3,7 +3,8 @@
 Each condition in ``<kit>/results/<p>/`` is scored by ``team_rows`` into ``<kit>/scored/<p>-<arm>``
 (a bench root the paper's capacity figure reads), then summarised: answers and correct finds by
 source, success, correct finds per session hour, how the person met MAPS's answers, and the
-ledger's own checks (a duplicate answer, an answer after the session's end, a missing clock).
+ledger's own checks (a duplicate answer, an answer after the session's end or before the one ahead
+of it, an unreadable line, a missing clock).
 
     python -m baselines.human.study_qc p01 [--kit ~/maps-study] [--misses]
 """
@@ -11,10 +12,8 @@ ledger's own checks (a duplicate answer, an answer after the session's end, a mi
 from __future__ import annotations
 
 import argparse
-import calendar
 import json
 import statistics
-import time
 from collections import Counter
 from pathlib import Path
 
@@ -23,25 +22,32 @@ from baselines.human.study_server import KIT, use_kit
 SOURCES = ("own_search", "confirm", "replace", "skip", "unchecked")
 
 
-def _epoch(stamp: str) -> float:
-    return calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
-
-
 def checks(results: Path) -> list[str]:
     """What is wrong with one condition's ledger, in words; empty when nothing is."""
+    from baselines.human.audit_console import _jsonl
+    from baselines.human.capacity import _utc
+
     meta, ledger = results / "session.json", results / "answers.jsonl"
     if not meta.is_file():
         return ["no session.json: the session's clock is lost"]
     session = json.loads(meta.read_text())
-    answers = [json.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()] if ledger.is_file() else []
+    answers = _jsonl(ledger)
     out = []
+    lines = sum(1 for ln in ledger.read_text().splitlines() if ln.strip()) if ledger.is_file() else 0
+    if lines > len(answers):
+        out.append(f"{lines - len(answers)} unreadable lines in answers.jsonl")
     dup = [e for e, n in Counter(a["episode_id"] for a in answers).items() if n > 1]
     if dup:
         out.append(f"{len(dup)} reports answered twice, e.g. {dup[0]}")
-    end = float(session["started_epoch"]) + float(session["session_s"])
-    late = [a for a in answers if _epoch(a["answered_at"]) > end + 1]
+    # UTC stamps to the second compare as text.
+    end = _utc(float(session["started_epoch"]) + float(session["session_s"]) + 1)
+    late = [a for a in answers if a["answered_at"] > end]
     if late:
         out.append(f"{len(late)} answers after the session's end")
+    stamps = [session["started_at"]] + [a["answered_at"] for a in answers]
+    back = sum(b < a for a, b in zip(stamps, stamps[1:]))
+    if back:
+        out.append(f"{back} answers before the session's start or before the answer ahead of them: the clock moved back")
     off = [a for a in answers if a["episode_id"] not in session["order"]]
     if off:
         out.append(f"{len(off)} answers to reports not on the list")
@@ -50,7 +56,9 @@ def checks(results: Path) -> list[str]:
 
 def summary(scored: Path) -> dict:
     """One scored condition's numbers."""
-    rows = [json.loads(ln) for ln in (scored / "episodes.jsonl").read_text().splitlines() if ln.strip()]
+    from baselines.human.audit_console import _jsonl
+
+    rows = _jsonl(scored / "episodes.jsonl")
     hours = float(json.loads((scored / "session.json").read_text())["session_s"]) / 3600
     m = [r["metrics"] for r in rows]
     by = {s: [x for x in m if x.get("capacity_source") == s] for s in SOURCES}
@@ -76,12 +84,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--misses", action="store_true", help="list every report the person got wrong")
     args = ap.parse_args(argv)
     kit = args.kit.expanduser()
+    label = args.participant.strip().lower()
+    if label not in json.loads((kit / "plan" / "plan.json").read_text())["participants"]:
+        raise SystemExit(f"{label} is not a participant on this kit's plan")
     use_kit(kit)
     from baselines.human import team_rows
 
     bad = 0
     for arm in ("solo", "team"):
-        results = kit / "results" / args.participant / arm
+        results = kit / "results" / label / arm
         if not results.is_dir():
             print(f"{arm}: no session yet")
             continue
@@ -89,10 +100,9 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f"{arm}: CHECK FAILED: {p}")
         bad += len(problems)
-        if not (results / "answers.jsonl").is_file():
-            print(f"{arm}: no answers")
+        if not (results / "session.json").is_file():
             continue
-        scored = kit / "scored" / f"{args.participant}-{arm}"
+        scored = kit / "scored" / f"{label}-{arm}"
         team_rows.main(["--maps-root", str(kit / "maps_root"), "--decisions", str(results / "answers.jsonl"),
                         "--out-root", str(scored)])
         s = summary(scored)
