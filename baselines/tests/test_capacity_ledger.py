@@ -1,5 +1,6 @@
 """The capacity session holds up to what a participant's laptop does to it: no fcntl on Windows,
-a stale tab, a torn last line, a relaunch mid-report and a relaunch without the rehearsal length."""
+a stale tab, a torn last line, a relaunch mid-report, a relaunch within the second a result
+landed and a relaunch without the rehearsal length."""
 
 from __future__ import annotations
 
@@ -72,3 +73,18 @@ def test_a_resumed_session_keeps_its_recorded_length(tmp_path, monkeypatch) -> N
     now[0] += 120
     s = _relaunch(s, now)           # relaunched with the full length
     assert s.state()["over"] and not s.act({"action": "skip"})["ok"]
+
+
+def test_a_relaunch_reopens_the_report_at_the_answers_precise_time(tmp_path, monkeypatch) -> None:
+    now = [1000.7]
+    s = _session(tmp_path, monkeypatch, "team", now)
+    now[0] += 600.2                 # the second result landed at 600 s, within the answer's second
+    assert s.act({"action": "skip", "episode_id": "block_0::1#0"})["ok"]
+    assert s.state()["current"]["mode"] == "verify"
+    (a,) = [json.loads(ln) for ln in (tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()]
+    assert a["answered_epoch"] == now[0]
+    s = _relaunch(s, now)
+    assert s.state()["current"]["mode"] == "verify"
+    ledger = tmp_path / "p01" / "team" / "answers.jsonl"
+    ledger.write_text(json.dumps({k: v for k, v in a.items() if k != "answered_epoch"}) + "\n")
+    assert _relaunch(s, now).opened_at == a["answered_at"]          # a ledger from before the instant was kept

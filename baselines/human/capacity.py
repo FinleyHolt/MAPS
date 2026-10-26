@@ -16,7 +16,8 @@ is searched by hand, and a result landing meanwhile does not interrupt it. Alone
 
 Each answer lands in ``<out>/answers.jsonl`` with its source (``confirm``,
 ``replace``, ``own_search``, ``skip``), when the report was opened and answered
-and when MAPS's result was ready, in UTC; ``<out>/session.json`` holds the
+and when MAPS's result was ready, in UTC, and the answer's own instant (``answered_epoch``),
+at which the next report opens; ``<out>/session.json`` holds the
 session's start, length and list, so a restart keeps the clock. ``team_rows`` scores the
 ledger, and with MAPS also every result that landed within the session that the person
 never reached: an ``unchecked`` answer, scored as MAPS scored it, since the team's output
@@ -55,6 +56,13 @@ AGENTS = 96
 
 def _utc(epoch: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+def _answered_epoch(answer: dict) -> float:
+    """When an answer landed; a ledger written before ``answered_epoch`` has its stamp to the second."""
+    if "answered_epoch" in answer:
+        return float(answer["answered_epoch"])
+    return datetime.fromisoformat(answer["answered_at"]).timestamp()
 
 
 def halves(rows: dict[str, dict], seed: int) -> tuple[list[str], list[str]]:
@@ -146,8 +154,7 @@ class Capacity:
         self.answered = {a["episode_id"]: a for a in _jsonl(self.ledger)}
         self._cache = _PRIORS.setdefault(maps_root.resolve(), {})
         # The open report opened at the last answer, or at the start: a relaunch keeps it so.
-        self._open(max([self.started, *(datetime.fromisoformat(a["answered_at"]).timestamp()
-                                        for a in self.answered.values())]))
+        self._open(max([self.started, *(_answered_epoch(a) for a in self.answered.values())]))
 
     # -- the clock and the list --------------------------------------------
 
@@ -166,16 +173,16 @@ class Capacity:
         t = self.elapsed()
         return "ready" if t >= self.ends[i] else "searching" if t >= self.starts[i] else "not_started"
 
-    def _open(self, at: float | None = None) -> None:
-        """The earliest open report, opened ``at`` (now by default): verified if MAPS's result
-        was ready then, searched by hand if not, and kept so until it is answered."""
+    def _open(self, at: float) -> None:
+        """The earliest open report, opened ``at`` (the start or the last answer): verified if
+        MAPS's result was ready then, searched by hand if not, and kept so until it is answered."""
         self.index = next((i for i, e in enumerate(self.order) if e not in self.answered), None)
         self.current = None if self.index is None else self.order[self.index]
         self.review: Session | None = None
         self.point: tuple[float, float] | None = None
         if self.current is None:
             return
-        self.opened = self.clock() if at is None else at
+        self.opened = at
         self.opened_at = _utc(self.opened)
         self.verify = self.arm == "team" and self.opened - self.started >= self.ends[self.index]
         if self.verify:
@@ -190,16 +197,16 @@ class Capacity:
     def _answer(self, source: str, xy, **more) -> dict:
         if self.over():
             return {"ok": False, "error": "the session is over"}
-        i, e = self.index, self.current
+        i, e, now = self.index, self.current, self.clock()
         answer = {"episode_id": e, "order_index": i, "arm": self.arm, "source": source,
                   "xy": None if xy is None else [float(xy[0]), float(xy[1])],
-                  "opened_at": self.opened_at, "answered_at": _utc(self.clock()),
-                  "answer_s": round(self.clock() - self.opened, 1),
+                  "opened_at": self.opened_at, "answered_at": _utc(now), "answered_epoch": now,
+                  "answer_s": round(now - self.opened, 1),
                   "maps_ready_at": self.ready_at(i), "maps_ready_at_open": self.verify, **more}
         with self.ledger.open("a") as fh:
             fh.write(json.dumps(answer) + "\n")
         self.answered[e] = answer
-        self._open()
+        self._open(now)
         return {"ok": True}
 
     def _reviewed(self, decision: dict) -> None:
