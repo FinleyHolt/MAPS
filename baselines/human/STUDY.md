@@ -124,9 +124,10 @@ python -m baselines.human.study_qc p07 --kit "$KIT"      # --misses lists every 
 prints correct finds per session hour, answers by source and how the person met MAPS's
 answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), and exits
 non-zero when a ledger fails a check: a report answered twice, an answer after the session's
-end, an unreadable line, a clock moved back (an answer before the session's start or before
-the previous answer), a lost clock. It refuses a label that is not on the kit's plan (`P07` is
-`p07`).
+end, an answer to a report not on the list, an unreadable line, a clock moved back (an answer
+before the session's start or before the previous answer), a lost clock, a session not 40
+minutes long (a rehearsal?). It also exits non-zero when the label has no session at all. It
+refuses a label that is not on the kit's plan (`P07` is `p07`).
 
 The scored root reads like any bench root (`benchmarks.citynav.analysis.run_report`). With
 MAPS it also holds every MAPS answer released within the session that the person never
