@@ -4,7 +4,8 @@ Each condition in ``<kit>/results/<p>/`` is scored by ``team_rows`` into ``<kit>
 (a bench root the paper's capacity figure reads), then summarised: answers and correct finds by
 source, success, correct finds per session hour, how the person met MAPS's answers, and the
 ledger's own checks (a duplicate answer, an answer after the session's end or before the one ahead
-of it, an unreadable line, a missing clock).
+of it, an unreadable line, a missing clock, a session not of the study's length). It fails when a
+check does, or when the participant has no session.
 
     python -m baselines.human.study_qc p01 [--kit ~/maps-study] [--misses]
 """
@@ -25,7 +26,7 @@ SOURCES = ("own_search", "confirm", "replace", "skip", "unchecked")
 def checks(results: Path) -> list[str]:
     """What is wrong with one condition's ledger, in words; empty when nothing is."""
     from baselines.human.audit_console import _jsonl
-    from baselines.human.capacity import _utc
+    from baselines.human.capacity import SESSION_S, _utc
 
     meta, ledger = results / "session.json", results / "answers.jsonl"
     if not meta.is_file():
@@ -33,6 +34,8 @@ def checks(results: Path) -> list[str]:
     session = json.loads(meta.read_text())
     answers = _jsonl(ledger)
     out = []
+    if float(session["session_s"]) != SESSION_S:
+        out.append(f"session length {float(session['session_s']) / 60:g} min, not {SESSION_S / 60:g}: a rehearsal?")
     lines = sum(1 for ln in ledger.read_text().splitlines() if ln.strip()) if ledger.is_file() else 0
     if lines > len(answers):
         out.append(f"{lines - len(answers)} unreadable lines in answers.jsonl")
@@ -90,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     use_kit(kit)
     from baselines.human import team_rows
 
-    bad = 0
+    bad, sessions = 0, 0
     for arm in ("solo", "team"):
         results = kit / "results" / label / arm
         if not results.is_dir():
@@ -102,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         bad += len(problems)
         if not (results / "session.json").is_file():
             continue
+        sessions += 1
         scored = kit / "scored" / f"{label}-{arm}"
         team_rows.main(["--maps-root", str(kit / "maps_root"), "--decisions", str(results / "answers.jsonl"),
                         "--out-root", str(scored)])
@@ -117,7 +121,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.misses:
             for src, e in s["misses"]:
                 print(f"  miss  {src:<11} {e}")
-    return 1 if bad else 0
+    if not sessions:
+        print(f"{label} has no session to score")
+    return 1 if bad or not sessions else 0
 
 
 if __name__ == "__main__":

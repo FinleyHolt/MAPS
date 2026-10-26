@@ -1,8 +1,10 @@
 """The QC's ledger checks: a clean ledger passes; a duplicate, a late answer, an off-list report,
-a torn line and a clock set back each fail. The QC scores what a kit's results hold and refuses
-a label the kit's plan does not know."""
+a torn line, a clock set back and a rehearsal's length each fail, and so does a participant with
+no session. The QC scores what a kit's results hold and refuses a label the kit's plan does not
+know."""
 
 import json
+import shutil
 
 import pytest
 
@@ -11,8 +13,8 @@ from baselines.human.study_qc import checks, summary
 from baselines.tests.test_human_study import _root
 
 
-def _write(tmp_path, answers) -> None:
-    (tmp_path / "session.json").write_text(json.dumps({"started_epoch": 1_800_000_000.0, "session_s": 2400.0,
+def _write(tmp_path, answers, session_s: float = 2400.0) -> None:
+    (tmp_path / "session.json").write_text(json.dumps({"started_epoch": 1_800_000_000.0, "session_s": session_s,
                                                        "started_at": "2027-01-15T08:00:00Z", "order": ["a", "b", "c"]}))
     (tmp_path / "answers.jsonl").write_text("".join(json.dumps(a) + "\n" for a in answers))
 
@@ -24,6 +26,8 @@ def test_ledger_checks(tmp_path) -> None:
     _write(tmp_path, [{"episode_id": "a", "answered_at": on_time}, {"episode_id": "a", "answered_at": late},
                       {"episode_id": "z", "answered_at": late}])
     assert len(checks(tmp_path)) == 3
+    _write(tmp_path, [], session_s=600.0)
+    assert checks(tmp_path) == ["session length 10 min, not 40: a rehearsal?"]
     (tmp_path / "session.json").unlink()
     assert "clock" in checks(tmp_path)[0]
 
@@ -68,6 +72,13 @@ def test_an_idle_team_session_scores_maps_results_and_a_lost_clock_is_reported(t
     assert json.loads((scored / "session.json").read_text())["session_s"] == 3600.0
     s = summary(scored)
     assert (s["n"], s["correct"], s["hours"], s["sources"], s["misses"]) == (1, 1, 1.0, {"unchecked": (1, 1)}, [])
+
+
+def test_a_participant_with_no_session_fails(tmp_path, monkeypatch, capsys) -> None:
+    kit = _kit(tmp_path, monkeypatch)
+    shutil.rmtree(kit / "results" / "p04")
+    assert study_qc.main(["p04", "--kit", str(kit)]) == 1
+    assert "p04 has no session to score" in capsys.readouterr().out
 
 
 def test_a_label_off_the_plan_is_refused(tmp_path, monkeypatch) -> None:
