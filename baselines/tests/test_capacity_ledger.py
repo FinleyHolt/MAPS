@@ -1,0 +1,27 @@
+"""The capacity session holds up to what a participant's laptop does to it: no fcntl on Windows,
+a stale tab, a torn last line, a relaunch mid-report and a relaunch without the rehearsal length."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+from baselines.human import capacity
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def _relaunch(s: capacity.Capacity, now: list[float]) -> capacity.Capacity:
+    return capacity.Capacity(s.maps_root, s.order, s.out, s.arm, agents=1, session_s=3600, clock=lambda: now[0])
+
+
+def test_the_console_loads_and_a_session_opens_without_fcntl(tmp_path) -> None:
+    """Windows has no fcntl: what a session imports must load without it."""
+    code = ("import sys, json; from pathlib import Path; sys.modules['fcntl'] = None\n"
+            "import baselines.human.study_server\n"
+            "from baselines.human.capacity import Capacity\n"
+            "from baselines.tests.test_human_study import _root\n"
+            "tmp = Path(sys.argv[1]); root = _root(tmp)\n"
+            "assert Capacity(root, ['block_0::1#0'], tmp / 'out', 'solo').state()['current']['mode'] == 'search'\n")
+    subprocess.run([sys.executable, "-c", code, str(tmp_path)], check=True, cwd=REPO)

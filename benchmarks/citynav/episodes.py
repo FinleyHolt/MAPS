@@ -9,7 +9,6 @@ owner knows (``workdir``, ``worker_id``) and the owner's own verdicts
 
 from __future__ import annotations
 
-import fcntl
 import json
 import math
 import os
@@ -53,6 +52,8 @@ def hold_root(root: Path):
     (the flock lifts when it closes or the process ends). Raises ``RootHeld``
     naming the holder, or the filesystem when it cannot flock.
     """
+    import fcntl  # POSIX only, and the capacity console imports this module on Windows
+
     lock = (Path(root) / ROOT_LOCK).open("a+")
     try:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -94,6 +95,8 @@ def append_row(root: Path, row: dict) -> None:
     """Append one attempt to the run's ledger, under an exclusive flock. A
     ledger cut mid-line by a killed writer gets a newline first, so this row
     reads whole."""
+    import fcntl
+
     line = json.dumps(strict(row), allow_nan=False)
     with _append_lock, (Path(root) / EPISODES_JSONL).open("ab+") as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
@@ -120,6 +123,8 @@ def upsert_row(root: Path, row: dict) -> None:
     if run_no is None:
         append_row(root, row)
         return
+    import fcntl
+
     line = json.dumps(strict(row), allow_nan=False)
     path = Path(root) / EPISODES_JSONL
     with _append_lock, path.open("a+") as f:
