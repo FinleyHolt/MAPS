@@ -1,13 +1,15 @@
 """The study console's routes off a download: a tile by its XYZ address out of the MBTiles file
 (whose rows count from the south), the paper tone for a tile it lacks, and the AO, from any
-folder name; a plain answer for every route asked before a session or a label exists; a map
-click that keeps its report's id; OSM kinds in plain words; the command line; a second start
-while the first still serves, and another program on the port."""
+folder name; a plain answer for every route asked before a session or a label exists; a running
+session open again on a relaunch; a map click that keeps its report's id; OSM kinds in plain
+words; the command line; a second start while the first still serves, and another program on
+the port."""
 
 import json
 import socket
 import sqlite3
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -71,6 +73,21 @@ def test_a_select_keeps_its_report(tmp_path, monkeypatch) -> None:
     assert acts == [{"action": "select", "episode_id": "e1", "x": 2.0, "y": 4.0}]
     c.get("/visit/label?label=p02")
     assert c.get("/capacity/state").status_code == 409
+
+
+def test_a_relaunch_reopens_a_running_session(tmp_path, monkeypatch) -> None:
+    class Session:
+        def state(self) -> dict:
+            return {"current": None}
+
+    monkeypatch.setattr(study_server, "open_session", lambda kit, participant, condition: Session())
+    for step in ("practice", "solo"):
+        (tmp_path / "results" / "p01" / step).mkdir(parents=True)
+    (tmp_path / "results" / "p01" / "solo" / "session.json").write_text(json.dumps(
+        {"started_epoch": time.time(), "session_s": 2400.0, "episodes_n": 3}))
+    c = _client(tmp_path)
+    assert c.get("/capacity/state").json() == {"current": None, "practice": False}
+    assert "Its clock kept running while you were away." in c.get("/visit").text
 
 
 def test_osm_kinds_in_plain_words() -> None:

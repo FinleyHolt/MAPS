@@ -167,6 +167,10 @@ def build_app(kit: Path, console: Path, visit: Visit):
         return [list(local_to_lonlat(tiles_dir, map_name, float(x), float(y))) for x, y in pts]
 
     box: dict[str, Any] = {"cap": None, "practice": False}
+    running = [step for step in ("first", "second") if visit.participant and visit.status(step) == "running"]
+    if running:
+        # A relaunch mid-session: a console tab left open picks the session up on its next poll.
+        box["cap"] = open_session(kit, visit.participant, visit.condition(running[0]))
 
     def session() -> Any:
         if box["cap"] is None:
