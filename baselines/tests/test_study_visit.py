@@ -147,5 +147,6 @@ def test_a_mistyped_label_stays_in_the_box(tmp_path) -> None:
     v = Visit(tmp_path)
     v.set_label("p83'")
     assert "value='p83&#x27;'" in v.page()
+    assert "value=''" in v.page()  # with its error, once
     v.set_label("p01")
     assert v.typed == ""

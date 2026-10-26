@@ -433,11 +433,11 @@ class Visit:
         """The visit page; ``change`` asks for the label form while the label can still change.
         An error shows on the page that follows it, once."""
         err = f"<p class=err>{html.escape(self.error)}</p>" if self.error else ""
-        self.error = ""
+        typed, self.error, self.typed = self.typed, "", ""
         if self.participant is None or (change and not self.locked()):
             body = (f"<h1>The search study</h1>{err}"
                     "<form action='/visit/label'><p>Your participant label, from the study lead:</p>"
-                    f"<input name=label placeholder='like p07' value='{html.escape(self.typed, quote=True)}' autofocus> "
+                    f"<input name=label placeholder='like p07' value='{html.escape(typed, quote=True)}' autofocus> "
                     "<button>Continue</button></form>")
             return PAGE.format(body=body)
         from markdown_it import MarkdownIt
