@@ -58,7 +58,6 @@ export const pointFeature = (at: LonLat, props: Record<string, unknown>): GeoJSO
 export const PAPER = { navy: "#1F3A5F", teal: "#2F6870", sky: "#8FB0D3",
                        sand: "#E9DCC3", grey: "#6B6259", ink: "#1E1B18", white: "#FFFFFF",
                        halo: "rgba(30,27,24,0.55)" };
-export type MapTheme = "station" | "paper";
 
 /** The paper theme's marks, Fig. 1's: rings with a white halo, thin sky outlines, no text on the imagery. */
 function paperLayers(layers: object[]): object[] {
@@ -92,9 +91,9 @@ function paperLayers(layers: object[]): object[] {
   });
 }
 
-function studyStyle(theme: MapTheme = "station"): StyleSpecification {
+function studyStyle(): StyleSpecification {
   const style = baseStudyStyle();
-  return theme === "paper" ? { ...style, layers: paperLayers(style.layers) as StyleSpecification["layers"] } : style;
+  return { ...style, layers: paperLayers(style.layers) as StyleSpecification["layers"] };
 }
 
 function baseStudyStyle(): StyleSpecification {
@@ -164,7 +163,7 @@ function whenBuilt<T>(path: string, then: (body: T) => void): void {
   }).catch(() => window.setTimeout(() => whenBuilt(path, then), 3000));
 }
 
-export function useStudyMap(onClick: (at: LonLat) => void, theme: MapTheme = "station") {
+export function useStudyMap(onClick: (at: LonLat) => void) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
@@ -201,7 +200,7 @@ export function useStudyMap(onClick: (at: LonLat) => void, theme: MapTheme = "st
     }
     const label = (text: string, at: LonLat) => {
       const el = document.createElement("span");
-      el.className = theme === "paper" ? "judge-label is-prior paper-name" : "judge-label is-prior";
+      el.className = "judge-label is-prior paper-name";
       el.textContent = text;
       osmMarkers.current.push(new maplibre.Marker({ element: el, anchor: "left", offset: [6, 0] }).setLngLat(at).addTo(map));
     };
@@ -246,7 +245,7 @@ export function useStudyMap(onClick: (at: LonLat) => void, theme: MapTheme = "st
     Promise.all([import("maplibre-gl"), located]).then(([maplibre, location]) => {
       if (cancelled || containerRef.current === null) return;
       maplibreRef.current = maplibre;
-      const map = new maplibre.Map({ container: containerRef.current, style: studyStyle(theme), attributionControl: false,
+      const map = new maplibre.Map({ container: containerRef.current, style: studyStyle(), attributionControl: false,
                                      center: location ? [location.center.lon, location.center.lat] : [0, 0], zoom: 13,
                                      minZoom: location?.minzoom ?? MIN_ZOOM, maxZoom: 21, dragRotate: false, pitchWithRotate: false });
       map.addControl(new maplibre.ScaleControl({ unit: "metric" }), "bottom-left");
@@ -357,7 +356,7 @@ export function useStudyMap(onClick: (at: LonLat) => void, theme: MapTheme = "st
     markMarkers.current = [];
     if (map && maplibre && all.length > 1) all.forEach((at, i) => {
       const el = document.createElement("span");
-      el.className = theme === "paper" ? "judge-label is-prior paper-name" : "judge-label is-prior";
+      el.className = "judge-label is-prior paper-name";
       el.textContent = String(i + 1);
       markMarkers.current.push(new maplibre.Marker({ element: el, anchor: "left", offset: [14, 0] }).setLngLat(at).addTo(map));
     });

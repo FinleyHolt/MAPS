@@ -82,7 +82,7 @@ export function CapacityConsole() {
   const m = useStudyMap((at) => {
     const s = stRef.current;
     if (s && !s.over && s.current && mapTakesClicks(readyAt.current, performance.now())) void act({ action: "select", lon: at[0], lat: at[1] });
-  }, "paper");
+  });
   useEffect(() => { if (m.ready) readyAt.current = performance.now(); }, [m.ready]);
 
   // The list's statuses move on the replay's clock, so the state is asked for every few seconds;
