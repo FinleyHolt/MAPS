@@ -20,56 +20,101 @@ reasoning and the pictures it looked at, and how long each search took. With MAP
 releases each of its answers when that run says it landed, so the participant meets them in
 the order and at the rate they arrived.
 
+The briefing awaits the owner's approval.
+
 ## For participants
 
 Everything is in `READ ME FIRST.txt` inside the download ([its source](bundle/READ%20ME%20FIRST.txt)).
-In short: double-click the launcher for your system, type your label in the page that opens,
-and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/), and with it
-Python and the console's packages, into the unzipped folder and uv's cache; that needs the
-internet once. A Mac or Windows computer with 8 GB of memory, 6 GB of free disk, Chrome or
-Firefox and a mouse is enough.
+In short: unzip, double-click the launcher for your system, type your label in the page that
+opens, and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/), and with
+it Python and the console's packages, into the unzipped folder and uv's cache; that needs the
+internet once. A Mac with macOS 12 or later (macOS 11 or later on Apple silicon) or a Windows
+10 or 11 computer with 8 GB of memory, 6 GB of free disk, Chrome or Firefox and a mouse is
+enough.
 
 ## For the study lead
 
-### Build and share the download
+The kit is one folder, here `$KIT`; every command below names it with `--kit`.
 
 ```sh
-python -m baselines.human.study_package bundle --kit ~/datasets/calcity-campaign/study-kit --out MAPS-study.zip
+KIT=~/datasets/calcity-campaign/study-kit
 ```
 
-The zip (about 2.5 GB) holds the kit below, the console's Python code (never the bench's
-corpus and its targets), the briefing, and a launcher per system from [`bundle/`](bundle/):
-`Start study (Mac).command`, `Start study (Windows).bat` and `start-study.sh`.
+### Build and share the download
+
+The kit carries the console's built web code. After any change under `console/`, rebuild it
+into the kit:
+
+```sh
+cd baselines/human/console && npm ci && npm run build && rm -rf "$KIT/console" && cp -r dist "$KIT/console"
+```
+
+Then build the zip outside the repository, with the address participants write to:
+
+```sh
+python -m baselines.human.study_package bundle --kit "$KIT" --out ~/MAPS-study.zip --contact <email>
+```
+
+The zip (about 2.5 GB) holds the kit, the console's Python code (never the bench's corpus and
+its targets), the briefing, `kit/contact.txt`, and the launchers from [`bundle/`](bundle/):
+`Start study (Mac).command` and `Start study (Windows).bat`. Inside it, `app/run.sh` starts
+the study on Linux too. The READ ME and the visit page's last step give the `--contact`
+address.
 
 Upload **the zip file itself** to Google Drive and share it by link. Never share an unzipped
 folder: Drive zips a folder on download and drops the Mac launcher's permission to run. Send
 each participant the link and their label (`p01` to `p40`). The label is the only thing that
-identifies them in any file.
+identifies them in any file. An invitation:
 
-To rehearse the whole visit quickly, start a launcher with `MAPS_STUDY_SESSION_S=300` in its
-environment: each session then lasts five minutes. Rehearse in a separate unzip, since a
-session's clock and answers stay in its folder.
+> Thank you for taking part in the search study. Your participant label is **p07**; it is the
+> only thing that identifies you, so never type your name in the study.
+>
+> Download the study here: <link>. It is one zip file of about 2.5 GB. Google Drive says it is
+> too large to preview and cannot scan it for viruses; both are normal, so press "Download
+> anyway".
+>
+> Unzip it before anything else. On a Mac, double-click the zip. On Windows, right-click the
+> zip, choose Properties, tick "Unblock" if it is there and press OK; then right-click it
+> again and choose "Extract All". Open the new MAPS-study folder and follow
+> `READ ME FIRST.txt`. The Mac or Windows will warn about the launcher the first time; the
+> READ ME says which buttons to press.
+>
+> You need a Mac with macOS 12 or later (11 on Apple silicon) or a Windows 10 or 11 computer,
+> a mouse, Chrome or Firefox and about two hours. Questions about the setup: <email>.
 
 The launchers are unsigned, so macOS and Windows warn on the first start; the READ ME walks
 through both warnings.
 
+### Rehearse
+
+To rehearse the whole visit quickly, start the launcher from a terminal with
+`MAPS_STUDY_SESSION_S` set, for example `MAPS_STUDY_SESSION_S=600 sh MAPS-study/app/run.sh`:
+each session then lasts ten minutes. The variable sets a session's length when the session
+first starts; a resumed session keeps the length its `session.json` recorded. Give a session
+long enough to meet MAPS's answers on the verify screen, since the console releases them on
+MAPS's own timing. Rehearse in a separate unzip, since a session's clock and answers stay in
+its folder.
+
 ### Collect and score
 
-At the end the visit page offers the participant `maps-study-<p>.tgz`, which they email. It
+At the end the visit page offers the participant `maps-study-<p>.zip`, which they email. It
 holds `results/<p>/<condition>/answers.jsonl` (one line per answer: its source, `own_search`,
 `confirm`, `replace` or `skip`, the point, and when the report was opened and answered, UTC)
-and `session.json` (the session's start, length and list). Unpack it into a kit and check it:
+and `session.json` (the session's start, length and list). Unpack it into the kit, never over
+a file already there, and check it:
 
 ```sh
-tar xzf maps-study-p07.tgz -C ~/maps-study
-python -m baselines.human.study_qc p07            # --misses lists every report they got wrong
+unzip -n maps-study-p07.zip -d "$KIT"
+python -m baselines.human.study_qc p07 --kit "$KIT"      # --misses lists every report they got wrong
 ```
 
-`study_qc` scores each condition with `team_rows` into `~/maps-study/scored/p07-solo` and
-`p07-team`, prints correct finds per session hour, answers by source and how the person met
-MAPS's answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), and
-exits non-zero when a ledger fails a check: a report answered twice, an answer after the
-session's end, a lost clock.
+`study_qc` scores each condition with `team_rows` into `$KIT/scored/p07-solo` and `p07-team`,
+prints correct finds per session hour, answers by source and how the person met MAPS's
+answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), and exits
+non-zero when a ledger fails a check: a report answered twice, an answer after the session's
+end, an unreadable line, a clock moved back (an answer before the session's start or before
+the previous answer), a lost clock. It refuses a label that is not on the kit's plan (`P07` is
+`p07`).
 
 The scored root reads like any bench root (`benchmarks.citynav.analysis.run_report`). With
 MAPS it also holds every MAPS answer released within the session that the person never
@@ -78,8 +123,7 @@ reached, scored as MAPS scored it. A skip scores as a miss.
 ### Run it from a clone
 
 From the repository with `pip install -e '.[study]'`, the same visit is
-`python -m baselines.human.study_server [p07] --kit <kit>`; naming a condition after the label
-(`practice`, `first`, `second`, `solo`, `team`) opens that session at once.
+`python -m baselines.human.study_server --kit "$KIT"`.
 
 ### The kit
 
@@ -87,8 +131,7 @@ The kit is built from the bench's own files by `baselines.human.study_package` (
 `records`): the ortho as map tiles, MAPS's run as the verify screens read it, the OSM prior and
 labelled objects, and the plan (`baselines.human.capacity plan` for `p01` to `p40`, halves of
 equal MAPS SR, counterbalanced in groups of four, and `capacity practice`). The console's web
-source is `baselines/human/console` (`npm ci && npm run build`); the kit carries the built
-copy in `console/`.
+source is `baselines/human/console`; the kit carries the built copy in `console/`.
 
 Sessions run unsupervised, so nothing enforces the rule against other maps during a session;
 the briefing states it and the answer times show a session that stalled.
