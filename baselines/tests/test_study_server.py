@@ -1,7 +1,8 @@
 """The study console's routes off a download: a tile by its XYZ address out of the MBTiles file
 (whose rows count from the south), the paper tone for a tile it lacks, and the AO, from any
-folder name; a plain answer for every route asked before a session or a label exists; the
-OSM kinds in plain words; the command line; a second start while the first still serves."""
+folder name; a plain answer for every route asked before a session or a label exists; a map
+click that keeps its report's id; OSM kinds in plain words; the command line; a second start
+while the first still serves."""
 
 import json
 import socket
@@ -44,6 +45,28 @@ def test_before_a_session_or_a_label(tmp_path) -> None:
         assert c.get(path, follow_redirects=False).headers["location"] == "/visit"
     r = c.get("/visit/results.zip")
     assert r.status_code == 404 and "/visit" in r.text
+
+
+def test_a_select_keeps_its_report(tmp_path, monkeypatch) -> None:
+    import benchmarks.flight.tile_georef as georef
+
+    monkeypatch.setattr(georef, "lonlat_to_local", lambda tiles, name, lon, lat: (lon * 2, lat * 2))
+    acts = []
+
+    class Session:
+        def state(self) -> dict:
+            return {}
+
+        def act(self, req: dict) -> dict:
+            acts.append(req)
+            return {"ok": True}
+
+    monkeypatch.setattr(study_server, "open_session", lambda kit, participant, condition: Session())
+    c = _client(tmp_path)
+    c.get("/visit/label?label=p01")
+    c.post("/visit/start/practice")
+    c.post("/capacity/act", json={"action": "select", "lon": 1.0, "lat": 2.0, "episode_id": "e1"})
+    assert acts == [{"action": "select", "episode_id": "e1", "x": 2.0, "y": 4.0}]
 
 
 def test_osm_kinds_in_plain_words() -> None:

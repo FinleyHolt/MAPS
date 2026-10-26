@@ -202,7 +202,7 @@ def build_app(kit: Path, console: Path, visit: Visit):
                 xy = lonlat_to_local(tiles_dir, map_name, float(req["lon"]), float(req["lat"]))
                 if xy is None:
                     raise HTTPException(400, "that point is off the map")
-                req = {"action": "select", "x": xy[0], "y": xy[1]}
+                req = {**{k: v for k, v in req.items() if k not in ("lon", "lat")}, "x": xy[0], "y": xy[1]}
             out = cap.act(req)
             return {**out, "state": doc()}
 
