@@ -69,7 +69,13 @@ PLAIN = {("road", "residential"): "residential street", ("road", "living_street"
          ("landuse", "track"): "running track", ("landuse", "peak"): "hill", ("aeroway", "aerodrome"): "airport",
          ("poi", None): "place", ("poi", "doityourself"): "hardware store", ("poi", "fuel"): "gas station",
          ("poi", "tyres"): "tire shop", ("poi", "alcohol"): "liquor store", ("poi", "convenience"): "convenience store",
-         ("poi", "mobile_phone"): "phone shop", ("power", None): "power line"}
+         ("poi", "mobile_phone"): "phone shop", ("power", None): "power line",
+         ("landuse", "greenfield"): "building land", ("aeroway", "apron"): "airport apron",
+         ("building", "townhall"): "town hall", ("poi", "tobacco"): "tobacco shop", ("building", "roof"): "shelter roof",
+         ("landuse", "religious"): "church grounds", ("road", "crossing"): "crosswalk",
+         ("barrier", None): "fence or wall", ("landuse", "commercial"): "commercial area",
+         ("landuse", "industrial"): "industrial area", ("landuse", "retail"): "shopping area",
+         ("road", "turning_circle"): "cul-de-sac", ("poi", "veterinary"): "vet"}
 
 
 def _layer(row: dict) -> str:
@@ -100,11 +106,12 @@ def prior_doc(map_name: str, ll) -> dict[str, Any]:
         for r in rs if isinstance(rs, list) else []:
             if not isinstance(r, dict):
                 continue
+            r = {**r, "category": category}
             pts = [(float(p[0]), float(p[1])) for p in r.get("world_contour") or [] if len(p) >= 2]
             if (category == "roads" or r.get("highway")) and len(pts) >= 2:
                 line = pts
             else:
-                geom = _row_area({**r, "category": category})
+                geom = _row_area(r)
                 if geom is None or not hasattr(geom, "exterior"):
                     continue
                 line = list(geom.simplify(PRIOR_SIMPLIFY_M).exterior.coords)

@@ -8,6 +8,7 @@ import json
 import socket
 import sqlite3
 import threading
+from types import SimpleNamespace
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -81,6 +82,27 @@ def test_osm_kinds_in_plain_words() -> None:
     assert kind({"category": "pois", "shop": "doityourself"}) == "hardware store"
     assert kind({"category": "buildings"}) == "building"
     assert kind({"category": "pois", "amenity": "clinic"}) == "clinic"
+    assert kind({"category": "landuse", "landuse": "greenfield"}) == "building land"
+    assert kind({"category": "aeroway", "aeroway": "apron"}) == "airport apron"
+    assert kind({"category": "buildings", "building": "townhall"}) == "town hall"
+    assert kind({"category": "buildings", "building": "roof"}) == "shelter roof"
+    assert kind({"category": "pois", "shop": "tobacco"}) == "tobacco shop"
+    assert kind({"category": "landuse", "landuse": "religious"}) == "church grounds"
+    assert kind({"category": "roads", "highway": "crossing"}) == "crosswalk"
+    assert kind({"category": "barrier", "barrier": "fence"}) == "fence or wall"
+
+
+def test_every_prior_feature_carries_its_layer(monkeypatch) -> None:
+    from benchmarks.citynav.run_benchmark import assets
+
+    square = [[0, 0], [0, 10], [10, 10], [10, 0]]
+    features = {"roads": [{"highway": "residential", "name": "Lime Avenue", "world_contour": [[0, 0], [50, 0]]}],
+                "buildings": [{"building": "yes", "world_contour": square}],
+                "landuse": [{"landuse": "greenfield", "world_contour": square}],
+                "pois": [{"amenity": "cafe", "name": "Cafe", "world_contour": square}]}
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: SimpleNamespace(base_features=features))
+    doc = study_server.prior_doc("calcity", lambda pts: [list(p) for p in pts])
+    assert sorted(f["properties"]["layer"] for f in doc["features"]) == ["building", "landuse", "poi", "road"]
 
 
 def test_the_command_line_takes_no_participant() -> None:
