@@ -50,41 +50,26 @@ files elsewhere, untar them there and add `--kit <folder>` to each command.
 
 ## The visit
 
-Read [briefing.md](briefing.md) first. Then, with your own label in place of `p07`:
+With your own label in place of `p07`:
 
 ```sh
-python -m baselines.human.study_server p07 practice
+python -m baselines.human.study_server p07
 ```
 
-Open <http://127.0.0.1:8788/> in the browser. Work the four practice reports and try every
-tool the briefing lists. Stop the console with Ctrl-C in the terminal when done.
+The browser opens the study's page (or open <http://127.0.0.1:8788/> yourself). Keep the
+terminal window open until you are done. The page walks the whole visit: the briefing,
+practice, session 1, the break and session 2. Each session's 40 minutes start when you press
+its button, and the console ends the session itself.
 
-```sh
-python -m baselines.human.study_server p07 first
-```
-
-The plan decides whether you start alone or with MAPS; the console's top bar says which.
-**The 40 minutes start when this command starts**, so be seated and ready. Reload the
-browser page. The console ends the session itself and refuses further answers. Then Ctrl-C.
-
-Take the break, then:
-
-```sh
-python -m baselines.human.study_server p07 second
-```
-
-During a session, use only the console: no other maps, websites or phones. If the console
-or the browser stops, run the same command again. The session resumes on its own clock,
-with the lost time counted against it. Never delete a session's folder to start it again.
+During a session, use only the console: no other maps, websites or phones. If the console or
+the browser stops, run the same command again: the page picks up where you were, and a session
+resumes on its own clock, with the lost time counted against it. Never delete a session's
+folder to start it again.
 
 ## Send your results
 
-```sh
-tar czf ~/maps-study-p07.tgz -C ~/maps-study results/p07
-```
-
-Email `~/maps-study-p07.tgz` to the study lead. It holds your answers and when you gave
-them, and nothing else about you.
+At the end the page offers your results file. Email it to the study lead. It holds your
+answers and when you gave them, and nothing else about you.
 
 ## For the study lead
 
