@@ -27,9 +27,9 @@ The briefing awaits the owner's approval.
 Everything is in `READ ME FIRST.txt` inside the download ([its source](bundle/READ%20ME%20FIRST.txt)).
 In short: unzip, double-click the launcher for your system, type your label in the page that
 opens, and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/), and with
-it Python and the console's packages, into the unzipped folder and uv's cache; that needs the
-internet once. A Mac with macOS 12 or later (macOS 11 or later on Apple silicon) or a Windows
-10 or 11 computer with 8 GB of memory, 6 GB of free disk, Chrome or Firefox and a mouse is
+it Python and the console's packages, into the unzipped folder; that needs the internet once.
+A Mac with macOS 12 or later (macOS 11 or later on Apple silicon) or a computer with 64-bit
+Windows 10 or 11, with 8 GB of memory, 6 GB of free disk, Chrome or Firefox and a mouse, is
 enough.
 
 ## For the study lead
@@ -55,6 +55,9 @@ Then build the zip outside the repository, with the address participants write t
 python -m baselines.human.study_package bundle --kit "$KIT" --out ~/MAPS-study.zip --contact <email>
 ```
 
+It refuses a kit without `console/index.html`, `plan/plan.json`, `calcity_ortho.mbtiles` or
+`maps_root/episodes.jsonl`, and it follows symlinked folders in the kit.
+
 The zip (about 2.5 GB) holds the kit, the console's Python code (never the bench's corpus and
 its targets), the briefing, `kit/contact.txt`, and the launchers from [`bundle/`](bundle/):
 `Start study (Mac).command` and `Start study (Windows).bat`. Inside it, `app/run.sh` starts
@@ -76,14 +79,23 @@ identifies them in any file. An invitation:
 > Unzip it before anything else. On a Mac, double-click the zip. On Windows, right-click the
 > zip, choose Properties, tick "Unblock" if it is there and press OK; then right-click it
 > again and choose "Extract All". Open the new MAPS-study folder and follow
-> `READ ME FIRST.txt`. The Mac or Windows will warn about the launcher the first time; the
+> "READ ME FIRST.txt". The Mac or Windows will warn about the launcher the first time; the
 > READ ME says which buttons to press.
 >
-> You need a Mac with macOS 12 or later (11 on Apple silicon) or a Windows 10 or 11 computer,
-> a mouse, Chrome or Firefox and about two hours. Questions about the setup: <email>.
+> You need a Mac with macOS 12 or later (11 on Apple silicon) or a computer with 64-bit
+> Windows 10 or 11, 8 GB of memory, 6 GB of free disk space, an internet connection for the
+> first start, a mouse, Chrome or Firefox and about two hours. Questions about the setup:
+> <email>.
 
 The launchers are unsigned, so macOS and Windows warn on the first start; the READ ME walks
 through both warnings.
+
+### A wrong label, or one copy for a second person
+
+The label stays changeable on the visit page until session 1 starts. After that the unzipped
+folder belongs to that label. To correct it, or to hand the same copy to someone else, have
+the participant save their results file first, then move `MAPS-study/kit/results/<label>` out
+of the folder and start the study again: the page asks for a label as on the first start.
 
 ### Rehearse
 
