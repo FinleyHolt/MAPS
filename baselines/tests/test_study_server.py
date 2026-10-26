@@ -2,8 +2,8 @@
 (whose rows count from the south), the paper tone for a tile it lacks, and the AO, from any
 folder name; a plain answer for every route asked before a session or a label exists; a running
 session open again on a relaunch; a map click that keeps its report's id; OSM kinds in plain
-words; the command line; a second start while the first still serves, and another program on
-the port."""
+words; the command line; a second start while the first serves or still starts, found past a
+system proxy, and another program on the port."""
 
 import json
 import socket
