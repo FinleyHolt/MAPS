@@ -133,6 +133,10 @@ class Capacity:
             meta.write_text(json.dumps({"arm": arm, "agents": agents if arm == "team" else 0, "session_s": self.session_s,
                                         "started_epoch": self.started, "started_at": _utc(self.started),
                                         "episodes_n": len(order), "order": order}, indent=1))
+        if self.ledger.is_file() and self.ledger.read_bytes()[-1:] not in (b"", b"\n"):
+            # A line torn by a power loss: the next answer starts on a line of its own.
+            with self.ledger.open("a") as fh:
+                fh.write("\n")
         self.answered = {a["episode_id"]: a for a in _jsonl(self.ledger)}
         self._cache: dict = {}
         self._open()

@@ -3,6 +3,7 @@ a stale tab, a torn last line, a relaunch mid-report and a relaunch without the 
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -36,3 +37,12 @@ def test_an_action_for_a_report_that_already_changed_is_refused(tmp_path, monkey
     assert stale == {"ok": False, "error": "That report already changed. The page now shows the current one."}
     assert len((tmp_path / "p01" / "solo" / "answers.jsonl").read_text().splitlines()) == 1
     assert s.act({"action": "skip"})["ok"]
+
+
+def test_a_torn_last_line_is_repaired_before_the_next_answer(tmp_path, monkeypatch) -> None:
+    ledger = tmp_path / "p01" / "solo" / "answers.jsonl"
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text('{"episode_id": "block_0::1#0", "sou')
+    s = _session(tmp_path, monkeypatch, "solo", [1000.0])
+    assert s.act({"action": "skip"})["ok"]
+    assert json.loads(ledger.read_text().splitlines()[-1])["episode_id"] == "block_0::1#0"
