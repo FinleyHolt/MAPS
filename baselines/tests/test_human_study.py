@@ -134,6 +134,7 @@ def test_the_audit_console_is_blind_and_resumes_after_its_last_decision(tmp_path
     for leak in ("target_xy", "100.0", '"SR"', '"NE"', "metrics"):
         assert leak not in blob, leak
     assert s.act({"action": "candidate", "id": 1})["ok"] and s.state()["selected"]["affordable"]
+    assert s.state()["selected"]["refusal"] is None
     assert s.act({"action": "replace", "opened": [0]})["ok"]
     (d,) = [json.loads(ln) for ln in (out / "decisions.jsonl").read_text().splitlines()]
     assert d["decision"] == "replace" and d["candidate"] == 1 and d["xy"] == [0.0, 98.0] and d["opened"] == [0]
@@ -155,8 +156,9 @@ def test_a_replacement_maps_could_not_have_flown_is_refused_in_plain_words(tmp_p
     monkeypatch.setattr(assets, "load_episode_assets", lambda m: type("A", (), {"base_features": {}})())
     s = audit_console.Session(_root(tmp_path), ["block_0::1#0"], tmp_path / "p01")
     assert s.act({"action": "select", "x": 0.0, "y": 1e6})["ok"]
-    assert s.act({"action": "replace"}) == {
-        "ok": False, "error": "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm."}
+    refusal = "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm."
+    assert s.state()["selected"]["refusal"] == refusal
+    assert s.act({"action": "replace"}) == {"ok": False, "error": refusal}
 
 
 def test_with_the_benchmark_labels_the_candidates_are_the_labelled_objects_near_the_run(tmp_path, monkeypatch) -> None:

@@ -55,6 +55,8 @@ LABELS_NEAR_M = 300.0
 COLOURS = {"prior": (255, 214, 0), "candidate": (0, 220, 255), "maps": (255, 0, 255),
            "selected": (60, 255, 60), "stop": (255, 255, 255)}
 _SHA = re.compile(r"^[0-9a-f]{64}$")
+#: A replacement MAPS's remaining flight could not reach, as the participant reads it.
+UNREACHABLE = "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm."
 
 
 @dataclass
@@ -324,11 +326,15 @@ class Session:
             "turns": r.turns, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
             "candidates": [{"id": c.id, "label": c.label, "color": c.color, "dist_m": round(_reach(c, r.maps_xy))}
                            for c in sorted(r.candidates, key=lambda c: _reach(c, r.maps_xy))],
-            "selected": None if sel is None else {**sel, "affordable": affordable(self.rows[r.episode_id], sel["xy"], self.max_steps)},
+            "selected": None if sel is None else self._selected(sel),
             "landmarks": [{"name": lm.name, "kind": str(lm.tags.get("category") or ""),
                            "dist_m": round(float(np.hypot(lm.centroid[0] - r.maps_xy[0], lm.centroid[1] - r.maps_xy[1])))}
                           for lm in sorted(r.landmarks, key=lambda lm: np.hypot(lm.centroid[0] - r.maps_xy[0], lm.centroid[1] - r.maps_xy[1]))],
         }
+
+    def _selected(self, sel: dict) -> dict:
+        ok = affordable(self.rows[self.review.episode_id], sel["xy"], self.max_steps)
+        return {**sel, "affordable": ok, "refusal": None if ok else UNREACHABLE}
 
     def act(self, req: dict) -> dict:
         r = self.review
@@ -387,7 +393,7 @@ class Session:
             if not self.selected:
                 return {"ok": False, "error": "select a candidate or a point first"}
             if not affordable(self.rows[r.episode_id], self.selected["xy"], self.max_steps):
-                return {"ok": False, "error": "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm."}
+                return {"ok": False, "error": UNREACHABLE}
         decision = {
             "episode_id": r.episode_id, "decision": kind,
             "xy": list(self.selected["xy"]) if kind == "replace" else list(r.maps_xy),
