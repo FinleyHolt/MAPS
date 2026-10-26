@@ -403,7 +403,8 @@ class Visit:
         if folder is None or not folder.is_dir():
             return None
         buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        # A file dated before 1980 (a computer whose clock was reset) is stored at 1980, not refused.
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as z:
             for f in sorted(folder.rglob("*")):
                 if f.is_file():
                     z.write(f, f"results/{self.participant}/{f.relative_to(folder).as_posix()}")

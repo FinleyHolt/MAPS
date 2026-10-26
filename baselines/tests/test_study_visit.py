@@ -5,6 +5,7 @@ file carries the answers and no account names; the briefing renders as HTML."""
 
 import io
 import json
+import os
 import re
 import time
 import zipfile
@@ -122,6 +123,8 @@ def test_results_file(tmp_path) -> None:
     members = zipfile.ZipFile(io.BytesIO(v.results_zip())).infolist()
     assert "results/p01/solo/answers.jsonl" in {m.filename for m in members}
     assert all(m.extra == b"" for m in members)
+    os.utime(tmp_path / "results" / "p01" / "solo" / "answers.jsonl", (0, 0))
+    assert v.results_zip()
     (tmp_path / "contact.txt").unlink()
     assert "the study lead" in Visit(tmp_path).page()
 
