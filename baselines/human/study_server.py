@@ -319,8 +319,6 @@ def open_session(kit: Path, participant: str, condition: str) -> Any:
     out = kit / "results" / participant / condition
     if condition == "practice":
         shutil.rmtree(out, ignore_errors=True)
-    elif (out / "session.json").is_file():
-        print(f"{participant} {condition} has a session already: resuming its clock")
     order = [ln.strip() for ln in order_file.read_text().splitlines() if ln.strip()]
     return Capacity(root, order, out, arm, labels=bench_labels(), session_s=session_s())
 
