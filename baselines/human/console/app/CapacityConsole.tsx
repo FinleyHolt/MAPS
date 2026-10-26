@@ -225,6 +225,7 @@ export function CapacityConsole() {
 
   return (
     <div className="station capacity">
+      <div>
       <header className="cap-bar">
         <span className="cap-title">Search study</span>
         <span className="cap-arm">{head?.session ?? ""}</span>
@@ -236,10 +237,12 @@ export function CapacityConsole() {
       </header>
       {lost ? (
         <p className="cap-lost" role="alert">
-          Lost contact with the study. If the black text window was closed, start the study again, then reload this page.{" "}
+          Lost contact with the study. If the text window that runs the study was closed, start the study again as in
+          READ ME FIRST step 1. Your session's clock keeps running.{" "}
           <a href="/visit">Back to the study page</a>
         </p>
       ) : null}
+      </div>
 
       {st?.over ? (
         <div className="judge-done">
