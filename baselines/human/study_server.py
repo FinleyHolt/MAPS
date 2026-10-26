@@ -528,8 +528,9 @@ def _is_study(url: str) -> bool:
     """Whether the server at ``url`` is this study, by its visit page."""
     import urllib.request
 
+    # Straight to the computer itself, past any system proxy.
     try:
-        with urllib.request.urlopen(url + "visit", timeout=3) as r:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url + "visit", timeout=3) as r:
             return b"The search study" in r.read()
     except (OSError, ValueError):
         return False

@@ -128,24 +128,41 @@ def test_the_command_line_takes_no_participant() -> None:
     assert e.value.code == 2
 
 
-def test_a_second_start_points_at_the_first(tmp_path, capsys) -> None:
-    class Study(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"<title>The search study</title>")
+class _Study(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"<title>The search study</title>")
 
-        def log_message(self, *_args) -> None:
-            pass
+    def log_message(self, *_args) -> None:
+        pass
 
-    server = HTTPServer(("127.0.0.1", 0), Study)
+
+@pytest.fixture
+def study():
+    server = HTTPServer(("127.0.0.1", 0), _Study)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        assert study_server.main(["--kit", str(tmp_path), "--port", str(server.server_port), "--no-browser"]) == 0
-    finally:
-        server.shutdown()
+    yield server.server_port
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_second_start_points_at_the_first(tmp_path, capsys, study) -> None:
+    assert study_server.main(["--kit", str(tmp_path), "--port", str(study), "--no-browser"]) == 0
     out = capsys.readouterr().out
     assert "already running" in out and "Keep this window open" not in out
+
+
+def test_the_study_is_found_past_a_system_proxy(monkeypatch, study) -> None:
+    import urllib.request
+
+    # urlopen keeps the opener of its first call, with the proxies of that moment.
+    monkeypatch.setattr(urllib.request, "_opener", None)
+    for name in ("no_proxy", "NO_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    for name in ("http_proxy", "HTTP_PROXY"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")
+    assert study_server._is_study(f"http://127.0.0.1:{study}/")
 
 
 def test_another_program_on_the_port(tmp_path, capsys) -> None:
