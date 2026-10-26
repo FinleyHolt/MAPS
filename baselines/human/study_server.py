@@ -550,7 +550,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-browser", action="store_true", help="do not open the browser")
     args = ap.parse_args(argv)
     url = f"http://{args.host}:{args.port}/"
-    if _answers(args.host, args.port):
+
+    def taken() -> int:
         if not _is_study(url):
             print(f"Port {args.port} is taken by another program. Restart the computer and start the study again.")
             return 1
@@ -558,6 +559,9 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_browser:
             webbrowser.open(url)
         return 0
+
+    if _answers(args.host, args.port):
+        return taken()
     kit = args.kit.expanduser()
     console = kit / "console"
     if not (console / "index.html").is_file():
@@ -565,10 +569,24 @@ def main(argv: list[str] | None = None) -> int:
     use_kit(kit)
     import uvicorn
 
+    app = build_app(kit, console, Visit(kit))
+    # The port, bound and listening before anything says the study runs: a second start during
+    # this one's startup finds it here rather than failing to bind after its own.
+    sock = socket.socket()
+    if os.name != "nt":
+        # Windows lets a second program bind a port held with this option; elsewhere it only
+        # skips the wait after a closed server.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((args.host, args.port))
+        sock.listen()
+    except OSError:
+        sock.close()
+        return taken()
     print(f"The study is running at {url}. Keep this window open until you have saved your results file.")
     if not args.no_browser:
         threading.Thread(target=_open_when_ready, args=(args.host, args.port, url), daemon=True).start()
-    uvicorn.run(build_app(kit, console, Visit(kit)), host=args.host, port=args.port, log_level="warning")
+    uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port, log_level="warning")).run(sockets=[sock])
     return 0
 
 

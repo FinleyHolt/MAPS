@@ -153,6 +153,15 @@ def test_a_second_start_points_at_the_first(tmp_path, capsys, study) -> None:
     assert "already running" in out and "Keep this window open" not in out
 
 
+def test_a_second_start_during_the_first_ones_startup_points_at_the_first(tmp_path, capsys, monkeypatch, study) -> None:
+    _client(tmp_path)
+    monkeypatch.setattr(study_server, "_answers", lambda host, port: False)
+    monkeypatch.setattr(study_server, "use_kit", lambda kit: None)
+    assert study_server.main(["--kit", str(tmp_path), "--port", str(study), "--no-browser"]) == 0
+    out = capsys.readouterr().out
+    assert "already running" in out and "Keep this window open" not in out
+
+
 def test_the_study_is_found_past_a_system_proxy(monkeypatch, study) -> None:
     import urllib.request
 
