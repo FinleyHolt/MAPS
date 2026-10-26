@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { OsmSearch, OsmToggle, pointFeature, ringFeature, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, keyCommand, pollState } from "@/app/capacityView";
+import { actBody, header, keyCommand, overLines, pollState } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
@@ -40,8 +40,6 @@ const STATUS: Record<string, string> = {
 /** Labelled objects listed before "show more". */
 const NEAREST = 5;
 const CAPTURE = new URLSearchParams(window.location.search).has("capture");
-
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -195,19 +193,20 @@ export function CapacityConsole() {
     };
   }, [m.mapRef]);
 
+  const head = st ? header(st) : null;
   const objects = review?.candidates ?? [];
   const pick = objects.find((c) => c.id === review?.maps_pick);
 
   return (
     <div className="station capacity">
       <header className="cap-bar">
-        <span className="cap-title">MAPS · Operator console</span>
-        <span className="cap-mission">{cur ? `report ${cur.n}` : st?.over ? "session over" : "loading"}</span>
-        <span className="cap-arm">{st?.arm === "team" ? "with MAPS" : st ? "alone" : ""}</span>
+        <span className="cap-title">Search study</span>
+        <span className="cap-arm">{head?.session ?? ""}</span>
+        <span className="cap-mission">{cur ? `report ${cur.n}` : st?.over ? "finished" : "loading"}</span>
         <span className="station-spacer" />
         {st?.practice && !st.over ? <a className="cap-continue" href="/visit">Done practicing</a> : null}
         {st ? <span className="cap-count">{st.answered_n} answered · {st.skipped_n} skipped</span> : null}
-        {st ? <span className="cap-clock" title="time left in this session">{clock(st.remaining_s)}</span> : null}
+        {head?.clock ? <span className="cap-clock">{head.clock}</span> : null}
       </header>
       {lost ? (
         <p className="cap-lost" role="alert">
@@ -218,8 +217,7 @@ export function CapacityConsole() {
 
       {st?.over ? (
         <div className="judge-done">
-          <p className="cap-report-text">The session is over: {st.answered_n} answered, {st.skipped_n} skipped.</p>
-          <p className="cap-hint">Every answer is saved. The report open when time ran out is not counted.</p>
+          {overLines(st).map((line, i) => <p key={line} className={i ? "cap-hint" : "cap-report-text"}>{line}</p>)}
           <p><a className="cap-continue" href="/visit">Continue</a></p>
         </div>
       ) : (

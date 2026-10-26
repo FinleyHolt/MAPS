@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { actBody, keyCommand, pollState } from "./capacityView.ts";
+import { actBody, header, keyCommand, overLines, pollState } from "./capacityView.ts";
 
 const team = { arm: "team", practice: false, remaining_s: 723, over: false, current: { episode_id: "calcity::7#6", mode: "verify" } };
 const practice = { ...team, arm: "solo", practice: true, current: { episode_id: "calcity::1#0", mode: "search" } };
@@ -28,4 +28,18 @@ test("a failed poll reads as lost contact, and a good one as the state", async (
   assert.equal(await pollState(async () => ({ ok: false, status: 409, json: async () => ({ detail: "x" }) })), null);
   assert.equal(await pollState(async () => { throw new TypeError("Failed to fetch"); }), null);
   assert.deepEqual(await pollState(async () => ({ ok: true, status: 200, json: async () => team })), team);
+});
+
+test("the header names the session; practice has no clock", () => {
+  assert.deepEqual(header(team), { session: "Session: with MAPS", clock: "12:03 left" });
+  assert.deepEqual(header({ ...team, arm: "solo" }), { session: "Session: alone", clock: "12:03 left" });
+  assert.deepEqual(header(practice), { session: "Practice", clock: null });
+});
+
+test("practice ends without a time-ran-out sentence", () => {
+  const lines = overLines({ ...practice, over: true, answered_n: 4, skipped_n: 0 });
+  assert.deepEqual(lines, ["Practice finished. Press Continue to go back to the study page."]);
+  const real = overLines({ ...team, over: true, answered_n: 3, skipped_n: 1 }).join(" ");
+  assert.match(real, /3 answered, 1 skipped/);
+  assert.match(real, /time ran out/);
 });
