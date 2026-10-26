@@ -465,8 +465,7 @@ class Visit:
             now = ("<h2>Done. One last step: send your results</h2>"
                    "<form action='/visit/results.zip' onsubmit=\"document.getElementById('saved').hidden=false\">"
                    "<button>Save my results file</button></form>"
-                   f"<p id=saved hidden>Saved {zipname}, usually in your Downloads folder. "
-                   f"Now email it to {contact}.</p>"
+                   "<p id=saved hidden>Your browser is saving the file.</p>"
                    f"<p>Your browser saves {zipname}, usually in your Downloads folder. "
                    f"Attach it to an email to {contact}. Then you can close this page and the "
                    "text window (on a Mac, press Terminate if asked).</p>")

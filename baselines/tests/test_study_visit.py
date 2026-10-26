@@ -123,8 +123,7 @@ def test_results_file(tmp_path) -> None:
     page = v.page()
     assert "Save my results file" in page and "maps-study-p01.zip" in page and "lead@example.org" in page
     assert "the text window (on a Mac, press Terminate if asked)." in page
-    assert ("<p id=saved hidden>Saved maps-study-p01.zip, usually in your Downloads folder. "
-            "Now email it to lead@example.org.</p>") in page
+    assert "<p id=saved hidden>Your browser is saving the file.</p>" in page
     members = zipfile.ZipFile(io.BytesIO(v.results_zip())).infolist()
     assert "results/p01/solo/answers.jsonl" in {m.filename for m in members}
     assert all(m.extra == b"" for m in members)
