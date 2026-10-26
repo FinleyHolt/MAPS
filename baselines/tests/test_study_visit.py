@@ -5,11 +5,12 @@ file carries the answers and no account names; the briefing renders as HTML."""
 
 import io
 import json
+import re
 import tarfile
 import time
 
 from baselines.human import study_server
-from baselines.human.study_server import STEPS, Visit, md_html
+from baselines.human.study_server import STEPS, Visit
 
 
 def _kit(tmp_path, contact: str | None = None):
@@ -87,7 +88,9 @@ def test_results_file(tmp_path) -> None:
     assert "the study lead" in Visit(tmp_path).page()
 
 
-def test_briefing_markdown() -> None:
-    out = md_html("# Title\n\nSome **bold** and `code`\nwrapped.\n\n- one\n  - nested\n    more\n- two\n")
-    assert out.splitlines() == ["<h2>Title</h2>", "<p>Some <b>bold</b> and <code>code</code> wrapped.</p>", "<ul>",
-                                "<li>one</li>", "<ul>", "<li>nested more</li>", "</ul>", "<li>two</li>", "</ul>"]
+def test_briefing_markdown(tmp_path) -> None:
+    v = Visit(_kit(tmp_path))
+    v.set_label("p01")
+    page = v.page()
+    assert "<code>Lime Avenue &amp; 88th Street</code>" in page
+    assert not re.search(r"</li>\s*<ul>", page)

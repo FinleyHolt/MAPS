@@ -291,39 +291,6 @@ STEPS = ("practice", "first", "second")
 CONDITIONS = {"solo": "alone", "team": "with MAPS"}
 
 
-def md_html(text: str) -> str:
-    """The briefing's Markdown as HTML: headings, bullets (one level of nesting), bold, code, paragraphs."""
-    inline = lambda t: re.sub(r"`(.+?)`", r"<code>\1</code>", re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(t)))
-    out, para, depth = [], [], 0
-
-    def flush() -> None:
-        if para:
-            out.append(f"<p>{inline(' '.join(para))}</p>")
-            para.clear()
-
-    for line in text.splitlines() + [""]:
-        bullet = re.match(r"( *)- (.*)", line)
-        want = (len(bullet.group(1)) // 2 + 1) if bullet else (depth if line.startswith("  ") and depth else 0)
-        if not bullet and depth and line.startswith("  "):
-            out[-1] = out[-1][:-5] + " " + inline(line.strip()) + "</li>"
-            continue
-        flush() if bullet or not line.strip() or line.startswith("#") else None
-        while depth < want:
-            out.append("<ul>")
-            depth += 1
-        while depth > want:
-            out.append("</ul>")
-            depth -= 1
-        if bullet:
-            out.append(f"<li>{inline(bullet.group(2))}</li>")
-        elif line.startswith("#"):
-            level = len(line) - len(line.lstrip("#"))
-            out.append(f"<h{level + 1}>{inline(line.lstrip('#').strip())}</h{level + 1}>")
-        elif line.strip():
-            para.append(line.strip())
-    return "\n".join(out)
-
-
 class Visit:
     """One participant's visit, as the visit page walks it: the briefing, practice, the first
     condition, a break, the second, done. Where they are is read off the results on disk, so a
@@ -408,6 +375,8 @@ class Visit:
                     "<form action='/visit/label'><p>Your participant label, from the study lead:</p>"
                     "<input name=label placeholder='p01' autofocus> <button>Continue</button></form>")
             return PAGE.format(body=body)
+        from markdown_it import MarkdownIt
+
         st = {s: self.status(s) for s in STEPS}
         minutes = round(session_s() / 60)
 
@@ -447,7 +416,7 @@ class Visit:
                    + button("practice", "Practice again" if practiced else "Start practice")
                    + f"<h2>Step 3: {name('first')}</h2>" + (button("first", "Start session 1", clock) if practiced
                                                            else "<p class=note>Opens after practice.</p>"))
-        brief = md_html(BRIEFING.read_text()) if BRIEFING.is_file() else ""
+        brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
         return PAGE.format(body=f"<p class=who>Participant {self.participant}</p>{err}{now}<hr>"
                                 f"<div class=brief>{brief}</div>")
 
@@ -456,7 +425,8 @@ PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8><title>The sear
 :root {{ --ink: #141310; --paper: #fbfaf5; --navy: #1f3a5f; --grey: #6b675d; }}
 body {{ margin: 0 auto; max-width: 46rem; padding: 32px 16px 64px; font: 17px/1.5 system-ui, sans-serif;
        color: var(--ink); background: var(--paper); }}
-h1 {{ font-size: 28px; }} h2 {{ font-size: 21px; margin-top: 28px; }} h3 {{ font-size: 18px; }}
+h1 {{ font-size: 28px; }} h2 {{ font-size: 21px; margin-top: 28px; }}
+.brief h1 {{ font-size: 24px; }} .brief h2 {{ font-size: 19px; }}
 button {{ font: inherit; font-weight: 700; padding: 10px 22px; color: #fff; background: var(--navy);
          border: 0; cursor: pointer; }}
 input {{ font: inherit; padding: 8px; width: 8rem; }}

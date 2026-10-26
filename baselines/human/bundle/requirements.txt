@@ -1,6 +1,7 @@
 # What the study console imports, pinned to the versions it was tested on (study_package bundle).
 fastapi==0.162.0
 uvicorn==0.54.0
+markdown-it-py==4.2.0
 numpy==2.5.4
 pillow==13.0.0
 opencv-python-headless==5.0.0.93
