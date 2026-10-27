@@ -156,6 +156,7 @@ def test_the_review_explains_maps_answer_with_its_reply_and_says_what_each_step_
     (attempt / "reply.md").write_text("**Answer: `detected_1`** by the gate, `prior_3`.")
     state = audit_console.Session(root, ["block_0::1#0"], tmp_path / "p02").state()
     assert state["maps_reply"] == "**Answer: `detected_1`** by the gate, `prior_3`."
+    assert state["maps_reason"] == "prior_3 is the gate; detected_1 sits at [0.0, 98.0]"
     assert state["turns"][0]["refs"] == {"prior": ["prior_3"], "detected": ["detected_1", "detected_0", "detected_7"],
                                          "xy": [[0.0, 98.0], [1.0, 2.0], [0.0, 50.0]]}
     assert state["reply_refs"] == {"prior": ["prior_3"], "detected": ["detected_1"], "xy": []}

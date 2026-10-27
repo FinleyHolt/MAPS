@@ -395,6 +395,8 @@ class Session:
                             if r.maps_pick is not None
                             else f"a mapped {r.maps_prior[1]}" if r.maps_prior is not None else "a point, no object under it"),
             "maps_reply": r.reply, "reply_refs": refs_of(r.reply),
+            # The last step's reasoning: the paper figure's capture of the console shows it.
+            "maps_reason": r.turns[-1]["reasoning"] if r.turns else "",
             "turns": r.turns,
             # The detections the search or the reply names: what each step used, on the map.
             "detected": {fid: r.detected[fid] for t in [*r.turns, {"refs": refs_of(r.reply)}]
