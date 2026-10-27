@@ -25,13 +25,13 @@ The briefing awaits the owner's approval.
 ## For participants
 
 Everything is in `READ ME FIRST.txt` inside the download ([its source](bundle/READ%20ME%20FIRST.txt)).
-In short: unzip, double-click the launcher for your system, type your label in the page that
+In short: unzip, start the launcher for your system, type your label in the page that
 opens, and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/) and the console's
 packages into the unzipped folder (uv keeps the Python it fetches in the user's own folder);
 that needs the internet once.
-A Mac with macOS 12 or later (macOS 11 or later on Apple silicon) or a computer with 64-bit
-Windows 10 or 11, with 8 GB of memory, 6 GB of free disk, Chrome or Firefox and a mouse, is
-enough.
+A Mac with macOS 12 or later (macOS 11 or later on Apple silicon), a computer with 64-bit
+Windows 10 or 11, or a 64-bit Linux computer (started from a terminal), with 8 GB of memory,
+6 GB of free disk, Chrome or Firefox and a mouse, is enough.
 
 ## For the study lead
 
