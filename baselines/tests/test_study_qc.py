@@ -95,3 +95,20 @@ def test_a_label_off_the_plan_is_refused(tmp_path, monkeypatch) -> None:
     kit = _kit(tmp_path, monkeypatch)
     with pytest.raises(SystemExit, match="p99 is not a participant on this kit's plan"):
         study_qc.main(["p99", "--kit", str(kit)])
+
+
+def test_a_run_id_or_its_one_label_scores_under_the_run_id(tmp_path, monkeypatch, capsys) -> None:
+    kit = _kit(tmp_path, monkeypatch)
+    (kit / "results" / "p04").rename(kit / "results" / "p04-3f9a2c1e")
+    for arg in ("p04-3f9a2c1e", "p04"):
+        assert study_qc.main([arg, "--kit", str(kit)]) == 1
+        assert "team: 1/1 correct" in capsys.readouterr().out
+        assert (kit / "scored" / "p04-3f9a2c1e-team" / "episodes.jsonl").is_file()
+
+
+def test_a_label_with_two_visits_asks_for_one(tmp_path, monkeypatch) -> None:
+    kit = _kit(tmp_path, monkeypatch)
+    (kit / "results" / "p04").rename(kit / "results" / "p04-3f9a2c1e")
+    (kit / "results" / "p04-0b1c2d3e").mkdir()
+    with pytest.raises(SystemExit, match="p04 has 2 visits: p04-0b1c2d3e, p04-3f9a2c1e; name one"):
+        study_qc.main(["p04", "--kit", str(kit)])

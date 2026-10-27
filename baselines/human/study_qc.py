@@ -1,13 +1,14 @@
 """Score one participant's capacity sessions off the study download and check them (``STUDY.md``).
 
-Each condition in ``<kit>/results/<p>/`` is scored by ``team_rows`` into ``<kit>/scored/<p>-<arm>``
+Each condition in ``<kit>/results/<run id>/`` is scored by ``team_rows`` into ``<kit>/scored/<run id>-<arm>``
 (a bench root the paper's capacity figure reads), then summarised: answers and correct finds by
 source, success, correct finds per session hour, how the person met MAPS's answers, and the
 ledger's own checks (a duplicate answer, an answer after the session's end or before the one ahead
 of it, an unreadable line, a missing clock, a session not of the study's length). It fails when a
-check does, or when the participant lacks either session.
+check does, or when the participant lacks either session. A bare label names its one visit; a
+label with several asks for the run id.
 
-    python -m baselines.human.study_qc p01 [--kit ~/maps-study] [--misses]
+    python -m baselines.human.study_qc p01-3f9a2c1e [--kit ~/maps-study] [--misses]
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
-from baselines.human.study_server import KIT, use_kit
+from baselines.human.study_server import KIT, label_of, use_kit
 
 SOURCES = ("own_search", "confirm", "replace", "skip", "unchecked")
 
@@ -80,37 +81,56 @@ def summary(scored: Path) -> dict:
     return out
 
 
+def run_of(kit: Path, name: str) -> str:
+    """The run id a name means: a run id itself, or the one visit under a bare label."""
+    name = name.strip().lower()
+    results = kit / "results"
+    if "-" not in name and results.is_dir():
+        runs = sorted(p.name for p in results.iterdir() if p.is_dir() and label_of(p.name) == name)
+        if len(runs) > 1:
+            raise SystemExit(f"{name} has {len(runs)} visits: {', '.join(runs)}; name one")
+        name = runs[0] if runs else name
+    if label_of(name) not in json.loads((kit / "plan" / "plan.json").read_text())["participants"]:
+        raise SystemExit(f"{label_of(name)} is not a participant on this kit's plan")
+    return name
+
+
+def score(kit: Path, run: str) -> dict[str, dict]:
+    """Each condition of one run: its failed checks, and its numbers once it has a clock,
+    scored into ``<kit>/scored/<run>-<arm>``."""
+    use_kit(kit)
+    from baselines.human import team_rows
+
+    out = {}
+    for arm in ("solo", "team"):
+        results = kit / "results" / run / arm
+        if not results.is_dir():
+            out[arm] = {"failed": ["no session yet"], "summary": None}
+            continue
+        out[arm] = {"failed": checks(results), "summary": None}
+        if (results / "session.json").is_file():
+            scored = kit / "scored" / f"{run}-{arm}"
+            team_rows.main(["--maps-root", str(kit / "maps_root"), "--decisions", str(results / "answers.jsonl"),
+                            "--out-root", str(scored)])
+            out[arm]["summary"] = summary(scored)
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("participant")
+    ap.add_argument("participant", help="a run id (p07-3f9a2c1e), or a label with one visit (p07)")
     ap.add_argument("--kit", type=Path, default=KIT)
     ap.add_argument("--misses", action="store_true", help="list every report the person got wrong")
     args = ap.parse_args(argv)
     kit = args.kit.expanduser()
-    label = args.participant.strip().lower()
-    if label not in json.loads((kit / "plan" / "plan.json").read_text())["participants"]:
-        raise SystemExit(f"{label} is not a participant on this kit's plan")
-    use_kit(kit)
-    from baselines.human import team_rows
-
-    bad, sessions = 0, 0
-    for arm in ("solo", "team"):
-        results = kit / "results" / label / arm
-        if not results.is_dir():
-            print(f"{arm}: CHECK FAILED: no session yet")
-            bad += 1
-            continue
-        problems = checks(results)
-        for p in problems:
+    run = run_of(kit, args.participant)
+    res = score(kit, run)
+    for arm, r in res.items():
+        for p in r["failed"]:
             print(f"{arm}: CHECK FAILED: {p}")
-        bad += len(problems)
-        if not (results / "session.json").is_file():
+        s = r["summary"]
+        if s is None:
             continue
-        sessions += 1
-        scored = kit / "scored" / f"{label}-{arm}"
-        team_rows.main(["--maps-root", str(kit / "maps_root"), "--decisions", str(results / "answers.jsonl"),
-                        "--out-root", str(scored)])
-        s = summary(scored)
         print(f"\n{arm}: {s['correct']}/{s['n']} correct ({100 * s['correct'] / max(1, s['n']):.1f}%), "
               f"{s['correct'] / s['hours']:.1f} correct per hour over {60 * s['hours']:.0f} min")
         for src, (n, ok) in s["sources"].items():
@@ -122,9 +142,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.misses:
             for src, e in s["misses"]:
                 print(f"  miss  {src:<11} {e}")
-    if not sessions:
-        print(f"{label} has no session to score")
-    return 1 if bad or not sessions else 0
+    if all(r["summary"] is None for r in res.values()):
+        print(f"{run} has no session to score")
+    return 1 if any(r["failed"] for r in res.values()) or all(r["summary"] is None for r in res.values()) else 0
 
 
 if __name__ == "__main__":
