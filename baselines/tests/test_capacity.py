@@ -77,7 +77,7 @@ def test_alone_a_skip_is_logged_and_the_session_refuses_answers_after_its_hour(t
     assert not _act(s, "skip")["ok"] and s.state()["over"] and s.state()["current"] is None
 
 
-def test_every_source_scores_and_a_skip_is_a_miss() -> None:
+def test_every_source_scores_and_a_skip_alone_or_before_maps_lands_is_a_miss() -> None:
     row = _maps_row()
     base = {"arm": "team", "opened_at": "2026-10-21T04:00:00Z", "answered_at": "2026-10-21T04:01:00Z", "answer_s": 60.0}
     hit = team_rows.team_row(row, {**base, "source": "own_search", "xy": [0.0, 95.0]}, _CFG)["metrics"]
@@ -88,6 +88,18 @@ def test_every_source_scores_and_a_skip_is_a_miss() -> None:
     assert fixed["SR"] == 1 and fixed["maps_SR"] == 0
     skip = team_rows.team_row(_maps_row(SR=1), {**base, "source": "skip", "xy": None}, _CFG)["metrics"]
     assert skip["SR"] == 0 and skip["maps_SR"] == 1 and skip["capacity_source"] == "skip"
+    alone = team_rows.team_row(_maps_row(SR=1), {**base, "arm": "solo", "source": "skip", "xy": None,
+                                                 "maps_in_session": True}, _CFG)["metrics"]
+    assert alone["SR"] == 0
+    kept = team_rows.team_row(_maps_row(SR=1), {**base, "source": "skip", "xy": None, "maps_in_session": True}, _CFG)
+    assert kept["metrics"]["SR"] == 1 and kept["metrics"]["capacity_source"] == "skip" and kept["commit_xy"] is not None
+
+
+def test_a_skip_with_maps_keeps_its_answer_only_when_it_landed_within_the_session() -> None:
+    session = {"started_epoch": 0.0, "session_s": 2400}
+    assert team_rows.landed_in_session({"maps_ready_at": "1970-01-01T00:39:59Z"}, session)
+    assert not team_rows.landed_in_session({"maps_ready_at": "1970-01-01T00:40:01Z"}, session)
+    assert not team_rows.landed_in_session({"maps_ready_at": None}, session)
 
 
 def test_results_released_within_the_session_and_never_reached_count_as_maps_scored_them() -> None:

@@ -22,8 +22,8 @@ accuracy both count.
 
 ## Rules
 
-- Work the reports in the order the console gives them. You may skip a report, but a skip
-  counts as a wrong answer.
+- Work the reports in the order the console gives them. You may skip a report. Alone, a skip
+  counts as a wrong answer. With MAPS, a skip lets MAPS's answer count for that report.
 - Use only the console. No other maps, websites or phones during a session.
 - The place may be anywhere on the map. Outlines on the imagery are a guide, not a list of
   answers.

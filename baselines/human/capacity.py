@@ -4,7 +4,8 @@ The backlog is the MAPS root's episodes, split into two halves of equal MAPS SR
 (``plan``), one half per condition, the halves and the order of the conditions
 counterbalanced in groups of four participants. Each participant works their
 half in a fixed shuffled order, always on the earliest open report, for one
-fixed-length session per condition. A skip is allowed and scored as a miss.
+fixed-length session per condition. A skip is allowed: alone it scores as a miss, and with
+MAPS it leaves MAPS's answer standing (``team_rows``).
 
 With MAPS (``arm = "team"``) its results are not flown live: each is released
 when a replay of the root's own recorded timing says it lands, ``agents``

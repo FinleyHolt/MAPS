@@ -5,7 +5,7 @@
  * their list. With MAPS, a report whose result had landed when it opened is verified
  * (confirm, or pick another); one that had not is searched by hand, and a result landing
  * meanwhile does not interrupt the search. Alone, every report is searched by hand. A
- * skip moves on and counts as a miss. The session runs a fixed time (capacity.SESSION_S).
+ * skip moves on: alone it counts as a miss, with MAPS its answer counts. The session runs a fixed time (capacity.SESSION_S).
  *
  * Its screenshot is a panel of the paper's capacity figure, so it wears the paper's look
  * (studyMap.tsx's "paper" theme and the .capacity styles): one sans face, the figure
@@ -416,11 +416,11 @@ export function CapacityConsole() {
               )}
               <p className="cap-hint">
                 {askSkip ? (
-                  <>Skip this report?{st?.practice ? "" : " It counts as a miss."}{" "}
+                  <>Skip this report?{st?.practice ? "" : st?.arm === "team" ? " MAPS's answer counts instead." : " It counts as a miss."}{" "}
                     <button type="button" className="cap-link" disabled={busy || !cur} onClick={() => { setAskSkip(false); void act({ action: "skip" }); }}>Yes, skip</button>
                     {" / "}<button type="button" className="cap-link" onClick={() => setAskSkip(false)}>No</button></>
                 ) : (
-                  <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : " (counts as a miss)"}</>
+                  <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : st?.arm === "team" ? " (MAPS's answer counts)" : " (counts as a miss)"}</>
                 )}
                 {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, MAPS_ZOOM)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
               </p>

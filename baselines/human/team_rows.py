@@ -92,7 +92,9 @@ def affordable(row: dict, xy: tuple[float, float], max_steps: int) -> bool:
 def capacity_row(row: dict, answer: dict, cfg: dict, shape_of=None) -> dict:
     """One answer of the capacity study (``baselines.human.capacity``) as a scored row: a
     confirm or a replace as the audit scores them, a search by hand as a map-search commit,
-    a skip as a miss. Every row carries the answer's source and its timeline."""
+    a skip alone as a miss (nothing was committed), and a skip with MAPS as MAPS's answer when it
+    landed within the session (``maps_in_session``), a miss otherwise. Every row carries the
+    answer's source and its timeline."""
     source = answer["source"]
     timeline = {"capacity_source": source, "capacity_arm": answer.get("arm"), "capacity_order_index": answer.get("order_index"),
                 "capacity_opened_at": answer.get("opened_at"), "capacity_answered_at": answer.get("answered_at"),
@@ -107,7 +109,12 @@ def capacity_row(row: dict, answer: dict, cfg: dict, shape_of=None) -> dict:
     if source == "skip":
         out = json.loads(json.dumps(row))
         maps_sr = out["metrics"]["SR"]
-        # Attempted and failed: nobody gains by passing over a hard report.
+        if answer.get("arm") == "team" and answer.get("maps_in_session"):
+            # The team's output is every MAPS result plus the person's work: passing a report over
+            # leaves MAPS's answer standing, as for one never reached.
+            out["metrics"].update(policy=policy, commit_path="capacity:skip", maps_SR=maps_sr, **timeline)
+            return out
+        # Nothing committed: a miss.
         out["metrics"].update(SR=0, steps_taken=0, policy=policy, commit_path="capacity:skip", maps_SR=maps_sr, **timeline)
         out.update(visited_xy=[], commit_xy=None)
         return out
@@ -116,6 +123,15 @@ def capacity_row(row: dict, answer: dict, cfg: dict, shape_of=None) -> dict:
     out = team_row(row, as_decision, cfg, shape_of)
     out["metrics"].update(policy=policy, commit_path=f"capacity:{source}", **timeline)
     return out
+
+
+def landed_in_session(answer: dict, session: dict) -> bool:
+    """Whether MAPS's result for an answer's report landed before its session's end."""
+    from baselines.human.capacity import _utc
+
+    end = _utc(float(session["started_epoch"]) + float(session["session_s"]))
+    # UTC stamps to the second compare as text.
+    return answer.get("maps_ready_at") is not None and answer["maps_ready_at"] <= end
 
 
 def unchecked_answers(session: dict, answered: set[str], rows: dict[str, dict]) -> list[dict]:
@@ -230,8 +246,13 @@ def main(argv: list[str] | None = None) -> int:
     decided = {d["episode_id"]: d for d in iter_json_rows(args.decisions)}
     session_file = args.decisions.parent / "session.json"
     if session_file.is_file():
+        session = json.loads(session_file.read_text())
+        # A skip with MAPS: whether MAPS's answer, which then stands, landed within the session.
+        for d in decided.values():
+            if d.get("source") == "skip" and d.get("arm") == "team":
+                d["maps_in_session"] = landed_in_session(d, session)
         # A capacity session with MAPS: the results it released that the person never reached.
-        for d in unchecked_answers(json.loads(session_file.read_text()), set(decided), scored_rows(args.maps_root)):
+        for d in unchecked_answers(session, set(decided), scored_rows(args.maps_root)):
             decided[d["episode_id"]] = d
     rows = write_root(args.maps_root, list(decided.values()), args.out_root)
     if session_file.is_file():
