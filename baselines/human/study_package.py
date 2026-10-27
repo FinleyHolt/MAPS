@@ -7,7 +7,8 @@ pictures the console shows and the records MAPS's results are read from. This wr
                              tiles, zoom 12 to 20, no-data transparent
   ``maps_root/``             the MAPS root the plan replays: its ledger and timing, and per
                              attempt the records a verify screen reads (the turns, the
-                             detections, the stops, the frames)
+                             detections, the stops, the frames, and MAPS's final reply as
+                             ``reply.md``)
   ``tiles/``                 the bench's OSM prior bake (``<map>_meta.json``, ``<map>_features.json``)
   ``data/cityrefer/objects.json``  the labelled objects
   ``plan/``                  the participants' lists, dealt by ``capacity plan``, and the
@@ -15,7 +16,11 @@ pictures the console shows and the records MAPS's results are read from. This wr
 
     python -m baselines.human.study_package tiles --raster <map>_rgb.tif --out <dir>/calcity_ortho.mbtiles
     python -m baselines.human.study_package records --maps-root <root> --study <plan dir> --out <dir>
+    python -m baselines.human.study_package replies --transcripts <mirror of the root's transcripts> --kit <dir>
     python -m baselines.human.study_package bundle --kit <dir> --out <outside the repo>/MAPS-study.zip --contact <email>
+
+``replies`` writes ``reply.md`` into a kit's attempts from a folder that holds only the root's
+``<attempt>/flight/llm/transcript.jsonl`` files, laid out as the root lays them out.
 
 ``bundle`` writes the one file a participant downloads: the download above, the console's code
 (the Python only, never the bench's corpus and its targets), the briefing, the study lead's
@@ -45,6 +50,8 @@ ZOOMS = range(12, 21)
 TILE_PX = 256
 #: The attempt files a verify screen reads (``audit_console.blind_review``), and its frames.
 ATTEMPT_FILES = ("conversation.jsonl", "detections.jsonl", "flight/tour_cursor.json")
+#: An attempt's LLM wire log, whose last message is MAPS's final reply; the kit keeps the reply alone.
+TRANSCRIPT = "flight/llm/transcript.jsonl"
 
 #: The open raster per overview level, one set per worker process.
 _SRC: dict = {}
@@ -130,6 +137,28 @@ def build_tiles(raster: Path, out: Path, workers: int = 8) -> int:
     return n_tiles
 
 
+def reply_text(transcript: Path) -> str:
+    """MAPS's final reply, the explanation of its answer: the content of the transcript's last
+    response; empty when the transcript is absent or holds no response."""
+    from benchmarks.citynav.analysis.rows import iter_json_rows
+
+    reply = ""
+    for row in iter_json_rows(transcript) if transcript.is_file() else ():
+        choices = (row.get("response") or {}).get("choices") if row.get("kind") == "response" else None
+        if choices:
+            reply = str((choices[0].get("message") or {}).get("content") or "")
+    return reply.strip()
+
+
+def write_reply(transcript: Path, attempt: Path) -> bool:
+    """``<attempt>/reply.md`` from the attempt's transcript; whether there was a reply to write."""
+    reply = reply_text(transcript)
+    if reply:
+        attempt.mkdir(parents=True, exist_ok=True)
+        (attempt / "reply.md").write_text(reply, encoding="utf-8")
+    return bool(reply)
+
+
 def copy_records(maps_root: Path, out: Path) -> int:
     """The MAPS root's ledger, timing and manifest, and per attempt what a verify screen reads."""
     from baselines.human.session_plan import scored_rows
@@ -147,7 +176,18 @@ def copy_records(maps_root: Path, out: Path) -> int:
                 shutil.copy2(src / rel, dst / rel)
         if (src / "frames").is_dir():
             shutil.copytree(src / "frames", dst / "frames", dirs_exist_ok=True)
+        write_reply(src / TRANSCRIPT, dst)
     return len(rows)
+
+
+def copy_replies(transcripts: Path, kit: Path) -> list[str]:
+    """``reply.md`` into every attempt of the kit's MAPS root, from ``transcripts``, a folder of
+    the root's transcripts alone; the episodes left without one."""
+    from baselines.human.session_plan import scored_rows
+
+    root = kit / "maps_root"
+    return [eid for eid, row in scored_rows(root).items()
+            if not write_reply(transcripts / row["workdir"] / TRANSCRIPT, root / row["workdir"])]
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -210,6 +250,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--maps-root", type=Path, required=True)
     r.add_argument("--study", type=Path, required=True, help="the plan's folder (capacity plan and practice wrote it)")
     r.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("replies", help="MAPS's final replies into a kit, from a mirror of the root's transcripts")
+    p.add_argument("--transcripts", type=Path, required=True)
+    p.add_argument("--kit", type=Path, required=True)
     b = sub.add_parser("bundle", help="the participant's one download: the kit, the code and the launchers")
     b.add_argument("--kit", type=Path, required=True)
     b.add_argument("--out", type=Path, required=True, help="the zip, outside the repository")
@@ -217,6 +260,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "bundle":
         print(f"{build_bundle(args.kit, args.out, args.contact)} files -> {args.out}")
+        return 0
+    if args.cmd == "replies":
+        missing = copy_replies(args.transcripts, args.kit)
+        print(f"replies -> {args.kit / 'maps_root'}; {len(missing)} attempts without one" + "".join(f"\n  {e}" for e in missing))
         return 0
     if args.cmd == "tiles":
         print(f"{build_tiles(args.raster, args.out, args.workers)} tiles -> {args.out}")

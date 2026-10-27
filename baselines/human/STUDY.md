@@ -16,7 +16,7 @@ no account, no terminal, no GPU.
 
 MAPS does not run on the participant's machine. It searched every report of the study once,
 96 searches at a time, and the download holds that run: each answer it committed, its
-reasoning and the pictures it looked at, and how long each search took. With MAPS, the console
+reply explaining it, its reasoning and the pictures it looked at, and how long each search took. With MAPS, the console
 releases each of its answers when that run says it landed, so the participant meets them in
 the order and at the rate they arrived.
 
@@ -142,7 +142,8 @@ From the repository with `pip install -e '.[study]'`, the same visit is
 ### The kit
 
 The kit is built from the bench's own files by `baselines.human.study_package` (`tiles`, then
-`records`): the ortho as map tiles, MAPS's run as the verify screens read it, the OSM prior and
+`records`): the ortho as map tiles, MAPS's run as the verify screens read it (`replies` adds
+MAPS's final replies to a kit from a copy of the run's transcripts alone), the OSM prior and
 labelled objects, and the plan (`baselines.human.capacity plan` for `p01` to `p40`, halves of
 equal MAPS SR, counterbalanced in groups of four, and `capacity practice`). The console's web
 source is `baselines/human/console`; the kit carries the built copy in `console/`.

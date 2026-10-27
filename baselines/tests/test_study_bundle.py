@@ -3,6 +3,7 @@ code rides without the bench's corpus, a kit's results never ship, and the lead'
 address reaches the READ ME and the kit. The Mac launcher works from its own folder, in UTF-8,
 offline once set up, and says so plainly when setup did not finish."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -123,3 +124,37 @@ def test_windows_launcher_lines() -> None:
     runs = [line for line in bat if line.startswith('"%UV%" run')]
     assert runs and all("--managed-python" in line for line in runs)
     assert sum("--offline" in line for line in runs) == 2 and not any("PYTHONPATH" in line for line in bat)
+
+
+def _transcript(path, *contents) -> None:
+    """An attempt's LLM wire log: one request and one response per reply, the last MAPS's answer."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [{"kind": "params"}]
+    for c in contents:
+        rows += [{"kind": "request"}, {"kind": "response", "response": {"choices": [
+            {"finish_reason": "stop", "message": {"role": "assistant", "content": c}}]}}]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_maps_reply_is_its_last_message_and_lands_beside_the_attempts_records(tmp_path) -> None:
+    from baselines.human.study_package import copy_records, reply_text
+
+    root = tmp_path / "root"
+    wd = "a/w0/maps_1_calcity_x"
+    (root / wd).mkdir(parents=True)
+    (root / wd / "conversation.jsonl").write_text("")
+    (root / "episodes.jsonl").write_text(json.dumps({"episode_id": "calcity::1#0", "status": "ok", "workdir": wd}) + "\n"
+                                         + json.dumps({"episode_id": "calcity::2#0", "status": "ok", "workdir": "a/w0/none"}) + "\n")
+    _transcript(root / wd / "flight/llm/transcript.jsonl", "\n\n", "\n\n**Answer: `prior_7`**, the house.\n")
+    assert reply_text(root / wd / "flight/llm/transcript.jsonl") == "**Answer: `prior_7`**, the house."
+    assert reply_text(tmp_path / "missing.jsonl") == ""
+    out = tmp_path / "kit" / "maps_root"
+    assert copy_records(root, out) == 2
+    assert (out / wd / "reply.md").read_text() == "**Answer: `prior_7`**, the house."
+    assert not (out / "a/w0/none/reply.md").exists()
+    # A kit built before replies were carried takes them from a mirror of the transcripts alone.
+    (out / wd / "reply.md").unlink()
+    mirror = tmp_path / "transcripts"
+    _transcript(mirror / wd / "flight/llm/transcript.jsonl", "the house at the corner")
+    assert main(["replies", "--transcripts", str(mirror), "--kit", str(tmp_path / "kit")]) == 0
+    assert (out / wd / "reply.md").read_text() == "the house at the corner"
