@@ -1,11 +1,11 @@
 """The capacity study: how many correct finds a fixed session holds, a person alone and with MAPS.
 
-The backlog is the MAPS root's episodes, split into two halves of equal MAPS SR
-(``plan``), one half per condition, the halves and the order of the conditions
-counterbalanced in groups of four participants. Each participant works their
-half in a fixed shuffled order, always on the earliest open report, for one
-fixed-length session per condition. A skip is allowed: alone it scores as a miss, and with
-MAPS it leaves MAPS's answer standing (``team_rows``).
+Between subjects (``plan``): each participant works one condition, alone or with MAPS,
+dealt half and half by the seed, since everything a person does in the study is practice
+that would carry into a second condition. Each works the whole backlog, the MAPS root's
+episodes, in their own fixed shuffled order, always on the earliest open report, for one
+fixed-length session. A skip is allowed: alone it scores as a miss, and with MAPS it leaves
+MAPS's answer standing (``team_rows``).
 
 With MAPS (``arm = "team"``) its results are not flown live: each is released
 when a replay of the root's own recorded timing says it lands, ``agents``
@@ -66,40 +66,24 @@ def _answered_epoch(answer: dict) -> float:
     return datetime.fromisoformat(answer["answered_at"]).timestamp()
 
 
-def halves(rows: dict[str, dict], seed: int) -> tuple[list[str], list[str]]:
-    """The episodes in two halves whose MAPS SR differs by at most one episode's worth:
-    each SR stratum shuffled and dealt alternately."""
-    a: list[str] = []
-    b: list[str] = []
-    for sr in (1, 0):
-        stratum = sorted(e for e, r in rows.items() if int(r["metrics"]["SR"]) == sr)
-        random.Random(f"{seed}:{sr}").shuffle(stratum)
-        for e in stratum:
-            # Alternate on the running count, so the second stratum carries on where the first left off.
-            (a if (len(a) + len(b)) % 2 == 0 else b).append(e)
-    return sorted(a), sorted(b)
-
-
 def plan(rows: dict[str, dict], participants: list[str], seed: int, agents: int = AGENTS) -> dict:
-    """Each participant's two lists, in their own fixed shuffled order. In every group of
-    four, each half meets each condition twice and each condition goes first twice."""
-    half = halves(rows, seed)
-    out = {"seed": seed, "halves_n": [len(half[0]), len(half[1])],
-           "halves_maps_sr": [round(sum(rows[e]["metrics"]["SR"] for e in h) / max(1, len(h)), 4) for h in half],
-           "participants": {}}
-    for i, p in enumerate(participants):
-        solo_half = i % 2
-        first = "solo" if (i // 2) % 2 == 0 else "team"
-        lists = {}
-        for arm, h in (("solo", half[solo_half]), ("team", half[1 - solo_half])):
-            order = list(h)
-            random.Random(int(hashlib.sha256(f"{seed}:{p}:{arm}".encode()).hexdigest()[:12], 16)).shuffle(order)
-            lists[arm] = order
-        _starts, ends = release_times([float(rows[e].get("elapsed_s") or 0) for e in lists["team"]], agents)
-        out["participants"][p] = {"solo_half": "AB"[solo_half], "team_half": "AB"[1 - solo_half], "first": first,
-                                  # How much of MAPS's output this participant's team session holds.
-                                  "agents": agents, "maps_ready_in_session": sum(t <= SESSION_S for t in ends),
-                                  "lists": lists}
+    """Each participant's one condition and list: the conditions dealt half and half (one
+    more alone for an odd count) in an order the seed shuffles, and each list the whole
+    backlog in the participant's own fixed shuffled order."""
+    every = sorted(rows)
+    arms = [("solo", "team")[i % 2] for i in range(len(participants))]
+    random.Random(f"{seed}:arms").shuffle(arms)
+    out = {"seed": seed, "design": "between subjects", "episodes_n": len(every),
+           "maps_sr": round(sum(rows[e]["metrics"]["SR"] for e in every) / max(1, len(every)), 4), "participants": {}}
+    for p, arm in zip(participants, arms):
+        order = list(every)
+        random.Random(int(hashlib.sha256(f"{seed}:{p}:{arm}".encode()).hexdigest()[:12], 16)).shuffle(order)
+        entry = {"arm": arm, "lists": {arm: order}}
+        if arm == "team":
+            _starts, ends = release_times([float(rows[e].get("elapsed_s") or 0) for e in order], agents)
+            # How much of MAPS's output this participant's session holds.
+            entry.update(agents=agents, maps_ready_in_session=sum(t <= SESSION_S for t in ends))
+        out["participants"][p] = entry
     return out
 
 
@@ -287,7 +271,7 @@ def practice_root(maps_root: Path, n: int, seed: int, out: Path) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("plan", help="deal the halves and each participant's ordered lists")
+    p = sub.add_parser("plan", help="deal each participant's condition and ordered list")
     p.add_argument("--maps-root", type=Path, required=True)
     p.add_argument("--participants", required=True, help="comma-separated labels, never names: p01,p02,...")
     p.add_argument("--seed", type=int, default=1234)
@@ -310,8 +294,9 @@ def main(argv: list[str] | None = None) -> int:
     (args.out / "plan.json").write_text(json.dumps(
         {**doc, "participants": {k: {kk: vv for kk, vv in v.items() if kk != "lists"} for k, v in doc["participants"].items()}},
         indent=1))
-    print(f"halves {doc['halves_n']} at MAPS SR {doc['halves_maps_sr']}; "
-          f"{len(doc['participants'])} participants -> {args.out}")
+    arms = [d["arm"] for d in doc["participants"].values()]
+    print(f"{len(arms)} participants, {arms.count('solo')} alone and {arms.count('team')} with MAPS, "
+          f"{doc['episodes_n']} reports each (MAPS SR {doc['maps_sr']}) -> {args.out}")
     return 0
 
 

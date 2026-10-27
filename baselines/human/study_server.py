@@ -3,10 +3,9 @@
     python -m baselines.human.study_server [--kit ~/maps-study]
 
 The download's launchers run this, and the browser opens the visit page. It asks for the
-participant's label, walks the briefing, practice, the first condition, a break and the second,
-and offers the results file at the end; ``first`` and ``second`` are the participant's two
-conditions in the order the plan counterbalanced (``plan/plan.json``). Where the visit is, is
-read off the results on disk, so a relaunch picks up where it left off.
+participant's label, walks the briefing, practice and the one timed session, in the condition
+the plan dealt that participant (``plan/plan.json``), and offers the results file at the end.
+Where the visit is, is read off the results on disk, so a relaunch picks up where it left off.
 
 The console (``console/``) is one browser tab over the session the visit page opened last:
 :class:`baselines.human.capacity.Capacity` over the plan's list, the bench's ortho as tiles
@@ -179,7 +178,7 @@ def build_app(kit: Path, console: Path, visit: Visit):
         return [list(local_to_lonlat(tiles_dir, map_name, float(x), float(y))) for x, y in pts]
 
     box: dict[str, Any] = {"cap": None, "practice": False}
-    running = [step for step in ("first", "second") if visit.participant and visit.status(step) == "running"]
+    running = [step for step in ("session",) if visit.participant and visit.status(step) == "running"]
     if running:
         # A relaunch mid-session: a console tab left open picks the session up on its next poll.
         box["cap"] = open_session(kit, visit.run, visit.condition(running[0]))
@@ -338,7 +337,7 @@ def open_session(kit: Path, run: str, condition: str) -> Any:
 
 
 BRIEFING = Path(__file__).with_name("briefing.md")
-STEPS = ("practice", "first", "second")
+STEPS = ("practice", "session")
 #: Each condition as the visit page names it.
 CONDITIONS = {"solo": "alone", "team": "with MAPS"}
 #: The results file's ``format`` and ``version``, as ``study_collect`` checks them.
@@ -346,8 +345,8 @@ RESULTS_FORMAT, RESULTS_VERSION = "maps-capacity-results", 1
 
 
 class Visit:
-    """One participant's visit, as the visit page walks it: the briefing, practice, the first
-    condition, a break, the second, done. Where they are is read off the results on disk, so a
+    """One participant's visit, as the visit page walks it: the briefing, practice, the session
+    in the participant's condition, done. Where they are is read off the results on disk, so a
     relaunch picks up where the visit left off, under the one run id it finds there.
     ``participant`` is the plan label; ``run`` the visit's run id, its results folder."""
 
@@ -363,16 +362,15 @@ class Visit:
         self.typed = ""
         self.returning = self.participant is not None
         # A session whose clock ran on while the study was closed, until the participant returns to it.
-        self.away = self.returning and self.session("first") is not None and "running" in (
-            self.status("first"), self.status("second"))
+        self.away = self.returning and self.status("session") == "running"
 
     def locked(self) -> bool:
-        """Whether the label is fixed: once session 1 has started, its answers are under it."""
-        return self.participant is not None and self.session("first") is not None
+        """Whether the label is fixed: once the session has started, its answers are under it."""
+        return self.participant is not None and self.session("session") is not None
 
     def set_label(self, label: str) -> None:
         """The participant's label; the first mints the visit's run id, and a change before
-        session 1 discards the old run's practice and mints another."""
+        the session discards the old run's practice and mints another."""
         label = label.strip().lower()
         self.typed = label
         if not label:
@@ -391,8 +389,8 @@ class Visit:
             self.participant, self.error, self.typed = label, "", ""
 
     def condition(self, step: str) -> str:
-        first = self.plan[self.participant]["first"]
-        return {"practice": "practice", "first": first, "second": ({"solo", "team"} - {first}).pop()}[step]
+        """The step's condition: practice, or the participant's one condition from the plan."""
+        return "practice" if step == "practice" else self.plan[self.participant]["arm"]
 
     def session(self, step: str) -> dict | None:
         """The step's ``session.json``, once its session has started."""
@@ -417,12 +415,11 @@ class Visit:
 
     def start(self, step: str) -> Any:
         """The step's session, or None when it cannot open now: no label yet, a step out of
-        turn (practice once session 1 has started, a session before the one ahead of it), or a
-        timed session that is over."""
+        turn (practice once the session has started, the session before practice), or a timed
+        session that is over."""
         if self.participant is None or step not in STEPS:
             return None
-        ahead = {"practice": self.status("first") == "todo", "first": self.status("practice") == "done",
-                 "second": self.status("first") == "done"}[step]
+        ahead = {"practice": self.status("session") == "todo", "session": self.status("practice") == "done"}[step]
         if not ahead or (step != "practice" and self.status(step) == "done"):
             return None
         if step != "practice":
@@ -459,7 +456,7 @@ class Visit:
         """A timed session as the visit page names it, at the length its own clock holds once it has one."""
         session = self.session(step)
         minutes = round((float(session["session_s"]) if session else session_s()) / 60)
-        return f"session {STEPS.index(step)} ({CONDITIONS[self.condition(step)]}, {minutes} minutes)"
+        return f"your session ({CONDITIONS[self.condition(step)]}, {minutes} minutes)"
 
     def page(self, change: bool = False) -> str:
         """The visit page; ``change`` asks for the label form while the label can still change.
@@ -486,15 +483,14 @@ class Visit:
         def running(step: str) -> str:
             session = self.session(step)
             left = math.ceil((float(session["session_s"]) - (time.time() - float(session["started_epoch"]))) / 60)
-            n = STEPS.index(step)
             away = " Its clock kept running while you were away." if self.away else ""
-            return (f"<h2>Session {n} ({CONDITIONS[self.condition(step)]}) is under way</h2>"
+            return (f"<h2>Your session ({CONDITIONS[self.condition(step)]}) is under way</h2>"
                     f"<p>About {left} minute{'' if left == 1 else 's'} left.{away}</p>"
-                    + button(step, f"Return to session {n}"))
+                    + button(step, "Return to the session"))
 
         clock = f"The {minutes} minutes start when you press the button, so be seated and ready."
         contact, filename = html.escape(self.contact), f"maps-study-{self.run}.json"
-        if st["second"] == "done":
+        if st["session"] == "done":
             now = ("<h2>Done. One last step: send your results</h2>"
                    "<form action='/visit/results.json' onsubmit=\"document.getElementById('saved').hidden=false\">"
                    "<button>Save my results file</button></form>"
@@ -502,14 +498,8 @@ class Visit:
                    f"<p>Your browser saves {filename}, usually in your Downloads folder. "
                    f"Attach it to an email to {contact}. Then you can close this page and the "
                    "text window (on a Mac, press Terminate if asked).</p>")
-        elif st["second"] == "running":
-            now = running("second")
-        elif st["first"] == "done":
-            now = (f"<h2>Session 1 is done. Take a five-minute break.</h2>"
-                   "<p id=break hidden>Break: <span id=countdown>5:00</span> left.</p>"
-                   f"<p>Then start {self.name('second')}.</p>" + button("second", "Start session 2", clock) + BREAK_JS)
-        elif st["first"] == "running":
-            now = running("first")
+        elif st["session"] == "running":
+            now = running("session")
         else:
             practiced = st["practice"] == "done"
             now = ("<p class=note><a href='/visit?change=1'>Not your label? Change it</a></p>"
@@ -518,8 +508,8 @@ class Visit:
                    "shift-click measuring. Practice ends after the fourth report; <b>Done practicing</b> at the top "
                    "stops it early.</p>"
                    + button("practice", "Practice again" if practiced else "Start practice")
-                   + f"<h2>Step 3: {self.name('first')}</h2>" + (button("first", "Start session 1", clock) if practiced
-                                                                 else "<p class=note>Opens after practice.</p>"))
+                   + f"<h2>Step 3: {self.name('session')}</h2>" + (button("session", "Start your session", clock)
+                                                                   if practiced else "<p class=note>Opens after practice.</p>"))
         brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
         who = (f"Welcome back, {self.participant}. Your answers are saved." if self.returning
                else f"Participant {self.participant}")
@@ -527,15 +517,6 @@ class Visit:
         return PAGE.format(body=f"<p class=who>{who} <small>(results id {self.run})</small></p>{err}{now}<hr>"
                                 f"<div class=brief>{brief}</div>")
 
-
-#: The break's countdown, from when the page loads; without script the page reads the same, less the clock.
-BREAK_JS = """<script>
-const end = Date.now() + 300000, el = document.getElementById("countdown");
-document.getElementById("break").hidden = false;
-const tick = () => { const s = Math.max(0, Math.round((end - Date.now()) / 1000));
-  el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); if (s) setTimeout(tick, 1000); };
-tick();
-</script>"""
 
 PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8><title>The search study</title><style>
 :root {{ --ink: #141310; --paper: #fbfaf5; --navy: #1f3a5f; --grey: #6b675d; }}

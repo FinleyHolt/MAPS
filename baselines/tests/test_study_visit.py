@@ -1,5 +1,6 @@
 """The visit page's walk, read off the results on disk: a label must be on the plan, and it
-can change until session 1 starts; an error shows once; each session opens only in its turn and says its condition;
+can change until the session starts; an error shows once; the session opens only after practice and says the
+participant's condition;
 a session is over when its clock runs out or every listed report has an answer; the results
 file carries the answers and no account names; the briefing renders as HTML."""
 
@@ -14,8 +15,8 @@ from baselines.human.study_server import STEPS, Visit
 
 def _kit(tmp_path, contact: str | None = None):
     (tmp_path / "plan").mkdir()
-    (tmp_path / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"first": "solo"},
-                                                                              "p02": {"first": "team"}}}))
+    (tmp_path / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"arm": "solo"},
+                                                                              "p02": {"arm": "team"}}}))
     if contact:
         (tmp_path / "contact.txt").write_text(contact + "\n")
     return tmp_path
@@ -39,28 +40,26 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     assert "Type your label, for example p07." in v.page()
     v.set_label(" P01 ")
     assert v.participant == "p01"
-    assert [v.condition(s) for s in STEPS] == ["practice", "solo", "team"]
+    assert [v.condition(s) for s in STEPS] == ["practice", "solo"]
     page = v.page()
-    assert "Step 3: session 1 (alone, 40 minutes)" in page and "Opens after practice" in page
+    assert "Step 3: your session (alone, 40 minutes)" in page and "Opens after practice" in page
     assert "Practice ends after the fourth report" in page and "shift-click measuring" in page
-    assert v.start("first") is None and v.start("second") is None
+    assert v.start("session") is None
     assert v.start("practice") == "practice"
     (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
-    assert "Start session 1" in v.page() and "Opening..." in v.page() and v.start("first") == "solo"
+    assert "Start your session" in v.page() and "Opening..." in v.page() and v.start("session") == "solo"
     _session(tmp_path / "results" / v.run / "solo")
     page = v.page()
-    assert v.status("first") == "running" and "Return to session 1" in page
-    assert "Session 1 (alone) is under way" in page and "About 40 minutes left." in page
+    assert v.status("session") == "running" and "Return to the session" in page
+    assert "Your session (alone) is under way" in page and "About 40 minutes left." in page
     assert "kept running while you were away" not in page
     assert v.start("practice") is None
     _session(tmp_path / "results" / v.run / "solo", age_s=2350)
     assert "About 1 minute left." in v.page()
     _session(tmp_path / "results" / v.run / "solo", age_s=2401)
-    assert v.status("first") == "done" and v.start("first") is None
+    assert v.status("session") == "done" and v.start("session") is None and v.start("practice") is None
     page = v.page()
-    assert "five-minute break" in page and "Then start session 2 (with MAPS, 40 minutes)." in page
-    assert "<span id=countdown>5:00</span>" in page and "<p id=break hidden>" in page
-    assert v.start("second") == "team"
+    assert "Save my results file" in page and "break" not in page and "Start" not in page
 
 
 def test_a_session_ends_when_every_report_has_an_answer(tmp_path) -> None:
@@ -68,12 +67,12 @@ def test_a_session_ends_when_every_report_has_an_answer(tmp_path) -> None:
     v.set_label("p01")
     solo = tmp_path / "results" / v.run / "solo"
     _session(solo, answers='{"episode_id": "a"}\n{"episode_id": "a"}\n{"episode_id": "b"}\n{"episode_id": "c"')
-    assert v.status("first") == "running"
+    assert v.status("session") == "running"
     _session(solo, answers='{"episode_id": "a"}\n{"episode_id": "b"}\n{"episode_id": "c"}\n')
-    assert v.status("first") == "done"
+    assert v.status("session") == "done"
 
 
-def test_a_label_changes_until_session_1_starts(tmp_path) -> None:
+def test_a_label_changes_until_the_session_starts(tmp_path) -> None:
     (_kit(tmp_path) / "results" / "p02" / "practice").mkdir(parents=True)
     v = Visit(tmp_path)
     page = v.page()
@@ -97,7 +96,7 @@ def test_the_clock_kept_running_only_after_a_relaunch(tmp_path, monkeypatch) -> 
     _session(tmp_path / "results" / "p01" / "solo")
     v = Visit(tmp_path)
     assert "Its clock kept running while you were away." in v.page()
-    assert v.start("first") == "solo"
+    assert v.start("session") == "solo"
     assert "kept running" not in v.page()
 
 
@@ -105,9 +104,11 @@ def test_minutes_from_the_sessions_own_clock(tmp_path, monkeypatch) -> None:
     (_kit(tmp_path) / "results" / "p01" / "practice").mkdir(parents=True)
     _session(tmp_path / "results" / "p01" / "solo")
     monkeypatch.setenv("MAPS_STUDY_SESSION_S", "600")
-    v = Visit(tmp_path)
-    assert v.name("first") == "session 1 (alone, 40 minutes)"
-    assert v.name("second") == "session 2 (with MAPS, 10 minutes)"
+    assert Visit(tmp_path).name("session") == "your session (alone, 40 minutes)"
+    (tmp_path / "fresh").mkdir()
+    v = Visit(_kit(tmp_path / "fresh"))
+    v.set_label("p02")
+    assert v.name("session") == "your session (with MAPS, 10 minutes)"
 
 
 def test_results_file(tmp_path) -> None:
@@ -117,7 +118,6 @@ def test_results_file(tmp_path) -> None:
     assert v.results_json() is None
     (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
     _session(tmp_path / "results" / v.run / "solo", age_s=2401, answers='{"episode_id": "a"}\ntorn\n')
-    _session(tmp_path / "results" / v.run / "team", age_s=2401)
     page = v.page()
     assert "Save my results file" in page and f"maps-study-{v.run}.json" in page and "lead@example.org" in page
     assert "/visit/results.json" in page and ".zip" not in page
@@ -127,10 +127,9 @@ def test_results_file(tmp_path) -> None:
     doc = json.loads(data)
     assert (doc["format"], doc["version"], doc["run_id"], doc["participant"]) == ("maps-capacity-results", 1, v.run, "p01")
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", doc["saved_at"])
-    assert list(doc) == sorted(doc) and list(doc["sessions"]) == ["solo", "team"]
+    assert list(doc) == sorted(doc) and list(doc["sessions"]) == ["solo"]
     solo = doc["sessions"]["solo"]
     assert solo["answers"] == [{"episode_id": "a"}] and solo["unreadable_lines"] == 1 and solo["session"]["episodes_n"] == 3
-    assert doc["sessions"]["team"] == {"session": doc["sessions"]["team"]["session"], "answers": []}
     assert str(tmp_path) not in data.decode() and os.path.basename(os.path.expanduser("~")) not in data.decode()
     again = v.results_json()
     assert json.loads(again) | {"saved_at": 0} == doc | {"saved_at": 0}
@@ -149,7 +148,7 @@ def test_briefing_markdown(tmp_path) -> None:
 
 def test_a_mistyped_label_stays_in_the_box(tmp_path) -> None:
     (tmp_path / "plan").mkdir()
-    (tmp_path / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"first": "team"}}}))
+    (tmp_path / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"arm": "team"}}}))
     v = Visit(tmp_path)
     v.set_label("p83'")
     assert "value='p83&#x27;'" in v.page()
@@ -174,7 +173,7 @@ def test_each_visit_gets_its_own_run_id_under_its_label(tmp_path, monkeypatch) -
     (tmp_path / "results" / run / "practice").mkdir(parents=True)
     v.set_label("p02")
     assert re.fullmatch(r"p02-[0-9a-f]{8}", v.run) and not (tmp_path / "results" / run).exists()
-    assert v.condition("first") == "team"
+    assert v.condition("session") == "team"
     _session(tmp_path / "results" / v.run / "team")
     back = Visit(tmp_path)
     assert (back.run, back.participant) == (v.run, "p02") and "Welcome back, p02" in back.page()

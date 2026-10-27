@@ -24,7 +24,7 @@ def _client(kit):
     (kit / "console").mkdir(parents=True)
     (kit / "console" / "index.html").write_text("<!doctype html>")
     (kit / "plan").mkdir()
-    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"first": "solo"}, "p02": {"first": "team"}}}))
+    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"arm": "solo"}, "p02": {"arm": "team"}}}))
     db = sqlite3.connect(kit / "calcity_ortho.mbtiles")
     db.execute("CREATE TABLE tiles (zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_data BLOB)")
     db.execute("INSERT INTO tiles VALUES (14, 2900, ?, ?)", (2**14 - 1 - 6514, b"webp"))

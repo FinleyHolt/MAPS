@@ -1,8 +1,8 @@
-"""The capacity study deals equal halves, replays MAPS on its recorded timing, and logs
-every answer with its source and timeline.
+"""The capacity study deals each participant one condition, replays MAPS on its recorded
+timing, and logs every answer with its source and timeline.
 
-The halves differ in MAPS SR by at most one episode's worth, and each group of four
-participants meets each half in each condition with either condition first. A report is
+The conditions are dealt half and half, and each participant works every report in their
+own order, the plan reproducible from its seed. A report is
 verified if MAPS's result had landed when it was opened and searched by hand if not, and a
 result landing meanwhile does not change that. A skip is a miss; the session refuses
 answers once its time is up; every source scores through team_rows.
@@ -17,16 +17,21 @@ from baselines.human import capacity, team_rows
 from baselines.tests.test_human_study import _CFG, _maps_row, _root
 
 
-def test_the_halves_match_on_maps_sr_and_the_plan_counterbalances() -> None:
+def test_the_plan_deals_half_alone_and_half_with_maps_each_over_every_report() -> None:
     rows = {f"block_0::{i}#0": {"metrics": {"SR": int(i % 3 == 0)}, "elapsed_s": 60.0} for i in range(101)}
-    a, b = capacity.halves(rows, seed=7)
-    assert not set(a) & set(b) and len(a) + len(b) == 101 and abs(len(a) - len(b)) <= 1
-    assert abs(sum(rows[e]["metrics"]["SR"] for e in a) - sum(rows[e]["metrics"]["SR"] for e in b)) <= 1
-    doc = capacity.plan(rows, ["p01", "p02", "p03", "p04"], seed=7)
+    labels = [f"p{i:02d}" for i in range(1, 15)]
+    doc = capacity.plan(rows, labels, seed=7)
     ps = doc["participants"]
-    assert sorted((ps[p]["solo_half"], ps[p]["first"]) for p in ps) == [("A", "solo"), ("A", "team"), ("B", "solo"), ("B", "team")]
-    assert ps["p01"]["maps_ready_in_session"] == len(ps["p01"]["lists"]["team"])
-    assert ps["p01"]["lists"]["solo"] != ps["p03"]["lists"]["solo"] and sorted(ps["p01"]["lists"]["solo"]) == sorted(ps["p03"]["lists"]["solo"])
+    assert (doc["design"], doc["episodes_n"], doc["maps_sr"]) == ("between subjects", 101, round(34 / 101, 4))
+    assert sorted(ps[p]["arm"] for p in labels) == ["solo"] * 7 + ["team"] * 7
+    assert all(list(ps[p]["lists"]) == [ps[p]["arm"]] and sorted(ps[p]["lists"][ps[p]["arm"]]) == sorted(rows)
+               for p in labels)
+    team = [p for p in labels if ps[p]["arm"] == "team"]
+    assert all(ps[p]["maps_ready_in_session"] == 101 and ps[p]["agents"] == capacity.AGENTS for p in team)
+    assert not any("maps_ready_in_session" in ps[p] for p in labels if p not in team)
+    assert ps[team[0]]["lists"]["team"] != ps[team[1]]["lists"]["team"]
+    assert capacity.plan(rows, labels, seed=7) == doc and capacity.plan(rows, labels, seed=8) != doc
+    assert [d["arm"] for d in capacity.plan(rows, labels[:3], seed=7)["participants"].values()].count("solo") == 2
 
 
 def test_the_replay_runs_the_list_in_order_on_so_many_agents() -> None:

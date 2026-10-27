@@ -1,11 +1,12 @@
-"""Score one participant's capacity sessions off the study download and check them (``STUDY.md``).
+"""Score one participant's capacity session off the study download and check it (``STUDY.md``).
 
-Each condition in ``<kit>/results/<run id>/`` is scored by ``team_rows`` into ``<kit>/scored/<run id>-<arm>``
+The participant's one condition (the plan's ``arm``) in ``<kit>/results/<run id>/`` is scored by
+``team_rows`` into ``<kit>/scored/<run id>-<arm>``
 (a bench root the paper's capacity figure reads), then summarised: answers and correct finds by
 source, success, correct finds per session hour, how the person met MAPS's answers, and the
 ledger's own checks (a duplicate answer, an answer after the session's end or before the one ahead
 of it, an unreadable line, a missing clock, a session not of the study's length). It fails when a
-check does, or when the participant lacks either session. A bare label names its one visit; a
+check does, or when the participant lacks their session. A bare label names its one visit; a
 label with several asks for the run id.
 
     python -m baselines.human.study_qc p01-3f9a2c1e [--kit ~/maps-study] [--misses]
@@ -96,24 +97,25 @@ def run_of(kit: Path, name: str) -> str:
 
 
 def score(kit: Path, run: str) -> dict[str, dict]:
-    """Each condition of one run: its failed checks, and its numbers once it has a clock,
-    scored into ``<kit>/scored/<run>-<arm>``."""
+    """The run's condition, as the plan dealt it: its failed checks, and its numbers once it
+    has a clock, scored into ``<kit>/scored/<run>-<arm>``."""
     use_kit(kit)
     from baselines.human import team_rows
 
-    out = {}
-    for arm in ("solo", "team"):
-        results = kit / "results" / run / arm
-        if not results.is_dir():
-            out[arm] = {"failed": ["no session yet"], "summary": None}
-            continue
-        out[arm] = {"failed": checks(results), "summary": None}
-        if (results / "session.json").is_file():
-            scored = kit / "scored" / f"{run}-{arm}"
-            team_rows.main(["--maps-root", str(kit / "maps_root"), "--decisions", str(results / "answers.jsonl"),
-                            "--out-root", str(scored)])
-            out[arm]["summary"] = summary(scored)
-    return out
+    arm = json.loads((kit / "plan" / "plan.json").read_text())["participants"][label_of(run)]["arm"]
+    other = {"solo": "team", "team": "solo"}[arm]
+    # A session in the condition the plan did not deal this participant: not this study's data.
+    stray = [f"a {other} session, not this participant's condition"] if (kit / "results" / run / other).is_dir() else []
+    results = kit / "results" / run / arm
+    if not results.is_dir():
+        return {arm: {"failed": ["no session yet", *stray], "summary": None}}
+    out = {"failed": checks(results) + stray, "summary": None}
+    if (results / "session.json").is_file():
+        scored = kit / "scored" / f"{run}-{arm}"
+        team_rows.main(["--maps-root", str(kit / "maps_root"), "--decisions", str(results / "answers.jsonl"),
+                        "--out-root", str(scored)])
+        out["summary"] = summary(scored)
+    return {arm: out}
 
 
 def main(argv: list[str] | None = None) -> int:

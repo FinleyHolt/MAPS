@@ -2,7 +2,7 @@
 visit's zip) unpacks, scores, is recorded once and lands in the
 figure's study.json beside its other entries; a second copy of it is skipped; a zip whose run id
 is already there with other contents is refused; a zip with anything but one run's ledgers is
-refused before a byte is written; a missing condition fails the QC and stays out of study.json;
+refused before a byte is written; a missing session fails the QC and stays out of study.json;
 a second pass over the inbox changes nothing; actions.csv lists every collected answer."""
 
 import csv
@@ -21,7 +21,6 @@ def _files(answers: str = "skip") -> dict[str, str]:
     answer = {"episode_id": "block_0::1#0", "source": answers, "arm": "solo", "answered_at": "1970-01-01T00:20:00Z"}
     return {f"results/{RUN}/solo/session.json": json.dumps({**session, "arm": "solo"}, indent=1),
             f"results/{RUN}/solo/answers.jsonl": json.dumps(answer) + "\n",
-            f"results/{RUN}/team/session.json": json.dumps({**session, "arm": "team"}, indent=1),
             f"results/{RUN}/practice/answers.jsonl": ""}
 
 
@@ -57,6 +56,7 @@ def _setup(tmp_path, monkeypatch):
     for f in sorted((kit / "results").rglob("*"), reverse=True):
         f.unlink() if f.is_file() else f.rmdir()
     (kit / "results").rmdir()
+    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p04": {"arm": "solo"}}}))
     monkeypatch.setenv("HOME", str(tmp_path))
     study = tmp_path / "study.json"
     study.write_text(json.dumps({"study": "s", "participants": {"p01": {"solo": "~/old"}}, "plan": "~/plan"}, indent=1) + "\n")
@@ -72,15 +72,15 @@ def test_a_good_zip_is_collected_once_and_fills_study_json(tmp_path, monkeypatch
     _zip(inbox, f"maps-study-{RUN}.zip", _files())
     assert _collect(kit, inbox, study) == 0
     out = capsys.readouterr().out
-    assert (kit / "results" / RUN / "solo" / "answers.jsonl").is_file() and (kit / "scored" / f"{RUN}-team").is_dir()
+    assert (kit / "results" / RUN / "solo" / "answers.jsonl").is_file() and (kit / "scored" / f"{RUN}-solo").is_dir()
     (rec,) = [json.loads(ln) for ln in (kit / "collected.jsonl").read_text().splitlines()]
     assert (rec["file"], rec["run_id"], rec["label"], rec["qc"], rec["failed"]) == (f"maps-study-{RUN}.zip", RUN, "p04", "pass", [])
-    assert rec["conditions"] == {"solo": [0, 1], "team": [1, 1]} and len(rec["sha256"]) == 64
+    assert rec["conditions"] == {"solo": [0, 1]} and len(rec["sha256"]) == 64
     doc = json.loads(study.read_text())
     assert doc["participants"] == {"p01": {"solo": "~/old"},
-                                   RUN: {"solo": f"~/kit/scored/{RUN}-solo", "team": f"~/kit/scored/{RUN}-team", "qc": "pass"}}
+                                   RUN: {"solo": f"~/kit/scored/{RUN}-solo", "qc": "pass"}}
     assert doc["plan"] == "~/plan" and list(doc) == ["study", "participants", "plan"]
-    assert RUN in out and "0/1" in out and "1/1" in out and "pass" in out
+    assert RUN in out and "0/1" in out and "pass" in out
     before = {p: p.read_bytes() for p in (kit / "collected.jsonl", study)}
     (inbox / "maps-study-copy.zip").write_bytes((inbox / f"maps-study-{RUN}.zip").read_bytes())
     assert _collect(kit, inbox, study) == 0
@@ -119,15 +119,14 @@ def test_a_zip_holding_anything_else_is_refused_before_anything_is_written(tmp_p
     assert not (kit / "results").exists() and not (tmp_path / "evil").exists() and not (kit / "collected.jsonl").exists()
 
 
-def test_a_missing_condition_fails_the_qc_and_is_recorded_flagged(tmp_path, monkeypatch, capsys) -> None:
+def test_a_missing_session_fails_the_qc_and_is_recorded_flagged(tmp_path, monkeypatch, capsys) -> None:
     kit, inbox, study = _setup(tmp_path, monkeypatch)
-    _zip(inbox, f"maps-study-{RUN}.zip", {k: v for k, v in _files().items() if "/team/" not in k})
+    _zip(inbox, f"maps-study-{RUN}.zip", {k: v for k, v in _files().items() if "/solo/" not in k})
     assert _collect(kit, inbox, study) == 1
     (rec,) = [json.loads(ln) for ln in (kit / "collected.jsonl").read_text().splitlines()]
-    assert rec["qc"] == "fail" and rec["failed"] == ["team: no session yet"] and rec["conditions"] == {"solo": [0, 1]}
+    assert rec["qc"] == "fail" and rec["failed"] == ["solo: no session yet"] and rec["conditions"] == {}
     # Every run is on record; the figure leaves out a flagged one.
-    assert json.loads(study.read_text())["participants"][RUN] == {
-        "solo": f"~/kit/scored/{RUN}-solo", "qc": "fail", "failed": ["team: no session yet"]}
+    assert json.loads(study.read_text())["participants"][RUN] == {"qc": "fail", "failed": ["solo: no session yet"]}
     assert "QC FAILED" in capsys.readouterr().out
     assert _collect(kit, inbox, study) == 0
 
@@ -152,11 +151,10 @@ def test_a_good_json_is_collected_as_the_visit_wrote_it(tmp_path, monkeypatch, c
     solo = kit / "results" / RUN / "solo"
     assert (solo / "session.json").read_text() == json.dumps(doc["sessions"]["solo"]["session"], indent=1)
     assert (solo / "answers.jsonl").read_text() == "".join(json.dumps(a) + "\n" for a in doc["sessions"]["solo"]["answers"])
-    assert sorted(p.name for p in (kit / "results" / RUN).iterdir()) == ["solo", "team"]
-    assert not (kit / "results" / RUN / "team" / "answers.jsonl").exists()
+    assert sorted(p.name for p in (kit / "results" / RUN).iterdir()) == ["solo"]
     (rec,) = [json.loads(ln) for ln in (kit / "collected.jsonl").read_text().splitlines()]
     assert (rec["file"], rec["run_id"], rec["qc"], rec["conditions"]) == (
-        f"maps-study-{RUN}.json", RUN, "pass", {"solo": [0, 1], "team": [1, 1]})
+        f"maps-study-{RUN}.json", RUN, "pass", {"solo": [0, 1]})
     assert json.loads(study.read_text())["participants"][RUN]["qc"] == "pass"
     with (kit / "actions.csv").open() as fh:
         rows = list(csv.DictReader(fh))
@@ -226,7 +224,6 @@ def test_the_visits_results_file_collects_back_byte_for_byte(tmp_path, monkeypat
     from baselines.human.study_server import Visit
 
     kit, inbox, study = _setup(tmp_path, monkeypatch)
-    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p04": {"first": "solo"}}}))
     for path, text in _files().items():
         (kit / path).parent.mkdir(parents=True, exist_ok=True)
         (kit / path).write_text(text)

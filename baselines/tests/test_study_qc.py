@@ -1,7 +1,7 @@
 """The QC's ledger checks: a clean ledger passes; a duplicate, a late answer, an off-list report,
-a torn line, a clock set back and a rehearsal's length each fail, and so does a participant with
-no session or with one. The QC scores what a kit's results hold and refuses a label the kit's plan does not
-know."""
+a torn line, a clock set back and a rehearsal's length each fail, and so does a participant without
+the session of their condition. The QC scores the plan's condition for the run and refuses a label the kit's
+plan does not know."""
 
 import json
 import shutil
@@ -50,45 +50,62 @@ def _kit(tmp_path, monkeypatch):
     row = json.loads((root / "episodes.jsonl").read_text())
     (root / "episodes.jsonl").write_text(json.dumps({**row, "elapsed_s": 100.0, "metrics": {**row["metrics"], "SR": 1}}) + "\n")
     (kit / "plan").mkdir()
-    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p04": {}}}))
+    (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p04": {"arm": "team"}, "p05": {"arm": "solo"}}}))
     team = kit / "results" / "p04" / "team"
     team.mkdir(parents=True)
     (team / "session.json").write_text(json.dumps({"arm": "team", "agents": 1, "session_s": 3600.0, "started_epoch": 1000.0,
                                                    "started_at": "1970-01-01T00:16:40Z", "episodes_n": 1,
                                                    "order": ["block_0::1#0"]}))
-    solo = kit / "results" / "p04" / "solo"
-    solo.mkdir()
+    solo = kit / "results" / "p05" / "solo"
+    solo.mkdir(parents=True)
     (solo / "answers.jsonl").write_text(json.dumps({"episode_id": "block_0::1#0", "source": "skip"}) + "\n")
     monkeypatch.setattr(study_qc, "use_kit", lambda k: None)
     return kit
 
 
-def test_an_idle_team_session_scores_maps_results_and_a_lost_clock_is_reported(tmp_path, monkeypatch, capsys) -> None:
+def test_an_idle_team_session_scores_maps_results(tmp_path, monkeypatch, capsys) -> None:
     kit = _kit(tmp_path, monkeypatch)
     assert study_qc.main(["P04", "--kit", str(kit)]) == 1
     out = capsys.readouterr().out
-    assert "solo: CHECK FAILED: no session.json" in out and "team: 1/1 correct" in out
+    assert "team: CHECK FAILED: session length 60 min, not 40: a rehearsal?" in out and "team: 1/1 correct" in out
+    assert "solo" not in out
     scored = kit / "scored" / "p04-team"
     assert json.loads((scored / "session.json").read_text())["session_s"] == 3600.0
     s = summary(scored)
     assert (s["n"], s["correct"], s["hours"], s["sources"], s["misses"]) == (1, 1, 1.0, {"unchecked": (1, 1)}, [])
 
 
-def test_a_participant_with_no_session_fails(tmp_path, monkeypatch, capsys) -> None:
+def test_a_lost_clock_is_reported(tmp_path, monkeypatch, capsys) -> None:
     kit = _kit(tmp_path, monkeypatch)
-    shutil.rmtree(kit / "results" / "p04")
-    assert study_qc.main(["p04", "--kit", str(kit)]) == 1
-    assert "p04 has no session to score" in capsys.readouterr().out
+    assert study_qc.main(["p05", "--kit", str(kit)]) == 1
+    out = capsys.readouterr().out
+    assert "solo: CHECK FAILED: no session.json" in out and "p05 has no session to score" in out and "team" not in out
 
 
-def test_a_participant_with_one_session_fails(tmp_path, monkeypatch, capsys) -> None:
+def test_a_participant_with_their_session_passes(tmp_path, monkeypatch, capsys) -> None:
     kit = _kit(tmp_path, monkeypatch)
-    shutil.rmtree(kit / "results" / "p04" / "solo")
     meta = kit / "results" / "p04" / "team" / "session.json"
     meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 2400.0}))
+    assert study_qc.main(["p04", "--kit", str(kit)]) == 0
+    out = capsys.readouterr().out
+    assert "team: 1/1 correct" in out and "FAILED" not in out and "solo" not in out
+
+
+def test_a_session_in_the_condition_the_plan_did_not_deal_fails(tmp_path, monkeypatch, capsys) -> None:
+    kit = _kit(tmp_path, monkeypatch)
+    meta = kit / "results" / "p04" / "team" / "session.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 2400.0}))
+    shutil.copytree(kit / "results" / "p04" / "team", kit / "results" / "p04" / "solo")
+    assert study_qc.main(["p04", "--kit", str(kit)]) == 1
+    assert "team: CHECK FAILED: a solo session, not this participant's condition" in capsys.readouterr().out
+
+
+def test_a_participant_without_their_session_fails(tmp_path, monkeypatch, capsys) -> None:
+    kit = _kit(tmp_path, monkeypatch)
+    shutil.rmtree(kit / "results" / "p04" / "team")
     assert study_qc.main(["p04", "--kit", str(kit)]) == 1
     out = capsys.readouterr().out
-    assert "solo: CHECK FAILED: no session yet" in out and "team: 1/1 correct" in out
+    assert "team: CHECK FAILED: no session yet" in out and "p04 has no session to score" in out
 
 
 def test_a_label_off_the_plan_is_refused(tmp_path, monkeypatch) -> None:
