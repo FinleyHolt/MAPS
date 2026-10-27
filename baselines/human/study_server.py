@@ -14,8 +14,9 @@ The console (``console/``) is one browser tab over the session the visit page op
 MAPS's own records from the download's MAPS root. No reasoner, no segmenter, no network, and
 nothing served carries an episode's target or a score.
 
-The answers land in ``<kit>/results/<participant>/<condition>/`` (``answers.jsonl`` and the
-session's clock, ``session.json``). Starting a condition again resumes its clock; practice
+The first label the participant gives mints the visit's run id, ``<label>-<8 hex>``, so no
+two visits share a results folder. The answers land in ``<kit>/results/<run id>/<condition>/``
+(``answers.jsonl`` and the session's clock, ``session.json``). Starting a condition again resumes its clock; practice
 starts empty each time.
 """
 
@@ -34,6 +35,7 @@ import socket
 import sqlite3
 import threading
 import time
+import uuid
 import webbrowser
 import zipfile
 from pathlib import Path
@@ -48,6 +50,11 @@ PRIOR_SIMPLIFY_M = 0.3
 #: The map's zoom-out floor: the whole block in a laptop's window.
 MIN_ZOOM = 12
 _SHA = re.compile(r"^[0-9a-f]{64}$")
+
+
+def label_of(run_id: str) -> str:
+    """A run id's plan label: the text before its first dash (a bare label is its own)."""
+    return run_id.split("-")[0]
 
 
 def use_kit(kit: Path) -> None:
@@ -177,7 +184,7 @@ def build_app(kit: Path, console: Path, visit: Visit):
     running = [step for step in ("first", "second") if visit.participant and visit.status(step) == "running"]
     if running:
         # A relaunch mid-session: a console tab left open picks the session up on its next poll.
-        box["cap"] = open_session(kit, visit.participant, visit.condition(running[0]))
+        box["cap"] = open_session(kit, visit.run, visit.condition(running[0]))
 
     def session() -> Any:
         if box["cap"] is None:
@@ -268,9 +275,9 @@ def build_app(kit: Path, console: Path, visit: Visit):
     @app.get("/visit/label")
     def visit_label(label: str = "") -> Response:
         with lock:
-            before = visit.participant
+            before = visit.run
             visit.set_label(label)
-            if visit.participant != before:
+            if visit.run != before:
                 # The old label's practice is gone: its session with it.
                 box["cap"] = None
         return RedirectResponse("/visit", status_code=303)
@@ -291,7 +298,7 @@ def build_app(kit: Path, console: Path, visit: Visit):
             return HTMLResponse(PAGE.format(body="<h1>No results yet</h1><p>Nothing is saved yet. "
                                                  "<a href='/visit'>Back to the study page</a></p>"), status_code=404)
         return Response(data, media_type="application/zip", headers={
-            "Content-Disposition": f'attachment; filename="maps-study-{visit.participant}.zip"'})
+            "Content-Disposition": f'attachment; filename="maps-study-{visit.run}.zip"'})
 
     # The static mount below would serve index.html by name too, around the redirect.
     @app.get("/")
@@ -312,22 +319,24 @@ def session_s() -> float:
     return float(os.environ.get("MAPS_STUDY_SESSION_S") or SESSION_S)
 
 
-def open_session(kit: Path, participant: str, condition: str) -> Any:
-    """The participant's capacity session in one condition, off the download's plan."""
+def open_session(kit: Path, run: str, condition: str) -> Any:
+    """The visit's capacity session in one condition, off the download's plan for its label."""
     from baselines.human.audit_console import bench_labels
     from baselines.human.capacity import Capacity
 
+    participant = label_of(run)
     if condition == "practice":
         root, order_file, arm = kit / "plan" / "practice", kit / "plan" / "practice" / "practice.txt", "solo"
     else:
         root, order_file, arm = kit / "maps_root", kit / "plan" / participant / f"{condition}.txt", condition
     if not order_file.is_file():
         raise SystemExit(f"no list for {participant} {condition} at {order_file}: is {participant} on the plan?")
-    out = kit / "results" / participant / condition
+    out = kit / "results" / run / condition
     if condition == "practice":
         shutil.rmtree(out, ignore_errors=True)
     order = [ln.strip() for ln in order_file.read_text().splitlines() if ln.strip()]
-    return Capacity(root, order, out, arm, labels=bench_labels(), session_s=session_s())
+    return Capacity(root, order, out, arm, labels=bench_labels(), session_s=session_s(),
+                    ids={"run_id": run, "participant": participant})
 
 
 BRIEFING = Path(__file__).with_name("briefing.md")
@@ -339,7 +348,8 @@ CONDITIONS = {"solo": "alone", "team": "with MAPS"}
 class Visit:
     """One participant's visit, as the visit page walks it: the briefing, practice, the first
     condition, a break, the second, done. Where they are is read off the results on disk, so a
-    relaunch picks up where the visit left off, under the one label it finds there."""
+    relaunch picks up where the visit left off, under the one run id it finds there.
+    ``participant`` is the plan label; ``run`` the visit's run id, its results folder."""
 
     def __init__(self, kit: Path) -> None:
         self.kit = kit
@@ -347,8 +357,9 @@ class Visit:
         contact = kit / "contact.txt"
         self.contact = contact.read_text().strip() if contact.is_file() else "the study lead"
         results = kit / "results"
-        found = [p.name for p in results.iterdir() if p.is_dir() and p.name in self.plan] if results.is_dir() else []
-        self.participant, self.error = (found[0] if len(found) == 1 else None), ""
+        found = [p.name for p in results.iterdir() if p.is_dir() and label_of(p.name) in self.plan] if results.is_dir() else []
+        self.run = found[0] if len(found) == 1 else None
+        self.participant, self.error = (label_of(self.run) if self.run else None), ""
         self.typed = ""
         self.returning = self.participant is not None
         # A session whose clock ran on while the study was closed, until the participant returns to it.
@@ -360,7 +371,8 @@ class Visit:
         return self.participant is not None and self.session("first") is not None
 
     def set_label(self, label: str) -> None:
-        """The participant's label; a change before session 1 discards the old label's practice."""
+        """The participant's label; the first mints the visit's run id, and a change before
+        session 1 discards the old run's practice and mints another."""
         label = label.strip().lower()
         self.typed = label
         if not label:
@@ -372,9 +384,10 @@ class Visit:
             self.error = (f"You started as {self.participant}. A different label needs a fresh copy of the study: "
                           "ask the study lead.")
         else:
-            if self.participant not in (None, label):
-                shutil.rmtree(self.kit / "results" / self.participant, ignore_errors=True)
-                self.returning = False
+            if label != self.participant:
+                if self.run is not None:
+                    shutil.rmtree(self.kit / "results" / self.run, ignore_errors=True)
+                self.run, self.returning = f"{label}-{uuid.uuid4().hex[:8]}", False
             self.participant, self.error, self.typed = label, "", ""
 
     def condition(self, step: str) -> str:
@@ -383,7 +396,7 @@ class Visit:
 
     def session(self, step: str) -> dict | None:
         """The step's ``session.json``, once its session has started."""
-        meta = self.kit / "results" / self.participant / self.condition(step) / "session.json"
+        meta = self.kit / "results" / self.run / self.condition(step) / "session.json"
         return json.loads(meta.read_text()) if meta.is_file() else None
 
     def status(self, step: str) -> str:
@@ -391,7 +404,7 @@ class Visit:
         every listed report has an answer."""
         from baselines.human.audit_console import _jsonl
 
-        out = self.kit / "results" / self.participant / self.condition(step)
+        out = self.kit / "results" / self.run / self.condition(step)
         if step == "practice":
             return "done" if out.is_dir() else "todo"
         session = self.session(step)
@@ -414,12 +427,12 @@ class Visit:
             return None
         if step != "practice":
             self.away = False
-        return open_session(self.kit, self.participant, self.condition(step))
+        return open_session(self.kit, self.run, self.condition(step))
 
     def results_zip(self) -> bytes | None:
-        """The participant's results folder, as a zip: a zip records no owner, so the computer's
+        """The visit's results folder, as a zip: a zip records no owner, so the computer's
         account names stay out of it."""
-        folder = self.kit / "results" / self.participant if self.participant else None
+        folder = self.kit / "results" / self.run if self.run else None
         if folder is None or not folder.is_dir():
             return None
         buf = io.BytesIO()
@@ -427,7 +440,7 @@ class Visit:
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as z:
             for f in sorted(folder.rglob("*")):
                 if f.is_file():
-                    z.write(f, f"results/{self.participant}/{f.relative_to(folder).as_posix()}")
+                    z.write(f, f"results/{self.run}/{f.relative_to(folder).as_posix()}")
         return buf.getvalue()
 
     def name(self, step: str) -> str:
@@ -468,7 +481,7 @@ class Visit:
                     + button(step, f"Return to session {n}"))
 
         clock = f"The {minutes} minutes start when you press the button, so be seated and ready."
-        contact, zipname = html.escape(self.contact), f"maps-study-{self.participant}.zip"
+        contact, zipname = html.escape(self.contact), f"maps-study-{self.run}.zip"
         if st["second"] == "done":
             now = ("<h2>Done. One last step: send your results</h2>"
                    "<form action='/visit/results.zip' onsubmit=\"document.getElementById('saved').hidden=false\">"
@@ -498,7 +511,8 @@ class Visit:
         brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
         who = (f"Welcome back, {self.participant}. Your answers are saved." if self.returning
                else f"Participant {self.participant}")
-        return PAGE.format(body=f"<p class=who>{who}</p>{err}{now}<hr>"
+        # The run id, for the participant to quote in an email about this visit.
+        return PAGE.format(body=f"<p class=who>{who} <small>(results id {self.run})</small></p>{err}{now}<hr>"
                                 f"<div class=brief>{brief}</div>")
 
 

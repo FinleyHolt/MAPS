@@ -47,17 +47,17 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     assert "Practice ends after the fourth report" in page and "shift-click measuring" in page
     assert v.start("first") is None and v.start("second") is None
     assert v.start("practice") == "practice"
-    (tmp_path / "results" / "p01" / "practice").mkdir(parents=True)
+    (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
     assert "Start session 1" in v.page() and "Opening..." in v.page() and v.start("first") == "solo"
-    _session(tmp_path / "results" / "p01" / "solo")
+    _session(tmp_path / "results" / v.run / "solo")
     page = v.page()
     assert v.status("first") == "running" and "Return to session 1" in page
     assert "Session 1 (alone) is under way" in page and "About 40 minutes left." in page
     assert "kept running while you were away" not in page
     assert v.start("practice") is None
-    _session(tmp_path / "results" / "p01" / "solo", age_s=2350)
+    _session(tmp_path / "results" / v.run / "solo", age_s=2350)
     assert "About 1 minute left." in v.page()
-    _session(tmp_path / "results" / "p01" / "solo", age_s=2401)
+    _session(tmp_path / "results" / v.run / "solo", age_s=2401)
     assert v.status("first") == "done" and v.start("first") is None
     page = v.page()
     assert "five-minute break" in page and "Then start session 2 (with MAPS, 40 minutes)." in page
@@ -68,7 +68,7 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
 def test_a_session_ends_when_every_report_has_an_answer(tmp_path) -> None:
     v = Visit(_kit(tmp_path))
     v.set_label("p01")
-    solo = tmp_path / "results" / "p01" / "solo"
+    solo = tmp_path / "results" / v.run / "solo"
     _session(solo, answers='{"episode_id": "a"}\n{"episode_id": "a"}\n{"episode_id": "b"}\n{"episode_id": "c"')
     assert v.status("first") == "running"
     _session(solo, answers='{"episode_id": "a"}\n{"episode_id": "b"}\n{"episode_id": "c"}\n')
@@ -84,7 +84,7 @@ def test_a_label_changes_until_session_1_starts(tmp_path) -> None:
     v.set_label("p01")
     assert v.participant == "p01" and not (tmp_path / "results" / "p02").exists()
     assert "Welcome back" not in v.page() and "Participant p01" in v.page()
-    _session(tmp_path / "results" / "p01" / "solo")
+    _session(tmp_path / "results" / v.run / "solo")
     v = Visit(tmp_path)
     assert "Change it" not in v.page() and "placeholder" not in v.page(change=True)
     v.set_label("p02")
@@ -117,17 +117,17 @@ def test_results_file(tmp_path) -> None:
     assert v.results_zip() is None
     v.set_label("p01")
     assert v.results_zip() is None
-    (tmp_path / "results" / "p01" / "practice").mkdir(parents=True)
-    _session(tmp_path / "results" / "p01" / "solo", age_s=2401, answers='{"episode_id": "a"}\n')
-    _session(tmp_path / "results" / "p01" / "team", age_s=2401)
+    (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
+    _session(tmp_path / "results" / v.run / "solo", age_s=2401, answers='{"episode_id": "a"}\n')
+    _session(tmp_path / "results" / v.run / "team", age_s=2401)
     page = v.page()
-    assert "Save my results file" in page and "maps-study-p01.zip" in page and "lead@example.org" in page
+    assert "Save my results file" in page and f"maps-study-{v.run}.zip" in page and "lead@example.org" in page
     assert "the text window (on a Mac, press Terminate if asked)." in page
     assert "<p id=saved hidden>Your browser is saving the file.</p>" in page
     members = zipfile.ZipFile(io.BytesIO(v.results_zip())).infolist()
-    assert "results/p01/solo/answers.jsonl" in {m.filename for m in members}
+    assert f"results/{v.run}/solo/answers.jsonl" in {m.filename for m in members}
     assert all(m.extra == b"" for m in members)
-    os.utime(tmp_path / "results" / "p01" / "solo" / "answers.jsonl", (0, 0))
+    os.utime(tmp_path / "results" / v.run / "solo" / "answers.jsonl", (0, 0))
     assert v.results_zip()
     (tmp_path / "contact.txt").unlink()
     assert "the study lead" in Visit(tmp_path).page()
@@ -150,3 +150,40 @@ def test_a_mistyped_label_stays_in_the_box(tmp_path) -> None:
     assert "value=''" in v.page()  # with its error, once
     v.set_label("p01")
     assert v.typed == ""
+
+
+def test_each_visit_gets_its_own_run_id_under_its_label(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(study_server, "open_session", lambda kit, run, condition: (run, condition))
+    v = Visit(_kit(tmp_path))
+    v.set_label("P01")
+    run = v.run
+    assert re.fullmatch(r"p01-[0-9a-f]{8}", run) and v.participant == "p01"
+    other = Visit(tmp_path)
+    other.set_label("p01")
+    assert other.run != run
+    v.set_label("p01")
+    assert v.run == run and v.start("practice") == (run, "practice")
+    page = v.page()
+    assert "Participant p01" in page and run in page
+    (tmp_path / "results" / run / "practice").mkdir(parents=True)
+    v.set_label("p02")
+    assert re.fullmatch(r"p02-[0-9a-f]{8}", v.run) and not (tmp_path / "results" / run).exists()
+    assert v.condition("first") == "team"
+    _session(tmp_path / "results" / v.run / "team")
+    back = Visit(tmp_path)
+    assert (back.run, back.participant) == (v.run, "p02") and "Welcome back, p02" in back.page()
+    back.set_label("p01")
+    assert back.run == v.run
+
+
+def test_a_session_opens_the_labels_list_and_saves_under_the_run_id(tmp_path, monkeypatch) -> None:
+    from baselines.human import audit_console, capacity
+
+    opened = {}
+    monkeypatch.setattr(audit_console, "bench_labels", lambda: {})
+    monkeypatch.setattr(capacity, "Capacity", lambda root, order, out, arm, **kw: opened.update(order=order, out=out, **kw))
+    (_kit(tmp_path) / "plan" / "p01").mkdir()
+    (tmp_path / "plan" / "p01" / "solo.txt").write_text("a\nb\n")
+    study_server.open_session(tmp_path, "p01-3f9a2c1e", "solo")
+    assert opened["order"] == ["a", "b"] and opened["out"] == tmp_path / "results" / "p01-3f9a2c1e" / "solo"
+    assert opened["ids"] == {"run_id": "p01-3f9a2c1e", "participant": "p01"}
