@@ -1,6 +1,6 @@
 # Briefing: the search study
 
-Read before your first session.
+Read before your session.
 
 ## What you will do
 
@@ -9,7 +9,7 @@ a house, a pool, an intersection, a parking lot. For each report, find the place
 aerial imagery and put a point on it. An answer is correct when your point is on the place
 the report describes.
 
-You work two 40-minute sessions, with a short break between them:
+You work one 40-minute session, of one of two kinds. The study page says which is yours:
 
 - **Alone.** You search every report yourself.
 - **With MAPS.** MAPS is an automated search system that has searched the same kind of
@@ -17,8 +17,7 @@ You work two 40-minute sessions, with a short break between them:
   answer: confirm it if it is right, or pick the right place if it is not. When MAPS has
   not answered yet, you search that report yourself. MAPS is sometimes wrong.
 
-In both sessions, find as many places correctly as you can in the 40 minutes. Speed and
-accuracy both count.
+Find as many places correctly as you can in the 40 minutes. Speed and accuracy both count.
 
 ## Rules
 
@@ -31,7 +30,7 @@ accuracy both count.
 
 ## The console
 
-The console is the map screen that practice and each session open in.
+The console is the map screen that practice and your session open in.
 
 - **The report** is at the top left. The answer buttons are at the bottom of that column.
 - **The map** is the collected aerial imagery of the area, north up. Tan areas have no
@@ -56,8 +55,8 @@ The console is the map screen that practice and each session open in.
   answered it). The list keeps going past what one session can finish: answer as many as you
   can, in order.
 
-With MAPS, a report MAPS has already answered opens with that answer on the map and why MAPS
-chose it:
+If your session is with MAPS, a report MAPS has already answered opens with that answer on the
+map and why MAPS chose it:
 
 - **Go to MAPS's answer** (or the M key) brings the map back to MAPS's answer.
 - **Why MAPS chose it** shows MAPS's own explanation of its answer. Below it, **MAPS's whole
@@ -76,6 +75,6 @@ chose it:
 - MAPS works on many reports at once and finishes them in no fixed order, so some later
   reports may be ready while the open one is not. You always work on the open report.
 
-The four practice reports before the first session do not count. You search them alone, with
+The four practice reports before your session do not count. You search them alone, with
 no MAPS answers: use them to try the search box, the street map and shift-click measuring.
 Practice ends after the fourth report; **Done practicing** at the top stops it early.

@@ -3,8 +3,8 @@ THE SEARCH STUDY
 You need: a Mac with macOS 12 or later (macOS 11 or later on Apple silicon), a
 computer with 64-bit Windows 10 or 11, or a 64-bit Linux computer (Ubuntu 20.04
 or later, or similar), 8 GB of memory, 6 GB of free disk space, a
-mouse, Chrome or Firefox, an internet connection for the first start, about 2
-hours, and the participant label (p01, p02, ...) the study lead sent you. Your
+mouse, Chrome or Firefox, an internet connection for the first start, about 1
+hour and 15 minutes, and the participant label (p01, p02, ...) the study lead sent you. Your
 label is the only thing that identifies you; never type your name anywhere.
 
 A report is a short text that describes one place in California City, CA. In
@@ -60,10 +60,9 @@ the study you find each report's place on an aerial photo.
 2. Follow the page
 
    Type your label. The page then walks you through everything: the briefing,
-   four practice reports, session 1 (40 minutes), a 5-minute break, and
-   session 2 (40 minutes). Each session's 40 minutes start when you press its
-   button, so start it only when you are seated and ready for 40 minutes
-   without interruptions. During a session use only the study page: no other
+   four practice reports, and your session (40 minutes). The session's 40
+   minutes start when you press its button, so start it only when you are
+   seated and ready for 40 minutes without interruptions. During a session use only the study page: no other
    maps, websites or phones.
 
    If only the browser closed, open http://127.0.0.1:8788/ in Chrome or
