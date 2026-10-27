@@ -222,7 +222,8 @@ def blind_review(maps_root: Path, row: dict, landmarks: list[Landmark]) -> Revie
               "printed": str(r.get("printed") or ""), "frames": [f for f in r.get("frames") or [] if _SHA.match(str(f))]}
              for r in _jsonl(attempt / "conversation.jsonl") if r.get("kind") == "run"]
     for t in turns:
-        t["refs"] = refs_of("\n".join((t["reasoning"], t["said"], t["printed"])))
+        # What the step's code and output used; its reasoning also quotes the instructions' examples.
+        t["refs"] = refs_of("\n".join((t["said"], t["printed"])))
     reply = (attempt / "reply.md").read_text(encoding="utf-8").strip() if (attempt / "reply.md").is_file() else ""
     ended = next((str(r.get("ended_by")) for r in _jsonl(attempt / "conversation.jsonl") if r.get("kind") == "mission_end"), "")
     maps_xy = (float(row["commit_xy"][0]), float(row["commit_xy"][1]))
