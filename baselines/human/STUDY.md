@@ -53,7 +53,8 @@ cd baselines/human/console && npm ci && npm run build && rm -rf "$KIT/console" &
 Then build the zip outside the repository, with the address participants write to:
 
 ```sh
-python -m baselines.human.study_package bundle --kit "$KIT" --out ~/MAPS-study.zip --contact <email>
+python -m baselines.human.study_package bundle --kit "$KIT" --out ~/MAPS-study.zip \
+    --contact "frholt@stanford.edu and rlutz@unc.edu"
 ```
 
 It refuses a kit without `console/index.html`, `plan/plan.json`, `calcity_ortho.mbtiles` or
@@ -63,7 +64,7 @@ The zip (about 2.5 GB) holds the kit, the console's Python code (never the bench
 its targets), the briefing, `kit/contact.txt`, and the launchers from [`bundle/`](bundle/):
 `Start study (Mac).command` and `Start study (Windows).bat`. Inside it, `app/run.sh` starts
 the study on Linux too. The READ ME and the visit page's last step give the `--contact`
-address.
+text as written, so it reads as the end of "Email that file to ...".
 
 Upload **the zip file itself** to Google Drive and share it by link. Never share an unzipped
 folder: Drive zips a folder on download and drops the Mac launcher's permission to run. Send
@@ -115,14 +116,20 @@ hex characters (`p07-3f9a2c1e`). The label picks the plan's lists; the run id na
 results folder and file, so two visits under one label never collide. The visit page shows it
 beside the label.
 
-At the end the visit page offers `maps-study-<run id>.zip`. It holds
-`results/<run id>/<condition>/answers.jsonl` (one line per answer: the run id and label, its
-source, `own_search`, `confirm`, `replace` or `skip`, the point, and when the report was opened
-and answered, UTC) and `session.json` (the run id and label, the session's start, length and
-list), for `practice`, `solo` and `team`. No name or computer account is in it.
+At the end the visit page offers `maps-study-<run id>.json`, one JSON document:
+`"format": "maps-capacity-results"`, `"version": 1`, the run id, the label, when it was saved
+(UTC), and under `"sessions"` each of `practice`, `solo` and `team` that started, with its
+`"session"` (the `session.json` object: the run id and label, the session's start, length and
+list) and its `"answers"` (the `answers.jsonl` rows: the run id and label, the source,
+`own_search`, `confirm`, `replace` or `skip`, the point, and when the report was opened and
+answered, UTC), plus `"unreadable_lines"` when the ledger held lines that do not parse. No name,
+computer account or path is in it.
 
-1. The participant emails `maps-study-<run id>.zip` to the `--contact` address.
+1. The participant emails `maps-study-<run id>.json` to frholt@stanford.edu and rlutz@unc.edu,
+   so each file reaches both inboxes. The lead collects from their own inbox; Ryan's copies are
+   the backup: a file missing from one inbox is taken from the other.
 2. Save every attachment, unrenamed, into one inbox folder, here `~/datasets/capacity-study/inbox`.
+   Saving both copies of a file there is safe: the second is noted as already collected.
 3. Collect the inbox into the kit and the paper's figure:
 
    ```sh
@@ -130,15 +137,23 @@ list), for `practice`, `solo` and `team`. No name or computer account is in it.
        --study-json ~/Github/MAPS-SciRob/figures/capacity/study.json
    ```
 
-   For each `maps-study-*.zip` not collected yet it checks the zip holds `results/<run id>/`
-   of a label on the plan and nothing else, unpacks it into `$KIT/results` without replacing
-   a file, runs `study_qc`'s checks and scoring into `$KIT/scored/<run id>-solo` and
-   `<run id>-team`, records the zip (name, SHA-256, run id, label, time, checks) in
+   For each `maps-study-*.json` not collected yet it checks the file is a results file of
+   one run of a label on the plan, with only the sessions above, and writes each session's
+   `session.json` and `answers.jsonl` into `$KIT/results/<run id>/<session>/` as the visit
+   wrote them, without replacing a file. A `maps-study-*.zip`, the results file of an earlier
+   version of the visit, must hold `results/<run id>/` and nothing else, and unpacks the same
+   way. It then runs `study_qc`'s checks and scoring into `$KIT/scored/<run id>-solo` and
+   `<run id>-team`, records the file (name, SHA-256, run id, label, time, checks) in
    `$KIT/collected.jsonl`, and enters every run in the study.json as
    `participants["<run id>"]` with its `"qc"` (`"pass"`, or `"fail"` with what failed), leaving
    its other entries as they are. The figure draws the passing runs. It ends with a table of
    every collected run: label, conditions, correct out of answered per condition, and QC.
-   Running it again over the same inbox changes nothing, so run it whenever mail arrives.
+   `$KIT/actions.csv` lists every answer of every collected run, one row each (run id, label,
+   session, list position, report, source, point, opened, answered, seconds, whether MAPS's
+   answer was ready), rewritten from `$KIT/results` on every pass. It is for eyeballing; the
+   JSON results files and `$KIT/results` are the record.
+   A second copy of a file (the same SHA-256, or the same sessions saved again) is noted as
+   already collected and recorded once. Running it again over the same inbox changes nothing, so run it whenever mail arrives.
 4. Refresh the figure from the SciRob repository:
    `~/Github/MAPS/.venv/bin/python figures/capacity/render_capacity.py --refresh`, then the same
    command without `--refresh` to draw it.
@@ -150,13 +165,14 @@ list), for `practice`, `solo` and `team`. No name or computer account is in it.
 
 `study_collect` exits non-zero and says why when:
 
-- a zip is REFUSED for its contents (an entry outside `results/<run id>/`, an unknown file, a
-  link, two runs, a label off the plan, a damaged zip): nothing of it is written. Ask the
-  participant to send the file the visit page saved, unopened and unrenamed.
-- a zip is REFUSED because its run id is already in the kit with other files: the kit keeps
-  the first. Compare the two by hand (`unzip -d` to a scratch folder) and keep the complete
-  one; to replace the kit's copy, move `$KIT/results/<run id>` out and collect again. A zip
-  with the same files as the kit's copy is recorded without unpacking.
+- a file is REFUSED for its contents (a JSON file that is not a results file, of another
+  version, with a session other than `practice`, `solo` or `team`, or a session without its
+  clock and answers; a zip entry outside `results/<run id>/`, an unknown file, a link, two
+  runs, a damaged zip; a label off the plan): nothing of it is written. Ask the participant to
+  send the file the visit page saved, unopened and unrenamed.
+- a file is REFUSED because its run id is already in the kit with other files: the kit keeps
+  the first. Compare the two by hand and keep the complete one; to replace the kit's copy,
+  move `$KIT/results/<run id>` out and collect again.
 - a run fails QC: it is recorded, scored and entered in study.json flagged `"qc": "fail"` with
   what failed, and the figure leaves it out. Read it with
   `python -m baselines.human.study_qc <run id> --kit "$KIT"` (`--misses` lists every report

@@ -256,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("bundle", help="the participant's one download: the kit, the code and the launchers")
     b.add_argument("--kit", type=Path, required=True)
     b.add_argument("--out", type=Path, required=True, help="the zip, outside the repository")
-    b.add_argument("--contact", required=True, help="the study lead's email address, for questions and the results")
+    b.add_argument("--contact", required=True, help="the address or addresses for questions and the results, as one phrase (\"a@x.edu and b@y.edu\")")
     args = ap.parse_args(argv)
     if args.cmd == "bundle":
         print(f"{build_bundle(args.kit, args.out, args.contact)} files -> {args.out}")
