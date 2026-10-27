@@ -96,15 +96,16 @@ def _kind(row: dict) -> str:
 
 
 def prior_doc(map_name: str, ll) -> dict[str, Any]:
-    """The bench's OSM prior in WGS84: every row's outline (a road its centreline), and the
-    named places, for the toggle and the search."""
+    """The bench's OSM prior in WGS84: every row's outline (a road its centreline), each with the
+    id MAPS knew it by (``<category>_<index>``, ``maps.sws.graph.builder``: ``prior_2777``), and
+    the named places, for the toggle and the search."""
     from baselines.human.audit_console import block_prior
     from baselines.seam import _row_area
 
     features, landmarks = block_prior(map_name)
     shapes = []
     for category, rs in features.items():
-        for r in rs if isinstance(rs, list) else []:
+        for i, r in enumerate(rs if isinstance(rs, list) else []):
             if not isinstance(r, dict):
                 continue
             r = {**r, "category": category}
@@ -117,7 +118,7 @@ def prior_doc(map_name: str, ll) -> dict[str, Any]:
                     continue
                 line = list(geom.simplify(PRIOR_SIMPLIFY_M).exterior.coords)
             shapes.append({"type": "Feature", "properties": {"name": str(r.get("name") or ""), "kind": _kind(r),
-                                                          "layer": _layer(r)},
+                                                          "layer": _layer(r), "fid": f"{category}_{i}"},
                            "geometry": {"type": "LineString", "coordinates": ll(line)}})
     names = sorted(({"name": lm.name, "kind": _kind(lm.tags), "lonlat": ll([lm.centroid])[0]}
                     for lm in landmarks), key=lambda d: d["name"])
@@ -144,6 +145,12 @@ def review_doc(cap: Any, ll) -> dict[str, Any]:
     state["maps_lonlat"] = ll([r.maps_xy])[0]
     state["maps_prior_ring"] = ll(r.maps_prior[0]) if r.maps_prior else None
     state["stops"] = ll(r.stops)
+    # What each step and the reply name, their points and detections in WGS84 too.
+    state["turns"] = [{**t, "refs": {**t["refs"], "xy": ll(t["refs"]["xy"])}} for t in state["turns"]]
+    state["reply_refs"] = {**state["reply_refs"], "xy": ll(state["reply_refs"]["xy"])}
+    state["detected"] = {fid: {"label": d["label"], "lonlat": ll([d["xy"]])[0],
+                               "ring": ll(d["contour"]) if len(d["contour"]) >= 3 else None}
+                         for fid, d in state["detected"].items()}
     return state
 
 

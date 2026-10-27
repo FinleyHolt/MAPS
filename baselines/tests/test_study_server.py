@@ -122,6 +122,36 @@ def test_every_prior_feature_carries_its_layer(monkeypatch) -> None:
     assert sorted(f["properties"]["layer"] for f in doc["features"]) == ["building", "landuse", "poi", "road"]
 
 
+def test_a_prior_feature_carries_the_id_maps_knew_it_by(monkeypatch) -> None:
+    from baselines.human import audit_console
+    from baselines.seam import block_landmarks
+
+    square = lambda x: [[x, 0], [x, 10], [x + 10, 10], [x + 10, 0]]
+    # A row with no outline still takes its index: MAPS numbers the bake's list, drawn or not.
+    features = {"prior": [{"building": "yes", "world_contour": square(0)}, {"amenity": "bench"}, "junk",
+                          {"building": "yes", "world_contour": square(20)}]}
+    monkeypatch.setattr(audit_console, "block_prior", lambda m: (features, block_landmarks(features)))
+    doc = study_server.prior_doc("calcity", lambda pts: [list(p) for p in pts])
+    by_fid = {f["properties"]["fid"]: f["geometry"]["coordinates"] for f in doc["features"]}
+    assert sorted(by_fid) == ["prior_0", "prior_3"] and min(x for x, _ in by_fid["prior_3"]) == 20
+
+
+def test_a_review_names_what_each_step_used_in_lon_lat() -> None:
+    from types import SimpleNamespace
+
+    refs = {"prior": ["prior_3"], "detected": ["detected_1"], "xy": [[1.0, 2.0]]}
+    turns = [{"reasoning": "", "said": "", "printed": "", "frames": [], "refs": refs}]
+    state = {"candidates": [], "turns": turns, "reply_refs": {**refs, "xy": []},
+             "detected": {"detected_1": {"label": "car", "xy": [3.0, 4.0], "contour": [[0, 0], [0, 1], [1, 1]]}}}
+    session = SimpleNamespace(state=lambda: state, review=SimpleNamespace(candidates=[], maps_xy=(0.0, 0.0), maps_prior=None, stops=[]))
+    doc = study_server.review_doc(SimpleNamespace(review=session), lambda pts: [[x + 100, y + 100] for x, y in pts])
+    assert doc["turns"][0]["refs"] == {"prior": ["prior_3"], "detected": ["detected_1"], "xy": [[101.0, 102.0]]}
+    assert doc["reply_refs"]["xy"] == [] and doc["detected"]["detected_1"] == {
+        "label": "car", "lonlat": [103.0, 104.0], "ring": [[100, 100], [100, 101], [101, 101]]}
+    # The review's own records stay in local metres for the next poll.
+    assert turns[0]["refs"]["xy"] == [[1.0, 2.0]]
+
+
 def test_the_command_line_takes_no_participant() -> None:
     with pytest.raises(SystemExit) as e:
         study_server.main(["p01"])
