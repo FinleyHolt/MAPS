@@ -3,12 +3,10 @@ can change until session 1 starts; an error shows once; each session opens only 
 a session is over when its clock runs out or every listed report has an answer; the results
 file carries the answers and no account names; the briefing renders as HTML."""
 
-import io
 import json
 import os
 import re
 import time
-import zipfile
 
 from baselines.human import study_server
 from baselines.human.study_server import STEPS, Visit
@@ -114,21 +112,29 @@ def test_minutes_from_the_sessions_own_clock(tmp_path, monkeypatch) -> None:
 
 def test_results_file(tmp_path) -> None:
     v = Visit(_kit(tmp_path, contact="lead@example.org"))
-    assert v.results_zip() is None
+    assert v.results_json() is None
     v.set_label("p01")
-    assert v.results_zip() is None
+    assert v.results_json() is None
     (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
-    _session(tmp_path / "results" / v.run / "solo", age_s=2401, answers='{"episode_id": "a"}\n')
+    _session(tmp_path / "results" / v.run / "solo", age_s=2401, answers='{"episode_id": "a"}\ntorn\n')
     _session(tmp_path / "results" / v.run / "team", age_s=2401)
     page = v.page()
-    assert "Save my results file" in page and f"maps-study-{v.run}.zip" in page and "lead@example.org" in page
+    assert "Save my results file" in page and f"maps-study-{v.run}.json" in page and "lead@example.org" in page
+    assert "/visit/results.json" in page and ".zip" not in page
     assert "the text window (on a Mac, press Terminate if asked)." in page
     assert "<p id=saved hidden>Your browser is saving the file.</p>" in page
-    members = zipfile.ZipFile(io.BytesIO(v.results_zip())).infolist()
-    assert f"results/{v.run}/solo/answers.jsonl" in {m.filename for m in members}
-    assert all(m.extra == b"" for m in members)
-    os.utime(tmp_path / "results" / v.run / "solo" / "answers.jsonl", (0, 0))
-    assert v.results_zip()
+    data = v.results_json()
+    doc = json.loads(data)
+    assert (doc["format"], doc["version"], doc["run_id"], doc["participant"]) == ("maps-capacity-results", 1, v.run, "p01")
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", doc["saved_at"])
+    assert sorted(doc["sessions"]) == ["solo", "team"]
+    solo = doc["sessions"]["solo"]
+    assert solo["answers"] == [{"episode_id": "a"}] and solo["unreadable_lines"] == 1 and solo["session"]["episodes_n"] == 3
+    assert doc["sessions"]["team"] == {"session": doc["sessions"]["team"]["session"], "answers": []}
+    assert str(tmp_path) not in data.decode() and os.path.basename(os.path.expanduser("~")) not in data.decode()
+    again = v.results_json()
+    assert json.loads(again) | {"saved_at": 0} == doc | {"saved_at": 0}
+    assert again.decode().replace(json.loads(again)["saved_at"], "") == data.decode().replace(doc["saved_at"], "")
     (tmp_path / "contact.txt").unlink()
     assert "the study lead" in Visit(tmp_path).page()
 

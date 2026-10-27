@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import html
-import io
 import json
 import logging
 import math
@@ -37,7 +36,6 @@ import threading
 import time
 import uuid
 import webbrowser
-import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -291,14 +289,14 @@ def build_app(kit: Path, console: Path, visit: Visit):
             box["cap"], box["practice"] = cap, step == "practice"
         return RedirectResponse("/", status_code=303)
 
-    @app.get("/visit/results.zip")
+    @app.get("/visit/results.json")
     def visit_results() -> Response:
-        data = visit.results_zip()
+        data = visit.results_json()
         if data is None:
             return HTMLResponse(PAGE.format(body="<h1>No results yet</h1><p>Nothing is saved yet. "
                                                  "<a href='/visit'>Back to the study page</a></p>"), status_code=404)
-        return Response(data, media_type="application/zip", headers={
-            "Content-Disposition": f'attachment; filename="maps-study-{visit.run}.zip"'})
+        return Response(data, media_type="application/json", headers={
+            "Content-Disposition": f'attachment; filename="maps-study-{visit.run}.json"'})
 
     # The static mount below would serve index.html by name too, around the redirect.
     @app.get("/")
@@ -343,6 +341,8 @@ BRIEFING = Path(__file__).with_name("briefing.md")
 STEPS = ("practice", "first", "second")
 #: Each condition as the visit page names it.
 CONDITIONS = {"solo": "alone", "team": "with MAPS"}
+#: The results file's ``format`` and ``version``, as ``study_collect`` checks them.
+RESULTS_FORMAT, RESULTS_VERSION = "maps-capacity-results", 1
 
 
 class Visit:
@@ -429,19 +429,28 @@ class Visit:
             self.away = False
         return open_session(self.kit, self.run, self.condition(step))
 
-    def results_zip(self) -> bytes | None:
-        """The visit's results folder, as a zip: a zip records no owner, so the computer's
-        account names stay out of it."""
+    def results_json(self) -> bytes | None:
+        """The visit's results file: each session's clock and answers in one JSON document,
+        keys sorted so two saves of the same results differ only in ``saved_at``. It holds the
+        ledgers' contents alone, so the computer's account names and paths stay out of it."""
+        from baselines.human.audit_console import _jsonl
+
         folder = self.kit / "results" / self.run if self.run else None
         if folder is None or not folder.is_dir():
             return None
-        buf = io.BytesIO()
-        # A file dated before 1980 (a computer whose clock was reset) is stored at 1980, not refused.
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as z:
-            for f in sorted(folder.rglob("*")):
-                if f.is_file():
-                    z.write(f, f"results/{self.run}/{f.relative_to(folder).as_posix()}")
-        return buf.getvalue()
+        sessions = {}
+        for name in ("practice", "solo", "team"):
+            meta, ledger = folder / name / "session.json", folder / name / "answers.jsonl"
+            if not meta.is_file():
+                continue
+            answers = _jsonl(ledger)
+            sessions[name] = {"session": json.loads(meta.read_text()), "answers": answers}
+            lines = sum(1 for ln in ledger.read_text().splitlines() if ln.strip()) if ledger.is_file() else 0
+            if lines > len(answers):
+                sessions[name]["unreadable_lines"] = lines - len(answers)
+        doc = {"format": RESULTS_FORMAT, "version": RESULTS_VERSION, "run_id": self.run, "participant": self.participant,
+               "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "sessions": sessions}
+        return (json.dumps(doc, indent=1, sort_keys=True) + "\n").encode()
 
     def name(self, step: str) -> str:
         """A timed session as the visit page names it, at the length its own clock holds once it has one."""
@@ -481,13 +490,13 @@ class Visit:
                     + button(step, f"Return to session {n}"))
 
         clock = f"The {minutes} minutes start when you press the button, so be seated and ready."
-        contact, zipname = html.escape(self.contact), f"maps-study-{self.run}.zip"
+        contact, filename = html.escape(self.contact), f"maps-study-{self.run}.json"
         if st["second"] == "done":
             now = ("<h2>Done. One last step: send your results</h2>"
-                   "<form action='/visit/results.zip' onsubmit=\"document.getElementById('saved').hidden=false\">"
+                   "<form action='/visit/results.json' onsubmit=\"document.getElementById('saved').hidden=false\">"
                    "<button>Save my results file</button></form>"
                    "<p id=saved hidden>Your browser is saving the file.</p>"
-                   f"<p>Your browser saves {zipname}, usually in your Downloads folder. "
+                   f"<p>Your browser saves {filename}, usually in your Downloads folder. "
                    f"Attach it to an email to {contact}. Then you can close this page and the "
                    "text window (on a Mac, press Terminate if asked).</p>")
         elif st["second"] == "running":

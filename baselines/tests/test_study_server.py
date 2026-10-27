@@ -47,7 +47,7 @@ def test_before_a_session_or_a_label(tmp_path) -> None:
         assert r.status_code == 409 and r.json()["detail"]
     for path in ("/", "/index.html"):
         assert c.get(path, follow_redirects=False).headers["location"] == "/visit"
-    r = c.get("/visit/results.zip")
+    r = c.get("/visit/results.json")
     assert r.status_code == 404 and "/visit" in r.text
 
 
