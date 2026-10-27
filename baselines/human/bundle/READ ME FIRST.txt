@@ -66,9 +66,9 @@ the study you find each report's place on an aerial photo.
 3. Send your results
 
    When you finish, the page shows a "Save my results file" button. Your
-   browser saves maps-study-<your label>.zip, usually in your Downloads
-   folder. Email that file to {CONTACT}. It holds your answers and their
-   times, nothing else.
+   browser saves maps-study-<your label>-<a code>.zip (the page shows its
+   name), usually in your Downloads folder. Email that file to {CONTACT}.
+   It holds your answers and their times, nothing else.
 
 Questions about the page or the setup: {CONTACT}.
 Nobody can answer questions about a report.

@@ -95,7 +95,7 @@ through both warnings.
 
 The label stays changeable on the visit page until session 1 starts. After that the unzipped
 folder belongs to that label. To correct it, or to hand the same copy to someone else, have
-the participant save their results file first, then move `MAPS-study/kit/results/<label>` out
+the participant save their results file first, then move `MAPS-study/kit/results/<run id>` out
 of the folder and start the study again: the page asks for a label as on the first start.
 
 ### Rehearse
@@ -110,25 +110,66 @@ its folder.
 
 ### Collect and score
 
-At the end the visit page offers the participant `maps-study-<p>.zip`, which they email. It
-holds `results/<p>/<condition>/answers.jsonl` (one line per answer: its source, `own_search`,
-`confirm`, `replace` or `skip`, the point, and when the report was opened and answered, UTC)
-and `session.json` (the session's start, length and list). Unpack it into the kit, never over
-a file already there, and check it:
+The first label a participant types mints the visit's run id: the label, a dash and eight
+hex characters (`p07-3f9a2c1e`). The label picks the plan's lists; the run id names the
+results folder and file, so two visits under one label never collide. The visit page shows it
+beside the label.
 
-```sh
-unzip -n maps-study-p07.zip -d "$KIT"
-python -m baselines.human.study_qc p07 --kit "$KIT"      # --misses lists every report they got wrong
-```
+At the end the visit page offers `maps-study-<run id>.zip`. It holds
+`results/<run id>/<condition>/answers.jsonl` (one line per answer: the run id and label, its
+source, `own_search`, `confirm`, `replace` or `skip`, the point, and when the report was opened
+and answered, UTC) and `session.json` (the run id and label, the session's start, length and
+list), for `practice`, `solo` and `team`. No name or computer account is in it.
 
-`study_qc` scores each condition with `team_rows` into `$KIT/scored/p07-solo` and `p07-team`,
-prints correct finds per session hour, answers by source and how the person met MAPS's
-answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), and exits
-non-zero when a ledger fails a check: a report answered twice, an answer after the session's
-end, an answer to a report not on the list, an unreadable line, a clock moved back (an answer
-before the session's start or before the previous answer), a lost clock, a session not 40
-minutes long (a rehearsal?). It also exits non-zero when the label lacks either session. It
-refuses a label that is not on the kit's plan (`P07` is `p07`).
+1. The participant emails `maps-study-<run id>.zip` to the `--contact` address.
+2. Save every attachment, unrenamed, into one inbox folder, here `~/datasets/capacity-study/inbox`.
+3. Collect the inbox into the kit and the paper's figure:
+
+   ```sh
+   python -m baselines.human.study_collect --kit "$KIT" --inbox ~/datasets/capacity-study/inbox \
+       --study-json ~/Github/MAPS-SciRob/figures/capacity/study.json
+   ```
+
+   For each `maps-study-*.zip` not collected yet it checks the zip holds `results/<run id>/`
+   of a label on the plan and nothing else, unpacks it into `$KIT/results` without replacing
+   a file, runs `study_qc`'s checks and scoring into `$KIT/scored/<run id>-solo` and
+   `<run id>-team`, records the zip (name, SHA-256, run id, label, time, checks) in
+   `$KIT/collected.jsonl`, and adds a run that passes every check to the study.json as
+   `participants["<run id>"]`, leaving its other entries as they are. It ends with a table of
+   every collected run: label, conditions, correct out of answered per condition, and QC.
+   Running it again over the same inbox changes nothing, so run it whenever mail arrives.
+4. Refresh the figure from the SciRob repository:
+   `~/Github/MAPS/.venv/bin/python figures/capacity/render_capacity.py --refresh`, then the same
+   command without `--refresh` to draw it.
+   The refresh crops the example report's imagery from the archived ortho
+   (`~/datasets/calcity-campaign/data/rgbd_upstream`), which lives on hamming; run it where
+   that folder is.
+5. Back up the inbox, `$KIT/results`, `$KIT/scored` and `$KIT/collected.jsonl` together. They
+   name participants by label and run id only.
+
+`study_collect` exits non-zero and says why when:
+
+- a zip is REFUSED for its contents (an entry outside `results/<run id>/`, an unknown file, a
+  link, two runs, a label off the plan, a damaged zip): nothing of it is written. Ask the
+  participant to send the file the visit page saved, unopened and unrenamed.
+- a zip is REFUSED because its run id is already in the kit with other files: the kit keeps
+  the first. Compare the two by hand (`unzip -d` to a scratch folder) and keep the complete
+  one; to replace the kit's copy, move `$KIT/results/<run id>` out and collect again. A zip
+  with the same files as the kit's copy is recorded without unpacking.
+- a run fails QC: it is recorded and scored, and stays out of study.json. Read it with
+  `python -m baselines.human.study_qc <run id> --kit "$KIT"` (`--misses` lists every report
+  they got wrong). A run that stands despite its failure goes into study.json by hand, as
+  `"<run id>": {"solo": "<kit>/scored/<run id>-solo", "team": "<kit>/scored/<run id>-team"}`.
+
+`study_qc` prints correct finds per session hour, answers by source and how the person met
+MAPS's answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), and
+exits non-zero when a ledger fails a check: a report answered twice, an answer after the
+session's end, an answer to a report not on the list, an unreadable line, a clock moved back
+(an answer before the session's start or before the previous answer), a lost clock, a session
+not 40 minutes long (a rehearsal?), or a missing session. It takes a run id, or a bare label
+with one visit in the kit; a label with several lists their run ids. It refuses a label that is
+not on the kit's plan (`P07` is `p07`). A results folder named by a bare label (`results/p07`)
+reads as the run id `p07`.
 
 The scored root reads like any bench root (`benchmarks.citynav.analysis.run_report`). With
 MAPS it also holds every MAPS answer released within the session that the person never
