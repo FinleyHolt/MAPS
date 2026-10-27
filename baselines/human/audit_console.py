@@ -60,8 +60,10 @@ UNREACHABLE = "MAPS could not have reached that spot. Choose a place nearer MAPS
 #: How MAPS names a row of the street map or a detection: ``prior_2777``, ``detected_11``, and
 #: several of a kind at once, ``detected_12/28``.
 _FID = re.compile(r"\b(prior|detected)_(\d+((?:/\d+)*))\b")
-#: A point MAPS passed or printed, ``[7018, 6378]``: local metres.
+#: A point MAPS passed or printed, ``[7018, 6378]``: local metres. Its final reply writes them
+#: ``(3033, 5976)`` too, where a step's reasoning means a frame's pixels.
 _XY = re.compile(r"\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]")
+_XY_REPLY = re.compile(r"[\[(]\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*[\]);]")
 
 
 @dataclass
@@ -163,7 +165,7 @@ def detected_of(attempt: Path) -> dict[str, dict]:
     return {f"detected_{n}": v for n, v in enumerate(out.values())}
 
 
-def refs_of(text: str) -> dict[str, list]:
+def refs_of(text: str, xy_pattern: re.Pattern = _XY) -> dict[str, list]:
     """What a stretch of MAPS's search names, each once in the order named: rows of the street
     map (``prior_<i>``), detections (``detected_<i>``) and points (local metres)."""
     fids: dict[str, list[str]] = {"prior": [], "detected": []}
@@ -172,7 +174,7 @@ def refs_of(text: str) -> dict[str, list]:
             if f"{m.group(1)}_{n}" not in fids[m.group(1)]:
                 fids[m.group(1)].append(f"{m.group(1)}_{n}")
     xy: list[list[float]] = []
-    for m in _XY.finditer(text):
+    for m in xy_pattern.finditer(text):
         p = [float(m.group(1)), float(m.group(2))]
         if p not in xy:
             xy.append(p)
@@ -394,12 +396,12 @@ class Session:
             "maps_commit": (f"object {r.maps_pick} {'of the benchmark labels' if self.labels is not None else 'MAPS detected'}"
                             if r.maps_pick is not None
                             else f"a mapped {r.maps_prior[1]}" if r.maps_prior is not None else "a point, no object under it"),
-            "maps_reply": r.reply, "reply_refs": refs_of(r.reply),
+            "maps_reply": r.reply, "reply_refs": refs_of(r.reply, _XY_REPLY),
             # The last step's reasoning: the paper figure's capture of the console shows it.
             "maps_reason": r.turns[-1]["reasoning"] if r.turns else "",
             "turns": r.turns,
             # The detections the search or the reply names: what each step used, on the map.
-            "detected": {fid: r.detected[fid] for t in [*r.turns, {"refs": refs_of(r.reply)}]
+            "detected": {fid: r.detected[fid] for t in [*r.turns, {"refs": refs_of(r.reply, _XY_REPLY)}]
                          for fid in t["refs"]["detected"] if fid in r.detected}, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
             "candidates": [{"id": c.id, "label": c.label, "color": c.color, "dist_m": round(_reach(c, r.maps_xy)),
                             **({"kind": c.kind} if c.kind else {})}
