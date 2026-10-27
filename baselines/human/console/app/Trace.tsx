@@ -35,7 +35,10 @@ export function Trace({ instruction, turns, link, picked, onPick }: {
               ))}
             </div>
           ) : null}
-          {t.printed ? <pre className="entry-output">{t.printed}</pre> : null}
+          {t.printed ? (onPick ? (
+            <button type="button" className="entry-output entry-call" aria-pressed={picked === i} title="show on the map what this step used"
+                    onClick={() => onPick(i)}>{t.printed}</button>
+          ) : <pre className="entry-output">{t.printed}</pre>) : null}
         </div>
       ))}
     </div>
