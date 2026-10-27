@@ -51,6 +51,16 @@ def test_before_a_session_or_a_label(tmp_path) -> None:
     assert r.status_code == 404 and "/visit" in r.text
 
 
+def test_the_results_file_downloads_as_json(tmp_path) -> None:
+    kit, session = tmp_path / "kit", {"started_epoch": 0.0, "session_s": 2400.0, "episodes_n": 1}
+    (kit / "results" / "p01-3f9a2c1e" / "solo").mkdir(parents=True)
+    (kit / "results" / "p01-3f9a2c1e" / "solo" / "session.json").write_text(json.dumps(session))
+    r = _client(kit).get("/visit/results.json")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/json"
+    assert r.headers["content-disposition"] == 'attachment; filename="maps-study-p01-3f9a2c1e.json"'
+    assert r.json()["sessions"] == {"solo": {"answers": [], "session": session}}
+
+
 def test_a_select_keeps_its_report(tmp_path, monkeypatch) -> None:
     import benchmarks.flight.tile_georef as georef
 
