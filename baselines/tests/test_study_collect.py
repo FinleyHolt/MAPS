@@ -57,7 +57,7 @@ def test_a_good_zip_is_collected_once_and_fills_study_json(tmp_path, monkeypatch
     assert rec["conditions"] == {"solo": [0, 1], "team": [1, 1]} and len(rec["sha256"]) == 64
     doc = json.loads(study.read_text())
     assert doc["participants"] == {"p01": {"solo": "~/old"},
-                                   RUN: {"solo": f"~/kit/scored/{RUN}-solo", "team": f"~/kit/scored/{RUN}-team"}}
+                                   RUN: {"solo": f"~/kit/scored/{RUN}-solo", "team": f"~/kit/scored/{RUN}-team", "qc": "pass"}}
     assert doc["plan"] == "~/plan" and list(doc) == ["study", "participants", "plan"]
     assert RUN in out and "0/1" in out and "1/1" in out and "pass" in out
     before = {p: p.read_bytes() for p in (kit / "collected.jsonl", study)}
@@ -98,13 +98,26 @@ def test_a_zip_holding_anything_else_is_refused_before_anything_is_written(tmp_p
     assert not (kit / "results").exists() and not (tmp_path / "evil").exists() and not (kit / "collected.jsonl").exists()
 
 
-def test_a_missing_condition_fails_the_qc_and_stays_out_of_study_json(tmp_path, monkeypatch, capsys) -> None:
+def test_a_missing_condition_fails_the_qc_and_is_recorded_flagged(tmp_path, monkeypatch, capsys) -> None:
     kit, inbox, study = _setup(tmp_path, monkeypatch)
     _zip(inbox, f"maps-study-{RUN}.zip", {k: v for k, v in _files().items() if "/team/" not in k})
-    before = study.read_text()
     assert _collect(kit, inbox, study) == 1
     (rec,) = [json.loads(ln) for ln in (kit / "collected.jsonl").read_text().splitlines()]
     assert rec["qc"] == "fail" and rec["failed"] == ["team: no session yet"] and rec["conditions"] == {"solo": [0, 1]}
-    assert study.read_text() == before
+    # Every run is on record; the figure leaves out a flagged one.
+    assert json.loads(study.read_text())["participants"][RUN] == {
+        "solo": f"~/kit/scored/{RUN}-solo", "qc": "fail", "failed": ["team: no session yet"]}
     assert "QC FAILED" in capsys.readouterr().out
     assert _collect(kit, inbox, study) == 0
+
+
+def test_a_results_file_a_mac_unpacked_and_compressed_again_is_collected(tmp_path, monkeypatch, capsys) -> None:
+    kit, inbox, study = _setup(tmp_path, monkeypatch)
+    wrap = f"maps-study-{RUN}"
+    files = {f"{wrap}/{k}": v for k, v in _files().items()}
+    files.update({f"{wrap}/": "", f"{wrap}/results/": "", f"{wrap}/.DS_Store": "x",
+                  f"__MACOSX/{wrap}/._results": "x", f"__MACOSX/{wrap}/results/{RUN}/solo/._answers.jsonl": "x"})
+    _zip(inbox, f"{wrap}.zip", files)
+    assert _collect(kit, inbox, study) == 0
+    assert (kit / "results" / RUN / "solo" / "answers.jsonl").is_file()
+    assert not (kit / "results" / ".DS_Store").exists() and not list((kit / "results").rglob("._*"))

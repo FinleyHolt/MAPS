@@ -25,8 +25,11 @@ from pathlib import Path
 from baselines.human import study_qc
 from baselines.human.study_server import label_of
 
-#: The one shape of a results file's member: a run's condition's ledger or clock.
-MEMBER = re.compile(r"results/([a-z0-9]+(?:-[0-9a-f]{8})?)/(?:practice|solo|team)/(?:answers\.jsonl|session\.json)")
+#: The one shape of a results file's member: a run's condition's ledger or clock, under one
+#: folder when a Mac unpacked the file and the participant compressed that folder again.
+MEMBER = re.compile(r"(?:[^/]+/)?(results/([a-z0-9]+(?:-[0-9a-f]{8})?)/(?:practice|solo|team)/(?:answers\.jsonl|session\.json))")
+#: What a Mac adds when it compresses a folder: folder entries, Finder's records, resource forks.
+MAC_EXTRA = re.compile(r"(?:.*/)?(?:\.DS_Store)?|__MACOSX/.*")
 
 
 def members(zf: zipfile.ZipFile, plan: dict) -> tuple[str, dict[str, bytes]]:
@@ -34,12 +37,14 @@ def members(zf: zipfile.ZipFile, plan: dict) -> tuple[str, dict[str, bytes]]:
     runs, files = set(), {}
     for info in zf.infolist():
         m = MEMBER.fullmatch(info.filename)
+        if m is None and MAC_EXTRA.fullmatch(info.filename):
+            continue
         if m is None:
             raise ValueError(f"{info.filename!r} is not a results file's entry")
         if (info.external_attr >> 16) & 0o170000 == 0o120000:
             raise ValueError(f"{info.filename!r} is a link")
-        runs.add(m[1])
-        files[info.filename.removeprefix("results/")] = zf.read(info)
+        runs.add(m[2])
+        files[m[1].removeprefix("results/")] = zf.read(info)
     if len(runs) != 1:
         raise ValueError(f"holds {len(runs)} runs, not one")
     run = runs.pop()
@@ -79,9 +84,13 @@ def collect(kit: Path, zpath: Path, sha: str, plan: dict) -> dict | None:
 
 
 def add_to_study(study_json: Path, kit: Path, rec: dict) -> None:
-    """The run's scored roots in the figure's study.json, every other key as it was."""
+    """The run's scored roots and its qc in the figure's study.json, every other key as it was.
+    A run that failed a check is recorded too, flagged with what failed; the figure leaves it out."""
     doc = json.loads(study_json.read_text())
     entry = {arm: home_path(kit / "scored" / f"{rec['run_id']}-{arm}") for arm in rec["conditions"]}
+    entry["qc"] = rec["qc"]
+    if rec["failed"]:
+        entry["failed"] = rec["failed"]
     if doc.get("participants", {}).get(rec["run_id"]) != entry:
         doc.setdefault("participants", {})[rec["run_id"]] = entry
         study_json.write_text(json.dumps(doc, indent=1) + "\n")
@@ -91,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--kit", type=Path, required=True)
     ap.add_argument("--inbox", type=Path, required=True, help="the folder the emailed results files are saved in")
-    ap.add_argument("--study-json", type=Path, help="the capacity figure's study.json, to add each passing run to")
+    ap.add_argument("--study-json", type=Path, help="the capacity figure's study.json, to record each run in (a failed run flagged)")
     args = ap.parse_args(argv)
     kit, inbox = args.kit.expanduser(), args.inbox.expanduser()
     plan = json.loads((kit / "plan" / "plan.json").read_text())["participants"]
@@ -117,8 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         seen[sha] = zpath.name
         if rec["qc"] == "fail":
             bad += 1
-            print(f"QC FAILED {rec['run_id']} ({zpath.name}), not added to study.json: " + "; ".join(rec["failed"]))
-        elif args.study_json:
+            print(f"QC FAILED {rec['run_id']} ({zpath.name}), recorded flagged: " + "; ".join(rec["failed"]))
+        if args.study_json:
             add_to_study(args.study_json.expanduser(), kit, rec)
     last = {r["run_id"]: r for r in records}
     print(f"\n{'run id':<14} {'label':<6} {'conditions':<11} {'solo':>8} {'team':>8}  qc")

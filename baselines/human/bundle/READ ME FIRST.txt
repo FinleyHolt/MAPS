@@ -70,5 +70,8 @@ the study you find each report's place on an aerial photo.
    name), usually in your Downloads folder. Email that file to {CONTACT}.
    It holds your answers and their times, nothing else.
 
+   If your Mac unpacked it into a folder named maps-study-... instead,
+   right-click that folder, choose "Compress", and email the new .zip.
+
 Questions about the page or the setup: {CONTACT}.
 Nobody can answer questions about a report.

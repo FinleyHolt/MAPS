@@ -134,8 +134,9 @@ list), for `practice`, `solo` and `team`. No name or computer account is in it.
    of a label on the plan and nothing else, unpacks it into `$KIT/results` without replacing
    a file, runs `study_qc`'s checks and scoring into `$KIT/scored/<run id>-solo` and
    `<run id>-team`, records the zip (name, SHA-256, run id, label, time, checks) in
-   `$KIT/collected.jsonl`, and adds a run that passes every check to the study.json as
-   `participants["<run id>"]`, leaving its other entries as they are. It ends with a table of
+   `$KIT/collected.jsonl`, and enters every run in the study.json as
+   `participants["<run id>"]` with its `"qc"` (`"pass"`, or `"fail"` with what failed), leaving
+   its other entries as they are. The figure draws the passing runs. It ends with a table of
    every collected run: label, conditions, correct out of answered per condition, and QC.
    Running it again over the same inbox changes nothing, so run it whenever mail arrives.
 4. Refresh the figure from the SciRob repository:
@@ -156,10 +157,10 @@ list), for `practice`, `solo` and `team`. No name or computer account is in it.
   the first. Compare the two by hand (`unzip -d` to a scratch folder) and keep the complete
   one; to replace the kit's copy, move `$KIT/results/<run id>` out and collect again. A zip
   with the same files as the kit's copy is recorded without unpacking.
-- a run fails QC: it is recorded and scored, and stays out of study.json. Read it with
+- a run fails QC: it is recorded, scored and entered in study.json flagged `"qc": "fail"` with
+  what failed, and the figure leaves it out. Read it with
   `python -m baselines.human.study_qc <run id> --kit "$KIT"` (`--misses` lists every report
-  they got wrong). A run that stands despite its failure goes into study.json by hand, as
-  `"<run id>": {"solo": "<kit>/scored/<run id>-solo", "team": "<kit>/scored/<run id>-team"}`.
+  they got wrong). To let a flagged run stand, set its `"qc"` to `"pass"` by hand.
 
 `study_qc` prints correct finds per session hour, answers by source and how the person met
 MAPS's answers (wrong and confirmed, wrong and fixed, right and replaced with a miss), and
