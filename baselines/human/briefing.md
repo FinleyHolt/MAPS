@@ -60,9 +60,12 @@ With MAPS, a report MAPS has already answered opens with that answer on the map 
 chose it:
 
 - **Go to MAPS's answer** (or the M key) brings the map back to MAPS's answer.
+- **Why MAPS chose it** shows MAPS's own explanation of its answer. Below it, **MAPS's whole
+  search** lists each step MAPS took; click a step's code to see on the map what that step used,
+  and click it again to clear it.
 - Places named in **Why MAPS chose it** are drawn on the map in color, with a small key under
-  the text; places in **MAPS's whole search** (under **more**) are drawn while that section is
-  open. Point at one to see it on the map; click it to go there.
+  the text; places in **MAPS's whole search** are drawn while that section is open. Point at
+  one to see it on the map; click it to go there.
 - **Mapped objects near MAPS's answer** lists the objects on the map closest to it, nearest
   first. Clicking one picks it as your point and goes there; **number them on the map** shows
   each one's number on the map.
