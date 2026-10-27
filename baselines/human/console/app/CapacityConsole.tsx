@@ -316,7 +316,7 @@ export function CapacityConsole() {
             </section>
 
             {/* Everything between the report and the controls scrolls; the controls never move. */}
-            <div className="cap-scroll">
+            <div className="cap-scroll" key={cur?.episode_id}>{/* a new report opens at the top, its sections closed */}
             {verifying && CAPTURE ? (
               <section className="cap-block">
                 <p className="cap-kicker">Why MAPS chose it</p>
