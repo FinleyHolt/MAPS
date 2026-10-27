@@ -141,6 +141,30 @@ def test_the_audit_console_is_blind_and_resumes_after_its_last_decision(tmp_path
     assert s.state()["done"] and audit_console.Session(root, ["block_0::1#0"], out, _crop).review is None
 
 
+def test_the_review_explains_maps_answer_with_its_reply_and_says_what_each_step_used(tmp_path, monkeypatch) -> None:
+    from benchmarks.citynav.run_benchmark import assets
+
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: type("A", (), {"base_features": {}})())
+    root = _root(tmp_path)
+    attempt = root / "w0" / "maps_x"
+    s = audit_console.Session(root, ["block_0::1#0"], tmp_path / "p01")
+    # No reply on record: the last step's reasoning stands in.
+    assert s.state()["maps_reply"] == "the red car by the gate"
+    (attempt / "conversation.jsonl").write_text(json.dumps(
+        {"kind": "run", "reasoning": "prior_3 is the gate; detected_1 sits at [0.0, 98.0]", "said": "r = find('car', nearest=[1, 2])",
+         "printed": "detected_0 [0.0, 50.0]\ndetected_1/7 prior_3 [0:20]", "frames": []}) + "\n")
+    (attempt / "reply.md").write_text("**Answer: `detected_1`** by the gate, `prior_3`.")
+    state = audit_console.Session(root, ["block_0::1#0"], tmp_path / "p02").state()
+    assert state["maps_reply"] == "**Answer: `detected_1`** by the gate, `prior_3`."
+    assert state["turns"][0]["refs"] == {"prior": ["prior_3"], "detected": ["detected_1", "detected_0", "detected_7"],
+                                         "xy": [[0.0, 98.0], [1.0, 2.0], [0.0, 50.0]]}
+    assert state["reply_refs"] == {"prior": ["prior_3"], "detected": ["detected_1"], "xy": []}
+    # Each detection by the id MAPS gave it, at its outline; an id no detection carries is left out.
+    assert sorted(state["detected"]) == ["detected_0", "detected_1"]
+    assert state["detected"]["detected_1"]["label"] == "car" and state["detected"]["detected_1"]["xy"] == [0.0, 98.0]
+    assert len(state["detected"]["detected_1"]["contour"]) == 4
+
+
 def test_a_session_with_no_raster_selects_by_world_point(tmp_path, monkeypatch) -> None:
     from benchmarks.citynav.run_benchmark import assets
 

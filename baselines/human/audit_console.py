@@ -2,7 +2,7 @@
 
 MAPS flies alone first (the paired root). The console shows the auditor the
 instruction, the imagery around MAPS's commit with every candidate MAPS
-detected outlined and its pick marked, MAPS's own reasoning for the pick, the
+detected outlined and its pick marked, MAPS's own reply explaining the pick, the
 full trace behind it and a search over the block's named prior. The auditor
 confirms, or selects another candidate or point and commits that (with
 ``--labels`` the candidates are the benchmark's own labelled objects near the
@@ -57,6 +57,11 @@ COLOURS = {"prior": (255, 214, 0), "candidate": (0, 220, 255), "maps": (255, 0, 
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 #: A replacement MAPS's remaining flight could not reach, as the participant reads it.
 UNREACHABLE = "MAPS could not have reached that spot. Choose a place nearer MAPS's answer, or press Confirm."
+#: How MAPS names a row of the street map or a detection: ``prior_2777``, ``detected_11``, and
+#: several of a kind at once, ``detected_12/28``.
+_FID = re.compile(r"\b(prior|detected)_(\d+((?:/\d+)*))\b")
+#: A point MAPS passed or printed, ``[7018, 6378]``: local metres.
+_XY = re.compile(r"\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]")
 
 
 @dataclass
@@ -89,6 +94,10 @@ class Review:
     landmarks: list[Landmark] = field(default_factory=list)
     #: The mapped object under MAPS's commit when no detection is: its outline and a label.
     maps_prior: tuple[list[tuple[float, float]], str] | None = None
+    #: MAPS's final reply, which explains its answer (``reply.md``); the last step's reasoning without one.
+    reply: str = ""
+    #: Every object MAPS detected, by the id MAPS knew it by (``detected_of``).
+    detected: dict[str, dict] = field(default_factory=dict)
 
 
 def prior_under(features: dict | None, xy: tuple[float, float]) -> tuple[list[tuple[float, float]], str] | None:
@@ -141,6 +150,35 @@ def candidates_of(attempt: Path) -> list[Candidate]:
     return out
 
 
+def detected_of(attempt: Path) -> dict[str, dict]:
+    """Every object MAPS detected, by the id its search minted (``maps.sws.graph.runtime``):
+    ``detected_<i>`` in the order each track was first seen, an untracked sighting its own,
+    each where its latest sighting put it, as the search kept it."""
+    out: dict[str, dict] = {}
+    for i, d in enumerate(_jsonl(attempt / "detections.jsonl")):
+        track = (d.get("metadata") or {}).get("track_id")
+        key = f"track {track}" if track else f"row {i}"
+        out[key] = {"label": str(d.get("label") or "object"), "xy": [float(v) for v in d["world_xy"]],
+                    "contour": [[float(x), float(y)] for x, y in (d.get("metadata") or {}).get("world_contour") or []]}
+    return {f"detected_{n}": v for n, v in enumerate(out.values())}
+
+
+def refs_of(text: str) -> dict[str, list]:
+    """What a stretch of MAPS's search names, each once in the order named: rows of the street
+    map (``prior_<i>``), detections (``detected_<i>``) and points (local metres)."""
+    fids: dict[str, list[str]] = {"prior": [], "detected": []}
+    for m in _FID.finditer(text):
+        for n in m.group(2).split("/"):
+            if f"{m.group(1)}_{n}" not in fids[m.group(1)]:
+                fids[m.group(1)].append(f"{m.group(1)}_{n}")
+    xy: list[list[float]] = []
+    for m in _XY.finditer(text):
+        p = [float(m.group(1)), float(m.group(2))]
+        if p not in xy:
+            xy.append(p)
+    return {**fids, "xy": xy}
+
+
 def labelled_candidates(objects: list, points: list[tuple[float, float]], near_m: float = LABELS_NEAR_M) -> list[Candidate]:
     """The benchmark's labelled objects (``cityrefer/objects.json``) near ``points``, as
     candidates: each outline, what it is (``kind``, from ``bench_labels``), and a point inside
@@ -181,6 +219,9 @@ def blind_review(maps_root: Path, row: dict, landmarks: list[Landmark]) -> Revie
     turns = [{"reasoning": str(r.get("reasoning") or ""), "said": str(r.get("said") or ""),
               "printed": str(r.get("printed") or ""), "frames": [f for f in r.get("frames") or [] if _SHA.match(str(f))]}
              for r in _jsonl(attempt / "conversation.jsonl") if r.get("kind") == "run"]
+    for t in turns:
+        t["refs"] = refs_of("\n".join((t["reasoning"], t["said"], t["printed"])))
+    reply = (attempt / "reply.md").read_text(encoding="utf-8").strip() if (attempt / "reply.md").is_file() else ""
     ended = next((str(r.get("ended_by")) for r in _jsonl(attempt / "conversation.jsonl") if r.get("kind") == "mission_end"), "")
     maps_xy = (float(row["commit_xy"][0]), float(row["commit_xy"][1]))
     cands = candidates_of(attempt)
@@ -193,7 +234,8 @@ def blind_review(maps_root: Path, row: dict, landmarks: list[Landmark]) -> Revie
     return Review(episode_id=str(row["episode_id"]), map_name=str(row["map_name"]), instruction=str(row["description"]),
                   attempt=attempt, maps_xy=maps_xy, turns=turns, ended_by=ended, candidates=cands,
                   maps_pick=min(near, key=lambda c: np.hypot(c.xy[0] - maps_xy[0], c.xy[1] - maps_xy[1])).id if near else None,
-                  stops=stops, landmarks=landmarks)
+                  stops=stops, landmarks=landmarks, reply=reply or (turns[-1]["reasoning"] if turns else ""),
+                  detected=detected_of(attempt))
 
 
 def _reach(c: Candidate, xy: tuple[float, float]) -> float:
@@ -352,8 +394,11 @@ class Session:
             "maps_commit": (f"object {r.maps_pick} {'of the benchmark labels' if self.labels is not None else 'MAPS detected'}"
                             if r.maps_pick is not None
                             else f"a mapped {r.maps_prior[1]}" if r.maps_prior is not None else "a point, no object under it"),
-            "maps_reason": r.turns[-1]["reasoning"] if r.turns else "",
-            "turns": r.turns, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
+            "maps_reply": r.reply, "reply_refs": refs_of(r.reply),
+            "turns": r.turns,
+            # The detections the search or the reply names: what each step used, on the map.
+            "detected": {fid: r.detected[fid] for t in [*r.turns, {"refs": refs_of(r.reply)}]
+                         for fid in t["refs"]["detected"] if fid in r.detected}, "zoom": self.zoom, "view_m": 2 * ZOOM_HALF_M[self.zoom],
             "candidates": [{"id": c.id, "label": c.label, "color": c.color, "dist_m": round(_reach(c, r.maps_xy)),
                             **({"kind": c.kind} if c.kind else {})}
                            for c in sorted(r.candidates, key=lambda c: _reach(c, r.maps_xy))],
@@ -611,7 +656,7 @@ async function refresh(full){
   if(full){
     $('instr').textContent=st.instruction;$('prog').textContent=`episode ${st.index} of ${st.total}`;
     $('commit').textContent='MAPS committed to '+st.maps_commit+'.';
-    $('reason').textContent=st.maps_reason||'(MAPS gave no reasoning on its last turn)';
+    $('reason').textContent=st.maps_reply||'(MAPS gave no reply)';
     $('trace').innerHTML=st.turns.map((t,i)=>`<details data-i="${i}"><summary>Turn ${i+1}: ${esc(t.reasoning.slice(0,90))}…</summary>
       <div>${esc(t.reasoning)}</div><pre>${esc(t.said)}</pre>${t.printed?`<pre>${esc(t.printed)}</pre>`:''}
       ${t.frames.length?`<div class="thumbs">${t.frames.map(f=>`<img loading="lazy" src="/maps_frame/${f}.jpg" alt="frame">`).join('')}</div>`:''}</details>`).join('')
