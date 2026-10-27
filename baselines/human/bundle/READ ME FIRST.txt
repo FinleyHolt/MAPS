@@ -1,7 +1,8 @@
 THE SEARCH STUDY
 
-You need: a Mac with macOS 12 or later (macOS 11 or later on Apple silicon) or a
-computer with 64-bit Windows 10 or 11, 8 GB of memory, 6 GB of free disk space, a
+You need: a Mac with macOS 12 or later (macOS 11 or later on Apple silicon), a
+computer with 64-bit Windows 10 or 11, or a 64-bit Linux computer (Ubuntu 20.04
+or later, or similar), 8 GB of memory, 6 GB of free disk space, a
 mouse, Chrome or Firefox, an internet connection for the first start, about 2
 hours, and the participant label (p01, p02, ...) the study lead sent you. Your
 label is the only thing that identifies you; never type your name anywhere.
@@ -24,6 +25,9 @@ the study you find each report's place on an aerial photo.
             minutes. Open the new "MAPS-study" folder. If it holds only
             another "MAPS-study" folder, open that one.
 
+   Linux:   Right-click the zip and choose "Extract Here", or run
+            unzip MAPS-study.zip in a terminal.
+
 1. Start the study
 
    Mac:     Double-click "Start study (Mac)". The first time, the Mac refuses
@@ -37,6 +41,10 @@ the study you find each report's place on an aerial photo.
 
    Windows: Double-click "Start study (Windows)". If a blue "Windows protected
             your PC" box appears, press "More info", then "Run anyway".
+
+   Linux:   Open a terminal in the "MAPS-study" folder (in the file manager,
+            right-click inside the folder and choose "Open in Terminal"),
+            type sh "Start study (Linux).sh" and press Enter.
 
    A window with text opens. The first start downloads what the study needs:
    lines of text scroll by for several minutes. Then your browser opens the

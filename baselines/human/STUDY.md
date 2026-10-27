@@ -62,9 +62,10 @@ It refuses a kit without `console/index.html`, `plan/plan.json`, `calcity_ortho.
 
 The zip (about 2.5 GB) holds the kit, the console's Python code (never the bench's corpus and
 its targets), the briefing, `kit/contact.txt`, and the launchers from [`bundle/`](bundle/):
-`Start study (Mac).command` and `Start study (Windows).bat`. Inside it, `app/run.sh` starts
-the study on Linux too. The READ ME and the visit page's last step give the `--contact`
-text as written, so it reads as the end of "Email that file to ...".
+`Start study (Mac).command`, `Start study (Windows).bat` and `Start study (Linux).sh`. The Mac and
+Linux ones run `app/run.sh`; the Windows one does the same its own way. The READ ME and the visit
+page's last step give the `--contact` text as written, so it reads as the end of "Email that file
+to ...".
 
 Upload **the zip file itself** to Google Drive and share it by link. Never share an unzipped
 folder: Drive zips a folder on download and drops the Mac launcher's permission to run. Send

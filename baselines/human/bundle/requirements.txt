@@ -1,6 +1,6 @@
 # What the study console imports and everything those import, pinned to versions with Python
-# 3.12 wheels for macOS 12 and later on Intel, macOS 11 and later on Apple silicon, and 64-bit
-# Windows (study_package bundle).
+# 3.12 wheels for macOS 12 and later on Intel, macOS 11 and later on Apple silicon, 64-bit
+# Windows, and Linux (manylinux_2_28, x86-64 and arm64) (study_package bundle).
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1

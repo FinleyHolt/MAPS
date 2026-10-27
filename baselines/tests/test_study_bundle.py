@@ -32,6 +32,7 @@ def test_bundle(tmp_path) -> None:
     names = set(z.namelist())
     mode = lambda n: z.getinfo(n).external_attr >> 16
     assert mode("MAPS-study/Start study (Mac).command") & 0o111 and mode("MAPS-study/app/run.sh") & 0o111
+    assert mode("MAPS-study/Start study (Linux).sh") & 0o111
     assert b"\r\n" in z.read("MAPS-study/Start study (Windows).bat")
     assert "MAPS-study/app/baselines/human/study_server.py" in names and "MAPS-study/kit/plan/plan.json" in names
     assert not any("/tests/" in n or "/calcity/data/" in n or "/results/" in n for n in names)
@@ -39,7 +40,8 @@ def test_bundle(tmp_path) -> None:
     assert "lead@example.org" in readme and "{CONTACT}" not in readme and "\r\n" in readme
     assert z.read("MAPS-study/kit/contact.txt").decode().strip() == "lead@example.org"
     assert sorted(n for n in names if n.count("/") == 1) == [
-        "MAPS-study/READ ME FIRST.txt", "MAPS-study/Start study (Mac).command", "MAPS-study/Start study (Windows).bat"]
+        "MAPS-study/READ ME FIRST.txt", "MAPS-study/Start study (Linux).sh", "MAPS-study/Start study (Mac).command",
+        "MAPS-study/Start study (Windows).bat"]
     with pytest.raises(SystemExit) as e:
         main(["bundle", "--kit", str(kit), "--out", str(tmp_path / "c.zip")])
     assert e.value.code == 2

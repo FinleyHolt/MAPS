@@ -193,7 +193,8 @@ def copy_replies(transcripts: Path, kit: Path) -> list[str]:
 REPO = Path(__file__).resolve().parents[2]
 BUNDLE = Path(__file__).with_name("bundle")
 #: The launchers at the bundle's top, by their name in the bundle; ``app/`` holds the rest.
-TOP = {"Start study (Mac).command": "mac.command", "Start study (Windows).bat": "windows.bat"}
+TOP = {"Start study (Mac).command": "mac.command", "Start study (Windows).bat": "windows.bat",
+       "Start study (Linux).sh": "linux.sh"}
 #: Already compressed: stored as is, so the zip builds in minutes.
 STORED = (".mbtiles", ".jpg", ".png", ".webp")
 #: What a kit cannot start without: the console, the plan, the map and MAPS's run.
