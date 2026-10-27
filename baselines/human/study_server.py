@@ -430,9 +430,11 @@ class Visit:
         return open_session(self.kit, self.run, self.condition(step))
 
     def results_json(self) -> bytes | None:
-        """The visit's results file: each session's clock and answers in one JSON document,
-        keys sorted so two saves of the same results differ only in ``saved_at``. It holds the
-        ledgers' contents alone, so the computer's account names and paths stay out of it."""
+        """The visit's results file: each session's clock and answers in one JSON document. Its
+        own keys are sorted and the ledgers' rows keep the order they were written in, so two
+        saves of the same results differ only in ``saved_at`` and ``study_collect`` writes the
+        ledgers back byte for byte. It holds the ledgers' contents alone, so the computer's
+        account names and paths stay out of it."""
         from baselines.human.audit_console import _jsonl
 
         folder = self.kit / "results" / self.run if self.run else None
@@ -444,13 +446,14 @@ class Visit:
             if not meta.is_file():
                 continue
             answers = _jsonl(ledger)
-            sessions[name] = {"session": json.loads(meta.read_text()), "answers": answers}
+            sessions[name] = {"answers": answers, "session": json.loads(meta.read_text())}
             lines = sum(1 for ln in ledger.read_text().splitlines() if ln.strip()) if ledger.is_file() else 0
             if lines > len(answers):
                 sessions[name]["unreadable_lines"] = lines - len(answers)
-        doc = {"format": RESULTS_FORMAT, "version": RESULTS_VERSION, "run_id": self.run, "participant": self.participant,
-               "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "sessions": sessions}
-        return (json.dumps(doc, indent=1, sort_keys=True) + "\n").encode()
+        doc = {"format": RESULTS_FORMAT, "participant": self.participant, "run_id": self.run,
+               "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "sessions": sessions,
+               "version": RESULTS_VERSION}
+        return (json.dumps(doc, indent=1) + "\n").encode()
 
     def name(self, step: str) -> str:
         """A timed session as the visit page names it, at the length its own clock holds once it has one."""

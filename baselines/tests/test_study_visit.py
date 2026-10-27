@@ -127,7 +127,7 @@ def test_results_file(tmp_path) -> None:
     doc = json.loads(data)
     assert (doc["format"], doc["version"], doc["run_id"], doc["participant"]) == ("maps-capacity-results", 1, v.run, "p01")
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", doc["saved_at"])
-    assert sorted(doc["sessions"]) == ["solo", "team"]
+    assert list(doc) == sorted(doc) and list(doc["sessions"]) == ["solo", "team"]
     solo = doc["sessions"]["solo"]
     assert solo["answers"] == [{"episode_id": "a"}] and solo["unreadable_lines"] == 1 and solo["session"]["episodes_n"] == 3
     assert doc["sessions"]["team"] == {"session": doc["sessions"]["team"]["session"], "answers": []}
