@@ -279,6 +279,18 @@ textarea {
 .cap-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; font-size: 13px; }
 .cap-key-sw { display: inline-block; width: 16px; height: 5px; margin-right: 5px; vertical-align: middle; background: var(--place); box-shadow: 0 0 0 1px rgba(30,27,24,0.55); }
 .cap-reason.is-clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* MAPS's final reply: its paragraphs and bullet lines, the calls it cites set as code. */
+.cap-reply p { margin: 0 0 6px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+.cap-reply .cap-reply-li { position: relative; padding-left: 14px; }
+.cap-reply .cap-reply-li::before { content: "•"; position: absolute; left: 2px; }
+.cap-reply code, .cap-call { font: inherit; font-size: 13px; background: var(--color-cream); padding: 0 3px; }
+/* A cited call a step ran, and a step's code: a click shows on the map what that step used. */
+.cap-call { border: 1px solid var(--cap-teal); color: inherit; cursor: pointer; text-align: left; }
+.cap-call[aria-pressed="true"], .entry-call[aria-pressed="true"] { outline: 2px solid var(--cap-navy); }
+.entry-call { display: block; width: 100%; text-align: left; color: inherit; cursor: pointer; }
+.entry-call:hover { border-color: var(--cap-teal); }
+.entry[data-on="true"] { border-left-color: var(--cap-navy); }
+.cap-legend .sw.cap-sw-point { border-radius: 50%; }
 .cap-row { display: flex; justify-content: space-between; width: 100%; padding: 3px 4px; border: 0; background: none; font-size: 15px; cursor: pointer; text-align: left; }
 .cap-row[data-on="true"] { outline: 2px solid var(--cap-navy); }
 .cap-row[data-maps="true"] { color: var(--cap-navy); font-weight: 700; }

@@ -9,23 +9,30 @@
  *
  * Its screenshot is a panel of the paper's capacity figure, so it wears the paper's look
  * (studyMap.tsx's "paper" theme and the .capacity styles): one sans face, the figure
- * palette, no orange. The street map's places MAPS's reasoning names are links: each is drawn
- * on the map in its own colour, pointing at the name lights it, clicking frames it.
- * ``?capture=1`` hides the cursor, every hover state and those places, and exposes
+ * palette, no orange. A verified report explains MAPS's answer with MAPS's final reply, and below
+ * it MAPS's whole search, step by step. The street map's places they name are links: each is
+ * drawn on the map in its own colour, pointing at the name lights it, clicking frames it. A
+ * step's code, or a call the reply cites, selects that step: the map draws what it used (the
+ * street map's rows, the detections and the points it names) and frames them; again clears it.
+ * ``?capture=1`` keeps the figure's panel (the last step's reasoning), hides the cursor, every
+ * hover state and those places, and exposes
  * ``window.__capture()``: the episode, the map's bounds and the on-screen boxes the figure
  * places its callouts on.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
+import { fedFeatures, type Detected, type Refs } from "@/app/fed";
 import { placeSplitter } from "@/app/placeNames";
-import { OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
+import { replyBlocks, stepOfCall, type Span } from "@/app/reply";
+import { FED, OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
 import { actBody, header, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; kind?: string | null; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
   instruction: string; ended_by?: string; maps_pick?: number | null; maps_reason?: string;
+  maps_reply?: string; reply_refs?: Refs; detected?: Record<string, Detected>;
   turns?: Turn[]; candidates?: Candidate[]; maps_lonlat?: LonLat; maps_prior_ring?: Ring; stops?: LonLat[];
   selected?: { candidate: number | null; lonlat: LonLat; affordable: boolean; refusal?: string | null } | null;
 }
@@ -45,6 +52,8 @@ const NEAREST = 5;
 /** Where MAPS's answer opens, and where M goes: a few houses and the street they front. */
 const MAPS_ZOOM = 18.5;
 const CAPTURE = new URLSearchParams(window.location.search).has("capture");
+/** A step's whole text: what it reasoned, ran and printed. */
+const stepText = (t: Turn) => [t.reasoning, t.said, t.printed].filter(Boolean).join("\n");
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -68,6 +77,8 @@ export function CapacityConsole() {
   const [showIds, setShowIds] = useState(false);
   const [askSkip, setAskSkip] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
+  // The step whose inputs the map shows, or the reply's own; one at a time.
+  const [picked, setPicked] = useState<number | "reply" | null>(null);
   const readyAt = useRef(0);
   const stRef = useRef<State | null>(null);
   stRef.current = st;
@@ -121,6 +132,7 @@ export function CapacityConsole() {
     setStepsOpen(false);
     setAskSkip(false);
     setHot(null);
+    setPicked(null);
     if (verifying && review?.maps_lonlat) m.flyTo(review.maps_lonlat, MAPS_ZOOM);
     else m.frameAo(review?.maps_lonlat, MAPS_ZOOM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,11 +162,14 @@ export function CapacityConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [st, m.ready, verifying]);
 
-  // The places MAPS's reasoning names, in the order it names them, one colour each: those of
-  // "Why MAPS chose it", and those of the whole search's steps while they are open.
+  // The places MAPS names, in the order it names them, one colour each: those of the selected
+  // step (or the reply, selected); else those of the reply, and the search's steps while they are open.
   const split = useMemo(() => placeSplitter(CAPTURE ? [] : m.names.map((n) => n.name)), [m.names]);
-  const said = verifying && review ? [...new Set([review.maps_reason ?? "", ...(stepsOpen ? (review.turns ?? []).map((t) => t.reasoning ?? "") : [])]
-    .flatMap(split).flatMap((p) => (typeof p === "string" ? [] : [p.name])))] : [];
+  const turns = review?.turns ?? [];
+  const pickedTurn = typeof picked === "number" ? turns[picked] : undefined;
+  const namesIn = (texts: string[]) => [...new Set(texts.flatMap(split).flatMap((p) => (typeof p === "string" ? [] : [p.name])))];
+  const said = !verifying || !review ? [] : pickedTurn ? namesIn([stepText(pickedTurn)]) : picked === "reply" ? namesIn([review.maps_reply ?? ""])
+    : namesIn([review.maps_reply ?? "", ...(stepsOpen ? turns.map((t) => t.reasoning ?? "") : [])]);
   const colour = (name: string) => SAID[said.indexOf(name) % SAID.length];
   useEffect(() => {
     if (m.ready) m.setSaid(said.map((name) => ({ name, colour: colour(name) })), hot);
@@ -166,6 +181,38 @@ export function CapacityConsole() {
             onClick={() => m.frameName(name)}>{text}</button>
   );
   const linked = (text: string): ReactNode => split(text).map((p, i) => (typeof p === "string" ? p : place(p.name, p.text, i)));
+
+  // What the selected step used, on the map; a click on it frames it, a second click clears it.
+  const refsOf = (p: number | "reply" | null) => (p === "reply" ? review?.reply_refs : p === null ? undefined : turns[p]?.refs);
+  const fed = (p: number | "reply" | null) => {
+    const refs = refsOf(p);
+    return refs && review ? fedFeatures(refs, m.priorIndex.current, review.detected ?? {}) : [];
+  };
+  useEffect(() => {
+    if (m.ready) m.set("fed", verifying ? fed(picked) : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked, st, m.names, m.ready, verifying]);
+  const choose = (p: number | "reply") => {
+    const next = picked === p ? null : p;
+    setPicked(next);
+    setHot(null);
+    if (next !== null) m.frameFed(fed(next), namesIn([next === "reply" ? review?.maps_reply ?? "" : stepText(turns[next])]));
+  };
+  // MAPS's reply, paragraph by paragraph; a call it cites that a step ran selects that step.
+  const said_ = turns.map((t) => t.said ?? "");
+  const span = (s: Span, key: number) => {
+    if (s.code) {
+      const step = stepOfCall(s.text, said_);
+      return step === null ? <code key={key}>{s.text}</code> : (
+        <button type="button" key={key} className="cap-call" aria-pressed={picked === step} title={`step ${step + 1}: show on the map what it used`}
+                onClick={() => choose(step)}>{s.text}</button>
+      );
+    }
+    const body = linked(s.text);
+    return s.bold ? <strong key={key}>{body}</strong> : s.em ? <em key={key}>{body}</em> : <span key={key}>{body}</span>;
+  };
+  const reply = useMemo(() => replyBlocks(review?.maps_reply ?? ""), [review?.maps_reply]);
+  const cites = !!review?.reply_refs && (review.reply_refs.prior.length + review.reply_refs.detected.length + review.reply_refs.xy.length) > 0;
 
   // Object numbers are off the imagery unless asked for.
   const idMarkers = useRef<import("maplibre-gl").Marker[]>([]);
@@ -270,20 +317,38 @@ export function CapacityConsole() {
 
             {/* Everything between the report and the controls scrolls; the controls never move. */}
             <div className="cap-scroll">
-            {verifying ? (
+            {verifying && CAPTURE ? (
               <section className="cap-block">
                 <p className="cap-kicker">Why MAPS chose it</p>
                 <p className={moreReason ? "cap-reason" : "cap-reason is-clamped"}>{linked(review?.maps_reason ?? "")}</p>
                 <p className="cap-hint">
                   <button type="button" className="cap-link" onClick={() => { setHot(null); setStepsOpen(false); setMoreReason((v) => !v); }}>{moreReason ? "less" : "more"}</button>
                 </p>
+                {moreReason && review ? (
+                  <details className="judge-full" onToggle={(e) => { setHot(null); setStepsOpen(e.currentTarget.open); }}><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} link={linked} /></details>
+                ) : null}
+              </section>
+            ) : verifying ? (
+              <section className="cap-block">
+                <p className="cap-kicker">Why MAPS chose it</p>
+                <div className="cap-reply">
+                  {reply.map((b, i) => <p key={i} className={b.kind === "li" ? "cap-reply-li" : undefined}>{b.spans.map(span)}</p>)}
+                </div>
+                {cites ? (
+                  <p className="cap-hint"><button type="button" className="cap-link" aria-pressed={picked === "reply"} onClick={() => choose("reply")}>
+                    {picked === "reply" ? "hide what the answer cites" : "show on the map what the answer cites"}</button></p>
+                ) : null}
                 {said.length ? (
                   <p className="cap-key">{said.map((name) => (
                     <span key={name}><span className="cap-key-sw" style={{ "--place": colour(name) } as CSSProperties} />{place(name, name, name)}</span>
                   ))}</p>
                 ) : null}
-                {moreReason && review ? (
-                  <details className="judge-full" onToggle={(e) => { setHot(null); setStepsOpen(e.currentTarget.open); }}><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} link={linked} /></details>
+                {review ? (
+                  <details className="judge-full" onToggle={(e) => { setHot(null); setStepsOpen(e.currentTarget.open); }}>
+                    <summary>MAPS's whole search, {turns.length} steps</summary>
+                    <p className="cap-hint">Click a step's code to see on the map what it used; click again to clear.</p>
+                    <Trace instruction={review.instruction} turns={turns} link={linked} picked={typeof picked === "number" ? picked : null} onPick={choose} />
+                  </details>
                 ) : null}
               </section>
             ) : null}
@@ -374,6 +439,8 @@ export function CapacityConsole() {
             </div>
             <p className="cap-legend">
               {st?.arm === "team" ? <><span className="sw cap-sw-maps" /> MAPS's answer <span className="sw cap-sw-cand" /> mapped objects</> : null}
+              {verifying && picked !== null ? <>{" "}<span className="sw" style={{ borderColor: FED.prior }} /> street map rows{" "}
+                <span className="sw" style={{ borderColor: FED.detected }} /> detections <span className="sw cap-sw-point" style={{ borderColor: FED.point }} /> points, {picked === "reply" ? "the answer cites" : `step ${picked + 1} used`} ·{" "}</> : null}
               <span className="sw cap-sw-pick" /> your point <span className="sw cap-sw-found" /> search result · north up · O shows the street map · shift-click measures
             </p>
           </div>

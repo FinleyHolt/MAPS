@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapLibreMap, Marker as MapLibreMarker, StyleSpecification } from "maplibre-gl";
 
+import { boundsOf } from "@/app/fed";
 import { kindMatches } from "@/app/kindWords";
 import { alongStreet, axisAt, buildingsAlong, closestApproach, crossings, metres, nearestOther, type LonLat } from "@/app/studyGeometry";
 
@@ -38,6 +39,8 @@ const OSM_LABEL_REPEAT_PX = 260;
 const OSM_KEY = "maps-study-street-map";
 /** Where a found name or crossing opens: houses and the streets between them both read. */
 const FIND_ZOOM = 17.5;
+/** The closest a selected step's inputs open: a house and its lot. */
+const FED_ZOOM = 19;
 /** A wheel notch's zoom: MapLibre's default (1/450) takes forty notches from a house to a street grid. */
 const WHEEL_ZOOM_RATE = 1 / 180;
 
@@ -58,6 +61,9 @@ export const PAPER = { navy: "#1F3A5F", teal: "#2F6870", sky: "#8FB0D3",
 /** The places MAPS's reasoning names, one colour each in the order it names them: bright inks,
  * none the figure's own, each over a dark halo so it reads on imagery and street map alike. */
 export const SAID = ["#ff4fd8", "#ffd60a", "#22e4ff", "#ff8c1a", "#a6ff00", "#b388ff", "#ff5c5c", "#3dffb0"];
+/** What a selected step of MAPS's search used (fed.ts): the street map's rows it names, its
+ * detections and its points, each over the same dark halo. */
+export const FED = { prior: "#4d7dff", detected: "#a6ff00", point: "#ffd60a" };
 
 /** The paper theme's marks, Fig. 1's: rings with a white halo, thin sky outlines, no text on the imagery. */
 function paperLayers(layers: object[]): object[] {
@@ -112,6 +118,7 @@ function baseStudyStyle(): StyleSpecification {
       sel: { type: "geojson", data: fc([]) },
       mark: { type: "geojson", data: fc([]) },
       said: { type: "geojson", data: fc([]) },
+      fed: { type: "geojson", data: fc([]) },
       ruler: { type: "geojson", data: fc([]) },
     },
     layers: [
@@ -133,6 +140,15 @@ function baseStudyStyle(): StyleSpecification {
         paint: { "line-color": PAPER.halo, "line-width": ["case", ["get", "hot"], 10, 5.5] } },
       { id: "said-line", type: "line", source: "said", layout: { "line-cap": "round", "line-join": "round" },
         paint: { "line-color": ["get", "colour"], "line-width": ["case", ["get", "hot"], 6, 2.5] } },
+      // What the selected step used: its rows and detections outlined, its points ringed.
+      { id: "fed-halo", type: "line", source: "fed", filter: ["==", ["geometry-type"], "LineString"],
+        layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": PAPER.halo, "line-width": 6.5 } },
+      { id: "fed-line", type: "line", source: "fed", filter: ["==", ["geometry-type"], "LineString"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": ["match", ["get", "fed"], "prior", FED.prior, FED.detected], "line-width": 3 } },
+      { id: "fed-dot", type: "circle", source: "fed", filter: ["==", ["geometry-type"], "Point"],
+        paint: { "circle-radius": 7, "circle-color": "rgba(0,0,0,0)", "circle-stroke-width": 2.5,
+                 "circle-stroke-color": ["match", ["get", "fed"], "detected", FED.detected, FED.point] } },
       { id: "stops-line", type: "line", source: "stops", filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": INK.paper, "line-width": 1.5, "line-dasharray": [2, 2], "line-opacity": 0.9 } },
       { id: "stops-dot", type: "circle", source: "stops", filter: ["==", ["geometry-type"], "Point"],
@@ -179,6 +195,8 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   clickRef.current = onClick;
   const osmMarkers = useRef<MapLibreMarker[]>([]);
   const osmData = useRef<GeoJSON.FeatureCollection | null>(null);
+  /** The street map's rows by the id MAPS knew each by (``prior_2777``). */
+  const priorIndex = useRef(new Map<string, GeoJSON.Feature>());
   const [ready, setReady] = useState(false);
   const [names, setNames] = useState<PriorName[]>([]);
   // The street map stays as the person left it, from one session to the next.
@@ -309,6 +327,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
         }).catch(() => undefined).finally(() => { mapRef.current = map; setReady(true); });
         whenBuilt<GeoJSON.FeatureCollection & { names: PriorName[] }>("study/prior.json", (p) => {
           osmData.current = { type: "FeatureCollection", features: p.features };
+          priorIndex.current = new Map(p.features.map((f) => [String(f.properties?.fid ?? ""), f]));
           (map.getSource("osm") as GeoJSONSource).setData(osmData.current);
           (map.getSource("osm-area") as GeoJSONSource).setData(fc(p.features.flatMap((f) => {
             const c = (f.geometry as GeoJSON.LineString).coordinates;
@@ -472,8 +491,15 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
     if (map && pts.length) frame(map, pts);
   }, []);
 
+  /** Frame what a step used, or the places it names when it used nothing else. */
+  const frameFed = useCallback((features: GeoJSON.Feature[], names: string[]) => {
+    const map = mapRef.current;
+    const b = boundsOf(features.length ? features : names.flatMap(piecesNamed));
+    if (map && b) map.fitBounds(b, { padding: 80, maxZoom: FED_ZOOM, duration: 400 });
+  }, []);
+
   return { containerRef, mapRef, maplibreRef, ready, names, osmOn, setOsmOn, lit, setLit, hover, showName, flyTo, frameAo, set,
-           ruler, rulerM, setRuler, markSpots, setSaid, frameName, clearFound, nearOf, crossingsOf, approachOf, kindsNear, piecesOf, litPiece, stepPiece };
+           ruler, rulerM, setRuler, markSpots, setSaid, frameName, frameFed, priorIndex, clearFound, nearOf, crossingsOf, approachOf, kindsNear, piecesOf, litPiece, stepPiece };
 }
 
 /** The street map's toggle, a chip over the map; what the line under the pointer is, beside
