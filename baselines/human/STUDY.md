@@ -191,7 +191,8 @@ reads as the run id `p07`.
 
 The scored root reads like any bench root (`benchmarks.citynav.analysis.run_report`). With
 MAPS it also holds every MAPS answer released within the session that the person never
-reached, scored as MAPS scored it. A skip scores as a miss.
+reached, scored as MAPS scored it. Alone, a skip scores as a miss; with MAPS, a skip keeps
+MAPS's answer when it landed within the session, and is a miss otherwise.
 
 ### Run it from a clone
 
