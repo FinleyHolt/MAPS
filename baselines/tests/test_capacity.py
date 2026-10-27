@@ -164,3 +164,13 @@ def test_the_servers_prior_and_every_session_share_one_build_of_the_block(tmp_pa
     again = capacity.Capacity(tmp_path / "root", ["block_0::1#0", "block_0::2#0"], tmp_path / "p01" / "team", "team",
                               agents=1, session_s=3600, clock=lambda: now[0])
     assert again.state()["current"]["mode"] == "verify" and loads == ["block_0"]
+
+
+def test_the_session_and_every_answer_carry_the_visits_ids(tmp_path, monkeypatch) -> None:
+    root = _root(tmp_path)
+    ids = {"run_id": "p01-3f9a2c1e", "participant": "p01"}
+    s = capacity.Capacity(root, ["block_0::1#0"], tmp_path / "out", "solo", ids=ids, clock=lambda: 1000.0)
+    assert _act(s, "skip")["ok"]
+    session = json.loads((tmp_path / "out" / "session.json").read_text())
+    answer = json.loads((tmp_path / "out" / "answers.jsonl").read_text())
+    assert {k: session[k] for k in ids} == ids and {k: answer[k] for k in ids} == ids

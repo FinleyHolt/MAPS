@@ -117,10 +117,12 @@ def release_times(elapsed_s: list[float], agents: int = AGENTS) -> tuple[list[fl
 
 
 class Capacity:
-    """One participant's session in one condition."""
+    """One participant's session in one condition. ``ids`` (the visit's run id and label) ride
+    on the session's clock and on every answer."""
 
     def __init__(self, maps_root: Path, order: list[str], out: Path, arm: str, *, agents: int = AGENTS,
-                 session_s: float = SESSION_S, labels: dict | None = None, clock=time.time) -> None:
+                 session_s: float = SESSION_S, labels: dict | None = None, ids: dict | None = None,
+                 clock=time.time) -> None:
         if arm not in ARMS:
             raise ValueError(f"arm {arm!r} is not one of {ARMS}")
         self.rows = scored_rows(maps_root)
@@ -128,7 +130,7 @@ class Capacity:
         if missing:
             raise SystemExit(f"FATAL: {len(missing)} listed episodes have no scored MAPS row, e.g. {missing[:3]}")
         self.maps_root, self.order, self.out, self.arm = maps_root, order, out, arm
-        self.labels, self.session_s, self.clock = labels, float(session_s), clock
+        self.labels, self.session_s, self.clock, self.ids = labels, float(session_s), clock, ids or {}
         self.starts, self.ends = (release_times([float(self.rows[e]["elapsed_s"]) for e in order], agents)
                                   if arm == "team" else ([], []))
         self.ledger, meta = out / "answers.jsonl", out / "session.json"
@@ -139,7 +141,7 @@ class Capacity:
             self.started, self.session_s = float(session["started_epoch"]), float(session["session_s"])
         else:
             self.started = clock()
-            meta.write_text(json.dumps({"arm": arm, "agents": agents if arm == "team" else 0, "session_s": self.session_s,
+            meta.write_text(json.dumps({**self.ids, "arm": arm, "agents": agents if arm == "team" else 0, "session_s": self.session_s,
                                         "started_epoch": self.started, "started_at": _utc(self.started),
                                         "episodes_n": len(order), "order": order}, indent=1))
         if self.ledger.is_file() and self.ledger.read_bytes()[-1:] not in (b"", b"\n"):
@@ -192,7 +194,7 @@ class Capacity:
         if self.over():
             return {"ok": False, "error": "the session is over"}
         i, e, now = self.index, self.current, self.clock()
-        answer = {"episode_id": e, "order_index": i, "arm": self.arm, "source": source,
+        answer = {**self.ids, "episode_id": e, "order_index": i, "arm": self.arm, "source": source,
                   "xy": None if xy is None else [float(xy[0]), float(xy[1])],
                   "opened_at": self.opened_at, "answered_at": _utc(now), "answered_epoch": now,
                   "answer_s": round(now - self.opened, 1),
