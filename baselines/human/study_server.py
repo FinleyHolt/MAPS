@@ -353,8 +353,11 @@ class Visit:
     def __init__(self, kit: Path) -> None:
         self.kit = kit
         self.plan = json.loads((kit / "plan" / "plan.json").read_text())["participants"]
-        contact = kit / "contact.txt"
+        contact, roster = kit / "contact.txt", kit / "roster.json"
         self.contact = contact.read_text().strip() if contact.is_file() else "the study lead"
+        # The participants' first names by label: the label form is then a list of names. The label
+        # alone goes into the results.
+        self.roster = {k: v for k, v in json.loads(roster.read_text()).items() if k in self.plan} if roster.is_file() else {}
         results = kit / "results"
         found = [p.name for p in results.iterdir() if p.is_dir() and label_of(p.name) in self.plan] if results.is_dir() else []
         self.run = found[0] if len(found) == 1 else None
@@ -374,19 +377,23 @@ class Visit:
         label = label.strip().lower()
         self.typed = label
         if not label:
-            self.error = "Type your label, for example p07."
+            self.error = "Choose your first name." if self.roster else "Type your label, for example p07."
         elif label not in self.plan:
             self.error = ("That is not a participant label in this study. Labels look like p07; "
                           "check the one the study lead sent you.")
         elif label != self.participant and self.locked():
-            self.error = (f"You started as {self.participant}. A different label needs a fresh copy of the study: "
-                          "ask the study lead.")
+            what = "name" if self.roster else "label"
+            self.error = f"You started as {self.who()}. A different {what} needs a fresh copy of the study: ask the study lead."
         else:
             if label != self.participant:
                 if self.run is not None:
                     shutil.rmtree(self.kit / "results" / self.run, ignore_errors=True)
                 self.run, self.returning = f"{label}-{uuid.uuid4().hex[:8]}", False
             self.participant, self.error, self.typed = label, "", ""
+
+    def who(self) -> str:
+        """The participant as the page names them: their first name from the roster, else their label."""
+        return self.roster.get(self.participant, self.participant or "")
 
     def condition(self, step: str) -> str:
         """The step's condition: practice, or the participant's one condition from the plan."""
@@ -464,10 +471,17 @@ class Visit:
         err = f"<p class=err>{html.escape(self.error)}</p>" if self.error else ""
         typed, self.error, self.typed = self.typed, "", ""
         if self.participant is None or (change and not self.locked()):
-            body = (f"<h1>The search study</h1>{err}"
-                    "<form action='/visit/label'><p>Your participant label, from the study lead:</p>"
-                    f"<input name=label placeholder='like p07' value='{html.escape(typed, quote=True)}' autofocus> "
-                    "<button>Continue</button></form>")
+            if self.roster:
+                # By name, in the alphabet's order: the list says nothing of labels or conditions.
+                names = sorted(self.roster.items(), key=lambda kv: kv[1].lower())
+                options = "".join(f"<option value='{html.escape(k, quote=True)}'{' selected' if k == typed else ''}>"
+                                  f"{html.escape(v)}</option>" for k, v in names)
+                field = ("<p>Choose your first name:</p><select name=label autofocus>"
+                         f"<option value=''>Choose...</option>{options}</select> ")
+            else:
+                field = ("<p>Your participant label, from the study lead:</p>"
+                         f"<input name=label placeholder='like p07' value='{html.escape(typed, quote=True)}' autofocus> ")
+            body = f"<h1>The search study</h1>{err}<form action='/visit/label'>{field}<button>Continue</button></form>"
             return PAGE.format(body=body)
         from markdown_it import MarkdownIt
 
@@ -502,7 +516,7 @@ class Visit:
             now = running("session")
         else:
             practiced = st["practice"] == "done"
-            now = ("<p class=note><a href='/visit?change=1'>Not your label? Change it</a></p>"
+            now = (f"<p class=note><a href='/visit?change=1'>Not {'you' if self.roster else 'your label'}? Change it</a></p>"
                    "<h2>Step 1: read the briefing below</h2><h2>Step 2: practice</h2>"
                    "<p>Four reports that never count, worked alone. Try the search box, the street map and "
                    "shift-click measuring. Practice ends after the fourth report; <b>Done practicing</b> at the top "
@@ -511,8 +525,8 @@ class Visit:
                    + f"<h2>Step 3: {self.name('session')}</h2>" + (button("session", "Start your session", clock)
                                                                    if practiced else "<p class=note>Opens after practice.</p>"))
         brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
-        who = (f"Welcome back, {self.participant}. Your answers are saved." if self.returning
-               else f"Participant {self.participant}")
+        who = (f"Welcome back, {html.escape(self.who())}. Your answers are saved." if self.returning
+               else f"Welcome, {html.escape(self.who())}" if self.roster else f"Participant {self.participant}")
         # The run id, for the participant to quote in an email about this visit.
         return PAGE.format(body=f"<p class=who>{who} <small>(results id {self.run})</small></p>{err}{now}<hr>"
                                 f"<div class=brief>{brief}</div>")
@@ -526,7 +540,7 @@ h1 {{ font-size: 28px; }} h2 {{ font-size: 21px; margin-top: 28px; }}
 .brief h1 {{ font-size: 24px; }} .brief h2 {{ font-size: 19px; }}
 button {{ font: inherit; font-weight: 700; padding: 10px 22px; color: #fff; background: var(--navy);
          border: 0; cursor: pointer; }}
-input {{ font: inherit; padding: 8px; width: 8rem; }}
+input, select {{ font: inherit; padding: 8px; }} input {{ width: 8rem; }} select {{ min-width: 12rem; }}
 .note, .who {{ color: var(--grey); }} .err {{ color: #a3341f; }}
 hr {{ margin: 36px 0; border: 0; border-top: 1px solid #d9d4c6; }}
 </style></head><body>{body}</body></html>"""

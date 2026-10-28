@@ -192,3 +192,19 @@ def test_a_session_opens_the_labels_list_and_saves_under_the_run_id(tmp_path, mo
     study_server.open_session(tmp_path, "p01-3f9a2c1e", "solo")
     assert opened["order"] == ["a", "b"] and opened["out"] == tmp_path / "results" / "p01-3f9a2c1e" / "solo"
     assert opened["ids"] == {"run_id": "p01-3f9a2c1e", "participant": "p01"}
+
+
+def test_a_roster_lists_first_names_and_keeps_the_label_in_the_results(tmp_path) -> None:
+    kit = _kit(tmp_path)
+    (kit / "roster.json").write_text(json.dumps({"p01": "Zoe", "p02": "Ann", "p09": "Off the plan"}))
+    v = Visit(kit)
+    page = v.page()
+    assert "<select name=label" in page and "Choose your first name:" in page and "Off the plan" not in page
+    assert page.index(">Ann<") < page.index(">Zoe<") and "p01" not in page.split("<select")[0]
+    v.set_label("")
+    assert "Choose your first name." in v.page()
+    v.set_label("p02")
+    page = v.page()
+    assert v.participant == "p02" and "Welcome, Ann" in page and "Not you? Change it" in page
+    _session(tmp_path / "results" / v.run / "team", age_s=2401)
+    assert json.loads(v.results_json())["participant"] == "p02" and b"Ann" not in v.results_json()
