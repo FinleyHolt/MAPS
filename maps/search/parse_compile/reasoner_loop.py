@@ -1552,6 +1552,7 @@ class _Mission:
                 cid = tc.get("id") or ""
                 args = json.loads(tc["function"]["arguments"])
                 if name == "run":
+                    flights_before = self.flights
                     out = self._dispatch_run(args)
                     if not withheld("look_for"):
                         out.setdefault("watching", (
@@ -1563,10 +1564,14 @@ class _Mission:
                         "run",
                         turn_idx=turn_idx,
                         reasoning=str(r.get("reasoning") or "")[:4000],
-                        said=str(args.get("code") or "")[:400],
+                        # the whole block: a flight past any cut would
+                        # vanish from the transcript
+                        said=str(args.get("code") or ""),
                         # already capped (python_surface.PRINT_CHAR_CAP)
                         printed=str(out.get("printed") or ""),
                         errored="error" in out,
+                        # stops this block flew, an errored block's included
+                        flights=self.flights - flights_before,
                         # every image this block showed, by sha
                         frames=list(self._block_frames))
                     self._block_frames.clear()
