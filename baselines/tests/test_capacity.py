@@ -34,6 +34,16 @@ def test_the_plan_deals_half_alone_and_half_with_maps_each_over_every_report() -
     assert [d["arm"] for d in capacity.plan(rows, labels[:3], seed=7)["participants"].values()].count("solo") == 2
 
 
+def test_rehearsal_labels_take_their_named_condition_outside_the_dealing() -> None:
+    rows = {f"block_0::{i}#0": {"metrics": {"SR": 1}, "elapsed_s": 60.0} for i in range(20)}
+    labels = [f"p{i:02d}" for i in range(1, 15)]
+    doc = capacity.plan(rows, labels, seed=7, tests={"t01": "team", "t02": "solo"})
+    ps = doc["participants"]
+    assert {p: ps[p]["arm"] for p in labels} == {p: d["arm"] for p, d in capacity.plan(rows, labels, seed=7)["participants"].items()}
+    assert (ps["t01"]["arm"], ps["t01"]["test"], ps["t02"]["arm"], ps["t02"]["test"]) == ("team", True, "solo", True)
+    assert "maps_ready_in_session" in ps["t01"] and not any("test" in ps[p] for p in labels)
+
+
 def test_the_replay_runs_the_list_in_order_on_so_many_agents() -> None:
     starts, ends = capacity.release_times([100, 50, 30, 10], agents=2)
     assert starts == [0, 0, 50, 80] and ends == [100, 50, 80, 90]

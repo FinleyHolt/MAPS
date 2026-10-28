@@ -100,6 +100,17 @@ def test_a_session_in_the_condition_the_plan_did_not_deal_fails(tmp_path, monkey
     assert "team: CHECK FAILED: a solo session, not this participant's condition" in capsys.readouterr().out
 
 
+def test_a_rehearsal_labels_run_fails_so_collection_flags_it(tmp_path, monkeypatch, capsys) -> None:
+    kit = _kit(tmp_path, monkeypatch)
+    plan = json.loads((kit / "plan" / "plan.json").read_text())
+    plan["participants"]["p04"]["test"] = True
+    (kit / "plan" / "plan.json").write_text(json.dumps(plan))
+    meta = kit / "results" / "p04" / "team" / "session.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 2400.0}))
+    assert study_qc.main(["p04", "--kit", str(kit)]) == 1
+    assert "team: CHECK FAILED: a rehearsal label, not a participant" in capsys.readouterr().out
+
+
 def test_a_participant_without_their_session_fails(tmp_path, monkeypatch, capsys) -> None:
     kit = _kit(tmp_path, monkeypatch)
     shutil.rmtree(kit / "results" / "p04" / "team")

@@ -73,7 +73,11 @@ folder: Drive zips a folder on download and drops the Mac launcher's permission 
 The kit's `roster.json` maps each label to the participant's first name (`{"p01": "Tyler", ...}`,
 labels `p01` to `p15` in the roster's order); the visit page then offers the first names, in
 alphabetical order, in place of a typed label, and the results still name the label alone. The
-roster rides in the download, so first names only, and only when they are unique. Without a
+roster rides in the download, so first names only, and only when they are unique. The plan also
+holds two rehearsal labels for the study lead, `t01` (with MAPS) and `t02` (alone), listed as
+"Ryan (test MAPS)" and "Ryan (test control)" (`capacity plan --tests t01:team,t02:solo`): they
+leave the participants' conditions as dealt, and `study_qc` fails their runs, so collection
+records them flagged and the figure leaves them out. Without a
 roster the page asks for a label. Every participant gets the same invitation:
 
 > Thank you for taking part in the search study. You will choose your first name from a list in

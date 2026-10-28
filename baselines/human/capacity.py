@@ -66,19 +66,22 @@ def _answered_epoch(answer: dict) -> float:
     return datetime.fromisoformat(answer["answered_at"]).timestamp()
 
 
-def plan(rows: dict[str, dict], participants: list[str], seed: int, agents: int = AGENTS) -> dict:
+def plan(rows: dict[str, dict], participants: list[str], seed: int, agents: int = AGENTS,
+         tests: dict[str, str] | None = None) -> dict:
     """Each participant's one condition and list: the conditions dealt half and half (one
     more alone for an odd count) in an order the seed shuffles, and each list the whole
-    backlog in the participant's own fixed shuffled order."""
+    backlog in the participant's own fixed shuffled order. ``tests`` adds labels for the
+    study lead's own rehearsals, each in the condition named, outside the dealing and marked
+    ``test`` (``study_qc`` fails their runs, so collection flags them)."""
     every = sorted(rows)
     arms = [("solo", "team")[i % 2] for i in range(len(participants))]
     random.Random(f"{seed}:arms").shuffle(arms)
     out = {"seed": seed, "design": "between subjects", "episodes_n": len(every),
            "maps_sr": round(sum(rows[e]["metrics"]["SR"] for e in every) / max(1, len(every)), 4), "participants": {}}
-    for p, arm in zip(participants, arms):
+    for p, arm in [*zip(participants, arms), *(tests or {}).items()]:
         order = list(every)
         random.Random(int(hashlib.sha256(f"{seed}:{p}:{arm}".encode()).hexdigest()[:12], 16)).shuffle(order)
-        entry = {"arm": arm, "lists": {arm: order}}
+        entry = {"arm": arm, "lists": {arm: order}, **({"test": True} if p in (tests or {}) else {})}
         if arm == "team":
             _starts, ends = release_times([float(rows[e].get("elapsed_s") or 0) for e in order], agents)
             # How much of MAPS's output this participant's session holds.
@@ -275,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--maps-root", type=Path, required=True)
     p.add_argument("--participants", required=True, help="comma-separated labels, never names: p01,p02,...")
     p.add_argument("--seed", type=int, default=1234)
+    p.add_argument("--tests", default="", help="rehearsal labels and their conditions: t01:team,t02:solo")
     p.add_argument("--out", type=Path, required=True)
     q = sub.add_parser("practice", help="a practice root of rows the MAPS root never flew")
     q.add_argument("--maps-root", type=Path, required=True)
@@ -286,7 +290,10 @@ def main(argv: list[str] | None = None) -> int:
         picked = practice_root(args.maps_root, args.n, args.seed, args.out)
         print(f"{len(picked)} practice reports -> {args.out}/practice.txt")
         return 0
-    doc = plan(scored_rows(args.maps_root), [x for x in args.participants.split(",") if x], args.seed)
+    tests = dict(x.split(":") for x in args.tests.split(",") if x)
+    if any(arm not in ARMS for arm in tests.values()):
+        raise SystemExit(f"--tests conditions are {ARMS}: {args.tests}")
+    doc = plan(scored_rows(args.maps_root), [x for x in args.participants.split(",") if x], args.seed, tests=tests)
     for name, d in doc["participants"].items():
         (args.out / name).mkdir(parents=True, exist_ok=True)
         for arm, order in d["lists"].items():
@@ -294,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     (args.out / "plan.json").write_text(json.dumps(
         {**doc, "participants": {k: {kk: vv for kk, vv in v.items() if kk != "lists"} for k, v in doc["participants"].items()}},
         indent=1))
-    arms = [d["arm"] for d in doc["participants"].values()]
+    arms = [d["arm"] for d in doc["participants"].values() if not d.get("test")]
     print(f"{len(arms)} participants, {arms.count('solo')} alone and {arms.count('team')} with MAPS, "
           f"{doc['episodes_n']} reports each (MAPS SR {doc['maps_sr']}) -> {args.out}")
     return 0

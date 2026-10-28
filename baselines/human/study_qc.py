@@ -102,10 +102,13 @@ def score(kit: Path, run: str) -> dict[str, dict]:
     use_kit(kit)
     from baselines.human import team_rows
 
-    arm = json.loads((kit / "plan" / "plan.json").read_text())["participants"][label_of(run)]["arm"]
+    dealt = json.loads((kit / "plan" / "plan.json").read_text())["participants"][label_of(run)]
+    arm = dealt["arm"]
     other = {"solo": "team", "team": "solo"}[arm]
     # A session in the condition the plan did not deal this participant: not this study's data.
     stray = [f"a {other} session, not this participant's condition"] if (kit / "results" / run / other).is_dir() else []
+    if dealt.get("test"):
+        stray.append("a rehearsal label, not a participant")
     results = kit / "results" / run / arm
     if not results.is_dir():
         return {arm: {"failed": ["no session yet", *stray], "summary": None}}
