@@ -25,7 +25,7 @@ The briefing awaits the owner's approval.
 ## For participants
 
 Everything is in `READ ME FIRST.txt` inside the download ([its source](bundle/READ%20ME%20FIRST.txt)).
-In short: unzip, start the launcher for your system, type your label in the page that
+In short: unzip, start the launcher for your system, choose your first name in the page that
 opens, and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/) and the console's
 packages into the unzipped folder (uv keeps the Python it fetches in the user's own folder);
 that needs the internet once.
@@ -68,12 +68,16 @@ page's last step give the `--contact` text as written, so it reads as the end of
 to ...".
 
 Upload **the zip file itself** to Google Drive and share it by link. Never share an unzipped
-folder: Drive zips a folder on download and drops the Mac launcher's permission to run. Send
-each participant the link and their label (`p01` to `p14`). The label is the only thing that
-identifies them in any file. An invitation:
+folder: Drive zips a folder on download and drops the Mac launcher's permission to run.
 
-> Thank you for taking part in the search study. Your participant label is **p07**; it is the
-> only thing that identifies you, so never type your name in the study.
+The kit's `roster.json` maps each label to the participant's first name (`{"p01": "Tyler", ...}`,
+labels `p01` to `p15` in the roster's order); the visit page then offers the first names, in
+alphabetical order, in place of a typed label, and the results still name the label alone. The
+roster rides in the download, so first names only, and only when they are unique. Without a
+roster the page asks for a label. Every participant gets the same invitation:
+
+> Thank you for taking part in the search study. You will choose your first name from a list in
+> the study; your results carry only a code for it.
 >
 > Download the study here: <link>. It is one zip file of about 2.5 GB. Google Drive says it is
 > too large to preview and cannot scan it for viruses; both are normal, so press "Download
@@ -204,9 +208,9 @@ From the repository with `pip install -e '.[study]'`, the same visit is
 The kit is built from the bench's own files by `baselines.human.study_package` (`tiles`, then
 `records`): the ortho as map tiles, MAPS's run as the verify screens read it (`replies` adds
 MAPS's final replies to a kit from a copy of the run's transcripts alone), the OSM prior and
-labelled objects, and the plan (`baselines.human.capacity plan` for `p01` to `p14`: seven alone
+labelled objects, and the plan (`baselines.human.capacity plan` for `p01` to `p15`: eight alone
 and seven with MAPS, dealt by the seed, each working every report in their own shuffled order;
-and `capacity practice`). The console's web
+and `capacity practice`), and `roster.json`. The console's web
 source is `baselines/human/console`; the kit carries the built copy in `console/`.
 
 Sessions run unsupervised, so nothing enforces the rule against other maps during a session;
