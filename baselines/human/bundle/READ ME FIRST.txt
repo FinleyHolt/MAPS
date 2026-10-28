@@ -10,6 +10,9 @@ yours. Your results carry only a code for it, never your name.
 A report is a short text that describes one place in California City, CA. In
 the study you find each report's place on an aerial photo.
 
+First watch "Watch first - tutorial.mp4" in this folder: under two minutes, it
+shows every step below.
+
 0. Download and unzip
 
    Download MAPS-study.zip from the link (about 2.5 GB). Google Drive says the

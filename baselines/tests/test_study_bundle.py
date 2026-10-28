@@ -42,6 +42,11 @@ def test_bundle(tmp_path) -> None:
     assert sorted(n for n in names if n.count("/") == 1) == [
         "MAPS-study/READ ME FIRST.txt", "MAPS-study/Start study (Linux).sh", "MAPS-study/Start study (Mac).command",
         "MAPS-study/Start study (Windows).bat"]
+    video = tmp_path / "t.mp4"
+    video.write_bytes(b"\0" * 64)
+    build_bundle(kit, tmp_path / "v.zip", contact="lead@example.org", video=video)
+    info = zipfile.ZipFile(tmp_path / "v.zip").getinfo("MAPS-study/Watch first - tutorial.mp4")
+    assert info.file_size == 64 and info.compress_type == zipfile.ZIP_STORED
     with pytest.raises(SystemExit) as e:
         main(["bundle", "--kit", str(kit), "--out", str(tmp_path / "c.zip")])
     assert e.value.code == 2

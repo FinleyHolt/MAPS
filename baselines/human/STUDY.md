@@ -54,7 +54,7 @@ Then build the zip outside the repository, with the address participants write t
 
 ```sh
 python -m baselines.human.study_package bundle --kit "$KIT" --out ~/MAPS-study.zip \
-    --contact "frholt@stanford.edu and rlutz@unc.edu"
+    --contact "frholt@stanford.edu and rlutz@unc.edu" --video "<the tutorial>.mp4"
 ```
 
 It refuses a kit without `console/index.html`, `plan/plan.json`, `calcity_ortho.mbtiles` or

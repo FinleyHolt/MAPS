@@ -196,12 +196,16 @@ BUNDLE = Path(__file__).with_name("bundle")
 TOP = {"Start study (Mac).command": "mac.command", "Start study (Windows).bat": "windows.bat",
        "Start study (Linux).sh": "linux.sh"}
 #: Already compressed: stored as is, so the zip builds in minutes.
-STORED = (".mbtiles", ".jpg", ".png", ".webp")
+STORED = (".mbtiles", ".jpg", ".png", ".webp", ".mp4")
 #: What a kit cannot start without: the console, the plan, the map and MAPS's run.
 REQUIRED = ("console/index.html", "plan/plan.json", "calcity_ortho.mbtiles", "maps_root/episodes.jsonl")
 
 
-def build_bundle(kit: Path, out: Path, contact: str) -> int:
+#: The tutorial video's name at the bundle's top, beside the READ ME.
+VIDEO = "Watch first - tutorial.mp4"
+
+
+def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) -> int:
     """The participant's one download, as a zip whose launchers keep their execute bit. The
     READ ME and ``kit/contact.txt`` (which the visit page reads) carry the lead's ``contact``."""
     name = "MAPS-study"
@@ -211,6 +215,9 @@ def build_bundle(kit: Path, out: Path, contact: str) -> int:
     texts = {f"{name}/READ ME FIRST.txt": (BUNDLE / "READ ME FIRST.txt").read_text().replace("{CONTACT}", contact),
              f"{name}/kit/contact.txt": contact + "\n"}
     files = [(f"{name}/{arc}", BUNDLE / src) for arc, src in TOP.items()]
+    if video is not None:
+        # Already compressed: stored as is.
+        files.append((f"{name}/{VIDEO}", video))
     files += [(f"{name}/app/run.sh", BUNDLE / "run.sh"), (f"{name}/app/requirements.txt", BUNDLE / "requirements.txt")]
     files += [(f"{name}/app/{f}", REPO / f) for f in code]
     # A kit of symlinked folders ships what the links point at.
@@ -258,9 +265,10 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--kit", type=Path, required=True)
     b.add_argument("--out", type=Path, required=True, help="the zip, outside the repository")
     b.add_argument("--contact", required=True, help="the address or addresses for questions and the results, as one phrase (\"a@x.edu and b@y.edu\")")
+    b.add_argument("--video", type=Path, help=f"the tutorial video, shipped at the top as \"{VIDEO}\"")
     args = ap.parse_args(argv)
     if args.cmd == "bundle":
-        print(f"{build_bundle(args.kit, args.out, args.contact)} files -> {args.out}")
+        print(f"{build_bundle(args.kit, args.out, args.contact, args.video)} files -> {args.out}")
         return 0
     if args.cmd == "replies":
         missing = copy_replies(args.transcripts, args.kit)
