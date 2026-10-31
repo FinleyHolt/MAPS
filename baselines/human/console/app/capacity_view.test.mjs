@@ -23,6 +23,7 @@ test("a held key acts once", () => {
   assert.equal(keyCommand({ key: "S", repeat: false }, "search", true), "pick");
   assert.equal(keyCommand({ key: "s", repeat: false }, "search", false), null);
   assert.equal(keyCommand({ key: "Enter", repeat: false }, "search", true), null);
+  assert.equal(keyCommand({ key: "b", repeat: false }, "verify", false), "back");
 });
 
 test("a failed poll reads as lost contact, and a good one as the state", async () => {

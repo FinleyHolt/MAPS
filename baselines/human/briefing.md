@@ -26,7 +26,9 @@ Find as many places correctly as you can in the 40 minutes. Speed and accuracy b
 - Use only the console. No other maps, websites or phones during a session.
 - The place may be anywhere on the map. Outlines on the imagery are a guide, not a list of
   answers.
-- Once you answer, the next report opens. You cannot go back.
+- Once you answer, the next report opens. **Back to report N** (or the B key), under the
+  answer buttons, reopens the report before it to answer it again; your earlier answer stands
+  until you do. Answering it, or **keep it and return**, brings back the report you were on.
 
 ## The console
 

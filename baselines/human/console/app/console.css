@@ -270,6 +270,7 @@ textarea {
 .cap-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .cap-btn kbd, .cap-link kbd { font-size: 12px; border: 1px solid currentColor; padding: 0 4px; margin-left: 6px; border-radius: 2px; }
 .cap-hint { margin: 8px 0 0; font-size: 14px; color: var(--cap-grey); }
+.cap-earlier { padding: 6px 8px; background: var(--cap-sand); color: var(--cap-ink); }
 .cap-link { background: none; border: 0; padding: 0; color: var(--cap-teal); font-size: 14px; cursor: pointer; text-decoration: underline; }
 .cap-right { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .cap-reason { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }

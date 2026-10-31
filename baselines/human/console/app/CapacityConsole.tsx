@@ -27,7 +27,7 @@ import { placeSplitter } from "@/app/placeNames";
 import { replyBlocks, stepOfCall, type Span } from "@/app/reply";
 import { FED, OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, header, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
+import { actBody, EARLIER, header, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; kind?: string | null; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
@@ -40,7 +40,8 @@ interface Row { n: number; episode_id: string; status: string; current: boolean 
 interface State {
   arm: "solo" | "team"; practice?: boolean; elapsed_s: number; remaining_s: number; over: boolean; total: number;
   answered_n: number; skipped_n: number; list: Row[];
-  current: null | { n: number; episode_id: string; instruction: string; mode: "verify" | "search"; point: LonLat | null; review: Review | null };
+  current: null | { n: number; episode_id: string; instruction: string; mode: "verify" | "search"; point: LonLat | null; review: Review | null;
+             earlier?: string | null; can_back?: boolean };
 }
 
 const STATUS: Record<string, string> = {
@@ -244,6 +245,7 @@ export function CapacityConsole() {
       else if (k === "clear") { void act({ action: "clear" }); m.setRuler([]); }
       else if (k === "street") m.setOsmOn((on) => !on);
       else if (k === "maps" && review?.maps_lonlat) m.flyTo(review.maps_lonlat, MAPS_ZOOM);
+      else if (k === "back" && s.current.can_back) void act({ action: "back" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -313,6 +315,12 @@ export function CapacityConsole() {
             <section className="cap-block cap-report">
               <p className="cap-kicker">Report {cur?.n ?? ""}</p>
               <p className="cap-report-text">{cur?.instruction ?? ""}</p>
+              {cur?.earlier ? (
+                <p className="cap-hint cap-earlier" role="status">
+                  You are changing your answer to report {cur.n}: {EARLIER[cur.earlier] ?? cur.earlier}. That answer stands until you
+                  answer again.{" "}<button type="button" className="cap-link" disabled={busy} onClick={() => void act({ action: "resume" })}>keep it and return</button>
+                </p>
+              ) : null}
             </section>
 
             {/* Everything between the report and the controls scrolls; the controls never move. */}
@@ -423,6 +431,7 @@ export function CapacityConsole() {
                   <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : st?.arm === "team" ? " (MAPS's answer counts)" : " (counts as a miss)"}</>
                 )}
                 {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, MAPS_ZOOM)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
+                {cur?.can_back ? <> · <button type="button" className="cap-link" disabled={busy} onClick={() => void act({ action: "back" })}>back to report {cur.n - 1} <kbd>B</kbd></button></> : null}
               </p>
               {fault ? <p className="judge-fault">{fault}</p> : null}
             </section>

@@ -19,7 +19,7 @@ export function verifyHint(sel: { refusal?: string | null } | null): string {
   return sel.refusal ?? "Your point is on the map. Press Pick another to answer with it.";
 }
 
-export type KeyCommand = "confirm" | "pick" | "clear" | "street" | "maps";
+export type KeyCommand = "confirm" | "pick" | "clear" | "street" | "maps" | "back";
 
 /** The console's keys; a held key acts once. */
 export function keyCommand(e: { key: string; repeat: boolean }, mode: "verify" | "search", canPick: boolean): KeyCommand | null {
@@ -27,7 +27,7 @@ export function keyCommand(e: { key: string; repeat: boolean }, mode: "verify" |
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (k === "Enter") return mode === "verify" ? "confirm" : null;
   if (k === "s") return canPick ? "pick" : null;
-  return ({ Escape: "clear", o: "street", m: "maps" } as Record<string, KeyCommand>)[k] ?? null;
+  return ({ Escape: "clear", o: "street", m: "maps", b: "back" } as Record<string, KeyCommand>)[k] ?? null;
 }
 
 /** The map takes clicks from a second after it is ready (``readyAt``, 0 while it is not):
@@ -63,3 +63,8 @@ export async function pollState<T>(get: () => Promise<{ ok: boolean; json: () =>
     return null;
   }
 }
+
+/** How the console names an earlier answer's source, on a report opened again. */
+export const EARLIER: Record<string, string> = {
+  confirm: "you confirmed MAPS's answer", replace: "you picked another place", own_search: "you placed a point", skip: "you skipped it",
+};
