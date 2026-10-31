@@ -54,7 +54,7 @@ Then build the zip outside the repository, with the address participants write t
 
 ```sh
 python -m baselines.human.study_package bundle --kit "$KIT" --out ~/MAPS-study.zip \
-    --contact "frholt@stanford.edu and rlutz@unc.edu" --video "<the tutorial>.mp4"
+    --contact "frholt@stanford.edu and ryan.lutzy@gmail.com" --video "<the tutorial>.mp4"
 ```
 
 It refuses a kit without `console/index.html`, `plan/plan.json`, `calcity_ortho.mbtiles` or
@@ -134,7 +134,7 @@ list) and its `"answers"` (the `answers.jsonl` rows: the run id and label, the s
 answered, UTC), plus `"unreadable_lines"` when the ledger held lines that do not parse. No name,
 computer account or path is in it.
 
-1. The participant emails `maps-study-<run id>.json` to frholt@stanford.edu and rlutz@unc.edu,
+1. The participant emails `maps-study-<run id>.json` to frholt@stanford.edu and ryan.lutzy@gmail.com,
    so each file reaches both inboxes. The lead collects from their own inbox; Ryan's copies are
    the backup: a file missing from one inbox is taken from the other.
 2. Save every attachment, unrenamed, into one inbox folder, here `~/datasets/capacity-study/inbox`.
