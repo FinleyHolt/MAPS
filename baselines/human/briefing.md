@@ -39,8 +39,10 @@ The console is the map screen that practice and your session open in.
   imagery.
 - **Search box** (top left of the map):
   - Type a street or place name, then pick a result. Every section of that street lights up.
-  - A street in several sections shows ‹ › beside the Street map chip: they step along it
-    section by section.
+  - Some streets come in separate sections far apart under one name. The search lists each
+    section under the street's name, with the street nearest it and how many buildings line
+    it; the map numbers the sections to match. Pick a section to go to it, and use ‹ › beside
+    the Street map chip to step from one section to the next.
   - Type two names joined by `&` (for example `Lime Avenue & 88th Street`) to find where
     they cross.
   - Type a kind of place (`parking`, `park`, `pool`) to list the nearest mapped ones. Backyard

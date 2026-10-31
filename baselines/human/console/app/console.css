@@ -190,6 +190,7 @@ textarea {
 }
 .judge-row:hover { background: var(--color-sel); }
 .judge-row[data-on="true"] { background: #e3efe4; outline: 1px solid var(--color-good); }
+.judge-sub { padding-left: 18px; }
 .judge-dim { color: var(--color-faint); }
 .judge-search {
   width: 100%; margin-bottom: 6px; padding: 5px 7px; border: 1px solid var(--color-rule); background: var(--color-paper); font: inherit;
@@ -204,6 +205,9 @@ textarea {
 .judge-full summary { cursor: pointer; font-size: 13px; color: var(--color-cite); margin-bottom: 8px; }
 .judge-done { padding: 48px; }
 .judge-canvas.is-far .judge-label { display: none; }
+/* A searched street's stretches, numbered as the search lists them: shown at every zoom. */
+.study-stretch { min-width: 20px; padding: 1px 5px; border: 2px solid #fff; border-radius: 10px; background: #2F6870; color: #fff;
+  font-size: 13px; font-weight: 700; text-align: center; box-shadow: 0 0 3px #1E1B18; pointer-events: none; }
 .judge-canvas-wrap { position: relative; min-height: 0; }
 .judge-canvas-wrap .judge-canvas { position: absolute; inset: 0; }
 .study-layers { position: absolute; top: 10px; left: 10px; z-index: 2; display: flex; gap: 6px; }

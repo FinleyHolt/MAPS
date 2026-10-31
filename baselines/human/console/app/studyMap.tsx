@@ -9,12 +9,12 @@
  * uses and leaves the rest empty.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapLibreMap, Marker as MapLibreMarker, StyleSpecification } from "maplibre-gl";
 
 import { boundsOf } from "@/app/fed";
 import { kindMatches } from "@/app/kindWords";
-import { alongStreet, axisAt, buildingsAlong, closestApproach, crossings, metres, nearestOther, type LonLat } from "@/app/studyGeometry";
+import { axisAt, buildingsAlong, closestApproach, crossings, metres, nearestOther, stretches, type LonLat } from "@/app/studyGeometry";
 
 export { crossings, metres };
 
@@ -425,54 +425,74 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   const approachOf = useCallback((a: string, b: string) => closestApproach(osmData.current?.features ?? [], a, b), []);
   const nearOf = useCallback((at: LonLat, exclude: string[]) => nearestOther(osmData.current?.features ?? [], at, exclude), []);
   const crossingsOf = useCallback((a: string, b: string) => crossings(osmData.current?.features ?? [], a, b), []);
-  const piecesOf = useCallback((name: string) => (osmData.current?.features ?? []).filter((f) => f.properties?.name === name).length, []);
+  /** A named place's stretches (``stretches``): what the search lists and ‹ › steps through. */
+  const stretchesNamed = (name: string | null) => stretches((osmData.current?.features ?? []).filter((f) => f.properties?.name === name)
+    .map((f) => (f.geometry as GeoJSON.LineString).coordinates as LonLat[]));
+  const piecesOf = useCallback((name: string) => stretchesNamed(name).length, []);
 
   /** Light every piece of a named place and frame them all: a street the prior carries in
    * seven pieces is seven pieces on the map, not one point at their mean. */
   const buildingPoints = () => (osmData.current?.features ?? []).filter((f) => f.properties?.layer === "building")
     .map((f) => (f.geometry as GeoJSON.LineString).coordinates[0] as LonLat);
   const [litPiece, setLitPiece] = useState<{ n: number; of: number; buildings: number } | null>(null);
+  const litPieceRef = useRef(litPiece);
+  litPieceRef.current = litPiece;
   const frame = (map: MapLibreMap, pts: LonLat[]) => {
     const lons = pts.map((p) => p[0]);
     const lats = pts.map((p) => p[1]);
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
                   { padding: 80, maxZoom: FIND_ZOOM, duration: 400 });
   };
-  /** Step through a lit name's pieces end to end; ``skipEmpty`` passes over pieces with no
-   * building along them (a paper road through empty lots holds no house to find). */
-  const stepPiece = useCallback((by: number, skipEmpty = false) => {
-    const map = mapRef.current;
-    const name = litRef.current;
-    const pieces = alongStreet((osmData.current?.features ?? []).filter((f) => f.properties?.name === name)
-      .map((f) => (f.geometry as GeoJSON.LineString).coordinates as LonLat[]));
-    if (!map || !pieces.length) return;
+  /** A name's stretches along it (``stretches``), each with the buildings along it, the point it is labelled
+   * at (the middle of its longest piece) and the nearest other street there. */
+  const stretchesOf = useCallback((name: string) => {
     const homes = buildingPoints();
-    const counts = pieces.map((p) => buildingsAlong(p, homes));
-    setLitPiece((cur) => {
-      let n = cur?.n ?? 0;
-      for (let tries = 0; tries < pieces.length; tries++) {
-        n = ((n - 1 + by) % pieces.length + pieces.length) % pieces.length + 1;
-        if (!skipEmpty || counts[n - 1] > 0) break;
-      }
-      // At a house's scale: the buildings along the piece, not the whole piece, when it has any.
-      const along = homes.filter((h) => buildingsAlong(pieces[n - 1], [h]) > 0);
-      frame(map, along.length ? along : pieces[n - 1]);
-      return { n, of: pieces.length, buildings: counts[n - 1] };
+    const feats = osmData.current?.features ?? [];
+    return stretchesNamed(name).map((pieces) => {
+      const longest = pieces.reduce((a, b) => (b.length > a.length ? b : a));
+      const at = longest[Math.floor(longest.length / 2)];
+      return { pieces, at, along: homes.filter((h) => pieces.some((p) => buildingsAlong(p, [h]) > 0)), near: nearestOther(feats, at, [name]) };
     });
   }, []);
-  const showName = useCallback((name: string) => {
+  /** Frame stretch ``n`` (1-based) of the lit name, at a house's scale when buildings line it. */
+  const showStretch = (map: MapLibreMap, all: ReturnType<typeof stretchesOf>, n: number) => {
+    const s = all[n - 1];
+    frame(map, s.along.length ? s.along : s.pieces.flat());
+    setLitPiece({ n, of: all.length, buildings: s.along.length });
+  };
+  /** Step through a lit name's stretches along it; ``skipEmpty`` passes over stretches with
+   * no building along them (a paper road through empty lots holds no house to find). */
+  const stepPiece = useCallback((by: number, skipEmpty = false) => {
     const map = mapRef.current;
+    const all = stretchesOf(litRef.current ?? "");
+    if (!map || !all.length) return;
+    let n = litPieceRef.current?.n ?? 0;
+    for (let tries = 0; tries < all.length; tries++) {
+      n = ((n - 1 + by) % all.length + all.length) % all.length + 1;
+      if (!skipEmpty || all[n - 1].along.length > 0) break;
+    }
+    showStretch(map, all, n);
+  }, [stretchesOf]);
+  /** Light a named place. With ``stretch`` (1-based) frame that stretch; else every stretch with
+   * buildings along it, where a house or a pool can be (every stretch if none has). A name in
+   * several stretches has each numbered on the map, as the search lists them. */
+  const showName = useCallback((name: string, stretch?: number) => {
+    const map = mapRef.current;
+    const maplibre = maplibreRef.current;
     clearFound();
     setLit(name);
-    // The pieces with buildings along them, where a house or a pool can be; every piece if none has.
-    const pieces = (osmData.current?.features ?? []).filter((f) => f.properties?.name === name)
-      .map((f) => (f.geometry as GeoJSON.LineString).coordinates as LonLat[]);
-    const homes = buildingPoints();
-    const built = pieces.filter((p) => buildingsAlong(p, homes) > 0);
-    const pts = (built.length ? built : pieces).flat();
-    if (!map || !pts.length) return;
-    frame(map, pts);
-  }, [clearFound]);
+    const all = stretchesOf(name);
+    if (!map || !all.length) return;
+    if (maplibre && all.length > 1) all.forEach((s, i) => {
+      const el = document.createElement("span");
+      el.className = "study-stretch";
+      el.textContent = String(i + 1);
+      markMarkers.current.push(new maplibre.Marker({ element: el }).setLngLat(s.at).addTo(map));
+    });
+    if (stretch) return showStretch(map, all, stretch);
+    const built = all.filter((s) => s.along.length);
+    frame(map, (built.length ? built : all).flatMap((s) => s.pieces.flat()));
+  }, [clearFound, stretchesOf]);
 
   const set = useCallback((id: string, features: GeoJSON.Feature[]) =>
     (mapRef.current?.getSource(id) as GeoJSONSource | undefined)?.setData(fc(features)), []);
@@ -499,7 +519,7 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   }, []);
 
   return { containerRef, mapRef, maplibreRef, ready, names, osmOn, setOsmOn, lit, setLit, hover, showName, flyTo, frameAo, set,
-           ruler, rulerM, setRuler, markSpots, setSaid, frameName, frameFed, priorIndex, clearFound, nearOf, crossingsOf, approachOf, kindsNear, piecesOf, litPiece, stepPiece };
+           ruler, rulerM, setRuler, markSpots, setSaid, frameName, frameFed, priorIndex, clearFound, nearOf, crossingsOf, approachOf, kindsNear, piecesOf, stretchesOf, litPiece, stepPiece };
 }
 
 /** The street map's toggle, a chip over the map; what the line under the pointer is, beside
@@ -546,13 +566,15 @@ export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, piec
 
 /** A search over the OSM prior's named places: a match lights every piece of it and frames them.
  * Matches list exact first, then by where the words start, then the rest, each alphabetically,
- * so the list holds still while the query grows; Enter takes the first. */
-export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf, kindsNear, piecesOf, nearOf }: {
-  names: PriorName[]; lit: string | null; onPick: (n: PriorName) => void;
+ * so the list holds still while the query grows; Enter takes the first. A close match in several
+ * stretches far apart lists each stretch under it, with the street nearest it. */
+export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf, kindsNear, piecesOf, stretchesOf, nearOf }: {
+  names: PriorName[]; lit: string | null; onPick: (n: PriorName, stretch?: number) => void;
   onCross: (all: LonLat[], focus: number) => void; crossingsOf: (a: string, b: string) => LonLat[];
   approachOf: (a: string, b: string) => { at: LonLat; m: number } | null;
   kindsNear: (q: string, street?: string) => { name: string; kind: string; at: LonLat; m: number; near: string | null }[];
   piecesOf: (name: string) => number; nearOf: (at: LonLat, exclude: string[]) => string | null;
+  stretchesOf: (name: string) => { along: LonLat[]; near: string | null }[];
 }) {
   const [query, setQuery] = useState("");
   // The list closes once a result is taken (or on Esc), and opens again on typing.
@@ -615,13 +637,25 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
             </button>
           ) : <p className="judge-hint">No two streets match those names.</p>
         ) : null}
-        {hits.map((n) => (
-          <button type="button" key={`${n.name}-${n.lonlat.join(",")}`} className="judge-row" data-on={lit === n.name}
-                  onClick={() => take(() => onPick(n))}>
-            <span>{n.name}</span>
-            <span className="judge-dim">{n.kind}{piecesOf(n.name) > 1 ? ` · ${piecesOf(n.name)} sections` : ""}</span>
-          </button>
-        ))}
+        {hits.map((n, i) => {
+          const parts = piecesOf(n.name);
+          // The first few close matches list their stretches; a long list of loose ones does not.
+          const each = parts > 1 && i < 3 && rank(n) <= 1 ? stretchesOf(n.name) : [];
+          return (
+            <Fragment key={`${n.name}-${n.lonlat.join(",")}`}>
+              <button type="button" className="judge-row" data-on={lit === n.name} onClick={() => take(() => onPick(n))}>
+                <span>{n.name}{each.length ? <span className="judge-dim"> · all {parts} sections</span> : null}</span>
+                <span className="judge-dim">{n.kind}{parts > 1 && !each.length ? ` · ${parts} sections` : ""}</span>
+              </button>
+              {each.map((st, k) => (
+                <button type="button" key={k} className="judge-row judge-sub" onClick={() => take(() => onPick(n, k + 1))}>
+                  <span>section {k + 1}{st.near ? ` · by ${st.near}` : ""}</span>
+                  <span className="judge-dim">{st.along.length ? `${st.along.length} building${st.along.length === 1 ? "" : "s"}` : "no buildings"}</span>
+                </button>
+              ))}
+            </Fragment>
+          );
+        })}
         {kinds.map((k) => (
           <button type="button" key={`${k.kind}|${k.at.join(",")}`} className="judge-row" onClick={() => take(() => onCross([k.at], 0))}>
             <span>{k.name || k.kind}{k.name ? <span className="judge-dim"> {k.kind}</span> : null}

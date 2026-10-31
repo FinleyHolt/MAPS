@@ -443,8 +443,8 @@ export function CapacityConsole() {
               <div ref={m.containerRef} className="judge-canvas" />
               <OsmToggle on={m.osmOn} onChange={m.setOsmOn} hover={CAPTURE ? null : m.hover} rulerM={m.rulerM} onClearRuler={() => m.setRuler([])}
                          lit={m.lit} pieces={m.lit ? m.piecesOf(m.lit) : 0} litPiece={m.litPiece} onStep={m.stepPiece} />
-              <OsmSearch key={cur?.episode_id ?? ""} names={m.names} lit={m.lit} onPick={(n) => m.showName(n.name)} onCross={m.markSpots}
-                         crossingsOf={m.crossingsOf} approachOf={m.approachOf} kindsNear={m.kindsNear} piecesOf={m.piecesOf} nearOf={m.nearOf} />
+              <OsmSearch key={cur?.episode_id ?? ""} names={m.names} lit={m.lit} onPick={(n, k) => m.showName(n.name, k)} onCross={m.markSpots}
+                         crossingsOf={m.crossingsOf} approachOf={m.approachOf} kindsNear={m.kindsNear} piecesOf={m.piecesOf} stretchesOf={m.stretchesOf} nearOf={m.nearOf} />
             </div>
             <p className="cap-legend">
               {st?.arm === "team" ? <><span className="sw cap-sw-maps" /> MAPS's answer <span className="sw cap-sw-cand" /> mapped objects</> : null}

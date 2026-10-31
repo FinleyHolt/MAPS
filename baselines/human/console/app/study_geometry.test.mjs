@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { alongStreet, buildingsAlong, closestApproach, crossings, metres } from "./studyGeometry.ts";
+import { buildingsAlong, closestApproach, crossings, metres, stretches } from "./studyGeometry.ts";
 
 const street = (name, coordinates) => ({ properties: { name }, geometry: { type: "LineString", coordinates } });
 // About 10 m a step at Cal City's latitude.
@@ -37,13 +37,17 @@ test("two streets that never meet report where they come closest and how far apa
   assert.ok(near && Math.abs(near.m - Math.hypot(22.3, 30.1)) < 0.5);
 });
 
-test("a street in shuffled, reversed pieces walks end to end from its west end", () => {
-  const a = [[0, 0], [E, 0]], b = [[E, 0], [2 * E, 0]], c = [[3 * E, 0], [2 * E, 0]];
-  const walked = alongStreet([c, a, b]);
-  assert.deepEqual(walked.map((p) => p[0][0]), [0, E, 2 * E]);
-});
-
 test("the buildings along a piece are those within forty metres of it", () => {
   const piece = [[0, 0], [10 * E, 0]];
   assert.equal(buildingsAlong(piece, [[5 * E, 3 * N], [5 * E, 6 * N], [20 * E, 0]]), 1);
+});
+
+test("a street's pieces that touch are one stretch, and one far off is another, west first", () => {
+  const far = [[100 * E, 0], [110 * E, 0]];
+  const groups = stretches([far, [[0, 0], [5 * E, 0]], [[5 * E, 0], [10 * E, N]], [[10 * E + E, N], [20 * E, N]]]);
+  assert.deepEqual(groups.map((g) => g.length), [3, 1]);
+  assert.deepEqual(groups[1], [far]);
+  assert.equal(stretches([[[0, 0], [5 * E, 0]], [[12 * E, 0], [20 * E, 0]]]).length, 2);   // 70 m apart
+  const south = [[0, -100 * N], [0, -90 * N]], north = [[0, 0], [0, 10 * N]];
+  assert.deepEqual(stretches([south, north]), [[north], [south]]);                     // a N–S street, north first
 });

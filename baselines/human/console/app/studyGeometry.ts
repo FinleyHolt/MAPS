@@ -99,31 +99,6 @@ export function closestApproach(features: { properties?: Record<string, unknown>
   return best;
 }
 
-/** A street's pieces in order along it: from the piece with the westmost end, each next piece the
- * one whose end is nearest the last one's far end (each piece turned to run onward). A street the
- * prior breaks into pieces is then walked end to end, not jumped about. */
-export function alongStreet(pieces: LonLat[][]): LonLat[][] {
-  const left = pieces.filter((p) => p.length > 1).map((p) => [...p]);
-  if (!left.length) return [];
-  const startAt = left.reduce((bi, p, i) => (Math.min(p[0][0], p[p.length - 1][0]) < Math.min(left[bi][0][0], left[bi][left[bi].length - 1][0]) ? i : bi), 0);
-  let cur = left.splice(startAt, 1)[0];
-  if (cur[cur.length - 1][0] < cur[0][0]) cur.reverse();
-  const out = [cur];
-  while (left.length) {
-    const end = cur[cur.length - 1];
-    let best = { i: 0, flip: false, d: Infinity };
-    left.forEach((p, i) => {
-      const a = metres(end, p[0]), b = metres(end, p[p.length - 1]);
-      if (a < best.d) best = { i, flip: false, d: a };
-      if (b < best.d) best = { i, flip: true, d: b };
-    });
-    cur = left.splice(best.i, 1)[0];
-    if (best.flip) cur.reverse();
-    out.push(cur);
-  }
-  return out;
-}
-
 /** How many of ``points`` (a building's first vertex each) lie within ``within_m`` of ``line``. */
 export function buildingsAlong(line: LonLat[], points: LonLat[], within_m = 40): number {
   const xs = line.map((p) => p[0]); const ys = line.map((p) => p[1]);
@@ -135,4 +110,24 @@ export function buildingsAlong(line: LonLat[], points: LonLat[], within_m = 40):
     for (let i = 1; i < line.length; i++) if (metres(p, nearestOn(p, line[i - 1], line[i])) <= within_m) { n++; break; }
   }
   return n;
+}
+
+/** A street's pieces grouped into stretches: pieces whose vertices come within ``gap_m`` of each
+ * other are one stretch; a paper grid's street is often several stretches far apart under one
+ * name. Ordered along the street: west to east, or north to south when it runs N–S. */
+export function stretches(pieces: LonLat[][], gap_m = 60): LonLat[][][] {
+  const near = (a: LonLat[], b: LonLat[]) => a.some((p) => b.some((q) => metres(p, q) < gap_m));
+  const out: LonLat[][][] = [];
+  for (const piece of pieces.filter((p) => p.length > 1)) {
+    const joined = out.filter((s) => s.some((p) => near(p, piece)));
+    const merged = [...joined.flat(), piece];
+    joined.forEach((s) => out.splice(out.indexOf(s), 1));
+    out.push(merged);
+  }
+  // Along the street's long axis: west to east, or north to south for a street that runs N–S.
+  const all = out.flat(2);
+  const span = (k: 0 | 1) => Math.max(...all.map((p) => p[k])) - Math.min(...all.map((p) => p[k]));
+  const ns = all.length > 0 && span(1) > span(0) * Math.cos(all[0][1] * Math.PI / 180);
+  const key = (s: LonLat[][]) => (ns ? -Math.max(...s.flat().map((p) => p[1])) : Math.min(...s.flat().map((p) => p[0])));
+  return out.sort((a, b) => key(a) - key(b));
 }
