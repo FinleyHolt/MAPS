@@ -161,7 +161,7 @@ def test_a_good_json_is_collected_as_the_visit_wrote_it(tmp_path, monkeypatch, c
     assert [(r["run_id"], r["participant"], r["session"], r["episode_id"], r["source"], r["x"]) for r in rows] == [
         (RUN, "p04", "solo", "block_0::1#0", "skip", "")]
     assert list(rows[0]) == ["run_id", "participant", "session", "order_index", "episode_id", "source", "x", "y",
-                             "opened_at", "answered_at", "answer_s", "maps_ready_at_open"]
+                             "opened_at", "answered_at", "answer_s", "maps_ready_at_open", "revises"]
 
 
 def test_two_copies_of_one_results_file_collect_once(tmp_path, monkeypatch, capsys) -> None:

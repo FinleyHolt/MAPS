@@ -88,3 +88,27 @@ def test_a_relaunch_reopens_the_report_at_the_answers_precise_time(tmp_path, mon
     ledger = tmp_path / "p01" / "team" / "answers.jsonl"
     ledger.write_text(json.dumps({k: v for k, v in a.items() if k != "answered_epoch"}) + "\n")
     assert _relaunch(s, now).opened_at == a["answered_at"]          # a ledger from before the instant was kept
+
+
+def test_back_reopens_the_last_report_and_the_one_left_open_comes_back_as_it_was_opened(tmp_path, monkeypatch) -> None:
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "team", now)
+    assert not _act(s, "back")["ok"]                          # nothing before the first report
+    now[0] += 50
+    assert _act(s, "select", x=0.0, y=99.0)["ok"] and _act(s, "commit")["ok"]
+    left = (s.index, s.opened, s.verify)                      # opened at 50 s, before MAPS's second landed
+    now[0] += 700
+    assert _act(s, "back")["ok"]
+    cur = s.state()["current"]
+    assert (cur["n"], cur["mode"], cur["earlier"], cur["point"], cur["can_back"]) == (1, "search", "own_search", [0.0, 99.0], False)
+    assert _act(s, "select", x=5.0, y=5.0)["ok"] and _act(s, "commit")["ok"]
+    assert (s.index, s.opened, s.verify) == left              # its clock and screen, not a fresh open
+    assert s.state()["current"]["earlier"] is None and s.state()["answered_n"] == 1
+    a, b = [json.loads(ln) for ln in (tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()]
+    assert (a["xy"], "revises" in a, b["xy"], b["revises"]) == ([0.0, 99.0], False, [5.0, 5.0], True)
+    from baselines.human import study_qc
+    assert study_qc.checks(tmp_path / "p01" / "team") == ["session length 60 min, not 40: a rehearsal?"]
+    assert _act(s, "back")["ok"] and _act(s, "resume")["ok"] and (s.index, s.opened) == left[:2]
+    assert not _act(s, "resume")["ok"]                        # nothing left open to go back to
+    s = _relaunch(s, now)                                     # the revision does not move the open report's clock
+    assert (s.index, s.opened, s.verify) == left

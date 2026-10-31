@@ -5,7 +5,10 @@ dealt half and half by the seed, since everything a person does in the study is 
 that would carry into a second condition. Each works the whole backlog, the MAPS root's
 episodes, in their own fixed shuffled order, always on the earliest open report, for one
 fixed-length session. A skip is allowed: alone it scores as a miss, and with MAPS it leaves
-MAPS's answer standing (``team_rows``).
+MAPS's answer standing (``team_rows``). ``back`` reopens the report before the one open to
+answer it again, on the screen it was answered on; the new answer lands as another ledger row
+marked ``revises``, which ``team_rows`` scores in place of the earlier one, and the report left
+open comes back as it was opened.
 
 With MAPS (``arm = "team"``) its results are not flown live: each is released
 when a replay of the root's own recorded timing says it lands, ``agents``
@@ -136,9 +139,12 @@ class Capacity:
             # A line torn by a power loss: the next answer starts on a line of its own.
             with self.ledger.open("a") as fh:
                 fh.write("\n")
-        self.answered = {a["episode_id"]: a for a in _jsonl(self.ledger)}
-        # The open report opened at the last answer, or at the start: a relaunch keeps it so.
-        self._open(max([self.started, *(_answered_epoch(a) for a in self.answered.values())]))
+        rows = _jsonl(self.ledger)
+        self.answered = {a["episode_id"]: a for a in rows}
+        # The report left open while an earlier one is answered again: (index, opened, verify).
+        self.left: tuple[int, float, bool] | None = None
+        # The open report opened at the last first answer, or at the start: a relaunch keeps it so.
+        self._open(max([self.started, *(_answered_epoch(a) for a in rows if not a.get("revises"))]))
 
     # -- the clock and the list --------------------------------------------
 
@@ -159,16 +165,23 @@ class Capacity:
 
     def _open(self, at: float) -> None:
         """The earliest open report, opened ``at`` (the start or the last answer): verified if
-        MAPS's result was ready then, searched by hand if not, and kept so until it is answered."""
-        self.index = next((i for i, e in enumerate(self.order) if e not in self.answered), None)
-        self.current = None if self.index is None else self.order[self.index]
+        MAPS's result was ready then, searched by hand if not, and kept so until it is answered.
+        The report left open to answer an earlier one again comes back as it was opened."""
+        i = next((i for i, e in enumerate(self.order) if e not in self.answered), None)
+        if self.left is not None and self.left[0] == i:
+            self._show(*self.left)
+        else:
+            self._show(i, at, i is not None and self.arm == "team" and at - self.started >= self.ends[i])
+        self.left = None
+
+    def _show(self, index: int | None, opened: float, verify: bool) -> None:
+        self.index = index
+        self.current = None if index is None else self.order[index]
         self.review: Session | None = None
         self.point: tuple[float, float] | None = None
         if self.current is None:
             return
-        self.opened = at
-        self.opened_at = _utc(self.opened)
-        self.verify = self.arm == "team" and self.opened - self.started >= self.ends[self.index]
+        self.opened, self.opened_at, self.verify = opened, _utc(opened), verify
         if self.verify:
             self.review = Session(self.maps_root, [self.current], self.out, labels=self.labels, rows=self.rows,
                                   record=self._reviewed)
@@ -186,11 +199,27 @@ class Capacity:
                   "xy": None if xy is None else [float(xy[0]), float(xy[1])],
                   "opened_at": self.opened_at, "answered_at": _utc(now), "answered_epoch": now,
                   "answer_s": round(now - self.opened, 1),
-                  "maps_ready_at": self.ready_at(i), "maps_ready_at_open": self.verify, **more}
+                  "maps_ready_at": self.ready_at(i), "maps_ready_at_open": self.verify, **more,
+                  **({"revises": True} if e in self.answered else {})}
         with self.ledger.open("a") as fh:
             fh.write(json.dumps(answer) + "\n")
         self.answered[e] = answer
         self._open(now)
+        return {"ok": True}
+
+    def back(self) -> dict:
+        """Reopen the report before the one open, on the screen it was answered on (verifying
+        MAPS's answer or searching by hand), its own point placed again if it was searched; its
+        earlier answer stands until it is answered again."""
+        if not self.index:
+            return {"ok": False, "error": "there is no earlier report"}
+        if self.left is None:
+            self.left = (self.index, self.opened, self.verify)
+        j = self.index - 1
+        earlier = self.answered[self.order[j]]
+        self._show(j, self.clock(), bool(earlier.get("maps_ready_at_open")))
+        if not self.verify and earlier.get("xy"):
+            self.point = (float(earlier["xy"][0]), float(earlier["xy"][1]))
         return {"ok": True}
 
     def _reviewed(self, decision: dict) -> None:
@@ -205,6 +234,14 @@ class Capacity:
             # A stale or second tab, or one that names no report: its action may be meant for one already answered.
             return {"ok": False, "error": "That report already changed. The page now shows the current one."}
         kind = req.get("action")
+        if kind == "back":
+            return self.back()
+        if kind == "resume":
+            # Leave an earlier report as it was answered, back to the one left open.
+            if self.left is None:
+                return {"ok": False, "error": "no report was left open"}
+            self._open(self.clock())
+            return {"ok": True}
         if kind == "skip":
             return self._answer("skip", None)
         if self.review is not None:
@@ -238,6 +275,9 @@ class Capacity:
                 "n": self.index + 1, "episode_id": self.current,
                 "instruction": str(self.rows[self.current]["description"]),
                 "mode": "verify" if self.verify else "search",
+                # Answered before and open again: the earlier answer's source, which stands until replaced.
+                "earlier": self.answered[self.current]["source"] if self.current in self.answered else None,
+                "can_back": bool(self.index),
                 "point": None if self.point is None else list(self.point),
                 "review": self.review.state() if self.review is not None else None,
             },

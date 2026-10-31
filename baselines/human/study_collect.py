@@ -129,7 +129,7 @@ def collect(kit: Path, path: Path, sha: str, plan: dict) -> dict | None:
 
 #: actions.csv's columns: an answer's ids, then its fields as answers.jsonl holds them, ``xy`` split.
 ACTIONS = ("run_id", "participant", "session", "order_index", "episode_id", "source", "x", "y",
-           "opened_at", "answered_at", "answer_s", "maps_ready_at_open")
+           "opened_at", "answered_at", "answer_s", "maps_ready_at_open", "revises")
 
 
 def write_actions(kit: Path, plan: dict) -> None:

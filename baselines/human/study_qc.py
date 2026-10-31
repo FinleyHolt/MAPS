@@ -41,7 +41,8 @@ def checks(results: Path) -> list[str]:
     lines = sum(1 for ln in ledger.read_text().splitlines() if ln.strip()) if ledger.is_file() else 0
     if lines > len(answers):
         out.append(f"{lines - len(answers)} unreadable lines in answers.jsonl")
-    dup = [e for e, n in Counter(a["episode_id"] for a in answers).items() if n > 1]
+    # A report answered again through ``back`` is marked ``revises``; a second first answer is a fault.
+    dup = [e for e, n in Counter(a["episode_id"] for a in answers if not a.get("revises")).items() if n > 1]
     if dup:
         out.append(f"{len(dup)} reports answered twice, e.g. {dup[0]}")
     # UTC stamps to the second compare as text.
