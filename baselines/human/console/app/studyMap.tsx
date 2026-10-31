@@ -541,8 +541,8 @@ export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, piec
             {lit} · <span className="study-piece">{litPiece ? `section ${litPiece.n} of ${litPiece.of} · ${litPiece.buildings} building${litPiece.buildings === 1 ? "" : "s"} along it`
               : `${pieces ?? 1} section${(pieces ?? 1) > 1 ? "s" : ""}`}</span>
             {(pieces ?? 1) > 1 ? (
-              <> <button type="button" className="linkish" onClick={() => onStep(-1)}>‹</button>{" "}
-                <button type="button" className="linkish" onClick={() => onStep(1)}>›</button>{" "}
+              <> <button type="button" className="linkish study-step" title="the section before" onClick={() => onStep(-1)}>‹</button>
+                <button type="button" className="linkish study-step" title="the next section" onClick={() => onStep(1)}>›</button>{" "}
                 <button type="button" className="linkish" title="the next section with a building along it"
                         onClick={() => onStep(1, true)}>next with buildings</button></>
             ) : null}
