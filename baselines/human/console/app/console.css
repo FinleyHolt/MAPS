@@ -191,6 +191,7 @@ textarea {
 .judge-row:hover { background: var(--color-sel); }
 .judge-row[data-on="true"] { background: #e3efe4; outline: 1px solid var(--color-good); }
 .judge-sub { padding-left: 18px; }
+.judge-sub > .judge-dim { white-space: nowrap; }
 .judge-dim { color: var(--color-faint); }
 .judge-search {
   width: 100%; margin-bottom: 6px; padding: 5px 7px; border: 1px solid var(--color-rule); background: var(--color-paper); font: inherit;
