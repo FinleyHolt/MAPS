@@ -35,6 +35,8 @@ export const LABEL_MIN_ZOOM = 16;
 const OSM_LABEL_CAP = 80;
 const OSM_LABEL_MIN_ZOOM = 15;
 const OSM_LABEL_REPEAT_PX = 260;
+/** A street name's size: 14 px at OSM_LABEL_MIN_ZOOM, growing 2 px a zoom to 20 px close in. */
+const osmLabelPx = (zoom: number) => Math.min(20, Math.max(14, 14 + (zoom - OSM_LABEL_MIN_ZOOM) * 2));
 /** Where the browser keeps the street map's on or off. */
 const OSM_KEY = "maps-study-street-map";
 /** Where a found name or crossing opens: houses and the streets between them both read. */
@@ -230,17 +232,23 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
         features: osmData.current.features.map((f) => (f.properties?.name === lit ? { ...f, properties: { ...f.properties, lit: true } } : f)),
       } : osmData.current);
     }
-    const label = (text: string, at: LonLat) => {
+    const size = osmLabelPx(map.getZoom());
+    const label = (text: string, at: LonLat, right: boolean) => {
       const el = document.createElement("span");
       el.className = "judge-label paper-name";
+      el.style.fontSize = `${size}px`;
       el.textContent = text;
-      osmMarkers.current.push(new maplibre.Marker({ element: el, anchor: "left", offset: [6, 0] }).setLngLat(at).addTo(map));
+      osmMarkers.current.push(new maplibre.Marker({ element: el, anchor: right ? "right" : "left", offset: [right ? -6 : 6, 0] })
+        .setLngLat(at).addTo(map));
     };
     if (!osmOnRef.current || map.getZoom() < OSM_LABEL_MIN_ZOOM || !osmData.current) return;
     // Every named row in view, at a vertex of it inside the view: a street broken into
     // pieces is named on each piece, and a long one again along its length.
     const bounds = map.getBounds();
     const placed: Record<string, { x: number; y: number }[]> = {};
+    // Where names already sit, as boxes (anchor left, 6 px out): a name that would overlap one is
+    // left off, so a cluster of short streets reads as a few names, not a pile.
+    const boxes: { x0: number; x1: number; y0: number; y1: number }[] = [];
     const litFirst = [...osmData.current.features].sort((a, b) =>
       Number(b.properties?.name === litRef.current) - Number(a.properties?.name === litRef.current));
     for (const f of litFirst) {
@@ -262,8 +270,15 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
       const px = map.project(at);
       const near = (placed[name] ??= []);
       if (near.some((q) => Math.hypot(q.x - px.x, q.y - px.y) < OSM_LABEL_REPEAT_PX)) continue;
+      // ponytail: width estimated at 0.6 em a character, measure the text if names clip or overlap.
+      const w = 8 + name.length * size * 0.6;
+      // A name that would run off the map's right edge sits left of its point instead.
+      const right = px.x + w > map.getCanvas().clientWidth;
+      const box = { x0: right ? px.x - w : px.x + 4, x1: right ? px.x - 4 : px.x + w, y0: px.y - size * 0.75, y1: px.y + size * 0.75 };
+      if (boxes.some((b) => box.x0 < b.x1 && b.x0 < box.x1 && box.y0 < b.y1 && b.y0 < box.y1)) continue;
+      boxes.push(box);
       near.push({ x: px.x, y: px.y });
-      label(name, at);
+      label(name, at, right);
     }
   }, []);
 
