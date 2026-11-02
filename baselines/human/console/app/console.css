@@ -192,6 +192,7 @@ textarea {
 .judge-row[data-on="true"] { background: #e3efe4; outline: 1px solid var(--color-good); }
 .judge-sub { padding-left: 18px; }
 .judge-sub > .judge-dim { white-space: nowrap; }
+.judge-sub[data-meets="true"] { background: rgba(31, 58, 95, 0.1); }
 /* The section arrows: a target a hand can hit, not one character. */
 .study-step { padding: 0 7px; font-size: 18px; line-height: 1; font-weight: 700; }
 .judge-dim { color: var(--color-faint); }

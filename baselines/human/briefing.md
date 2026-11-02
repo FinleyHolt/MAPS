@@ -27,7 +27,7 @@ session: find as many places correctly as you can. Speed and accuracy both count
 | Find where two streets cross | Type both, joined by `&`: `Lime Avenue & 88th Street` | |
 | Find mapped places of a kind | Type the kind: `parking`, `park`, `pool`. Backyard pools and most houses are not on the street map: find those on the imagery. | |
 | Step through a street's sections | Some streets come in separate sections far apart. The search lists each, the map numbers them, and ‹ › beside the Street map chip steps between them. | |
-| See street and building names | **Street map** chip; point at a street for its name and which way it runs | O |
+| See street and building names | **Street map** chip; point at a street for its name | O |
 | Measure a distance | Hold Shift and click two points; click the length chip to clear it | |
 | Clear your point and the ruler | | Esc |
 

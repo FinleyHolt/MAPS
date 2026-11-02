@@ -14,7 +14,7 @@ import type { GeoJSONSource, Map as MapLibreMap, Marker as MapLibreMarker, Style
 
 import { boundsOf } from "@/app/fed";
 import { kindMatches } from "@/app/kindWords";
-import { axisAt, buildingsAlong, closestApproach, crossings, metres, nearestOther, stretches, type LonLat } from "@/app/studyGeometry";
+import { buildingsAlong, closestApproach, crossings, metres, nearestOther, stretches, type LonLat } from "@/app/studyGeometry";
 
 export { crossings, metres };
 
@@ -128,13 +128,15 @@ function baseStudyStyle(): StyleSpecification {
         paint: { "line-color": INK.ink, "line-width": 1.5, "line-opacity": 0.8, "line-dasharray": [3, 2] } },
       // Closed outlines as invisible areas: what hover reads inside a building or a park.
       { id: "osm-area", type: "fill", source: "osm-area", paint: { "fill-color": "#000", "fill-opacity": 0 } },
-      // Roads solid yellow; everything else (buildings, landuse, lots) a thinner, paler line, so
-      // which lines are streets reads at a glance.
+      // Streets wide and solid yellow; buildings, water and places a thin pale line. Land use,
+      // power lines and fences are not drawn: on the imagery they read as more streets.
       { id: "osm-line", type: "line", source: "osm", layout: { visibility: "none" },
+        filter: ["in", ["get", "layer"], ["literal", ["road", "building", "water", "poi", "aeroway"]]],
         paint: { "line-color": ["case", ["==", ["get", "layer"], "road"], "#ffd600", "#fff3a8"],
-                 "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.45, 16, 0.85],
-                 "line-width": ["interpolate", ["linear"], ["zoom"], 13, ["case", ["get", "lit"], 3, 0.4],
-                                17, ["case", ["get", "lit"], 3.5, 1.2]] } },
+                 "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.6, 16, 0.9],
+                 "line-width": ["interpolate", ["linear"], ["zoom"], 13, ["case", ["==", ["get", "layer"], "road"], 1.5, 0.4],
+                                17, ["case", ["==", ["get", "layer"], "road"], 3.5, 1],
+                                19, ["case", ["==", ["get", "layer"], "road"], 6, 1.2]] } },
       // The places MAPS's reasoning names, in their colours; the one pointed at in the text heavier.
       { id: "said-halo", type: "line", source: "said", layout: { "line-cap": "round", "line-join": "round" },
         paint: { "line-color": PAPER.halo, "line-width": ["case", ["get", "hot"], 10, 5.5] } },
@@ -283,14 +285,15 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
       // window: a map that never hears of it draws in a corner of its panel.
       const sized = new ResizeObserver(() => map.resize());
       sized.observe(containerRef.current);
-      // What an OSM line under the pointer is, while the layer is on.
-      // A road also says which way it runs there, for "the south side" of a diagonal street.
+      // What an OSM line under the pointer is, while the layer is on: a street by its name.
       map.on("mousemove", (e) => {
         if (!osmOnRef.current) return;
         // A road under the pointer first; else the smallest outline the pointer is inside.
-        const roads = map.queryRenderedFeatures([[e.point.x - 10, e.point.y - 10], [e.point.x + 10, e.point.y + 10]], { layers: ["osm-line"] })
+        const roads = map.queryRenderedFeatures([[e.point.x - 14, e.point.y - 14], [e.point.x + 14, e.point.y + 14]], { layers: ["osm-line"] })
           .filter((f) => f.properties?.layer === "road");
-        const areas = map.queryRenderedFeatures(e.point, { layers: ["osm-area"] });
+        // An unnamed land use, power line or fence says nothing a person can use.
+        const areas = map.queryRenderedFeatures(e.point, { layers: ["osm-area"] })
+          .filter((f) => f.properties?.name || !["landuse", "power", "barrier"].includes(f.properties?.layer));
         const size = (f: GeoJSON.Feature) => {
           const c = (f.geometry as GeoJSON.Polygon).coordinates[0];
           const xs = c.map((p) => p[0]); const ys = c.map((p) => p[1]);
@@ -298,10 +301,8 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
         };
         const hit = roads[0] ?? areas.sort((a, b) => size(a) - size(b))[0];
         if (!hit) { setHover(null); return; }
-        const coords = hit.geometry.type === "LineString" ? (hit.geometry.coordinates as LonLat[]) : null;
-        const road = hit.properties?.layer === "road";
-        const axis = road && coords && coords.length > 1 ? `runs ${axisAt(coords, [e.lngLat.lng, e.lngLat.lat])}` : "";
-        const text = [hit.properties?.name, hit.properties?.kind, axis].filter(Boolean).join(" · ");
+        const text = hit.properties?.layer === "road" && hit.properties?.name ? String(hit.properties.name)
+          : [hit.properties?.name, hit.properties?.kind].filter(Boolean).join(" · ");
         setHover(text ? { text, x: e.point.x, y: e.point.y, left: e.point.x > map.getCanvas().clientWidth / 2 } : null);
       });
       map.getCanvas().addEventListener("mouseleave", () => setHover(null));
@@ -445,13 +446,17 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   };
   /** A name's stretches along it (``stretches``), each with the buildings along it, the point it is labelled
    * at (the middle of its longest piece) and the nearest other street there. */
-  const stretchesOf = useCallback((name: string) => {
+  /** A name's stretches; with ``report``, each says which streets the report names it meets. */
+  const stretchesOf = useCallback((name: string, report = "") => {
     const homes = buildingPoints();
     const feats = osmData.current?.features ?? [];
+    const named = [...new Set(feats.map((f) => String(f.properties?.name ?? "")))]
+      .filter((o) => o && o !== name && report.includes(o)).map((o) => ({ o, at: crossings(feats, name, o) }));
     return stretchesNamed(name).map((pieces) => {
       const longest = pieces.reduce((a, b) => (b.length > a.length ? b : a));
       const at = longest[Math.floor(longest.length / 2)];
-      return { pieces, at, along: homes.filter((h) => pieces.some((p) => buildingsAlong(p, [h]) > 0)), near: nearestOther(feats, at, [name]) };
+      return { pieces, at, along: homes.filter((h) => pieces.some((p) => buildingsAlong(p, [h]) > 0)), near: nearestOther(feats, at, [name]),
+               meets: named.filter((n) => pieces.some((p) => buildingsAlong(p, n.at, 30) > 0)).map((n) => n.o) };
     });
   }, []);
   /** Frame stretch ``n`` (1-based) of the lit name, at a house's scale when buildings line it. */
@@ -568,13 +573,15 @@ export function OsmToggle({ on, onChange, hover, rulerM, onClearRuler, lit, piec
  * Matches list exact first, then by where the words start, then the rest, each alphabetically,
  * so the list holds still while the query grows; Enter takes the first. A close match in several
  * stretches far apart lists each stretch under it, with the street nearest it. */
-export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf, kindsNear, piecesOf, stretchesOf, nearOf }: {
+export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf, kindsNear, piecesOf, stretchesOf, nearOf, report = "" }: {
   names: PriorName[]; lit: string | null; onPick: (n: PriorName, stretch?: number) => void;
   onCross: (all: LonLat[], focus: number) => void; crossingsOf: (a: string, b: string) => LonLat[];
   approachOf: (a: string, b: string) => { at: LonLat; m: number } | null;
   kindsNear: (q: string, street?: string) => { name: string; kind: string; at: LonLat; m: number; near: string | null }[];
   piecesOf: (name: string) => number; nearOf: (at: LonLat, exclude: string[]) => string | null;
-  stretchesOf: (name: string) => { along: LonLat[]; near: string | null }[];
+  stretchesOf: (name: string, report?: string) => { along: LonLat[]; near: string | null; meets: string[] }[];
+  /** The open report's text: a section that meets a street it names says so. */
+  report?: string;
 }) {
   const [query, setQuery] = useState("");
   // The list closes once a result is taken (or on Esc), and opens again on typing.
@@ -640,7 +647,7 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
         {hits.map((n, i) => {
           const parts = piecesOf(n.name);
           // The first few close matches list their stretches; a long list of loose ones does not.
-          const each = parts > 1 && i < 3 && rank(n) <= 1 ? stretchesOf(n.name) : [];
+          const each = parts > 1 && i < 3 && rank(n) <= 1 ? stretchesOf(n.name, report) : [];
           return (
             <Fragment key={`${n.name}-${n.lonlat.join(",")}`}>
               <button type="button" className="judge-row" data-on={lit === n.name} onClick={() => take(() => onPick(n))}>
@@ -648,8 +655,8 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
                 <span className="judge-dim">{n.kind}{parts > 1 && !each.length ? ` · ${parts} sections` : ""}</span>
               </button>
               {each.map((st, k) => (
-                <button type="button" key={k} className="judge-row judge-sub" onClick={() => take(() => onPick(n, k + 1))}>
-                  <span>section {k + 1}{st.near ? ` · by ${st.near}` : ""}</span>
+                <button type="button" key={k} className="judge-row judge-sub" data-meets={st.meets.length > 0} onClick={() => take(() => onPick(n, k + 1))}>
+                  <span>section {k + 1}{st.near ? ` · by ${st.near}` : ""}{st.meets.length ? <b> · meets {st.meets.join(" and ")}</b> : null}</span>
                   <span className="judge-dim">{st.along.length ? `${st.along.length} building${st.along.length === 1 ? "" : "s"}` : "no buildings"}</span>
                 </button>
               ))}

@@ -50,19 +50,6 @@ export function crossings(features: { properties?: Record<string, unknown> | nul
 }
 
 
-/** Which way a street runs at a point, as an axis: "N–S", "NE–SW", "E–W" or "NW–SE". */
-export function axisAt(line: LonLat[], at: LonLat): string {
-  let best = { d: Infinity, i: 1 };
-  for (let i = 1; i < line.length; i++) {
-    const d = metres(at, nearestOn(at, line[i - 1], line[i]));
-    if (d < best.d) best = { d, i };
-  }
-  const [a, b] = [line[best.i - 1], line[best.i]];
-  const k = Math.cos(a[1] * Math.PI / 180);
-  const deg = ((Math.atan2((b[0] - a[0]) * k, b[1] - a[1]) * 180) / Math.PI + 180) % 180;
-  return ["N–S", "NE–SW", "E–W", "NW–SE"][Math.round(deg / 45) % 4];
-}
-
 /** The nearest named line to ``at`` that is not one of ``exclude``, within ``within_m``: what
  * tells two crossings of the same two streets apart ("near Fuchsia Avenue"). */
 export function nearestOther(features: { properties?: Record<string, unknown> | null; geometry: unknown }[],
