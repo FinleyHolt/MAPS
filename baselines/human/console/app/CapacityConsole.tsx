@@ -27,7 +27,7 @@ import { placeSplitter } from "@/app/placeNames";
 import { replyBlocks, stepOfCall, type Span } from "@/app/reply";
 import { FED, OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, EARLIER, header, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
+import { actBody, aKind, EARLIER, header, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; kind?: string | null; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
@@ -51,7 +51,7 @@ const STATUS: Record<string, string> = {
 /** Mapped objects listed before "show more". */
 const NEAREST = 5;
 /** Where MAPS's answer opens, and where M goes: a few houses and the street they front. */
-const MAPS_ZOOM = 18.5;
+const MAPS_ZOOM = 17;
 const CAPTURE = new URLSearchParams(window.location.search).has("capture");
 /** A step's whole text: what it reasoned, ran and printed. */
 const stepText = (t: Turn) => [t.reasoning, t.said, t.printed].filter(Boolean).join("\n");
@@ -235,17 +235,27 @@ export function CapacityConsole() {
   const canPick = verifying ? !!sel && sel.affordable : !!cur?.point;
   const pickVerb = verifying ? "replace" : "commit";
 
+  // A key pressed while a click is still being saved runs once the save is back, not never.
+  const heldKey = useRef<string | null>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const run = (key: string) => {
       const s = stRef.current;
-      if (!s || s.over || !s.current || busy || (e.target as HTMLElement)?.tagName === "INPUT") return;
-      const k = keyCommand(e, s.current.mode, canPick);
-      if (k === "confirm") { e.preventDefault(); void act({ action: "confirm" }); }
+      if (!s || s.over || !s.current) return false;
+      const k = keyCommand({ key, repeat: false }, s.current.mode, canPick);
+      if (k === "confirm") void act({ action: "confirm" });
       else if (k === "pick") void act({ action: pickVerb });
       else if (k === "clear") { void act({ action: "clear" }); m.setRuler([]); }
       else if (k === "street") m.setOsmOn((on) => !on);
       else if (k === "maps" && review?.maps_lonlat) m.flyTo(review.maps_lonlat, MAPS_ZOOM);
       else if (k === "back" && s.current.can_back) void act({ action: "back" });
+      return k === "confirm";
+    };
+    if (!busy && heldKey.current) { const key = heldKey.current; heldKey.current = null; run(key); }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || (e.target as HTMLElement)?.tagName === "INPUT") return;
+      // One held key at most: a second press while busy replaces it, so nothing runs twice.
+      if (busy) { heldKey.current = e.key; if (e.key === "Enter") e.preventDefault(); return; }
+      if (run(e.key)) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -397,7 +407,7 @@ export function CapacityConsole() {
               {verifying ? (
                 <>
                   <p className="cap-status"><span className="cap-chip is-ready">result ready</span>
-                    MAPS's answer: {pick ? objectName(pick) : "the point marked on the map"}</p>
+                    MAPS's answer: {pick?.kind ? aKind(pick.kind) : "the point marked on the map"}</p>
                   <div className="cap-actions">
                     <button type="button" className="cap-btn cap-confirm" disabled={busy} onClick={() => void act({ action: "confirm" })}>
                       Confirm <kbd>Enter</kbd>
@@ -424,11 +434,11 @@ export function CapacityConsole() {
               )}
               <p className="cap-hint">
                 {askSkip ? (
-                  <>Skip this report?{st?.practice ? "" : st?.arm === "team" ? " MAPS's answer counts instead." : " It counts as a miss."}{" "}
+                  <>Skip this report?{st?.practice ? "" : st?.arm === "team" ? (verifying ? " MAPS's answer counts instead." : " MAPS is still working on it.") : " It counts as a miss."}{" "}
                     <button type="button" className="cap-link" disabled={busy || !cur} onClick={() => { setAskSkip(false); void act({ action: "skip" }); }}>Yes, skip</button>
                     {" / "}<button type="button" className="cap-link" onClick={() => setAskSkip(false)}>No</button></>
                 ) : (
-                  <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : st?.arm === "team" ? " (MAPS's answer counts)" : " (counts as a miss)"}</>
+                  <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : st?.arm === "team" ? (verifying ? " (MAPS's answer counts)" : " (MAPS is still working on this one)") : " (counts as a miss)"}</>
                 )}
                 {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, MAPS_ZOOM)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
                 {cur?.can_back ? <> · <button type="button" className="cap-link" disabled={busy} onClick={() => void act({ action: "back" })}>back to report {cur.n - 1} <kbd>B</kbd></button></> : null}
@@ -444,7 +454,8 @@ export function CapacityConsole() {
               <OsmToggle on={m.osmOn} onChange={m.setOsmOn} hover={CAPTURE ? null : m.hover} rulerM={m.rulerM} onClearRuler={() => m.setRuler([])}
                          lit={m.lit} pieces={m.lit ? m.piecesOf(m.lit) : 0} litPiece={m.litPiece} onStep={m.stepPiece} />
               <OsmSearch key={cur?.episode_id ?? ""} names={m.names} lit={m.lit} onPick={(n, k) => m.showName(n.name, k)} onCross={m.markSpots}
-                         crossingsOf={m.crossingsOf} approachOf={m.approachOf} kindsNear={m.kindsNear} piecesOf={m.piecesOf} stretchesOf={m.stretchesOf} nearOf={m.nearOf} />
+                         crossingsOf={m.crossingsOf} approachOf={m.approachOf} kindsNear={m.kindsNear} piecesOf={m.piecesOf} stretchesOf={m.stretchesOf} nearOf={m.nearOf}
+                         report={cur?.instruction} />
             </div>
             <p className="cap-legend">
               {st?.arm === "team" ? <><span className="sw cap-sw-maps" /> MAPS's answer <span className="sw cap-sw-cand" /> mapped objects</> : null}

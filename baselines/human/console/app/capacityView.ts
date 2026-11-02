@@ -48,6 +48,9 @@ export const objectNo = (c: { id: number; label: string }) => /(\d+)$/.exec(c.la
  * ("house 568"), else "object" and its number. */
 export const objectName = (c: { id: number; label: string; kind?: string | null }) => `${c.kind || "object"} ${objectNo(c)}`;
 
+/** MAPS's answer as the console names it: what kind of thing it is, without the label's number. */
+export const aKind = (kind: string) => `${/^[aeiou]/i.test(kind) ? "an" : "a"} ${kind}`;
+
 export function overLines(st: Pick<SessionView, "practice" | "answered_n" | "skipped_n">): string[] {
   if (st.practice) return ["Practice finished. Press Continue to go back to the study page."];
   return [`The session is over: ${st.answered_n} answered, ${st.skipped_n} skipped.`,

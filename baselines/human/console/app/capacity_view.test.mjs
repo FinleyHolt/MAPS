@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { actBody, header, keyCommand, mapTakesClicks, objectName, overLines, pollState, verifyHint } from "./capacityView.ts";
+import { actBody, aKind, header, keyCommand, mapTakesClicks, objectName, overLines, pollState, verifyHint } from "./capacityView.ts";
 
 const team = { arm: "team", practice: false, remaining_s: 723, over: false, current: { episode_id: "calcity::7#6", mode: "verify" } };
 const practice = { ...team, arm: "solo", practice: true, current: { episode_id: "calcity::1#0", mode: "search" } };
@@ -71,4 +71,9 @@ test("a mapped object reads as its kind and number where the study names a kind,
   assert.equal(objectName({ ...house, kind: "apartments" }), "apartments 568");
   assert.equal(objectName({ id: 9, label: "building 568" }), "object 568");
   assert.equal(objectName({ id: 9, label: "x" }), "object 9");
+});
+
+test("MAPS's answer reads as its kind, with an article and no number", () => {
+  assert.equal(aKind("residential street"), "a residential street");
+  assert.equal(aKind("apartment building"), "an apartment building");
 });
