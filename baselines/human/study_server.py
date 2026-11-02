@@ -542,8 +542,8 @@ class Visit:
         who = (f"Welcome back, {html.escape(self.who())}. Your answers are saved." if self.returning
                else f"Welcome, {html.escape(self.who())}" if self.roster else f"Participant {self.participant}")
         # The run id, for the participant to quote in an email about this visit.
-        # Under way or done, the briefing stays below as the reference it is.
-        below = "" if st["session"] == "todo" else f"<hr><div class=brief>{self.briefing()}</div>"
+        # Under way, the briefing stays below as the reference it is; done, only sending the results is left.
+        below = f"<hr><div class=brief>{self.briefing()}</div>" if st["session"] == "running" else ""
         return PAGE.format(body=f"<p class=who>{who} <small>(results id {self.run})</small></p>{err}{now}{below}")
 
     def briefing(self) -> str:

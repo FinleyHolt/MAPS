@@ -63,6 +63,7 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     assert v.status("session") == "done" and v.start("session") is None and v.start("practice") is None
     page = v.page()
     assert "Save my results file" in page and "break" not in page and "Start" not in page
+    assert "The task" not in page  # the briefing is done with once the session is
 
 
 def test_a_session_ends_when_every_report_has_an_answer(tmp_path) -> None:
