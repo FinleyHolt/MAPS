@@ -27,7 +27,7 @@ import { placeSplitter } from "@/app/placeNames";
 import { replyBlocks, stepOfCall, type Span } from "@/app/reply";
 import { FED, OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
-import { actBody, aKind, EARLIER, header, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
+import { actBody, aKind, EARLIER, header, savedLine, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
 
 interface Candidate { id: number; label: string; kind?: string | null; dist_m: number; lonlat: LonLat; ring: Ring }
 interface Review {
@@ -84,14 +84,20 @@ export function CapacityConsole() {
   const stRef = useRef<State | null>(null);
   stRef.current = st;
 
+  // What the last answer was, said where the next report opens, until the next one.
+  const [saved, setSaved] = useState<string | null>(null);
   const act = useCallback(async (body: Record<string, unknown>) => {
     const sent = actBody(stRef.current, body);
     if (!sent) return;
+    const n = stRef.current?.current?.n;
     setBusy(true);
     try {
       const out = await postJson<{ ok: boolean; error?: string; state: State }>("capacity/act", sent);
       setSt(out.state);
       setFault(out.ok ? null : out.error ?? "refused");
+      const line = out.ok && n !== undefined ? savedLine(n, String(body.action)) : null;
+      if (line) setSaved(line);
+      else if (body.action === "back") setSaved(null);
     } catch (e) {
       setFault(String((e as Error).message ?? e));
     } finally {
@@ -325,6 +331,7 @@ export function CapacityConsole() {
         <div className="station-body cap-body">
           <aside className="sidebar cap-side">
             <section className="cap-block cap-report">
+              {saved ? <p className="cap-saved" role="status">✓ {saved}</p> : null}
               <p className="cap-kicker">Report {cur?.n ?? ""}</p>
               <p className="cap-report-text">{cur?.instruction ?? ""}</p>
               {cur?.earlier ? (

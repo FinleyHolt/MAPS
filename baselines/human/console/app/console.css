@@ -262,6 +262,7 @@ textarea {
 .cap-arm { color: var(--cap-teal); font-weight: 700; }
 .cap-clock { font-size: 22px; font-weight: 700; color: var(--cap-navy); font-variant-numeric: tabular-nums; }
 .cap-clock.is-low { color: #a3341f; }
+.cap-saved { margin: 0 0 10px; padding: 8px 10px; background: #e3efe0; color: #2e6b34; font-size: 15px; font-weight: 700; }
 .cap-continue { display: inline-block; padding: 8px 16px; background: var(--cap-navy); color: #fff; font-weight: 700; text-decoration: none; }
 .cap-bar .cap-continue { padding: 4px 12px; margin-right: 12px; }
 /* Under the bar, above the sidebar and the map, clear of the map's controls. */

@@ -72,3 +72,10 @@ export async function pollState<T>(get: () => Promise<{ ok: boolean; json: () =>
 export const EARLIER: Record<string, string> = {
   confirm: "you confirmed MAPS's answer", replace: "you picked another place", own_search: "you placed a point", skip: "you skipped it",
 };
+
+/** The line that says the last answer landed, or null for an act that answers nothing. */
+export function savedLine(n: number, action: string): string | null {
+  if (action === "skip") return `Report ${n} skipped.`;
+  const how = EARLIER[action === "commit" ? "own_search" : action];
+  return how ? `Report ${n} saved: ${how}.` : null;
+}
