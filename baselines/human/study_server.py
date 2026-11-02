@@ -525,7 +525,10 @@ class Visit:
         else:
             practiced = st["practice"] == "done"
             first = int(self.video.is_file())
-            now = (f"<p class=note><a href='/visit?change=1'>Not {'you' if self.roster else 'your label'}? Change it</a></p>"
+            # Back from practice, the next step leads the page: the video and briefing stay below it.
+            ready = (f"<div class=next><h2>Practice done. Next: {self.name('session')}</h2>"
+                     + button("session", "Start your session", clock) + "</div>") if practiced else ""
+            now = ready + (f"<p class=note><a href='/visit?change=1'>Not {'you' if self.roster else 'your label'}? Change it</a></p>"
                    + ("<h2>Step 1: watch the tutorial</h2><video controls preload=metadata "
                       "src='/visit/tutorial.mp4'></video>" if self.video.is_file() else "")
                    + f"<h2>Step {first + 1}: read the briefing</h2><div class=brief>{self.briefing()}</div>"
@@ -567,6 +570,7 @@ h1 {{ font-size: 28px; }} h2 {{ font-size: 21px; margin-top: 28px; }}
 button {{ font: inherit; font-weight: 700; padding: 10px 22px; color: #fff; background: var(--navy);
          border: 0; cursor: pointer; }}
 input, select {{ font: inherit; padding: 8px; }} input {{ width: 8rem; }} select {{ min-width: 12rem; }}
+.next {{ background: #e3e9f1; padding: 4px 20px 20px; margin-bottom: 8px; }}
 .note, .who {{ color: var(--grey); }} .err {{ color: #a3341f; }}
 video {{ width: 100%; background: #000; }}
 .brief table {{ border-collapse: collapse; font-size: 15px; }}

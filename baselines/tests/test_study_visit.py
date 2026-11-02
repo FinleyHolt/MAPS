@@ -47,7 +47,10 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     assert v.start("session") is None
     assert v.start("practice") == "practice"
     (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
-    assert "Start your session" in v.page() and "Opening..." in v.page() and v.start("session") == "solo"
+    page = v.page()
+    # Back from practice, the session's button leads the page, above the briefing.
+    assert page.index("Practice done. Next: your session (alone, 40 minutes)") < page.index("Start your session") < page.index("The task")
+    assert "Opening..." in page and v.start("session") == "solo"
     _session(tmp_path / "results" / v.run / "solo")
     page = v.page()
     assert v.status("session") == "running" and "Return to the session" in page
