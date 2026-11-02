@@ -61,6 +61,17 @@ def test_the_results_file_downloads_as_json(tmp_path) -> None:
     assert r.json()["sessions"] == {"solo": {"answers": [], "session": session}}
 
 
+
+def test_the_tutorial_plays_on_the_visit_page_when_the_bundle_ships_it(tmp_path) -> None:
+    c = _client(tmp_path / "MAPS-study" / "kit")
+    c.get("/visit/label?label=p01")
+    assert "<video" not in c.get("/visit").text and c.get("/visit/tutorial.mp4").status_code == 404
+    (tmp_path / "MAPS-study" / study_server.VIDEO).write_bytes(b"mp4")
+    page = c.get("/visit").text
+    assert "Step 1: watch the tutorial" in page and "Step 4: your session" in page
+    r = c.get("/visit/tutorial.mp4", headers={"Range": "bytes=1-"})
+    assert r.status_code == 206 and r.content == b"p4"
+
 def test_a_select_keeps_its_report(tmp_path, monkeypatch) -> None:
     import benchmarks.flight.tile_georef as georef
 

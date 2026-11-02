@@ -62,9 +62,9 @@ shows every step below.
 
 2. Follow the page
 
-   Choose your first name. The page then walks you through everything: the briefing,
-   four practice reports, and your session (40 minutes). The session's 40
-   minutes start when you press its button, so start it only when you are
+   Choose your first name. The page then walks you through everything: the
+   tutorial again, the briefing, four practice reports, and your session (40
+   minutes). The session's 40 minutes start when you press its button, so start it only when you are
    seated and ready for 40 minutes without interruptions. During a session use only the study page: no other
    maps, websites or phones.
 

@@ -269,6 +269,12 @@ def build_app(kit: Path, console: Path, visit: Visit):
     def visit_page(change: bool = False) -> HTMLResponse:
         return HTMLResponse(visit.page(change), headers={"Cache-Control": "no-store"})
 
+    @app.get("/visit/tutorial.mp4")
+    def visit_tutorial() -> Response:
+        if not visit.video.is_file():
+            raise HTTPException(404)
+        return FileResponse(visit.video, media_type="video/mp4")
+
     @app.get("/visit/label")
     def visit_label(label: str = "") -> Response:
         with lock:
@@ -337,6 +343,8 @@ def open_session(kit: Path, run: str, condition: str) -> Any:
 
 
 BRIEFING = Path(__file__).with_name("briefing.md")
+#: The tutorial video's name at the bundle's top, beside the READ ME.
+VIDEO = "Watch first - tutorial.mp4"
 STEPS = ("practice", "session")
 #: Each condition as the visit page names it.
 CONDITIONS = {"solo": "alone", "team": "with MAPS"}
@@ -352,6 +360,8 @@ class Visit:
 
     def __init__(self, kit: Path) -> None:
         self.kit = kit
+        #: The tutorial, where the bundle ships it: beside the READ ME, a folder above the kit.
+        self.video = kit.parent / VIDEO
         self.plan = json.loads((kit / "plan" / "plan.json").read_text())["participants"]
         contact, roster = kit / "contact.txt", kit / "roster.json"
         self.contact = contact.read_text().strip() if contact.is_file() else "the study lead"
@@ -516,13 +526,16 @@ class Visit:
             now = running("session")
         else:
             practiced = st["practice"] == "done"
+            first = int(self.video.is_file())
             now = (f"<p class=note><a href='/visit?change=1'>Not {'you' if self.roster else 'your label'}? Change it</a></p>"
-                   "<h2>Step 1: read the briefing below</h2><h2>Step 2: practice</h2>"
+                   + ("<h2>Step 1: watch the tutorial</h2><video controls preload=metadata "
+                      "src='/visit/tutorial.mp4'></video>" if self.video.is_file() else "")
+                   + f"<h2>Step {first + 1}: read the briefing below</h2><h2>Step {first + 2}: practice</h2>"
                    "<p>Four reports that never count, worked alone. Try the search box, the street map and "
                    "shift-click measuring. Practice ends after the fourth report; <b>Done practicing</b> at the top "
                    "stops it early.</p>"
                    + button("practice", "Practice again" if practiced else "Start practice")
-                   + f"<h2>Step 3: {self.name('session')}</h2>" + (button("session", "Start your session", clock)
+                   + f"<h2>Step {first + 3}: {self.name('session')}</h2>" + (button("session", "Start your session", clock)
                                                                    if practiced else "<p class=note>Opens after practice.</p>"))
         brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
         who = (f"Welcome back, {html.escape(self.who())}. Your answers are saved." if self.returning
@@ -542,6 +555,7 @@ button {{ font: inherit; font-weight: 700; padding: 10px 22px; color: #fff; back
          border: 0; cursor: pointer; }}
 input, select {{ font: inherit; padding: 8px; }} input {{ width: 8rem; }} select {{ min-width: 12rem; }}
 .note, .who {{ color: var(--grey); }} .err {{ color: #a3341f; }}
+video {{ width: 100%; background: #000; }}
 hr {{ margin: 36px 0; border: 0; border-top: 1px solid #d9d4c6; }}
 </style></head><body>{body}</body></html>"""
 

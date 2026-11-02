@@ -42,6 +42,8 @@ from pathlib import Path
 
 import numpy as np
 
+from baselines.human.study_server import VIDEO
+
 #: Web mercator's half-width, metres.
 MERC_O = 20037508.342789244
 #: Zoom 12 frames the whole block; 20 is 0.12 m a pixel at Cal City, finer than the
@@ -201,8 +203,6 @@ STORED = (".mbtiles", ".jpg", ".png", ".webp", ".mp4")
 REQUIRED = ("console/index.html", "plan/plan.json", "calcity_ortho.mbtiles", "maps_root/episodes.jsonl")
 
 
-#: The tutorial video's name at the bundle's top, beside the READ ME.
-VIDEO = "Watch first - tutorial.mp4"
 
 
 def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) -> int:
