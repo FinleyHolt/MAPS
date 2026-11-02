@@ -131,7 +131,10 @@ function baseStudyStyle(): StyleSpecification {
       // Streets wide and solid yellow; buildings, water and places a thin pale line. Land use,
       // power lines and fences are not drawn: on the imagery they read as more streets.
       { id: "osm-line", type: "line", source: "osm", layout: { visibility: "none" },
-        filter: ["in", ["get", "layer"], ["literal", ["road", "building", "water", "poi", "aeroway"]]],
+        // A cul-de-sac's turning circle drawn as a road is a ring that reads as a marker: the street
+        // already runs to its middle, and the imagery shows the circle.
+        filter: ["all", ["in", ["get", "layer"], ["literal", ["road", "building", "water", "poi", "aeroway"]]],
+                 ["!=", ["get", "kind"], "cul-de-sac"]],
         paint: { "line-color": ["case", ["==", ["get", "layer"], "road"], "#ffd600", "#fff3a8"],
                  "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.6, 16, 0.9],
                  "line-width": ["interpolate", ["linear"], ["zoom"], 13, ["case", ["==", ["get", "layer"], "road"], 1.5, 0.4],
