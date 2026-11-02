@@ -199,7 +199,7 @@ def test_a_roster_lists_first_names_and_keeps_the_label_in_the_results(tmp_path)
     (kit / "roster.json").write_text(json.dumps({"p01": "Zoe", "p02": "Ann", "p09": "Off the plan"}))
     v = Visit(kit)
     page = v.page()
-    assert "<select name=label" in page and "Choose your first name:" in page and "Off the plan" not in page
+    assert "<select name=label" in page and "Select who you are from the list" in page and "Off the plan" not in page
     assert page.index(">Ann<") < page.index(">Zoe<") and "p01" not in page.split("<select")[0]
     v.set_label("")
     assert "Choose your first name." in v.page()

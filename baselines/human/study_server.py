@@ -476,7 +476,7 @@ class Visit:
                 names = sorted(self.roster.items(), key=lambda kv: kv[1].lower())
                 options = "".join(f"<option value='{html.escape(k, quote=True)}'{' selected' if k == typed else ''}>"
                                   f"{html.escape(v)}</option>" for k, v in names)
-                field = ("<p>Choose your first name:</p><select name=label autofocus>"
+                field = ("<p>Select who you are from the list, then press Continue.</p><select name=label autofocus>"
                          f"<option value=''>Choose...</option>{options}</select> ")
             else:
                 field = ("<p>Your participant label, from the study lead:</p>"
