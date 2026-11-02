@@ -142,8 +142,13 @@ def test_briefing_markdown(tmp_path) -> None:
     v = Visit(_kit(tmp_path))
     v.set_label("p01")
     page = v.page()
-    assert "<code>Lime Avenue &amp; 88th Street</code>" in page
+    assert "<code>Lime Avenue &amp; 88th Street</code>" in page and "<table>" in page
     assert not re.search(r"</li>\s*<ul>", page)
+    # Only the participant's own session kind, at the session's length, inside step 2.
+    assert "Your session: alone" in page and "Your session: with MAPS" not in page and "{MINUTES}" not in page
+    assert page.index("read the briefing") < page.index("Your session: alone") < page.index("practice</h2>")
+    v.set_label("p02")
+    assert "Your session: with MAPS" in v.page() and "Your session: alone" not in v.page()
 
 
 def test_a_mistyped_label_stays_in_the_box(tmp_path) -> None:

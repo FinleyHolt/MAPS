@@ -493,8 +493,6 @@ class Visit:
                          f"<input name=label placeholder='like p07' value='{html.escape(typed, quote=True)}' autofocus> ")
             body = f"<h1>The search study</h1>{err}<form action='/visit/label'>{field}<button>Continue</button></form>"
             return PAGE.format(body=body)
-        from markdown_it import MarkdownIt
-
         st = {s: self.status(s) for s in STEPS}
         minutes = round(session_s() / 60)
 
@@ -530,19 +528,34 @@ class Visit:
             now = (f"<p class=note><a href='/visit?change=1'>Not {'you' if self.roster else 'your label'}? Change it</a></p>"
                    + ("<h2>Step 1: watch the tutorial</h2><video controls preload=metadata "
                       "src='/visit/tutorial.mp4'></video>" if self.video.is_file() else "")
-                   + f"<h2>Step {first + 1}: read the briefing below</h2><h2>Step {first + 2}: practice</h2>"
+                   + f"<h2>Step {first + 1}: read the briefing</h2><div class=brief>{self.briefing()}</div>"
+                   f"<h2>Step {first + 2}: practice</h2>"
                    "<p>Four reports that never count, worked alone. Try the search box, the street map and "
                    "shift-click measuring. Practice ends after the fourth report; <b>Done practicing</b> at the top "
                    "stops it early.</p>"
                    + button("practice", "Practice again" if practiced else "Start practice")
                    + f"<h2>Step {first + 3}: {self.name('session')}</h2>" + (button("session", "Start your session", clock)
                                                                    if practiced else "<p class=note>Opens after practice.</p>"))
-        brief = MarkdownIt("commonmark", {"html": False}).render(BRIEFING.read_text()) if BRIEFING.is_file() else ""
         who = (f"Welcome back, {html.escape(self.who())}. Your answers are saved." if self.returning
                else f"Welcome, {html.escape(self.who())}" if self.roster else f"Participant {self.participant}")
         # The run id, for the participant to quote in an email about this visit.
-        return PAGE.format(body=f"<p class=who>{who} <small>(results id {self.run})</small></p>{err}{now}<hr>"
-                                f"<div class=brief>{brief}</div>")
+        # Under way or done, the briefing stays below as the reference it is.
+        below = "" if st["session"] == "todo" else f"<hr><div class=brief>{self.briefing()}</div>"
+        return PAGE.format(body=f"<p class=who>{who} <small>(results id {self.run})</small></p>{err}{now}{below}")
+
+    def briefing(self) -> str:
+        """The briefing as HTML: the participant's own session section, at the session's length."""
+        from markdown_it import MarkdownIt
+
+        if not BRIEFING.is_file():
+            return ""
+        own = f"Your session: {CONDITIONS[self.condition('session')]}"
+        parts = BRIEFING.read_text().split("\n## ")
+        kept = [parts[0]] + [t for t in parts[1:] if not t.startswith("Your session: ") or t.startswith(own + "\n")]
+        session = self.session("session")
+        minutes = round((float(session["session_s"]) if session else session_s()) / 60)
+        text = "\n## ".join(kept).replace("{MINUTES}", str(minutes))
+        return MarkdownIt("commonmark", {"html": False}).enable("table").render(text)
 
 
 PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8><title>The search study</title><style>
@@ -556,6 +569,8 @@ button {{ font: inherit; font-weight: 700; padding: 10px 22px; color: #fff; back
 input, select {{ font: inherit; padding: 8px; }} input {{ width: 8rem; }} select {{ min-width: 12rem; }}
 .note, .who {{ color: var(--grey); }} .err {{ color: #a3341f; }}
 video {{ width: 100%; background: #000; }}
+.brief table {{ border-collapse: collapse; font-size: 15px; }}
+.brief th, .brief td {{ border-top: 1px solid #d9d4c6; padding: 6px 10px 6px 0; text-align: left; vertical-align: top; }}
 hr {{ margin: 36px 0; border: 0; border-top: 1px solid #d9d4c6; }}
 </style></head><body>{body}</body></html>"""
 
