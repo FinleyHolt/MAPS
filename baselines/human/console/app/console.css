@@ -207,7 +207,8 @@ textarea {
   text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 5px #000;
 }
 .judge-full summary { cursor: pointer; font-size: 13px; color: var(--color-cite); margin-bottom: 8px; }
-.judge-done { padding: 48px; }
+.judge-done { padding: 48px 16px; max-width: 36rem; margin: 0 auto; display: grid; gap: 12px; align-content: start; }
+.judge-done p.cap-hint { font-size: 16px; }
 .judge-canvas.is-far .judge-label { display: none; }
 /* A searched street's stretches, numbered as the search lists them: shown at every zoom. */
 .study-stretch { min-width: 20px; padding: 1px 5px; border: 2px solid #fff; border-radius: 10px; background: #2F6870; color: #fff;
@@ -260,6 +261,7 @@ textarea {
 .cap-mission, .cap-arm, .cap-count { font-size: 16px; color: var(--cap-grey); }
 .cap-arm { color: var(--cap-teal); font-weight: 700; }
 .cap-clock { font-size: 22px; font-weight: 700; color: var(--cap-navy); font-variant-numeric: tabular-nums; }
+.cap-clock.is-low { color: #a3341f; }
 .cap-continue { display: inline-block; padding: 8px 16px; background: var(--cap-navy); color: #fff; font-weight: 700; text-decoration: none; }
 .cap-bar .cap-continue { padding: 4px 12px; margin-right: 12px; }
 /* Under the bar, above the sidebar and the map, clear of the map's controls. */

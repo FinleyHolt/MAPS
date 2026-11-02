@@ -54,7 +54,8 @@ export const aKind = (kind: string) => `${/^[aeiou]/i.test(kind) ? "an" : "a"} $
 export function overLines(st: Pick<SessionView, "practice" | "answered_n" | "skipped_n">): string[] {
   if (st.practice) return ["Practice finished. Press Continue to go back to the study page."];
   return [`The session is over: ${st.answered_n} answered, ${st.skipped_n} skipped.`,
-          "Every answer is saved. The report open when time ran out is not counted."];
+          "Every answer is saved. The report open when time ran out is not counted.",
+          "One step left: save your results file and email it. Continue shows how."];
 }
 
 /** The session's state, or null when the study did not answer with one. */

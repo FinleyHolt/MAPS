@@ -289,7 +289,8 @@ export function CapacityConsole() {
     };
   }, [m.mapRef]);
 
-  const head = st ? header(st, stAt && now > stAt ? (now - stAt) / 1000 : 0) : null;
+  const age = stAt && now > stAt ? (now - stAt) / 1000 : 0;
+  const head = st ? header(st, age) : null;
   const objects = review?.candidates ?? [];
   const pick = objects.find((c) => c.id === review?.maps_pick);
 
@@ -303,7 +304,8 @@ export function CapacityConsole() {
         <span className="station-spacer" />
         {st?.practice && !st.over ? <a className="cap-continue" href="/visit">Done practicing</a> : null}
         {st ? <span className="cap-count">{st.answered_n} answered · {st.skipped_n} skipped</span> : null}
-        {head?.clock ? <span className="cap-clock">{head.clock}</span> : null}
+        {/* The last minute in red: time is short enough to answer the open report, not start another search. */}
+        {head?.clock ? <span className={st && !st.practice && st.remaining_s - age < 60 ? "cap-clock is-low" : "cap-clock"}>{head.clock}</span> : null}
       </header>
       {lost ? (
         <p className="cap-lost" role="alert">
@@ -317,7 +319,7 @@ export function CapacityConsole() {
       {st?.over ? (
         <div className="judge-done">
           {overLines(st).map((line, i) => <p key={line} className={i ? "cap-hint" : "cap-report-text"}>{line}</p>)}
-          <p><a className="cap-continue" href="/visit">Continue</a></p>
+          <p><a className="cap-continue" href="/visit">{st.practice ? "Continue" : "Continue to save your results"}</a></p>
         </div>
       ) : (
         <div className="station-body cap-body">

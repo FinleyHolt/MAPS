@@ -44,6 +44,7 @@ test("practice ends without a time-ran-out sentence", () => {
   const real = overLines({ ...team, over: true, answered_n: 3, skipped_n: 1 }).join(" ");
   assert.match(real, /3 answered, 1 skipped/);
   assert.match(real, /time ran out/);
+  assert.match(real, /save your results file and email it/);
 });
 
 test("the map takes no click in its first second, where a double-clicked start button lands", () => {
