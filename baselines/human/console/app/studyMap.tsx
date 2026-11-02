@@ -135,7 +135,9 @@ function baseStudyStyle(): StyleSpecification {
       { id: "osm-line", type: "line", source: "osm", layout: { visibility: "none" },
         // A cul-de-sac's turning circle drawn as a road is a ring that reads as a marker: the street
         // already runs to its middle, and the imagery shows the circle.
-        filter: ["all", ["in", ["get", "layer"], ["literal", ["road", "building", "water", "poi", "aeroway"]]],
+        // Water only by name: an unnamed outline is mostly a dry wash, a shape on bare ground.
+        filter: ["all", ["any", ["in", ["get", "layer"], ["literal", ["road", "building", "poi", "aeroway"]]],
+                                ["all", ["==", ["get", "layer"], "water"], ["!=", ["get", "name"], ""]]],
                  ["!=", ["get", "kind"], "cul-de-sac"]],
         paint: { "line-color": ["case", ["==", ["get", "layer"], "road"], "#ffd600", "#fff3a8"],
                  "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.6, 16, 0.9],
