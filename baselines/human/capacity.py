@@ -124,6 +124,7 @@ class Capacity:
         if missing:
             raise SystemExit(f"FATAL: {len(missing)} listed episodes have no scored MAPS row, e.g. {missing[:3]}")
         self.maps_root, self.order, self.out, self.arm = maps_root, order, out, arm
+        self.position = {e: i for i, e in enumerate(order)}
         self.labels, self.session_s, self.clock, self.ids = labels, float(session_s), clock, ids or {}
         self.starts, self.ends = (release_times([float(self.rows[e]["elapsed_s"]) for e in order], agents)
                                   if arm == "team" else ([], []))
@@ -231,12 +232,14 @@ class Capacity:
                      maps_xy=decision.get("maps_xy"))
 
     def log(self, events: list[dict]) -> None:
-        """Events from the console (``console/app/events.ts``), each stamped with the report open
-        when it lands, its place in the list and the session's clock, seconds."""
-        e, now = self.current, self.clock()
+        """Events from the console (``console/app/events.ts``), each with the report it happened on
+        (the one open when it lands, if it names none), that report's place in the list, and the
+        session's clock when it lands, seconds; ``t`` is the browser's own clock at the event."""
+        now = self.clock()
         with self.events.open("a") as fh:
             for ev in events:
-                fh.write(json.dumps({**ev, "episode_id": e, "order_index": self.index,
+                e = ev.get("episode_id") if ev.get("episode_id") in self.position else self.current
+                fh.write(json.dumps({**ev, "episode_id": e, "order_index": self.position.get(e),
                                      "session_s": round(now - self.started, 2)}) + "\n")
 
     def act(self, req: dict) -> dict:

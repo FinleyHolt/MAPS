@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { fedFeatures, type Detected, type Refs } from "@/app/fed";
 import { placeSplitter } from "@/app/placeNames";
 import { replyBlocks, stepOfCall, type Span } from "@/app/reply";
-import { flushEvents, logEvent } from "@/app/events";
+import { flushEvents, logEvent, setReport } from "@/app/events";
 import { FED, OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
 import { actBody, aKind, EARLIER, header, savedLine, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
@@ -134,6 +134,7 @@ export function CapacityConsole() {
   useEffect(() => {
     if (!m.ready || !cur || shown.current === cur.episode_id) return;
     shown.current = cur.episode_id;
+    setReport(cur.episode_id);
     m.clearFound();
     setMoreObjects(false);
     setMoreReason(false);
