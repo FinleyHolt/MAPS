@@ -124,7 +124,8 @@ def test_every_act_and_what_the_console_reports_land_in_the_event_record(tmp_pat
     assert _act(s, "select", x=1.234, y=5.0)["ok"] and _act(s, "commit")["ok"]
     rows = [json.loads(line) for line in (tmp_path / "p01" / "solo" / "events.jsonl").read_text().splitlines()]
     assert rows[0] == {"kind": "search", "t": 5.0, "query": "88th & Lime", "episode_id": e, "order_index": 0, "session_s": 12.0}
-    assert [(r["action"], r["ok"], r["on"]) for r in rows[1:]] == [("commit", False, e), ("select", True, e), ("commit", True, e)]
+    # Each act under the report it acted on, though a commit opens the next before it is logged.
+    assert [(r["action"], r["ok"], r["episode_id"]) for r in rows[1:]] == [("commit", False, e), ("select", True, e), ("commit", True, e)]
     assert rows[1]["error"] and (rows[2]["x"], rows[2]["y"]) == (1.23, 5.0)
     # An event names the report it happened on, even when it lands after the next one opened.
     s.log([{"kind": "step", "t": 9.0, "episode_id": e}])

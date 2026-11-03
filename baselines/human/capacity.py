@@ -248,7 +248,7 @@ class Capacity:
     def act(self, req: dict) -> dict:
         """One act of the person's, logged with its outcome (``events.jsonl``) before the next."""
         before, out = self.current, self._act(req)
-        self.log([{"kind": "act", "action": req.get("action"), "on": before, "ok": bool(out.get("ok")),
+        self.log([{"kind": "act", "action": req.get("action"), "episode_id": before, "ok": bool(out.get("ok")),
                    **({"error": out["error"]} if out.get("error") else {}),
                    **({k: round(float(req[k]), 2) for k in ("x", "y") if k in req}),
                    **({"id": req["id"]} if "id" in req else {})}])
