@@ -9,9 +9,10 @@ no account, no GPU.
 | Step | Time |
 |---|---|
 | Download and unzip; the first start sets itself up | about 15 min |
+| Watch the tutorial | 2 min |
 | Read the [briefing](briefing.md) | 5 min |
 | Practice: four reports that never count | 10 min |
-| The session, in the participant's one condition | 40 min |
+| The session, in the participant's one condition | 60 min |
 | Send the results file | 2 min |
 
 MAPS does not run on the participant's machine. It searched every report of the study once,
@@ -95,7 +96,7 @@ roster the page asks for a label. Every participant gets the same invitation:
 >
 > You need a Mac with macOS 12 or later (11 on Apple silicon), a computer with 64-bit Windows
 > 10 or 11, or a 64-bit Linux computer, 8 GB of memory, 6 GB of free disk space, an internet
-> connection for the first start, a mouse, Chrome or Firefox and about an hour and a quarter. Questions about the setup:
+> connection for the first start, a mouse, Chrome or Firefox and about an hour and a half. Questions about the setup:
 > <email>.
 
 The launchers are unsigned, so macOS and Windows warn on the first start; the READ ME walks
@@ -192,7 +193,7 @@ MAPS's answers (wrong and confirmed, wrong and fixed, right and replaced with a 
 exits non-zero when a ledger fails a check: a report answered twice, an answer after the
 session's end, an answer to a report not on the list, an unreadable line, a clock moved back
 (an answer before the session's start or before the previous answer), a lost clock, a session
-not 40 minutes long (a rehearsal?), or a missing session. It takes a run id, or a bare label
+not 60 minutes long (a rehearsal?), or a missing session. It takes a run id, or a bare label
 with one visit in the kit; a label with several lists their run ids. It refuses a label that is
 not on the kit's plan (`P07` is `p07`). A results folder named by a bare label (`results/p07`)
 reads as the run id `p07`.

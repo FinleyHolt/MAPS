@@ -24,7 +24,7 @@ def _kit(tmp_path, contact: str | None = None):
 
 def _session(folder, age_s: float = 0.0, answers: str = "") -> None:
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "session.json").write_text(json.dumps({"started_epoch": time.time() - age_s, "session_s": 2400.0,
+    (folder / "session.json").write_text(json.dumps({"started_epoch": time.time() - age_s, "session_s": 3600.0,
                                                      "episodes_n": 3}))
     (folder / "answers.jsonl").write_text(answers)
 
@@ -42,24 +42,24 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     assert v.participant == "p01"
     assert [v.condition(s) for s in STEPS] == ["practice", "solo"]
     page = v.page()
-    assert "Step 3: your session (alone, 40 minutes)" in page and "Opens after practice" in page
+    assert "Step 3: your session (alone, 60 minutes)" in page and "Opens after practice" in page
     assert "Practice ends after the fourth report" in page and "shift-click measuring" in page
     assert v.start("session") is None
     assert v.start("practice") == "practice"
     (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
     page = v.page()
     # Back from practice, the session's button leads the page, above the briefing.
-    assert page.index("Practice done. Next: your session (alone, 40 minutes)") < page.index("Start your session") < page.index("The task")
+    assert page.index("Practice done. Next: your session (alone, 60 minutes)") < page.index("Start your session") < page.index("The task")
     assert "Opening..." in page and v.start("session") == "solo"
     _session(tmp_path / "results" / v.run / "solo")
     page = v.page()
     assert v.status("session") == "running" and "Return to the session" in page
-    assert "Your session (alone) is under way" in page and "About 40 minutes left." in page
+    assert "Your session (alone) is under way" in page and "About 60 minutes left." in page
     assert "kept running while you were away" not in page
     assert v.start("practice") is None
-    _session(tmp_path / "results" / v.run / "solo", age_s=2350)
+    _session(tmp_path / "results" / v.run / "solo", age_s=3550)
     assert "About 1 minute left." in v.page()
-    _session(tmp_path / "results" / v.run / "solo", age_s=2401)
+    _session(tmp_path / "results" / v.run / "solo", age_s=3601)
     assert v.status("session") == "done" and v.start("session") is None and v.start("practice") is None
     page = v.page()
     assert "Save my results file" in page and "break" not in page and "Start" not in page
@@ -108,7 +108,7 @@ def test_minutes_from_the_sessions_own_clock(tmp_path, monkeypatch) -> None:
     (_kit(tmp_path) / "results" / "p01" / "practice").mkdir(parents=True)
     _session(tmp_path / "results" / "p01" / "solo")
     monkeypatch.setenv("MAPS_STUDY_SESSION_S", "600")
-    assert Visit(tmp_path).name("session") == "your session (alone, 40 minutes)"
+    assert Visit(tmp_path).name("session") == "your session (alone, 60 minutes)"
     (tmp_path / "fresh").mkdir()
     v = Visit(_kit(tmp_path / "fresh"))
     v.set_label("p02")
@@ -121,7 +121,7 @@ def test_results_file(tmp_path) -> None:
     v.set_label("p01")
     assert v.results_json() is None
     (tmp_path / "results" / v.run / "practice").mkdir(parents=True)
-    _session(tmp_path / "results" / v.run / "solo", age_s=2401, answers='{"episode_id": "a"}\ntorn\n')
+    _session(tmp_path / "results" / v.run / "solo", age_s=3601, answers='{"episode_id": "a"}\ntorn\n')
     page = v.page()
     assert "Save my results file" in page and f"maps-study-{v.run}.json" in page and "lead@example.org" in page
     assert "/visit/results.json" in page and ".zip" not in page
@@ -215,5 +215,5 @@ def test_a_roster_lists_first_names_and_keeps_the_label_in_the_results(tmp_path)
     v.set_label("p02")
     page = v.page()
     assert v.participant == "p02" and "Welcome, Ann" in page and "Not you? Change it" in page
-    _session(tmp_path / "results" / v.run / "team", age_s=2401)
+    _session(tmp_path / "results" / v.run / "team", age_s=3601)
     assert json.loads(v.results_json())["participant"] == "p02" and b"Ann" not in v.results_json()

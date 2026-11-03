@@ -13,21 +13,21 @@ from baselines.human.study_qc import checks, summary
 from baselines.tests.test_human_study import _root
 
 
-def _write(tmp_path, answers, session_s: float = 2400.0) -> None:
+def _write(tmp_path, answers, session_s: float = 3600.0) -> None:
     (tmp_path / "session.json").write_text(json.dumps({"started_epoch": 1_800_000_000.0, "session_s": session_s,
                                                        "started_at": "2027-01-15T08:00:00Z", "order": ["a", "b", "c"]}))
     (tmp_path / "answers.jsonl").write_text("".join(json.dumps(a) + "\n" for a in answers))
 
 
 def test_ledger_checks(tmp_path) -> None:
-    on_time, late = "2027-01-15T08:00:00Z", "2027-01-15T09:00:00Z"   # the session ends 08:40:00Z
+    on_time, late = "2027-01-15T08:00:00Z", "2027-01-15T09:20:00Z"   # the session ends 09:00:00Z
     _write(tmp_path, [{"episode_id": "a", "answered_at": on_time}, {"episode_id": "b", "answered_at": on_time}])
     assert checks(tmp_path) == []
     _write(tmp_path, [{"episode_id": "a", "answered_at": on_time}, {"episode_id": "a", "answered_at": late},
                       {"episode_id": "z", "answered_at": late}])
     assert len(checks(tmp_path)) == 3
     _write(tmp_path, [], session_s=600.0)
-    assert checks(tmp_path) == ["session length 10 min, not 40: a rehearsal?"]
+    assert checks(tmp_path) == ["session length 10 min, not 60: a rehearsal?"]
     (tmp_path / "session.json").unlink()
     assert "clock" in checks(tmp_path)[0]
 
@@ -53,7 +53,7 @@ def _kit(tmp_path, monkeypatch):
     (kit / "plan" / "plan.json").write_text(json.dumps({"participants": {"p04": {"arm": "team"}, "p05": {"arm": "solo"}}}))
     team = kit / "results" / "p04" / "team"
     team.mkdir(parents=True)
-    (team / "session.json").write_text(json.dumps({"arm": "team", "agents": 1, "session_s": 3600.0, "started_epoch": 1000.0,
+    (team / "session.json").write_text(json.dumps({"arm": "team", "agents": 1, "session_s": 7200.0, "started_epoch": 1000.0,
                                                    "started_at": "1970-01-01T00:16:40Z", "episodes_n": 1,
                                                    "order": ["block_0::1#0"]}))
     solo = kit / "results" / "p05" / "solo"
@@ -67,12 +67,12 @@ def test_an_idle_team_session_scores_maps_results(tmp_path, monkeypatch, capsys)
     kit = _kit(tmp_path, monkeypatch)
     assert study_qc.main(["P04", "--kit", str(kit)]) == 1
     out = capsys.readouterr().out
-    assert "team: CHECK FAILED: session length 60 min, not 40: a rehearsal?" in out and "team: 1/1 correct" in out
+    assert "team: CHECK FAILED: session length 120 min, not 60: a rehearsal?" in out and "team: 1/1 correct" in out
     assert "solo" not in out
     scored = kit / "scored" / "p04-team"
-    assert json.loads((scored / "session.json").read_text())["session_s"] == 3600.0
+    assert json.loads((scored / "session.json").read_text())["session_s"] == 7200.0
     s = summary(scored)
-    assert (s["n"], s["correct"], s["hours"], s["sources"], s["misses"]) == (1, 1, 1.0, {"unchecked": (1, 1)}, [])
+    assert (s["n"], s["correct"], s["hours"], s["sources"], s["misses"]) == (1, 1, 2.0, {"unchecked": (1, 1)}, [])
 
 
 def test_a_lost_clock_is_reported(tmp_path, monkeypatch, capsys) -> None:
@@ -85,7 +85,7 @@ def test_a_lost_clock_is_reported(tmp_path, monkeypatch, capsys) -> None:
 def test_a_participant_with_their_session_passes(tmp_path, monkeypatch, capsys) -> None:
     kit = _kit(tmp_path, monkeypatch)
     meta = kit / "results" / "p04" / "team" / "session.json"
-    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 2400.0}))
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 3600.0}))
     assert study_qc.main(["p04", "--kit", str(kit)]) == 0
     out = capsys.readouterr().out
     assert "team: 1/1 correct" in out and "FAILED" not in out and "solo" not in out
@@ -94,7 +94,7 @@ def test_a_participant_with_their_session_passes(tmp_path, monkeypatch, capsys) 
 def test_a_session_in_the_condition_the_plan_did_not_deal_fails(tmp_path, monkeypatch, capsys) -> None:
     kit = _kit(tmp_path, monkeypatch)
     meta = kit / "results" / "p04" / "team" / "session.json"
-    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 2400.0}))
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 3600.0}))
     shutil.copytree(kit / "results" / "p04" / "team", kit / "results" / "p04" / "solo")
     assert study_qc.main(["p04", "--kit", str(kit)]) == 1
     assert "team: CHECK FAILED: a solo session, not this participant's condition" in capsys.readouterr().out
@@ -106,7 +106,7 @@ def test_a_rehearsal_labels_run_fails_so_collection_flags_it(tmp_path, monkeypat
     plan["participants"]["p04"]["test"] = True
     (kit / "plan" / "plan.json").write_text(json.dumps(plan))
     meta = kit / "results" / "p04" / "team" / "session.json"
-    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 2400.0}))
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "session_s": 3600.0}))
     assert study_qc.main(["p04", "--kit", str(kit)]) == 1
     assert "team: CHECK FAILED: a rehearsal label, not a participant" in capsys.readouterr().out
 

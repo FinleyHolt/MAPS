@@ -52,7 +52,7 @@ def test_before_a_session_or_a_label(tmp_path) -> None:
 
 
 def test_the_results_file_downloads_as_json(tmp_path) -> None:
-    kit, session = tmp_path / "kit", {"started_epoch": 0.0, "session_s": 2400.0, "episodes_n": 1}
+    kit, session = tmp_path / "kit", {"started_epoch": 0.0, "session_s": 3600.0, "episodes_n": 1}
     (kit / "results" / "p01-3f9a2c1e" / "solo").mkdir(parents=True)
     (kit / "results" / "p01-3f9a2c1e" / "solo" / "session.json").write_text(json.dumps(session))
     r = _client(kit).get("/visit/results.json")
@@ -105,7 +105,7 @@ def test_a_relaunch_reopens_a_running_session(tmp_path, monkeypatch) -> None:
     for step in ("practice", "solo"):
         (tmp_path / "results" / "p01" / step).mkdir(parents=True)
     (tmp_path / "results" / "p01" / "solo" / "session.json").write_text(json.dumps(
-        {"started_epoch": time.time(), "session_s": 2400.0, "episodes_n": 3}))
+        {"started_epoch": time.time(), "session_s": 3600.0, "episodes_n": 3}))
     c = _client(tmp_path)
     assert c.get("/capacity/state").json() == {"current": None, "practice": False}
     assert "Its clock kept running while you were away." in c.get("/visit").text

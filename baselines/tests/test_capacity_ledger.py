@@ -107,7 +107,7 @@ def test_back_reopens_the_last_report_and_the_one_left_open_comes_back_as_it_was
     a, b = [json.loads(ln) for ln in (tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()]
     assert (a["xy"], "revises" in a, b["xy"], b["revises"]) == ([0.0, 99.0], False, [5.0, 5.0], True)
     from baselines.human import study_qc
-    assert study_qc.checks(tmp_path / "p01" / "team") == ["session length 60 min, not 40: a rehearsal?"]
+    assert study_qc.checks(tmp_path / "p01" / "team") == []  # an hour: the real length
     assert _act(s, "back")["ok"] and _act(s, "resume")["ok"] and (s.index, s.opened) == left[:2]
     assert not _act(s, "resume")["ok"]                        # nothing left open to go back to
     s = _relaunch(s, now)                                     # the revision does not move the open report's clock

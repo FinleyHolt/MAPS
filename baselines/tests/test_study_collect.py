@@ -16,7 +16,7 @@ RUN = "p04-3f9a2c1e"
 
 
 def _files(answers: str = "skip") -> dict[str, str]:
-    session = {"agents": 1, "session_s": 2400.0, "started_epoch": 1000.0, "started_at": "1970-01-01T00:16:40Z",
+    session = {"agents": 1, "session_s": 3600.0, "started_epoch": 1000.0, "started_at": "1970-01-01T00:16:40Z",
                "episodes_n": 1, "order": ["block_0::1#0"]}
     answer = {"episode_id": "block_0::1#0", "source": answers, "arm": "solo", "answered_at": "1970-01-01T00:20:00Z"}
     return {f"results/{RUN}/solo/session.json": json.dumps({**session, "arm": "solo"}, indent=1),

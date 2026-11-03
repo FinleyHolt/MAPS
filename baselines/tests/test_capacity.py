@@ -111,9 +111,9 @@ def test_every_source_scores_and_a_skip_alone_or_before_maps_lands_is_a_miss() -
 
 
 def test_a_skip_with_maps_keeps_its_answer_only_when_it_landed_within_the_session() -> None:
-    session = {"started_epoch": 0.0, "session_s": 2400}
-    assert team_rows.landed_in_session({"maps_ready_at": "1970-01-01T00:39:59Z"}, session)
-    assert not team_rows.landed_in_session({"maps_ready_at": "1970-01-01T00:40:01Z"}, session)
+    session = {"started_epoch": 0.0, "session_s": 3600}
+    assert team_rows.landed_in_session({"maps_ready_at": "1970-01-01T00:59:59Z"}, session)
+    assert not team_rows.landed_in_session({"maps_ready_at": "1970-01-01T01:00:01Z"}, session)
     assert not team_rows.landed_in_session({"maps_ready_at": None}, session)
 
 

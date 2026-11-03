@@ -50,9 +50,9 @@ from baselines.human.session_plan import scored_rows
 
 ARMS = ("solo", "team")
 SOURCES = ("confirm", "replace", "own_search", "skip")
-#: One condition's session, seconds: the same for every participant. Forty minutes, so a
-#: visit (setup, briefing, practice, both conditions and a break) fits in two hours.
-SESSION_S = 2400.0
+#: One condition's session, seconds: the same for every participant. An hour, so a visit
+#: (setup, tutorial, briefing, practice and the session) takes about an hour and a half.
+SESSION_S = 3600.0
 #: MAPS searches running at once in the replay, the concurrency the replayed batch flew at:
 #: nearly all of a participant's half lands within the session. ``plan`` records each list's count.
 AGENTS = 96
