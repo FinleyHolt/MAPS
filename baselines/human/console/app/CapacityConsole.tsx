@@ -129,7 +129,7 @@ export function CapacityConsole() {
   const review = cur?.review ?? null;
   const verifying = cur?.mode === "verify" && review !== null;
 
-  // Each new report opens framed on the briefed AO.
+  // Each new report opens framed on the briefed AO; one reopened by Back, on the point it was answered with.
   const shown = useRef<string | null>(null);
   useEffect(() => {
     if (!m.ready || !cur || shown.current === cur.episode_id) return;
@@ -142,6 +142,7 @@ export function CapacityConsole() {
     setHot(null);
     setPicked(null);
     if (verifying && review?.maps_lonlat) m.flyTo(review.maps_lonlat, MAPS_ZOOM);
+    else if (cur.point) m.flyTo(cur.point, MAPS_ZOOM);
     else m.frameAo(review?.maps_lonlat, MAPS_ZOOM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur?.episode_id, m.ready]);
