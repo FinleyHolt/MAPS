@@ -224,6 +224,9 @@ class Capacity:
         self._show(j, self.clock(), bool(earlier.get("maps_ready_at_open")))
         if not self.verify and earlier.get("xy"):
             self.point = (float(earlier["xy"][0]), float(earlier["xy"][1]))
+        elif self.review is not None and earlier.get("source") == "replace" and earlier.get("xy"):
+            # The other place the person picked, on the map again beside MAPS's answer.
+            self.review.act({"action": "select", "x": float(earlier["xy"][0]), "y": float(earlier["xy"][1])})
         return {"ok": True}
 
     def _reviewed(self, decision: dict) -> None:

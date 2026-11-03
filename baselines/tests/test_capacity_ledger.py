@@ -131,3 +131,24 @@ def test_every_act_and_what_the_console_reports_land_in_the_event_record(tmp_pat
     late = json.loads((tmp_path / "p01" / "solo" / "events.jsonl").read_text().splitlines()[-1])
     assert s.current != e and (late["episode_id"], late["order_index"]) == (e, 0)
 
+
+def test_back_on_a_checked_report_puts_the_other_place_picked_on_the_map_again(tmp_path, monkeypatch) -> None:
+    from benchmarks.citynav.run_benchmark import assets
+    from baselines.tests.test_human_study import _root
+
+    monkeypatch.setattr(assets, "load_episode_assets", lambda m: __import__("types").SimpleNamespace(base_features={}))
+    root = _root(tmp_path)
+    row = json.loads((root / "episodes.jsonl").read_text().splitlines()[0])
+    rows = [{**row, "episode_id": f"block_0::{i}#0", "elapsed_s": 100.0 if i == 1 else 500.0} for i in (1, 2, 3)]
+    (root / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    now = [1000.0]
+    s = capacity.Capacity(root, [r["episode_id"] for r in rows], tmp_path / "p01" / "team", "team", agents=1,
+                          session_s=3600, clock=lambda: now[0])
+    now[0] += 700                                              # the second result landed at 600 s
+    assert _act(s, "select", x=0.0, y=99.0)["ok"] and _act(s, "commit")["ok"]
+    assert s.state()["current"]["mode"] == "verify"
+    assert _act(s, "select", x=1.0, y=99.0)["ok"] and _act(s, "replace")["ok"]
+    picked = json.loads((tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()[-1])
+    assert picked["source"] == "replace" and _act(s, "back")["ok"]
+    cur = s.state()["current"]
+    assert cur["mode"] == "verify" and cur["earlier"] == "replace" and list(cur["review"]["selected"]["xy"]) == picked["xy"]
