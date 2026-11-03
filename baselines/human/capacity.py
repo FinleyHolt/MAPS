@@ -248,7 +248,10 @@ class Capacity:
     def act(self, req: dict) -> dict:
         """One act of the person's, logged with its outcome (``events.jsonl``) before the next."""
         before, out = self.current, self._act(req)
-        self.log([{"kind": "act", "action": req.get("action"), "episode_id": before, "ok": bool(out.get("ok")),
+        # A point MAPS could not have reached is refused on the screen, not by an act: say so here.
+        sel = self.review.selected if self.review is not None and req.get("action") in ("select", "candidate") else None
+        refused = {"refused": not self.review._selected(sel)["affordable"]} if sel else {}
+        self.log([{"kind": "act", "action": req.get("action"), "episode_id": before, "ok": bool(out.get("ok")), **refused,
                    **({"error": out["error"]} if out.get("error") else {}),
                    **({k: round(float(req[k]), 2) for k in ("x", "y") if k in req}),
                    **({"id": req["id"]} if "id" in req else {})}])

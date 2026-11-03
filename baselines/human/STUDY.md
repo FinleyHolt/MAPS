@@ -134,9 +134,10 @@ list) and its `"answers"` (the `answers.jsonl` rows: the run id and label, the s
 `own_search`, `confirm`, `replace` or `skip`, the point, and when the report was opened and
 answered, UTC), its `"events"` (the `events.jsonl` rows: how the person worked, each stamped
 with the open report, its place in the list and seconds into the session: every act with its
-outcome, `select` with the point, `commit` refused with no point, a pick refused as too far; and
+outcome, `select` with the point (with MAPS, `refused` when MAPS could not have reached it), `commit`
+refused with no point; and
 what the console reports: `search` with the query, `street_map` on or off, `ruler_point`, `view`
-with zoom and center after each pan, `reason_more`, `whole_search`, `step`, `show_cites`,
+with zoom and center after each pan, `whole_search`, `step`, `show_cites`,
 `go_to_maps`, `number_objects`, `more_objects`, and `hidden` and `visible` when the page leaves
 or returns to sight), plus `"unreadable_lines"` when the ledger held lines that do not parse. No
 name, computer account or path is in it.

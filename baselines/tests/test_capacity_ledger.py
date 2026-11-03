@@ -148,7 +148,14 @@ def test_back_on_a_checked_report_puts_the_other_place_picked_on_the_map_again(t
     now[0] += 700                                              # the second result landed at 600 s
     assert _act(s, "select", x=0.0, y=99.0)["ok"] and _act(s, "commit")["ok"]
     assert s.state()["current"]["mode"] == "verify"
+    from baselines.human import audit_console
+    monkeypatch.setattr(audit_console, "affordable", lambda *a: False)    # out of MAPS's reach
+    assert _act(s, "select", x=900.0, y=99.0)["ok"]
+    monkeypatch.setattr(audit_console, "affordable", lambda *a: True)
     assert _act(s, "select", x=1.0, y=99.0)["ok"] and _act(s, "replace")["ok"]
+    selects = [json.loads(ln) for ln in (tmp_path / "p01" / "team" / "events.jsonl").read_text().splitlines()]
+    selects = [r for r in selects if r.get("action") == "select" and r["order_index"] == 1]
+    assert [r["refused"] for r in selects] == [True, False]
     picked = json.loads((tmp_path / "p01" / "team" / "answers.jsonl").read_text().splitlines()[-1])
     assert picked["source"] == "replace" and _act(s, "back")["ok"]
     cur = s.state()["current"]
