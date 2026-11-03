@@ -131,3 +131,16 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+#: Reports a reviewer flagged or answered wrong after the study's root was flown. The plan deals
+#: none of them and a scored root carries none of them; the file says where each verdict came from.
+OMITTED_REPORTS = Path(__file__).with_name("omitted_reports.json")
+
+
+def omitted_reports(path: Path = OMITTED_REPORTS) -> dict[str, str]:
+    """Episode id -> the reviewer's reason, for every report the study leaves out."""
+    if not path.is_file():
+        return {}
+    return {e["episode_id"]: e["reason"] for e in json.loads(path.read_text())["episodes"]}
+

@@ -201,3 +201,64 @@ def test_the_session_and_every_answer_carry_the_visits_ids(tmp_path, monkeypatch
     session = json.loads((tmp_path / "out" / "session.json").read_text())
     answer = json.loads((tmp_path / "out" / "answers.jsonl").read_text())
     assert {k: session[k] for k in ids} == ids and {k: answer[k] for k in ids} == ids
+
+
+def _omitted(tmp_path, monkeypatch, *episode_ids: str):
+    from baselines.human import session_plan
+
+    path = tmp_path / "omitted_reports.json"
+    path.write_text(json.dumps({"episodes": [{"episode_id": e, "description": e, "reason": "flagged"} for e in episode_ids]}))
+    monkeypatch.setattr(session_plan, "OMITTED_REPORTS", path)
+    monkeypatch.setattr(capacity, "omitted_reports", lambda path=path: session_plan.omitted_reports(path))
+    monkeypatch.setattr(team_rows, "omitted_reports", lambda path=path: session_plan.omitted_reports(path))
+    return path
+
+
+def _two_row_root(tmp_path):
+    import yaml
+
+    root = tmp_path / "root"
+    root.mkdir()
+    rows = [{**_maps_row(SR=1), "episode_id": "a", "elapsed_s": 100.0}, {**_maps_row(SR=1), "episode_id": "b", "elapsed_s": 200.0}]
+    (root / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (root / "run_manifest.json").write_text(json.dumps({"config_yaml": yaml.safe_dump(_CFG), "split": "x"}))
+    return root
+
+
+def test_the_plan_deals_no_omitted_report(tmp_path, monkeypatch) -> None:
+    _omitted(tmp_path, monkeypatch, "b")
+    root = _two_row_root(tmp_path)
+    out = tmp_path / "plan"
+    capacity.main(["plan", "--maps-root", str(root), "--participants", "p01,p02", "--out", str(out)])
+    doc = json.loads((out / "plan.json").read_text())
+    assert doc["episodes_n"] == 1 and doc["omitted_n"] == 1
+    for p in ("p01", "p02"):
+        arm = doc["participants"][p]["arm"]
+        assert (out / p / f"{arm}.txt").read_text().split() == ["a"]
+
+
+def test_a_scored_root_drops_an_answer_and_a_released_result_on_an_omitted_report(tmp_path, monkeypatch) -> None:
+    _omitted(tmp_path, monkeypatch, "b")
+    root = _two_row_root(tmp_path)
+    session_dir = tmp_path / "p01" / "team"
+    session_dir.mkdir(parents=True)
+    base = {"arm": "team", "opened_at": "1970-01-01T00:00:00Z", "answered_at": "1970-01-01T00:01:00Z", "answer_s": 60.0}
+    # The person answered b, the omitted report, and never reached a; MAPS's result on a landed in time.
+    (session_dir / "answers.jsonl").write_text(json.dumps({**base, "episode_id": "b", "source": "own_search", "xy": [0.0, 99.0]}) + "\n")
+    (session_dir / "session.json").write_text(json.dumps(
+        {"arm": "team", "agents": 1, "session_s": 3600, "started_epoch": 0.0, "order": ["b", "a"]}))
+    out = tmp_path / "scored"
+    team_rows.main(["--maps-root", str(root), "--decisions", str(session_dir / "answers.jsonl"), "--out-root", str(out)])
+    scored = [json.loads(l) for l in (out / "episodes.jsonl").read_text().splitlines()]
+    assert [r["episode_id"] for r in scored] == ["a"]
+    assert scored[0]["metrics"]["capacity_source"] == "unchecked"
+    assert json.loads((out / "run_manifest.json").read_text())["selection"]["omitted_n"] == 1
+
+
+def test_the_omitted_reports_file_names_rows_of_the_study_root() -> None:
+    from baselines.human import session_plan
+
+    omitted = session_plan.omitted_reports()
+    assert len(omitted) >= 30, "the reviewed omissions are on file"
+    assert all(e.startswith("calcity::") and "#" in e for e in omitted)
+    assert all(reason.strip() for reason in omitted.values())
