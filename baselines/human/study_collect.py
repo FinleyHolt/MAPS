@@ -80,7 +80,8 @@ def json_members(data: bytes, plan: dict) -> tuple[str, dict[str, bytes], list[s
                          f"not some of {', '.join(SESSIONS)}")
     files, failed = {}, []
     for name, s in sessions.items():
-        if (not isinstance(s, dict) or not {"session", "answers"} <= set(s) <= {"session", "answers", "unreadable_lines"}
+        if (not isinstance(s, dict) or not {"session", "answers"} <= set(s) <= {"session", "answers", "events", "unreadable_lines"}
+                or not isinstance(s.get("events", []), list)
                 or not isinstance(s["session"], dict) or not isinstance(s["answers"], list)
                 or not all(isinstance(a, dict) for a in s["answers"])
                 or not isinstance(s.get("unreadable_lines", 0), int)):
@@ -89,6 +90,8 @@ def json_members(data: bytes, plan: dict) -> tuple[str, dict[str, bytes], list[s
         files[f"{run}/{name}/session.json"] = json.dumps(s["session"], indent=1).encode()
         if s["answers"]:
             files[f"{run}/{name}/answers.jsonl"] = "".join(json.dumps(a) + "\n" for a in s["answers"]).encode()
+        if s.get("events"):
+            files[f"{run}/{name}/events.jsonl"] = "".join(json.dumps(ev) + "\n" for ev in s["events"]).encode()
         if s.get("unreadable_lines") and name != "practice":
             failed.append(f"{name}: {s['unreadable_lines']} unreadable lines in answers.jsonl")
     return run, files, failed

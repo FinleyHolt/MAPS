@@ -112,3 +112,17 @@ def test_back_reopens_the_last_report_and_the_one_left_open_comes_back_as_it_was
     assert not _act(s, "resume")["ok"]                        # nothing left open to go back to
     s = _relaunch(s, now)                                     # the revision does not move the open report's clock
     assert (s.index, s.opened, s.verify) == left
+
+
+def test_every_act_and_what_the_console_reports_land_in_the_event_record(tmp_path, monkeypatch) -> None:
+    now = [1000.0]
+    s = _session(tmp_path, monkeypatch, "solo", now)
+    e = s.current
+    now[0] = 1012.0
+    s.log([{"kind": "search", "t": 5.0, "query": "88th & Lime"}])
+    assert not _act(s, "commit")["ok"]                         # no point yet: refused, and logged
+    assert _act(s, "select", x=1.234, y=5.0)["ok"] and _act(s, "commit")["ok"]
+    rows = [json.loads(line) for line in (tmp_path / "p01" / "solo" / "events.jsonl").read_text().splitlines()]
+    assert rows[0] == {"kind": "search", "t": 5.0, "query": "88th & Lime", "episode_id": e, "order_index": 0, "session_s": 12.0}
+    assert [(r["action"], r["ok"], r["on"]) for r in rows[1:]] == [("commit", False, e), ("select", True, e), ("commit", True, e)]
+    assert rows[1]["error"] and (rows[2]["x"], rows[2]["y"]) == (1.23, 5.0)

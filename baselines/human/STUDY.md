@@ -132,8 +132,14 @@ At the end the visit page offers `maps-study-<run id>.json`, one JSON document:
 `"session"` (the `session.json` object: the run id and label, the session's start, length and
 list) and its `"answers"` (the `answers.jsonl` rows: the run id and label, the source,
 `own_search`, `confirm`, `replace` or `skip`, the point, and when the report was opened and
-answered, UTC), plus `"unreadable_lines"` when the ledger held lines that do not parse. No name,
-computer account or path is in it.
+answered, UTC), its `"events"` (the `events.jsonl` rows: how the person worked, each stamped
+with the open report, its place in the list and seconds into the session: every act with its
+outcome, `select` with the point, `commit` refused with no point, a pick refused as too far; and
+what the console reports: `search` with the query, `street_map` on or off, `ruler_point`, `view`
+with zoom and center after each pan, `reason_more`, `whole_search`, `step`, `show_cites`,
+`go_to_maps`, `number_objects`, `more_objects`, and `hidden` and `visible` when the page leaves
+or returns to sight), plus `"unreadable_lines"` when the ledger held lines that do not parse. No
+name, computer account or path is in it.
 
 1. The participant emails `maps-study-<run id>.json` to frholt@stanford.edu and ryan.lutzy@gmail.com,
    so each file reaches both inboxes. The lead collects from their own inbox; Ryan's copies are

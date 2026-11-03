@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { fedFeatures, type Detected, type Refs } from "@/app/fed";
 import { placeSplitter } from "@/app/placeNames";
 import { replyBlocks, stepOfCall, type Span } from "@/app/reply";
+import { flushEvents, logEvent } from "@/app/events";
 import { FED, OsmSearch, OsmToggle, pointFeature, ringFeature, SAID, useStudyMap, type LonLat, type Ring } from "@/app/studyMap";
 import { Trace, type Turn } from "@/app/Trace";
 import { actBody, aKind, EARLIER, header, savedLine, keyCommand, mapTakesClicks, objectName, objectNo, overLines, pollState, verifyHint } from "@/app/capacityView";
@@ -201,6 +202,7 @@ export function CapacityConsole() {
   }, [picked, st, m.names, m.ready, verifying]);
   const choose = (p: number | "reply") => {
     const next = picked === p ? null : p;
+    logEvent(p === "reply" ? "show_cites" : "step", { step: p, on: next !== null });
     setPicked(next);
     setHot(null);
     if (next !== null) m.frameFed(fed(next), namesIn([next === "reply" ? review?.maps_reply ?? "" : stepText(turns[next])]));
@@ -241,6 +243,15 @@ export function CapacityConsole() {
   const canPick = verifying ? !!sel && sel.affordable : !!cur?.point;
   const pickVerb = verifying ? "replace" : "commit";
 
+  // The record of what the person does: posted every few seconds, and at once when the page is hidden.
+  useEffect(() => {
+    const seen = () => { logEvent(document.hidden ? "hidden" : "visible"); if (document.hidden) flushEvents(); };
+    document.addEventListener("visibilitychange", seen);
+    window.addEventListener("pagehide", flushEvents);
+    const id = window.setInterval(flushEvents, 5000);
+    return () => { document.removeEventListener("visibilitychange", seen); window.removeEventListener("pagehide", flushEvents); window.clearInterval(id); };
+  }, []);
+
   // A key pressed while a click is still being saved runs once the save is back, not never.
   const heldKey = useRef<string | null>(null);
   useEffect(() => {
@@ -252,7 +263,7 @@ export function CapacityConsole() {
       else if (k === "pick") void act({ action: pickVerb });
       else if (k === "clear") { void act({ action: "clear" }); m.setRuler([]); }
       else if (k === "street") m.setOsmOn((on) => !on);
-      else if (k === "maps" && review?.maps_lonlat) m.flyTo(review.maps_lonlat, MAPS_ZOOM);
+      else if (k === "maps" && review?.maps_lonlat) { logEvent("go_to_maps", { by: "key" }); m.flyTo(review.maps_lonlat, MAPS_ZOOM); }
       else if (k === "back" && s.current.can_back) void act({ action: "back" });
       return k === "confirm";
     };
@@ -349,7 +360,7 @@ export function CapacityConsole() {
                 <p className="cap-kicker">Why MAPS chose it</p>
                 <p className={moreReason ? "cap-reason" : "cap-reason is-clamped"}>{linked(review?.maps_reason ?? "")}</p>
                 <p className="cap-hint">
-                  <button type="button" className="cap-link" onClick={() => { setHot(null); setStepsOpen(false); setMoreReason((v) => !v); }}>{moreReason ? "less" : "more"}</button>
+                  <button type="button" className="cap-link" onClick={() => { logEvent("reason_more", { open: !moreReason }); setHot(null); setStepsOpen(false); setMoreReason((v) => !v); }}>{moreReason ? "less" : "more"}</button>
                 </p>
                 {moreReason && review ? (
                   <details className="judge-full" onToggle={(e) => { setHot(null); setStepsOpen(e.currentTarget.open); }}><summary>MAPS's whole search, {review.turns?.length ?? 0} steps</summary><Trace instruction={review.instruction} turns={review.turns ?? []} link={linked} /></details>
@@ -371,7 +382,7 @@ export function CapacityConsole() {
                   ))}</p>
                 ) : null}
                 {review ? (
-                  <details className="judge-full" onToggle={(e) => { setHot(null); setStepsOpen(e.currentTarget.open); }}>
+                  <details className="judge-full" onToggle={(e) => { logEvent("whole_search", { open: e.currentTarget.open }); setHot(null); setStepsOpen(e.currentTarget.open); }}>
                     <summary>MAPS's whole search, {turns.length} steps</summary>
                     <p className="cap-hint">Click a step's code to see on the map what it used; click again to clear.</p>
                     <Trace instruction={review.instruction} turns={turns} link={linked} picked={typeof picked === "number" ? picked : null} onPick={choose} />
@@ -383,7 +394,7 @@ export function CapacityConsole() {
             {verifying ? (
               <section className="cap-block">
                 <p className="cap-kicker">Mapped objects near MAPS's answer
-                  <button type="button" className="cap-link cap-right" onClick={() => setShowIds((v) => !v)}>{showIds ? "hide numbers" : "number them on the map"}</button></p>
+                  <button type="button" className="cap-link cap-right" onClick={() => { logEvent("number_objects", { on: !showIds }); setShowIds((v) => !v); }}>{showIds ? "hide numbers" : "number them on the map"}</button></p>
                 {(moreObjects ? objects : objects.slice(0, NEAREST)).map((c) => (
                   <button type="button" key={c.id} className="cap-row" data-on={sel?.candidate === c.id} data-maps={c.id === review?.maps_pick}
                           onClick={() => { void act({ action: "candidate", id: c.id }); m.flyTo(c.lonlat); }}>
@@ -391,7 +402,7 @@ export function CapacityConsole() {
                   </button>
                 ))}
                 {objects.length > NEAREST ? (
-                  <p className="cap-hint"><button type="button" className="cap-link" onClick={() => setMoreObjects((v) => !v)}>
+                  <p className="cap-hint"><button type="button" className="cap-link" onClick={() => { logEvent("more_objects", { open: !moreObjects }); setMoreObjects((v) => !v); }}>
                     {moreObjects ? "show fewer" : `show ${objects.length - NEAREST} more`}</button></p>
                 ) : null}
               </section>
@@ -449,7 +460,7 @@ export function CapacityConsole() {
                 ) : (
                   <><button type="button" className="cap-link" disabled={busy || !cur} onClick={() => setAskSkip(true)}>skip this report</button>{st?.practice ? null : st?.arm === "team" ? (verifying ? " (MAPS's answer counts)" : " (MAPS is still working on this one)") : " (counts as a miss)"}</>
                 )}
-                {verifying ? <> · <button type="button" className="cap-link" onClick={() => review?.maps_lonlat && m.flyTo(review.maps_lonlat, MAPS_ZOOM)}>go to MAPS's answer <kbd>M</kbd></button></> : null}
+                {verifying ? <> · <button type="button" className="cap-link" onClick={() => { if (!review?.maps_lonlat) return; logEvent("go_to_maps", { by: "button" }); m.flyTo(review.maps_lonlat, MAPS_ZOOM); }}>go to MAPS's answer <kbd>M</kbd></button></> : null}
                 {cur?.can_back ? <> · <button type="button" className="cap-link" disabled={busy} onClick={() => void act({ action: "back" })}>back to report {cur.n - 1} <kbd>B</kbd></button></> : null}
               </p>
               {fault ? <p className="judge-fault">{fault}</p> : null}

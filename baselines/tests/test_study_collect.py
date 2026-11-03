@@ -224,7 +224,8 @@ def test_the_visits_results_file_collects_back_byte_for_byte(tmp_path, monkeypat
     from baselines.human.study_server import Visit
 
     kit, inbox, study = _setup(tmp_path, monkeypatch)
-    for path, text in _files().items():
+    events = {f"results/{RUN}/solo/events.jsonl": json.dumps({"kind": "search", "t": 1.5, "query": "88th & Lime"}) + "\n"}
+    for path, text in {**_files(), **events}.items():
         (kit / path).parent.mkdir(parents=True, exist_ok=True)
         (kit / path).write_text(text)
     written = {p.relative_to(kit).as_posix(): p.read_bytes() for p in (kit / "results").rglob("*") if p.is_file()}

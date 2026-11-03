@@ -12,6 +12,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapLibreMap, Marker as MapLibreMarker, StyleSpecification } from "maplibre-gl";
 
+import { logEvent } from "@/app/events";
 import { boundsOf } from "@/app/fed";
 import { kindMatches } from "@/app/kindWords";
 import { buildingsAlong, closestApproach, crossings, metres, nearestOther, stretches, type LonLat } from "@/app/studyGeometry";
@@ -210,7 +211,10 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
   const [names, setNames] = useState<PriorName[]>([]);
   // The street map stays as the person left it, from one session to the next.
   const [osmOn, setOsmOn] = useState(() => { try { return localStorage.getItem(OSM_KEY) === "on"; } catch { return false; } });
-  useEffect(() => { try { localStorage.setItem(OSM_KEY, osmOn ? "on" : "off"); } catch { /* storage blocked: the default next time */ } }, [osmOn]);
+  useEffect(() => {
+    logEvent("street_map", { on: osmOn });
+    try { localStorage.setItem(OSM_KEY, osmOn ? "on" : "off"); } catch { /* storage blocked: the default next time */ }
+  }, [osmOn]);
   const osmOnRef = useRef(osmOn);
   osmOnRef.current = osmOn;
   const [lit, setLit] = useState<string | null>(null);
@@ -329,11 +333,16 @@ export function useStudyMap(onClick: (at: LonLat) => void) {
       // Shift-click lays a ruler; a plain click is the mode's own.
       map.on("click", (e) => {
         const at: LonLat = [e.lngLat.lng, e.lngLat.lat];
-        if (e.originalEvent.shiftKey) setRuler((r) => [...r, at]);
+        if (e.originalEvent.shiftKey) { logEvent("ruler_point", { at }); setRuler((r) => [...r, at]); }
         else clickRef.current(at);
       });
       const far = () => containerRef.current?.classList.toggle("is-far", map.getZoom() < LABEL_MIN_ZOOM);
       map.on("moveend", far);
+      // Where the person looked: the view at the end of each pan or zoom.
+      map.on("moveend", () => {
+        const c = map.getCenter();
+        logEvent("view", { zoom: Math.round(map.getZoom() * 100) / 100, at: [Math.round(c.lng * 1e5) / 1e5, Math.round(c.lat * 1e5) / 1e5] });
+      });
       far();
       map.on("load", () => {
         // The briefed AO, off the server's /area; none declared is no box.
@@ -606,7 +615,7 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
   const [query, setQuery] = useState("");
   // The list closes once a result is taken (or on Esc), and opens again on typing.
   const [shut, setShut] = useState(false);
-  const take = (fn: () => void) => { fn(); setShut(true); };
+  const take = (fn: () => void) => { logEvent("search", { query }); fn(); setShut(true); };
   // "Reed & Keller", "Reed and Keller", "Reed / Keller": where the two cross.
   const pair = query.split(/\s*(?:&|\/|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
   const best = (part: string) => {
@@ -639,6 +648,7 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
                if (e.key === "Escape") { setShut(true); e.currentTarget.blur(); return; }
                if (e.key !== "Enter") return;
                setShut(true);
+               logEvent("search", { query, by: "enter" });
                // The map's keys (O, S, Esc) are the map's again once a result is taken.
                e.currentTarget.blur();
                if (cross[0]) onCross(cross.map((c) => c.at), 0);

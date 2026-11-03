@@ -232,6 +232,19 @@ def build_app(kit: Path, console: Path, visit: Visit):
             out = cap.act(req)
             return {**out, "state": doc()}
 
+    @app.post("/capacity/events")
+    def capacity_events(req: dict[str, Any]) -> dict[str, Any]:
+        # The console's record of how the person works; a page with nothing open is told so.
+        events = req.get("events")
+        if not isinstance(events, list):
+            raise HTTPException(400, "events must be a list")
+        # ponytail: the page is the participant's own browser on their own machine, so the bound is size, not trust.
+        kept = [ev for ev in events[:500] if isinstance(ev, dict) and isinstance(ev.get("kind"), str)
+                and len(json.dumps(ev)) <= 2000]
+        with lock:
+            session().log(kept)
+        return {"ok": True, "logged": len(kept)}
+
     @app.get("/judge/frames/{sha}.jpg")
     def frame(sha: str) -> Response:
         cap = box["cap"]
@@ -461,6 +474,8 @@ class Visit:
                 continue
             answers = _jsonl(ledger)
             sessions[name] = {"answers": answers, "session": json.loads(meta.read_text())}
+            if (folder / name / "events.jsonl").is_file():
+                sessions[name]["events"] = _jsonl(folder / name / "events.jsonl")
             lines = sum(1 for ln in ledger.read_text().splitlines() if ln.strip()) if ledger.is_file() else 0
             if lines > len(answers):
                 sessions[name]["unreadable_lines"] = lines - len(answers)

@@ -22,7 +22,10 @@ Each answer lands in ``<out>/answers.jsonl`` with its source (``confirm``,
 ``replace``, ``own_search``, ``skip``), when the report was opened and answered
 and when MAPS's result was ready, in UTC, and the answer's own instant (``answered_epoch``),
 at which the next report opens; ``<out>/session.json`` holds the
-session's start, length and list, so a restart keeps the clock. ``team_rows`` scores the
+session's start, length and list, so a restart keeps the clock. ``<out>/events.jsonl`` records
+how the person worked: every act with its outcome (a point placed, a refusal) and what the console
+reports (``log``: panels opened, searches, the view, the page hidden), each stamped with the open
+report and the session's clock. ``team_rows`` scores the
 ledger, and with MAPS also every result that landed within the session that the person
 never reached: an ``unchecked`` answer, scored as MAPS scored it, since the team's output
 is every MAPS result plus the person's corrections and searches.
@@ -124,7 +127,7 @@ class Capacity:
         self.labels, self.session_s, self.clock, self.ids = labels, float(session_s), clock, ids or {}
         self.starts, self.ends = (release_times([float(self.rows[e]["elapsed_s"]) for e in order], agents)
                                   if arm == "team" else ([], []))
-        self.ledger, meta = out / "answers.jsonl", out / "session.json"
+        self.ledger, meta, self.events = out / "answers.jsonl", out / "session.json", out / "events.jsonl"
         out.mkdir(parents=True, exist_ok=True)
         if meta.is_file():
             # A resumed session keeps its recorded clock and length.
@@ -227,7 +230,25 @@ class Capacity:
         self._answer(decision["decision"], decision["xy"], candidate=decision.get("candidate"),
                      maps_xy=decision.get("maps_xy"))
 
+    def log(self, events: list[dict]) -> None:
+        """Events from the console (``console/app/events.ts``), each stamped with the report open
+        when it lands, its place in the list and the session's clock, seconds."""
+        e, now = self.current, self.clock()
+        with self.events.open("a") as fh:
+            for ev in events:
+                fh.write(json.dumps({**ev, "episode_id": e, "order_index": self.index,
+                                     "session_s": round(now - self.started, 2)}) + "\n")
+
     def act(self, req: dict) -> dict:
+        """One act of the person's, logged with its outcome (``events.jsonl``) before the next."""
+        before, out = self.current, self._act(req)
+        self.log([{"kind": "act", "action": req.get("action"), "on": before, "ok": bool(out.get("ok")),
+                   **({"error": out["error"]} if out.get("error") else {}),
+                   **({k: round(float(req[k]), 2) for k in ("x", "y") if k in req}),
+                   **({"id": req["id"]} if "id" in req else {})}])
+        return out
+
+    def _act(self, req: dict) -> dict:
         if self.over():
             return {"ok": False, "error": "the session is over"}
         if req.get("episode_id") != self.current:
