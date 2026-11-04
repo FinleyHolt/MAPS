@@ -150,6 +150,25 @@ def unchecked_answers(session: dict, answered: set[str], rows: dict[str, dict]) 
             for i, (e, end) in enumerate(zip(order, ends)) if end <= span and e not in answered]
 
 
+def masked_now(row: dict, cfg: dict, shape_of) -> dict:
+    """MAPS's row scored where it committed, on its target's footprint as the corpus holds it now.
+    The root scored each row on the mask of its day: a mask redrawn since (a QA pass) moves
+    MAPS's verdict with it, so a confirmed MAPS answer and a replaced one meet the same shape."""
+    m = row["metrics"]
+    if m.get("success_criterion") != "shape":
+        return row
+    out = json.loads(json.dumps(row))
+    visited = [tuple(p) for p in out.get("visited_xy") or []]
+    commit = tuple(out["commit_xy"]) if out.get("commit_xy") else None
+    final = visited[-1] if visited else commit
+    if final is None:
+        return row
+    out["metrics"].update(score_arrival(criterion="shape", final_pos_xy=final, target_xy=tuple(out["target_xy"]),
+                                        pos_trajectory=visited, success_dist_m=float(cfg["success_radius_m"]),
+                                        gt_polygon=shape_of(out["episode_id"]), commit_xy=commit))
+    return out
+
+
 def team_row(row: dict, decision: dict, cfg: dict, shape_of=None) -> dict:
     """The MAPS row as its auditor left it. ``shape_of`` (episode id ->
     footprint) scores a replacement on a shape bench."""
@@ -226,10 +245,8 @@ def write_root(maps_root: Path, decisions: list[dict], out_root: Path, omitted_n
     manifest["selection"] = {**(manifest.get("selection") or {}), "episodes_n": len(decisions), "allowlist": "audit decisions",
                              "omitted_n": omitted_n}
     shapes = TargetShapes(manifest["split"]) if any(
-        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape"
-        and d.get("decision", d.get("source")) in ("replace", "commit", "own_search")
-        for d in decisions) else None
-    out = [team_row(rows[d["episode_id"]], d, cfg, shapes) for d in decisions]
+        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape" for d in decisions) else None
+    out = [team_row(masked_now(rows[d["episode_id"]], cfg, shapes), d, cfg, shapes) for d in decisions]
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "run_manifest.json").write_text(json.dumps(manifest, indent=1))
     (out_root / "episodes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in out))

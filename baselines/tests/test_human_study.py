@@ -85,6 +85,18 @@ def test_a_confirmed_audit_is_the_maps_row_and_a_replacement_is_scored_where_it_
         team_rows.team_row(_maps_row(steps_taken=199), {"decision": "replace", "xy": [0.0, 99.0]}, _CFG)
 
 
+def test_maps_answer_is_regraded_on_the_mask_the_corpus_holds_now() -> None:
+    # MAPS committed at (0, 50), outside the target's footprint as it was drawn when the root flew.
+    row = _maps_row(success_criterion="shape")
+    redrawn = [(-5.0, 45.0), (5.0, 45.0), (5.0, 55.0), (-5.0, 55.0)]
+    now = team_rows.masked_now(row, _CFG, lambda eid: redrawn)
+    assert now["metrics"]["SR"] == 1 and row["metrics"]["SR"] == 0
+    kept = team_rows.team_row(now, {"decision": "confirm", "xy": row["commit_xy"]}, _CFG)
+    assert kept["metrics"]["SR"] == 1 and kept["metrics"]["maps_SR"] == 1
+    # A ring row has no footprint to redraw.
+    assert team_rows.masked_now(_maps_row(), _CFG, None) == _maps_row()
+
+
 def _root(tmp_path):
     root = tmp_path / "root"
     attempt = root / "w0" / "maps_x"
