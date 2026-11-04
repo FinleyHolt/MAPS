@@ -49,6 +49,13 @@ CARDS: dict[str, dict[str, Any]] = {
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
+    # Kimi K3.1 Pro (Moonshot AI), MXFP4 routed experts. Its README runs every
+    # reported result at temperature 1.0, top_p 0.95, and names no top_k (-1,
+    # off). Effort is the top-level `reasoning_effort` (low, high, max); the
+    # release DEFAULTS TO max, the expensive end. Every assistant turn must be
+    # passed back whole, reasoning_content included, which the transcript does.
+    "kimi-k3.1-pro": {"tokenizer": "moonshotai/Kimi-K3.1-Pro", "top_p": 0.95, "top_k": -1,
+                      "efforts": ("max", "high", "low")},
     # DeepSeek V4.1 Flash 1017, the official release (FP8 dense, FP4 experts).
     # Its README recommends temperature 1.0 and top_p 1.0 and names no top_k
     # (-1, off). Effort is a numeric budget 1-100. The names below are the
