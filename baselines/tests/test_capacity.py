@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+from baselines.human.study_package import shipped_row
 from baselines.human import capacity, team_rows
 from baselines.tests.test_human_study import _CFG, _maps_row, _root
 
@@ -57,6 +58,8 @@ def _session(tmp_path, monkeypatch, arm: str, now: list[float]):
     rows = (root / "episodes.jsonl").read_text().splitlines()
     second = {**json.loads(rows[0]), "episode_id": "block_0::2#0", "elapsed_s": 500.0}
     first = {**json.loads(rows[0]), "elapsed_s": 100.0}
+    # The ledger as the participant's download carries it: no target point, no score.
+    first, second = shipped_row(first), shipped_row(second)
     (root / "episodes.jsonl").write_text(json.dumps(first) + "\n" + json.dumps(second) + "\n")
     return capacity.Capacity(root, ["block_0::1#0", "block_0::2#0"], tmp_path / "p01" / arm, arm, agents=1,
                              session_s=3600, clock=lambda: now[0])
