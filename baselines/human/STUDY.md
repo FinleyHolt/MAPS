@@ -43,6 +43,24 @@ The kit is one folder, here `$KIT`; every command below names it with `--kit`.
 KIT=~/datasets/capacity-study/kit
 ```
 
+### The study's reports are frozen
+
+The study uses 1,065 of the 4,573 Cal City reports, plus four practice reports.
+[`study_reports.json`](study_reports.json) lists them: `session` (every participant's list
+deals exactly these, each in its own shuffle), `practice`, and `omitted` (the 35 reports the
+mask QA pass in [`benchmarks/calcity/qa`](../../benchmarks/calcity/qa/README.md) left out, never
+dealt). It records the corpus commit (`c7a36d65`), the MAPS run whose answers the console
+replays (`qwen38-flash-next-xhigh-c96`) and the plan seed. `calcity.json` stays the superset; the
+manifest is what IRB-90304 and the paper's capacity result rest on.
+
+Freeze rule: once the first participant starts, do not change a listed report's target shape,
+target position or description. A fix found later goes in with a line in this file saying which
+rows changed and why, and the scoring note in the paper; a change that alters what a participant
+sees or does needs an IRB modification first. `study_package bundle` refuses a kit whose plan
+deals any report not in the manifest, so a regenerated plan cannot quietly drift from it. To
+change the set on purpose before the study starts: regenerate the plan, rewrite the manifest from
+it, and commit both with the reason.
+
 ### Build and share the download
 
 The kit carries the console's built web code. After any change under `console/`, rebuild it
