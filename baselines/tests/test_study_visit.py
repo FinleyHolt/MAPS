@@ -40,10 +40,10 @@ def test_visit_steps(tmp_path, monkeypatch) -> None:
     v = Visit(_kit(tmp_path))
     v.set_label("p99")
     page = v.page()
-    assert v.participant is None and "That is not a participant label in this study. Labels look like p07" in page
+    assert v.participant is None and "That is not a participant code in this study. Codes look like p07" in page
     assert "value='p99'" in page and page.count("p99") == 1 and "placeholder='like p07'" in page
     v.set_label("  ")
-    assert "Type your label, for example p07." in v.page()
+    assert "Type your participant code, for example p07." in v.page()
     v.set_label(" P01 ")
     assert v.participant == "p01"
     assert [v.condition(s) for s in STEPS] == ["practice", "solo"]
@@ -86,7 +86,7 @@ def test_a_label_changes_until_the_session_starts(tmp_path) -> None:
     (_kit(tmp_path) / "results" / "p02" / "practice").mkdir(parents=True)
     v = Visit(tmp_path)
     page = v.page()
-    assert v.participant == "p02" and "Welcome back, p02" in page and "Not your label? Change it" in page
+    assert v.participant == "p02" and "Welcome back, p02" in page and "Not your code? Change it" in page
     assert "placeholder='like p07'" in v.page(change=True)
     v.set_label("p01")
     assert v.participant == "p01" and not (tmp_path / "results" / "p02").exists()
@@ -95,7 +95,7 @@ def test_a_label_changes_until_the_session_starts(tmp_path) -> None:
     v = Visit(tmp_path)
     assert "Change it" not in v.page() and "placeholder" not in v.page(change=True)
     v.set_label("p02")
-    msg = "You started as p01. A different label needs a fresh copy of the study: ask the study lead."
+    msg = "You started as p01. A different code needs a fresh copy of the study: ask the study lead."
     assert v.participant == "p01" and msg in v.page()
     assert msg not in v.page()
 

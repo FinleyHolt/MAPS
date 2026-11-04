@@ -26,6 +26,7 @@ def test_bundle(tmp_path) -> None:
     kit = _kit(tmp_path / "kit")
     (kit / "results" / "p01").mkdir(parents=True)
     (kit / "results" / "p01" / "answers.jsonl").write_text("{}\n")
+    (kit / "roster.json").write_text('{"p01": "Tyler"}')
     # The output's folder need not exist yet.
     build_bundle(kit, tmp_path / "new" / "b.zip", contact="lead@example.org")
     z = zipfile.ZipFile(tmp_path / "new" / "b.zip")
@@ -36,6 +37,8 @@ def test_bundle(tmp_path) -> None:
     assert b"\r\n" in z.read("MAPS-study/Start study (Windows).bat")
     assert "MAPS-study/app/baselines/human/study_server.py" in names and "MAPS-study/kit/plan/plan.json" in names
     assert not any("/tests/" in n or "/calcity/data/" in n or "/results/" in n for n in names)
+    # First names stay with the lead; the download never carries them.
+    assert "MAPS-study/kit/roster.json" not in names and "MAPS-study/app/baselines/human/information.md" in names
     readme = z.read("MAPS-study/READ ME FIRST.txt").decode()
     assert "lead@example.org" in readme and "{CONTACT}" not in readme and "\r\n" in readme
     assert z.read("MAPS-study/kit/contact.txt").decode().strip() == "lead@example.org"

@@ -420,12 +420,12 @@ class Visit:
         if not self.agreed:
             self.error, self.typed = "", ""
         elif not label:
-            self.error = "Choose your first name." if self.roster else "Type your label, for example p07."
+            self.error = "Choose your first name." if self.roster else "Type your participant code, for example p07."
         elif label not in self.plan:
-            self.error = ("That is not a participant label in this study. Labels look like p07; "
-                          "check the one the study lead sent you.")
+            self.error = ("That is not a participant code in this study. Codes look like p07; "
+                          "check the one in your invitation email.")
         elif label != self.participant and self.locked():
-            what = "name" if self.roster else "label"
+            what = "name" if self.roster else "code"
             self.error = f"You started as {self.who()}. A different {what} needs a fresh copy of the study: ask the study lead."
         else:
             if label != self.participant:
@@ -530,7 +530,7 @@ class Visit:
                 field = ("<p>Select who you are from the list, then press Continue.</p><select name=label autofocus>"
                          f"<option value=''>Choose...</option>{options}</select> ")
             else:
-                field = ("<p>Your participant label, from the study lead:</p>"
+                field = ("<p>Your participant code, from your invitation email:</p>"
                          f"<input name=label placeholder='like p07' value='{html.escape(typed, quote=True)}' autofocus> ")
             body = f"<h1>The search study</h1>{err}<form action='/visit/label'>{field}<button>Continue</button></form>"
             return PAGE.format(body=body)
@@ -569,7 +569,7 @@ class Visit:
             # Back from practice, the next step leads the page: the video and briefing stay below it.
             ready = (f"<div class=next><h2>Practice done. Next: {self.name('session')}</h2>"
                      + button("session", "Start your session", clock) + "</div>") if practiced else ""
-            now = ready + (f"<p class=note><a href='/visit?change=1'>Not {'you' if self.roster else 'your label'}? Change it</a></p>"
+            now = ready + (f"<p class=note><a href='/visit?change=1'>Not {'you' if self.roster else 'your code'}? Change it</a></p>"
                    + ("<h2>Step 1: watch the tutorial</h2><video controls preload=metadata "
                       "src='/visit/tutorial.mp4'></video>" if self.video.is_file() else "")
                    + f"<h2>Step {first + 1}: read the briefing</h2><div class=brief>{self.briefing()}</div>"

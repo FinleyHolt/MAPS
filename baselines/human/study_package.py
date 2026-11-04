@@ -222,7 +222,8 @@ def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) 
     files += [(f"{name}/app/{f}", REPO / f) for f in code]
     # A kit of symlinked folders ships what the links point at.
     kept = sorted(Path(d, f).relative_to(kit) for d, _, fs in os.walk(kit, followlinks=True) for f in fs)
-    kept = [rel for rel in kept if rel.parts[0] not in ("results", "scored")]
+    # The roster (first names by label) is the lead's record: participants type the code their email gives.
+    kept = [rel for rel in kept if rel.parts[0] not in ("results", "scored") and rel != Path("roster.json")]
     missing = [rel for rel in REQUIRED if Path(rel) not in kept]
     if missing:
         raise SystemExit(f"{kit} is not a whole kit: it lacks {', '.join(missing)}")
