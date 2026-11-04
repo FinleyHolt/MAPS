@@ -43,41 +43,57 @@ The kit is one folder, here `$KIT`; every command below names it with `--kit`.
 KIT=~/datasets/capacity-study/kit
 ```
 
-### The study's reports are frozen
+### The study's own record: `study/`
 
-The study uses 1,065 of the 4,573 Cal City reports, plus four practice reports.
-[`study_reports.json`](study_reports.json) lists them: `session` (every participant's list
-deals exactly these, each in its own shuffle), `practice`, and `omitted` (the 35 reports the
-mask QA pass in [`benchmarks/calcity/qa`](../../benchmarks/calcity/qa/README.md) left out, never
-dealt). It records the corpus commit (`c7a36d65`), the MAPS run whose answers the console
-replays (`qwen38-flash-next-xhigh-c96`) and the plan seed. `calcity.json` stays the superset; the
-manifest is what IRB-90304 and the paper's capacity result rest on.
+The study keeps its own copy of everything it is dealt and graded on, in [`study/`](study/),
+so no later change to the corpus, the kit or the MAPS run can move it:
 
-Freeze rule: once the first participant starts, do not change a listed report's target shape,
-target position or description. A fix found later goes in with a line in this file saying which
-rows changed and why, and the scoring note in the paper; a change that alters what a participant
-sees or does needs an IRB modification first. `study_package bundle` refuses a kit whose plan
-deals any report not in the manifest, so a regenerated plan cannot quietly drift from it. To
-change the set on purpose before the study starts: regenerate the plan, rewrite the manifest from
-it, and commit both with the reason.
+| File | What it holds |
+|---|---|
+| [`reports.json`](study/reports.json) | The 1,065 session reports every participant's list deals (each its own shuffle), the 4 practice reports, and the 35 the mask QA pass in [`benchmarks/calcity/qa`](../../benchmarks/calcity/qa/README.md) left out. It names the MAPS run the console replays (`qwen38-flash-next-xhigh-c96`) and the plan seed. |
+| [`targets.json`](study/targets.json) | Per session report: the text participants read, the target point, and the footprint a commit must land in, exported off `calcity.json` at `c7a36d65`. Grading reads this file and never the corpus. |
+| [`plan/`](study/plan/) | The lists `capacity plan` dealt, as the kit carries them. |
+| [`lock.json`](study/lock.json) | The sha256 of each file above, of the kit's MAPS ledger (`maps_root/episodes.jsonl`), and of the last zip `bundle` built, with the commit it was built from. |
 
-Grading uses the masks in `calcity.json` as committed, never the scores the MAPS run stored on
-Oct 21. `team_rows.masked_now` regrades MAPS's own answer on today's footprint before a team
-answer is scored, so a confirmed MAPS answer and a replaced one meet the same shape, and
-`maps_SR` in the scored rows is MAPS's score on that shape. The QA merge moved 8 of MAPS's
+`calcity.json` stays the 4,573-row superset; `study/` is what IRB-90304 and the paper's
+capacity result rest on.
+
+**Grading.** `study_qc` scores every session with `team_rows --targets study/targets.json`.
+`team_rows.masked_now` first regrades MAPS's own answer on the frozen footprint, so a confirmed
+MAPS answer and a replaced one meet the same shape, and `maps_SR` in the scored rows is MAPS's
+score on that shape, never the score its run stored on Oct 21. The QA merge moved 8 of MAPS's
 verdicts this way (3 now right, 5 now wrong): MAPS alone scores 742 of 1,065 (69.67%), not the
 744 (69.86%) the run stored and `plan.json`'s `maps_sr` still records.
 
-Check a kit before building or sharing it:
+**The download carries no answers.** `bundle` ships MAPS's ledger without each row's target
+point and every score but `steps_taken` (which prices a replacement against MAPS's budget), and
+never ships `study/`. The lead's kit keeps the full ledger.
+
+**Check.** Before building or sharing, and on any downloaded copy:
 
 ```sh
-python -m baselines.human.study_package check --kit "$KIT"
+python -m baselines.human.study_package check --kit "$KIT" [--zip <downloaded MAPS-study.zip>]
 ```
 
-It lists any report the plan deals off the manifest, any session report that cannot be graded
-(its text is not the corpus's, it has no footprint, or a point inside its footprint does not
-score right and one 565 m off does not score wrong), and each MAPS verdict the current masks
-move. It exits 1 on the first two; `bundle` runs the same checks and refuses the build.
+It lists any report the plan deals off `reports.json`; any file that strays from `lock.json`
+(a study file, the kit's plan against `study/plan/`, the kit's MAPS ledger, or the zip against
+the one the lock records); any session report that cannot be graded (its text is not the frozen
+text, it has no footprint, or a point inside its footprint does not score right and one 565 m
+off does not score wrong); and each MAPS verdict the frozen footprints move. It exits 1 on any
+but the last. `bundle` runs the same checks, refuses a build that fails them, and records the
+new zip in `lock.json`: commit the lock after every bundle.
+
+**Freeze rule.** Once the first participant starts, do not change `study/`. A fix found later
+goes in with a line in this file saying which rows changed and why, and the scoring note in the
+paper; a change that alters what a participant sees or does needs an IRB modification first.
+To change the study on purpose before it starts: regenerate the plan into the kit, then
+
+```sh
+python -m baselines.human.study_package freeze --kit "$KIT"
+```
+
+copies the kit's plan into `study/plan/`, exports `targets.json` off the committed corpus
+(refusing uncommitted corpus edits) and rewrites `lock.json`. Commit all four with the reason.
 
 ### Build and share the download
 

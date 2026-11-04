@@ -31,6 +31,7 @@ with it Python and the console's packages, on the first start.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -202,15 +203,20 @@ TOP = {"Start study (Mac).command": "mac.command", "Start study (Windows).bat": 
 STORED = (".mbtiles", ".jpg", ".png", ".webp", ".mp4")
 #: What a kit cannot start without: the console, the plan, the map and MAPS's run.
 REQUIRED = ("console/index.html", "plan/plan.json", "calcity_ortho.mbtiles", "maps_root/episodes.jsonl")
-#: The reports frozen for the study (IRB-90304): a kit whose plan deals anything else never ships.
-STUDY_REPORTS = Path(__file__).with_name("study_reports.json")
+#: The capacity study's own record (IRB-90304), which grading and the download rest on alone:
+#: ``reports.json`` (the reports dealt), ``targets.json`` (what each is graded on), ``plan/`` (the
+#: lists dealt) and ``lock.json`` (the checksum of each, the kit's MAPS ledger and the zip).
+STUDY = Path(__file__).with_name("study")
+STUDY_REPORTS = STUDY / "reports.json"
+STUDY_TARGETS = STUDY / "targets.json"
+STUDY_LOCK = STUDY / "lock.json"
+#: The one MAPS metric a participant's copy keeps: the steps MAPS took price a replacement
+#: against the budget it left. The target and every score stay with the lead.
+SHIPPED_METRICS = ("steps_taken",)
 
 
-def off_manifest(kit: Path, manifest: Path = STUDY_REPORTS) -> list[str]:
-    """Report ids the kit's plan deals that the study manifest does not list, sorted."""
-    doc = json.loads(manifest.read_text())
-    frozen = set(doc["session"]) | set(doc["practice"])
-    return sorted(dealt(kit) - frozen)
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def dealt(kit: Path) -> set[str]:
@@ -218,12 +224,106 @@ def dealt(kit: Path) -> set[str]:
     return {ln.strip() for f in (kit / "plan").glob("*/*.txt") for ln in f.read_text().splitlines() if ln.strip()}
 
 
-def ungradable(kit: Path, manifest: Path = STUDY_REPORTS) -> tuple[list[str], list[str]]:
-    """Every session report the kit's plan deals, graded the way a participant's answer will be: the text it shows is
-    the corpus's, a point inside its footprint scores right and one 565 m off scores wrong. The
-    failures as ``"<id>: <why>"``, and the reports where MAPS's root, scored on the masks of its
-    day, disagrees with the corpus now (``team_rows.masked_now`` regrades those)."""
-    ids = sorted(dealt(kit) & set(json.loads(manifest.read_text())["session"]))
+def off_manifest(kit: Path, manifest: Path = STUDY_REPORTS) -> list[str]:
+    """Report ids the kit's plan deals that the study manifest does not list, sorted."""
+    doc = json.loads(manifest.read_text())
+    return sorted(dealt(kit) - set(doc["session"]) - set(doc["practice"]))
+
+
+def shipped_row(row: dict) -> dict:
+    """A MAPS row as the participant's download carries it: no target point, no score."""
+    out = {k: v for k, v in row.items() if k != "target_xy"}
+    out["metrics"] = {k: row["metrics"][k] for k in SHIPPED_METRICS if k in row.get("metrics", {})}
+    return out
+
+
+def _plain(v):
+    """A footprint as JSON lists of floats, however the bench holds it."""
+    return [_plain(x) for x in v] if isinstance(v, (list, tuple, np.ndarray)) else float(v)
+
+
+def export_targets(kit: Path, study: Path = STUDY) -> int:
+    """``targets.json``: each session report's text as the kit's MAPS run shows it, and its
+    footprint and target point off the corpus as committed now. Refuses a dirty corpus or a
+    report whose text is not the corpus's."""
+    from baselines.human.study_server import use_kit
+
+    use_kit(kit)
+    from baselines.human import team_rows
+    from baselines.human.session_plan import scored_rows
+    from benchmarks.citynav.adapter import load_split, parse_episode
+    from benchmarks.citynav.paths import split_path
+
+    corpus_file = split_path("calcity")
+    if subprocess.run(["git", "diff", "--quiet", "HEAD", "--", str(corpus_file)], cwd=REPO).returncode:
+        raise SystemExit(f"{corpus_file.name} has uncommitted changes: commit them before freezing the study's targets")
+    commit = subprocess.run(["git", "log", "-1", "--format=%h", "--", str(corpus_file)], cwd=REPO, check=True,
+                            capture_output=True, text=True).stdout.strip()
+    corpus, rows = load_split(corpus_file), scored_rows(kit / "maps_root")
+    shape_of = team_rows.TargetShapes("calcity")
+    targets = {}
+    for e in json.loads((study / "reports.json").read_text())["session"]:
+        i = int(e.rsplit("#", 1)[1])
+        row, ep = rows[e], parse_episode(corpus[i], row_index=i)
+        if row["description"] not in corpus[i]["descriptions"]:
+            raise SystemExit(f"{e}: the text MAPS's run shows is not the corpus's")
+        targets[e] = {"description": row["description"], "target_xy": _plain(ep.target_xy), "footprint": _plain(shape_of(e))}
+    doc = {"_README": "What each capacity-study report is graded on (IRB-90304): the text participants read, the "
+                      "target point and the footprint a commit must land in. Exported by study_package freeze off "
+                      f"benchmarks/calcity/data/calcity.json at {commit}; grading reads this file, never the corpus.",
+           "corpus_commit": commit, "targets": targets}
+    (study / "targets.json").write_text(json.dumps(doc, indent=0) + "\n")
+    return len(targets)
+
+
+def _study_files(kit: Path, study: Path) -> dict[str, Path]:
+    files = {"reports.json": study / "reports.json", "targets.json": study / "targets.json",
+             "kit/maps_root/episodes.jsonl": kit / "maps_root" / "episodes.jsonl"}
+    files |= {f"plan/{p.relative_to(study / 'plan').as_posix()}": p for p in sorted((study / "plan").rglob("*")) if p.is_file()}
+    return files
+
+
+def freeze(kit: Path, study: Path = STUDY) -> dict:
+    """The kit's plan copied into the study, ``targets.json`` exported and ``lock.json`` written."""
+    shutil.rmtree(study / "plan", ignore_errors=True)
+    shutil.copytree(kit / "plan", study / "plan")
+    export_targets(kit, study)
+    return write_lock(kit, study)
+
+
+def write_lock(kit: Path, study: Path = STUDY) -> dict:
+    """``lock.json``: the sha256 of the study's files and the kit's MAPS ledger, as they stand."""
+    lock = {"_README": "The sha256 of every file the capacity study rests on, written by study_package freeze; "
+                       "check and bundle refuse a kit or a study folder that no longer matches. zip: the last "
+                       "download bundle built.",
+            "files": {k: _sha(p) for k, p in _study_files(kit, study).items()}}
+    (study / "lock.json").write_text(json.dumps(lock, indent=1) + "\n")
+    return lock
+
+
+def unlocked(kit: Path, study: Path = STUDY, zip_file: Path | None = None) -> list[str]:
+    """Where the study folder, the kit or a built zip strays from ``lock.json``."""
+    if not (study / "lock.json").is_file():
+        return ["the study has no lock.json: run study_package freeze"]
+    lock = json.loads((study / "lock.json").read_text())
+    have = {k: _sha(p) for k, p in _study_files(kit, study).items() if p.is_file()}
+    out = [f"{k}: {'missing' if k not in have else 'changed since the freeze'}" for k, v in lock["files"].items() if have.get(k) != v]
+    out += [f"{k}: not in the lock" for k in have if k not in lock["files"]]
+    kit_plan = {p.relative_to(kit / "plan").as_posix(): _sha(p) for p in (kit / "plan").rglob("*") if p.is_file()}
+    study_plan = {k.removeprefix("plan/"): v for k, v in have.items() if k.startswith("plan/")}
+    out += [f"kit/plan/{k}: not the study's plan" for k in sorted(set(kit_plan) | set(study_plan)) if kit_plan.get(k) != study_plan.get(k)]
+    if zip_file is not None and _sha(zip_file) != (lock.get("zip") or {}).get("sha256"):
+        out.append(f"{zip_file.name}: not the zip the lock records")
+    return out
+
+
+def ungradable(kit: Path, study: Path = STUDY) -> tuple[list[str], list[str]]:
+    """Every session report the kit's plan deals, graded the way a participant's answer will be,
+    on the study's ``targets.json``: the text it shows is the frozen text, a point inside its
+    footprint scores right and one 565 m off scores wrong. The failures as ``"<id>: <why>"``, and
+    the reports where MAPS's root, scored on the masks of its day, disagrees with the frozen
+    footprint (``team_rows.masked_now`` regrades those)."""
+    ids = sorted(dealt(kit) & set(json.loads((study / "reports.json").read_text())["session"]))
     if not ids:
         return [], []
     from baselines.human.study_server import use_kit
@@ -233,23 +333,22 @@ def ungradable(kit: Path, manifest: Path = STUDY_REPORTS) -> tuple[list[str], li
 
     from baselines.human import team_rows
     from baselines.human.session_plan import scored_rows
-    from benchmarks.citynav.adapter import load_split
-    from benchmarks.citynav.paths import split_path
 
-    corpus = load_split(split_path("calcity"))
-    rows, cfg, shape_of = scored_rows(kit / "maps_root"), team_rows.root_config(kit / "maps_root"), team_rows.TargetShapes("calcity")
+    rows, cfg = scored_rows(kit / "maps_root"), team_rows.root_config(kit / "maps_root")
+    targets = team_rows.StudyTargets(study / "targets.json")
     bad, moved = [], []
     for e in ids:
-        row = rows.get(e)
-        if row is None:
-            bad.append(f"{e}: not in the kit's MAPS root")
+        row, frozen = rows.get(e), targets.targets.get(e)
+        if row is None or frozen is None:
+            bad.append(f"{e}: not in the kit's MAPS root" if row is None else f"{e}: not in targets.json")
             continue
-        if row["description"] not in corpus[int(e.rsplit("#", 1)[1])]["descriptions"]:
-            bad.append(f"{e}: the text it shows is not the corpus's")
+        if row["description"] != frozen["description"]:
+            bad.append(f"{e}: the text it shows is not the frozen text")
         if row["metrics"].get("success_criterion") != "shape":
             bad.append(f"{e}: scored on a ring, not its footprint")
             continue
-        shape = shape_of(e)
+        row = {**row, "target_xy": frozen["target_xy"]}
+        shape = frozen["footprint"]
         geom = None
         if shape and len(shape) >= 3:
             geom = (Polygon(shape) if isinstance(shape[0][0], (int, float)) else MultiPolygon([Polygon(q) for q in shape])).buffer(0)
@@ -257,21 +356,21 @@ def ungradable(kit: Path, manifest: Path = STUDY_REPORTS) -> tuple[list[str], li
             bad.append(f"{e}: no footprint to grade on")
             continue
         p = geom.representative_point()
-        hit = team_rows.team_row(row, {"decision": "commit", "xy": [p.x, p.y]}, cfg, shape_of)["metrics"]["SR"]
-        miss = team_rows.team_row(row, {"decision": "commit", "xy": [p.x + 400, p.y + 400]}, cfg, shape_of)["metrics"]["SR"]
+        hit = team_rows.team_row(row, {"decision": "commit", "xy": [p.x, p.y]}, cfg, targets)["metrics"]["SR"]
+        miss = team_rows.team_row(row, {"decision": "commit", "xy": [p.x + 400, p.y + 400]}, cfg, targets)["metrics"]["SR"]
         if (hit, miss) != (1, 0):
             bad.append(f"{e}: a point inside scores {hit}, one 565 m off scores {miss}")
-        now = team_rows.masked_now(row, cfg, shape_of)["metrics"]["SR"]
+        now = team_rows.masked_now(row, cfg, targets)["metrics"]["SR"]
         if now != row["metrics"]["SR"]:
-            moved.append(f"{e}: MAPS {row['metrics']['SR']} as flown, {now} on the mask now")
+            moved.append(f"{e}: MAPS {row['metrics']['SR']} as flown, {now} on the frozen footprint")
     return bad, moved
 
 
-
-
-def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) -> int:
+def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None, study: Path = STUDY) -> int:
     """The participant's one download, as a zip whose launchers keep their execute bit. The
-    READ ME and ``kit/contact.txt`` (which the visit page reads) carry the lead's ``contact``."""
+    READ ME and ``kit/contact.txt`` (which the visit page reads) carry the lead's ``contact``.
+    Built only from a kit that matches the study's lock and grades whole; MAPS's ledger ships
+    without its targets and scores (``shipped_row``), and the lock records the zip."""
     name = "MAPS-study"
     code = subprocess.run(["git", "ls-files", "maps", "benchmarks", "baselines"], cwd=REPO, check=True,
                           capture_output=True, text=True).stdout.split()
@@ -291,14 +390,21 @@ def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) 
     missing = [rel for rel in REQUIRED if Path(rel) not in kept]
     if missing:
         raise SystemExit(f"{kit} is not a whole kit: it lacks {', '.join(missing)}")
-    stray = off_manifest(kit)
+    stray = off_manifest(kit, study / "reports.json")
     if stray:
-        raise SystemExit(f"{kit}'s plan deals {len(stray)} reports outside {STUDY_REPORTS.name}, "
+        raise SystemExit(f"{kit}'s plan deals {len(stray)} reports outside reports.json, "
                          f"first {stray[0]}: regenerate the plan, or change the manifest with a STUDY.md note")
-    bad, _moved = ungradable(kit)
+    drift = unlocked(kit, study)
+    if drift:
+        raise SystemExit(f"{len(drift)} files stray from the study's lock.json, first {drift[0]}")
+    bad, _moved = ungradable(kit, study)
     if bad:
         raise SystemExit(f"{len(bad)} of the study's reports cannot be graded, first {bad[0]}")
-    files += [(f"{name}/kit/{rel.as_posix()}", kit / rel) for rel in kept]
+    ledger = Path("maps_root/episodes.jsonl")
+    from benchmarks.citynav.analysis.rows import iter_json_rows
+
+    texts[f"{name}/kit/{ledger.as_posix()}"] = "".join(json.dumps(shipped_row(r)) + "\n" for r in iter_json_rows(kit / ledger))
+    files += [(f"{name}/kit/{rel.as_posix()}", kit / rel) for rel in kept if rel != ledger]
     files = [(arc, src) for arc, src in files if arc not in texts]
     # Windows' own line endings, so Notepad and cmd read them as lines.
     crlf = lambda b: b.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
@@ -306,7 +412,8 @@ def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) 
     tmp = out.with_suffix(".partial")
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
         for arc, text in texts.items():
-            z.writestr(arc, crlf(text.encode()))
+            # The ledger is read as JSON lines, not by people: its own line endings.
+            z.writestr(arc, text.encode() if arc.endswith(".jsonl") else crlf(text.encode()))
         for arc, src in files:
             if arc.endswith(".bat"):
                 info = zipfile.ZipInfo.from_file(src, arc)
@@ -316,6 +423,10 @@ def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) 
                 # The file's own mode rides along: the launchers keep their execute bit.
                 z.write(src, arc, zipfile.ZIP_STORED if arc.endswith(STORED) else zipfile.ZIP_DEFLATED)
     tmp.replace(out)
+    lock = json.loads((study / "lock.json").read_text())
+    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, capture_output=True, text=True).stdout.strip()
+    lock["zip"] = {"sha256": _sha(out), "bytes": out.stat().st_size, "commit": commit}
+    (study / "lock.json").write_text(json.dumps(lock, indent=1) + "\n")
     return len(texts) + len(files)
 
 
@@ -333,20 +444,28 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("replies", help="MAPS's final replies into a kit, from a mirror of the root's transcripts")
     p.add_argument("--transcripts", type=Path, required=True)
     p.add_argument("--kit", type=Path, required=True)
-    c = sub.add_parser("check", help="the kit's plan against the frozen reports, and every report graded once")
+    c = sub.add_parser("check", help="the kit against the study's lock and reports, and every report graded once")
     c.add_argument("--kit", type=Path, required=True)
+    c.add_argument("--zip", type=Path, help="a downloaded bundle, checked against the zip the lock records")
+    f = sub.add_parser("freeze", help="the kit's plan into the study, its targets exported and its lock written")
+    f.add_argument("--kit", type=Path, required=True)
     b = sub.add_parser("bundle", help="the participant's one download: the kit, the code and the launchers")
     b.add_argument("--kit", type=Path, required=True)
     b.add_argument("--out", type=Path, required=True, help="the zip, outside the repository")
     b.add_argument("--contact", required=True, help="the address or addresses for questions and the results, as one phrase (\"a@x.edu and b@y.edu\")")
     b.add_argument("--video", type=Path, help=f"the tutorial video, shipped at the top as \"{VIDEO}\"")
     args = ap.parse_args(argv)
+    if args.cmd == "freeze":
+        lock = freeze(args.kit)
+        print(f"{len(lock['files'])} files locked -> {STUDY_LOCK}")
+        return 0
     if args.cmd == "check":
-        stray, (bad, moved) = off_manifest(args.kit), ungradable(args.kit)
-        for line in [*(f"off the manifest: {e}" for e in stray), *bad, *moved]:
+        stray, drift, (bad, moved) = off_manifest(args.kit), unlocked(args.kit, zip_file=args.zip), ungradable(args.kit)
+        for line in [*(f"off the manifest: {e}" for e in stray), *drift, *bad, *moved]:
             print(line)
-        print(f"{len(stray)} dealt off the manifest, {len(bad)} ungradable, {len(moved)} MAPS verdicts regraded on today's masks")
-        return 1 if stray or bad else 0
+        print(f"{len(stray)} dealt off the manifest, {len(drift)} off the lock, {len(bad)} ungradable, "
+              f"{len(moved)} MAPS verdicts regraded on the frozen footprints")
+        return 1 if stray or drift or bad else 0
     if args.cmd == "bundle":
         print(f"{build_bundle(args.kit, args.out, args.contact, args.video)} files -> {args.out}")
         return 0

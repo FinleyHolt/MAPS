@@ -1,0 +1,63 @@
+{
+ "schema": "maps.run_manifest/v1",
+ "created_ts": "2026-10-21T16:36:30Z",
+ "hostname": "a01-11-s1-dgx-01-c01",
+ "run_id": "qwen38-flash-next-xhigh-c96",
+ "out_root": "/home/finley/datasets/calcity-campaign/roots/qwen38-flash-next-xhigh-c96",
+ "git_commit": "e4889d9ad76320812e06761185ac21f0234bc3c7",
+ "git_dirty": null,
+ "config": "/lustre/finley.holt/maps-campaign/e4889d9/configs/calcity.yaml",
+ "config_sha256": "0f5bf9bbe7dcb5c528b0e7ba60a059dcb4626d188529b5d0d1cdab4d1ab23205",
+ "split": "calcity",
+ "search_env_flags": {
+  "SEARCH_CITYNAV_TILES": "/lustre/finley.holt/maps-data/calcity",
+  "SEARCH_CITYNAV_RGBD_DIR": "/lustre/finley.holt/datasets/calcity/data/rgbd_upstream",
+  "SEARCH_SAMPLING_REASONING_EFFORT": "xhigh",
+  "SEARCH_COMPACT_TOKENIZER_NAME": "/lustre/finley.holt/models/RadixArk--Qwen3.8-Flash-Next-NVFP4"
+ },
+ "served_model": "qwen38-flash-next-nvfp4",
+ "served_build": "/lustre/finley.holt/models/RadixArk--Qwen3.8-Flash-Next-NVFP4",
+ "config_yaml": "max_steps: 100000\nsuccess_radius_m: 20.0\nspawn: uniform\nspawn_seed: 1234\nstart_altitude_agl_m: 914.4\naltitude_cap_m: 1000.0\nsensor: oryx_orx32_25mm_nadir\nwithhold: []\n",
+ "withhold": [],
+ "selection": {
+  "episodes_n": 4
+ },
+ "endpoints": {
+  "base_url": "http://127.0.0.1:30000/v1",
+  "model_id": "qwen38-flash-next-nvfp4",
+  "max_model_len": 262144,
+  "tokenizer": "/lustre/finley.holt/models/RadixArk--Qwen3.8-Flash-Next-NVFP4",
+  "input_budget": 221120,
+  "max_output_tokens": 40000,
+  "sam_url": "http://127.0.0.1:8772,http://127.0.0.1:8773,http://127.0.0.1:8774,http://127.0.0.1:8775"
+ },
+ "perception": {
+  "tiles_dir_resolved": "/lustre/finley.holt/maps-data/calcity",
+  "bake_sha256": "ae1ed4bc019e87e7b7faaf2178dd0b455875bb8af9eef43f512c021d06ac3dd2"
+ },
+ "env": {
+  "CITYNAV_BENCH_CONFIG": "configs/calcity.yaml",
+  "SAM_SERVER_URL": "http://127.0.0.1:8772,http://127.0.0.1:8773,http://127.0.0.1:8774,http://127.0.0.1:8775",
+  "SEARCH_BENCHMARK_NAME": "calcity",
+  "SEARCH_CALCITY_DATA": "/lustre/finley.holt/datasets/calcity",
+  "SEARCH_CALCITY_TILES": "/lustre/finley.holt/maps-data/calcity",
+  "SEARCH_CITYNAV_DATA": "/lustre/finley.holt/datasets/calcity",
+  "SEARCH_CITYNAV_RGBD_DIR": "/lustre/finley.holt/datasets/calcity/data/rgbd_upstream",
+  "SEARCH_CITYNAV_SPLITS": "/lustre/finley.holt/maps-campaign/e4889d9/benchmarks/calcity/data",
+  "SEARCH_CITYNAV_TILES": "/lustre/finley.holt/maps-data/calcity",
+  "SEARCH_COMPACT_TOKENIZER_NAME": "/lustre/finley.holt/models/RadixArk--Qwen3.8-Flash-Next-NVFP4",
+  "SEARCH_ENDPOINT_SPEC_OVERRIDE": "qwen38-flash-next-nvfp4:262144",
+  "SEARCH_REASONER_URL": "http://127.0.0.1:30000/v1",
+  "SEARCH_SAMPLING_REASONING_EFFORT": "xhigh"
+ },
+ "resumes": [],
+ "capacity96": {
+  "halves": [
+   "a",
+   "b"
+  ],
+  "workers_per_half": 48,
+  "nodes": 2
+ },
+ "practice": true
+}

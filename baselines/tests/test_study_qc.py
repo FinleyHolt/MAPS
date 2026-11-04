@@ -60,6 +60,8 @@ def _kit(tmp_path, monkeypatch):
     solo.mkdir(parents=True)
     (solo / "answers.jsonl").write_text(json.dumps({"episode_id": "block_0::1#0", "source": "skip"}) + "\n")
     monkeypatch.setattr(study_qc, "use_kit", lambda k: None)
+    # A toy root: graded on its own rows, not the study's frozen targets.
+    monkeypatch.setattr(study_qc, "STUDY_TARGETS", None)
     return kit
 
 

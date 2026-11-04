@@ -1,5 +1,5 @@
 {
- "_README": "The Cal City reports frozen for the capacity study (Stanford IRB-90304). session: the reports every participant's list deals, in no order (each list is its own shuffle). practice: the four practice reports. omitted: reports the QA pass left out, never dealt. Ids are calcity::<ann>#<row> into benchmarks/calcity/data/calcity.json, the 4,573-row superset. Do not change these rows' target shapes, positions or descriptions while the study runs; a change after the first participant starts needs a note in STUDY.md and an IRB check. study_package bundle refuses a kit whose plan deals anything not listed here.",
+ "_README": "The Cal City reports frozen for the capacity study (Stanford IRB-90304). session: the reports every participant's list deals, in no order (each list is its own shuffle). practice: the four practice reports. omitted: reports the QA pass left out, never dealt. Ids are calcity::<ann>#<row> into benchmarks/calcity/data/calcity.json, the 4,573-row superset. Grading reads targets.json beside this file, never the corpus; lock.json holds the checksum of every file the study rests on. study_package check and bundle refuse a kit that strays from either. A change after the first participant starts needs a note in STUDY.md and an IRB check.",
  "irb": "IRB-90304",
  "frozen": "2026-11-03",
  "corpus_commit": "c7a36d65",

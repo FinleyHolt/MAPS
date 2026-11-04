@@ -20,6 +20,7 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
+from baselines.human.study_package import STUDY_TARGETS
 from baselines.human.study_server import KIT, label_of, use_kit
 
 SOURCES = ("own_search", "confirm", "replace", "skip", "unchecked")
@@ -117,7 +118,7 @@ def score(kit: Path, run: str) -> dict[str, dict]:
     if (results / "session.json").is_file():
         scored = kit / "scored" / f"{run}-{arm}"
         team_rows.main(["--maps-root", str(kit / "maps_root"), "--decisions", str(results / "answers.jsonl"),
-                        "--out-root", str(scored)])
+                        "--out-root", str(scored), *(["--targets", str(STUDY_TARGETS)] if STUDY_TARGETS else [])])
         out["summary"] = summary(scored)
     return {arm: out}
 

@@ -3,6 +3,7 @@ code rides without the bench's corpus, a kit's results never ship, and the lead'
 address reaches the READ ME and the kit. The Mac launcher works from its own folder, in UTF-8,
 offline once set up, and says so plainly when setup did not finish."""
 
+import hashlib
 import json
 import os
 import shutil
@@ -11,7 +12,8 @@ import zipfile
 
 import pytest
 
-from baselines.human.study_package import BUNDLE, REQUIRED, STUDY_REPORTS, build_bundle, main, off_manifest
+from baselines.human.study_package import (BUNDLE, REQUIRED, STUDY_REPORTS, build_bundle, main, off_manifest, unlocked,
+                                           write_lock)
 
 
 def _kit(root):
@@ -22,13 +24,25 @@ def _kit(root):
     return root
 
 
+def _bundle(kit, out, **kw):
+    """A bundle off a toy kit, with a study folder frozen from it beside the kit."""
+    study = kit.parent / "study"
+    shutil.rmtree(study, ignore_errors=True)
+    study.mkdir()
+    shutil.copy2(STUDY_REPORTS, study / "reports.json")
+    (study / "targets.json").write_text('{"targets": {}}')
+    shutil.copytree(kit / "plan", study / "plan")
+    write_lock(kit, study)
+    return build_bundle(kit, out, study=study, **kw)
+
+
 def test_bundle(tmp_path) -> None:
     kit = _kit(tmp_path / "kit")
     (kit / "results" / "p01").mkdir(parents=True)
     (kit / "results" / "p01" / "answers.jsonl").write_text("{}\n")
     (kit / "roster.json").write_text('{"p01": "Tyler"}')
     # The output's folder need not exist yet.
-    build_bundle(kit, tmp_path / "new" / "b.zip", contact="lead@example.org")
+    _bundle(kit, tmp_path / "new" / "b.zip", contact="lead@example.org")
     z = zipfile.ZipFile(tmp_path / "new" / "b.zip")
     names = set(z.namelist())
     mode = lambda n: z.getinfo(n).external_attr >> 16
@@ -47,7 +61,7 @@ def test_bundle(tmp_path) -> None:
         "MAPS-study/Start study (Windows).bat"]
     video = tmp_path / "t.mp4"
     video.write_bytes(b"\0" * 64)
-    build_bundle(kit, tmp_path / "v.zip", contact="lead@example.org", video=video)
+    _bundle(kit, tmp_path / "v.zip", contact="lead@example.org", video=video)
     info = zipfile.ZipFile(tmp_path / "v.zip").getinfo("MAPS-study/Watch first - tutorial.mp4")
     assert info.file_size == 64 and info.compress_type == zipfile.ZIP_STORED
     with pytest.raises(SystemExit) as e:
@@ -59,7 +73,7 @@ def test_bundle_refuses_an_incomplete_kit(tmp_path) -> None:
     kit = _kit(tmp_path / "kit")
     (kit / "calcity_ortho.mbtiles").unlink()
     with pytest.raises(SystemExit, match="calcity_ortho.mbtiles"):
-        build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
+        _bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
     assert not (tmp_path / "b.zip").exists()
 
 
@@ -69,7 +83,7 @@ def test_bundle_follows_a_kit_of_symlinked_folders(tmp_path) -> None:
     kit.mkdir()
     for p in real.iterdir():
         (kit / p.name).symlink_to(p)
-    build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
+    _bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
     names = set(zipfile.ZipFile(tmp_path / "b.zip").namelist())
     assert {f"MAPS-study/kit/{rel}" for rel in REQUIRED} <= names
 
@@ -172,16 +186,44 @@ def test_maps_reply_is_its_last_message_and_lands_beside_the_attempts_records(tm
 
 def test_the_study_manifest_names_real_reports_and_gates_the_bundle(tmp_path) -> None:
     doc = json.loads(STUDY_REPORTS.read_text())
-    corpus = json.loads((STUDY_REPORTS.parents[2] / "benchmarks/calcity/data/calcity.json").read_text())
+    corpus = json.loads((STUDY_REPORTS.parents[3] / "benchmarks/calcity/data/calcity.json").read_text())
     for eid in doc["session"] + doc["practice"] + doc["omitted"]:
         ann, row = eid.removeprefix("calcity::").split("#")
         assert corpus[int(row)]["ann_ids"][0] == int(ann), eid
     assert len(set(doc["session"])) == len(doc["session"]) and not set(doc["session"]) & set(doc["omitted"])
+    # The study's own record: a target for every session report, and the lock matching the files in git.
+    study = STUDY_REPORTS.parent
+    assert set(json.loads((study / "targets.json").read_text())["targets"]) == set(doc["session"])
+    lock = json.loads((study / "lock.json").read_text())["files"]
+    for rel, sha in lock.items():
+        if not rel.startswith("kit/"):
+            assert hashlib.sha256((study / rel).read_bytes()).hexdigest() == sha, rel
+    assert {ln for f in (study / "plan").glob("*/*.txt") for ln in f.read_text().split()} <= set(doc["session"]) | set(doc["practice"])
     kit = _kit(tmp_path / "kit")
     (kit / "plan" / "p01").mkdir()
     (kit / "plan" / "p01" / "team.txt").write_text(doc["session"][0] + "\n")
     assert off_manifest(kit) == []
     (kit / "plan" / "p01" / "team.txt").write_text(doc["omitted"][0] + "\n")
     assert off_manifest(kit) == [doc["omitted"][0]]
-    with pytest.raises(SystemExit, match="outside study_reports.json"):
-        build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
+    with pytest.raises(SystemExit, match="outside reports.json"):
+        _bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
+
+
+def test_the_download_carries_no_target_and_the_lock_catches_any_drift(tmp_path) -> None:
+    kit = _kit(tmp_path / "kit")
+    row = {"episode_id": "calcity::1#0", "description": "the pool", "target_xy": [1.0, 2.0], "status": "ok",
+           "workdir": "w0/x", "metrics": {"SR": 1, "NE": 0.5, "steps_taken": 12, "precise_target": "shape"}}
+    (kit / "maps_root" / "episodes.jsonl").write_text(json.dumps(row) + "\n")
+    _bundle(kit, tmp_path / "b.zip", contact="lead@example.org")
+    shipped = json.loads(zipfile.ZipFile(tmp_path / "b.zip").read("MAPS-study/kit/maps_root/episodes.jsonl"))
+    assert "target_xy" not in shipped and shipped["metrics"] == {"steps_taken": 12} and shipped["description"] == "the pool"
+    names = zipfile.ZipFile(tmp_path / "b.zip").namelist()
+    assert not any(n.endswith(("targets.json", "lock.json")) for n in names)
+    study = tmp_path / "study"
+    assert unlocked(kit, study, tmp_path / "b.zip") == []
+    (kit / "plan" / "plan.json").write_text('{"participants": {}}')
+    assert unlocked(kit, study) == ["kit/plan/plan.json: not the study's plan"]
+    with pytest.raises(SystemExit, match="lock.json"):
+        build_bundle(kit, tmp_path / "c.zip", contact="lead@example.org", study=study)
+    (study / "targets.json").write_text('{"targets": {"x": 1}}')
+    assert "targets.json: changed since the freeze" in unlocked(kit, study)
