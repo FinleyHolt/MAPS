@@ -62,7 +62,9 @@ shows every step below.
 
 2. Follow the page
 
-   Choose your first name. The page then walks you through everything: the
+   The page first shows the study's information sheet: read it and press
+   "I agree", or close the page if you do not want to take part. Then choose
+   your first name. The page walks you through everything else: the
    tutorial again, the briefing, four practice reports, and your session (60
    minutes). The session's 60 minutes start when you press its button, so start it only when you are
    seated and ready for an hour without interruptions. During a session use only the study page: no other

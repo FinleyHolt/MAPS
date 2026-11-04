@@ -26,8 +26,8 @@ The briefing awaits the owner's approval.
 ## For participants
 
 Everything is in `READ ME FIRST.txt` inside the download ([its source](bundle/READ%20ME%20FIRST.txt)).
-In short: unzip, start the launcher for your system, choose your first name in the page that
-opens, and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/) and the console's
+In short: unzip, start the launcher for your system, read the information sheet in the page
+that opens and press "I agree", choose your first name, and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/) and the console's
 packages into the unzipped folder (uv keeps the Python it fetches in the user's own folder);
 that needs the internet once.
 A Mac with macOS 12 or later (macOS 11 or later on Apple silicon), a computer with 64-bit
@@ -55,7 +55,7 @@ Then build the zip outside the repository, with the address participants write t
 
 ```sh
 python -m baselines.human.study_package bundle --kit "$KIT" --out ~/MAPS-study.zip \
-    --contact "frholt@stanford.edu and ryan.lutzy@gmail.com" --video "<the tutorial>.mp4"
+    --contact "frholt@stanford.edu" --video "<the tutorial>.mp4"
 ```
 
 It refuses a kit without `console/index.html`, `plan/plan.json`, `calcity_ortho.mbtiles` or
@@ -102,6 +102,14 @@ roster the page asks for a label. Every participant gets the same invitation:
 The launchers are unsigned, so macOS and Windows warn on the first start; the READ ME walks
 through both warnings.
 
+### The information sheet
+
+The visit page opens on `information.md`, the information sheet IRB-90304 approved, and goes no
+further until the participant presses "I agree". The agreement and its time go to
+`kit/results/agreed.json`, so a relaunch does not ask again; `results/` never ships in a
+bundle, so a rehearsal's agreement stays with the lead. Change the sheet only through an IRB
+modification.
+
 ### A wrong label, or one copy for a second person
 
 The label stays changeable on the visit page until session 1 starts. After that the unzipped
@@ -142,9 +150,8 @@ with zoom and center after each pan, `whole_search`, `step`, `show_cites`,
 or returns to sight), plus `"unreadable_lines"` when the ledger held lines that do not parse. No
 name, computer account or path is in it.
 
-1. The participant emails `maps-study-<run id>.json` to frholt@stanford.edu and ryan.lutzy@gmail.com,
-   so each file reaches both inboxes. The lead collects from their own inbox; Ryan's copies are
-   the backup: a file missing from one inbox is taken from the other.
+1. The participant emails `maps-study-<run id>.json` to frholt@stanford.edu, the only address
+   IRB-90304 names for results.
 2. Save every attachment, unrenamed, into one inbox folder, here `~/datasets/capacity-study/inbox`.
    Saving both copies of a file there is safe: the second is noted as already collected.
 3. Collect the inbox into the kit and the paper's figure:
