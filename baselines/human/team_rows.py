@@ -27,7 +27,7 @@ from pathlib import Path
 
 import yaml
 
-from baselines.human.session_plan import scored_rows
+from baselines.human.session_plan import omitted_reports, scored_rows
 from benchmarks.citynav.action_snap import Pose, snap_to_actions
 from benchmarks.citynav.analysis.rows import iter_json_rows
 from benchmarks.citynav.eval import score_arrival
@@ -204,7 +204,7 @@ def _search_row(out: dict, decision: dict, cfg: dict, shape_of) -> dict:
     return out
 
 
-def write_root(maps_root: Path, decisions: list[dict], out_root: Path) -> list[dict]:
+def write_root(maps_root: Path, decisions: list[dict], out_root: Path, omitted_n: int = 0) -> list[dict]:
     """The team root: one row per decided episode, and the MAPS manifest with policy ``audit``."""
     rows = scored_rows(maps_root)
     cfg = root_config(maps_root)
@@ -223,7 +223,8 @@ def write_root(maps_root: Path, decisions: list[dict], out_root: Path) -> list[d
     manifest["out_root"] = str(out_root.resolve())
     manifest["audit"] = {"maps_root": str(maps_root.resolve()), "decisions": len(decisions)}
     # The team root holds the decided episodes, not the MAPS root's whole selection.
-    manifest["selection"] = {**(manifest.get("selection") or {}), "episodes_n": len(decisions), "allowlist": "audit decisions"}
+    manifest["selection"] = {**(manifest.get("selection") or {}), "episodes_n": len(decisions), "allowlist": "audit decisions",
+                             "omitted_n": omitted_n}
     shapes = TargetShapes(manifest["split"]) if any(
         rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape"
         and d.get("decision", d.get("source")) in ("replace", "commit", "own_search")
@@ -254,7 +255,13 @@ def main(argv: list[str] | None = None) -> int:
         # A capacity session with MAPS: the results it released that the person never reached.
         for d in unchecked_answers(session, set(decided), scored_rows(args.maps_root)):
             decided[d["episode_id"]] = d
-    rows = write_root(args.maps_root, list(decided.values()), args.out_root)
+    # A report the study left out after the root flew (omitted_reports.json): neither the
+    # person's answer on it nor MAPS's result counts, whoever reached it.
+    omitted = omitted_reports()
+    dropped = [e for e in decided if e in omitted]
+    for e in dropped:
+        del decided[e]
+    rows = write_root(args.maps_root, list(decided.values()), args.out_root, omitted_n=len(dropped))
     if session_file.is_file():
         # The session's length rides with its rows: a reader's per-hour rate divides by it.
         shutil.copy2(session_file, args.out_root / "session.json")

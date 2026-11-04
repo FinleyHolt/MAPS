@@ -49,7 +49,7 @@ from datetime import datetime
 from pathlib import Path
 
 from baselines.human.audit_console import Session, _jsonl
-from baselines.human.session_plan import scored_rows
+from baselines.human.session_plan import omitted_reports, scored_rows
 
 ARMS = ("solo", "team")
 SOURCES = ("confirm", "replace", "own_search", "skip")
@@ -363,7 +363,10 @@ def main(argv: list[str] | None = None) -> int:
     tests = dict(x.split(":") for x in args.tests.split(",") if x)
     if any(arm not in ARMS for arm in tests.values()):
         raise SystemExit(f"--tests conditions are {ARMS}: {args.tests}")
-    doc = plan(scored_rows(args.maps_root), [x for x in args.participants.split(",") if x], args.seed, tests=tests)
+    omitted = omitted_reports()
+    rows = {e: r for e, r in scored_rows(args.maps_root).items() if e not in omitted}
+    doc = plan(rows, [x for x in args.participants.split(",") if x], args.seed, tests=tests)
+    doc["omitted_n"] = len(omitted)
     for name, d in doc["participants"].items():
         (args.out / name).mkdir(parents=True, exist_ok=True)
         for arm, order in d["lists"].items():
