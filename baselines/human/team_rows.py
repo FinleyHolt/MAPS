@@ -65,6 +65,22 @@ class TargetShapes:
         return success_shape(parse_episode(row, row_index=index), self.objects)
 
 
+class StudyTargets:
+    """A frozen study's ``targets.json``: each report's footprint and target point as the study
+    froze them, called like ``TargetShapes``, so grading never reads the live corpus."""
+
+    def __init__(self, path: Path) -> None:
+        self.targets = json.loads(Path(path).read_text())["targets"]
+
+    def __call__(self, episode_id: str):
+        if episode_id not in self.targets:
+            raise ValueError(f"{episode_id}: not one of the study's reports")
+        return self.targets[episode_id]["footprint"]
+
+    def target_xy(self, episode_id: str) -> list[float]:
+        return self.targets[episode_id]["target_xy"]
+
+
 def root_config(maps_root: Path) -> dict:
     """The resolved config the MAPS root flew, off its manifest."""
     return yaml.safe_load(json.loads((maps_root / "run_manifest.json").read_text())["config_yaml"])
@@ -223,9 +239,15 @@ def _search_row(out: dict, decision: dict, cfg: dict, shape_of) -> dict:
     return out
 
 
-def write_root(maps_root: Path, decisions: list[dict], out_root: Path, omitted_n: int = 0) -> list[dict]:
-    """The team root: one row per decided episode, and the MAPS manifest with policy ``audit``."""
+def write_root(maps_root: Path, decisions: list[dict], out_root: Path, omitted_n: int = 0,
+               targets: Path | None = None) -> list[dict]:
+    """The team root: one row per decided episode, and the MAPS manifest with policy ``audit``.
+    With ``targets`` (a study's ``targets.json``) every row is graded on the study's frozen
+    footprint and target point, never the corpus's."""
     rows = scored_rows(maps_root)
+    study = StudyTargets(targets) if targets else None
+    if study:
+        rows = {e: {**r, "target_xy": study.target_xy(e)} for e, r in rows.items() if e in study.targets}
     cfg = root_config(maps_root)
     manifest = json.loads((maps_root / "run_manifest.json").read_text())
     arms = {d.get("arm") for d in decisions if "source" in d}
@@ -244,8 +266,8 @@ def write_root(maps_root: Path, decisions: list[dict], out_root: Path, omitted_n
     # The team root holds the decided episodes, not the MAPS root's whole selection.
     manifest["selection"] = {**(manifest.get("selection") or {}), "episodes_n": len(decisions), "allowlist": "audit decisions",
                              "omitted_n": omitted_n}
-    shapes = TargetShapes(manifest["split"]) if any(
-        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape" for d in decisions) else None
+    shapes = study or (TargetShapes(manifest["split"]) if any(
+        rows[d["episode_id"]]["metrics"].get("success_criterion") == "shape" for d in decisions) else None)
     out = [team_row(masked_now(rows[d["episode_id"]], cfg, shapes), d, cfg, shapes) for d in decisions]
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "run_manifest.json").write_text(json.dumps(manifest, indent=1))
@@ -258,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--maps-root", type=Path, required=True)
     ap.add_argument("--decisions", type=Path, required=True)
     ap.add_argument("--out-root", type=Path, required=True)
+    ap.add_argument("--targets", type=Path, help="a study's targets.json: grade on its frozen footprints, not the corpus")
     args = ap.parse_args(argv)
     select_bench(args.maps_root)
     # The last decision per episode: a resumed session may have re-judged one.
@@ -278,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     dropped = [e for e in decided if e in omitted]
     for e in dropped:
         del decided[e]
-    rows = write_root(args.maps_root, list(decided.values()), args.out_root, omitted_n=len(dropped))
+    rows = write_root(args.maps_root, list(decided.values()), args.out_root, omitted_n=len(dropped), targets=args.targets)
     if session_file.is_file():
         # The session's length rides with its rows: a reader's per-hour rate divides by it.
         shutil.copy2(session_file, args.out_root / "session.json")
