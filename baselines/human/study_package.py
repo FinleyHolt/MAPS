@@ -210,8 +210,61 @@ def off_manifest(kit: Path, manifest: Path = STUDY_REPORTS) -> list[str]:
     """Report ids the kit's plan deals that the study manifest does not list, sorted."""
     doc = json.loads(manifest.read_text())
     frozen = set(doc["session"]) | set(doc["practice"])
-    dealt = {ln.strip() for f in (kit / "plan").glob("*/*.txt") for ln in f.read_text().splitlines() if ln.strip()}
-    return sorted(dealt - frozen)
+    return sorted(dealt(kit) - frozen)
+
+
+def dealt(kit: Path) -> set[str]:
+    """Every report id the kit's plan deals, practice included."""
+    return {ln.strip() for f in (kit / "plan").glob("*/*.txt") for ln in f.read_text().splitlines() if ln.strip()}
+
+
+def ungradable(kit: Path, manifest: Path = STUDY_REPORTS) -> tuple[list[str], list[str]]:
+    """Every session report the kit's plan deals, graded the way a participant's answer will be: the text it shows is
+    the corpus's, a point inside its footprint scores right and one 565 m off scores wrong. The
+    failures as ``"<id>: <why>"``, and the reports where MAPS's root, scored on the masks of its
+    day, disagrees with the corpus now (``team_rows.masked_now`` regrades those)."""
+    ids = sorted(dealt(kit) & set(json.loads(manifest.read_text())["session"]))
+    if not ids:
+        return [], []
+    from baselines.human.study_server import use_kit
+
+    use_kit(kit)
+    from shapely.geometry import MultiPolygon, Polygon
+
+    from baselines.human import team_rows
+    from baselines.human.session_plan import scored_rows
+    from benchmarks.citynav.adapter import load_split
+    from benchmarks.citynav.paths import split_path
+
+    corpus = load_split(split_path("calcity"))
+    rows, cfg, shape_of = scored_rows(kit / "maps_root"), team_rows.root_config(kit / "maps_root"), team_rows.TargetShapes("calcity")
+    bad, moved = [], []
+    for e in ids:
+        row = rows.get(e)
+        if row is None:
+            bad.append(f"{e}: not in the kit's MAPS root")
+            continue
+        if row["description"] not in corpus[int(e.rsplit("#", 1)[1])]["descriptions"]:
+            bad.append(f"{e}: the text it shows is not the corpus's")
+        if row["metrics"].get("success_criterion") != "shape":
+            bad.append(f"{e}: scored on a ring, not its footprint")
+            continue
+        shape = shape_of(e)
+        geom = None
+        if shape and len(shape) >= 3:
+            geom = (Polygon(shape) if isinstance(shape[0][0], (int, float)) else MultiPolygon([Polygon(q) for q in shape])).buffer(0)
+        if geom is None or geom.is_empty:
+            bad.append(f"{e}: no footprint to grade on")
+            continue
+        p = geom.representative_point()
+        hit = team_rows.team_row(row, {"decision": "commit", "xy": [p.x, p.y]}, cfg, shape_of)["metrics"]["SR"]
+        miss = team_rows.team_row(row, {"decision": "commit", "xy": [p.x + 400, p.y + 400]}, cfg, shape_of)["metrics"]["SR"]
+        if (hit, miss) != (1, 0):
+            bad.append(f"{e}: a point inside scores {hit}, one 565 m off scores {miss}")
+        now = team_rows.masked_now(row, cfg, shape_of)["metrics"]["SR"]
+        if now != row["metrics"]["SR"]:
+            moved.append(f"{e}: MAPS {row['metrics']['SR']} as flown, {now} on the mask now")
+    return bad, moved
 
 
 
@@ -242,6 +295,9 @@ def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) 
     if stray:
         raise SystemExit(f"{kit}'s plan deals {len(stray)} reports outside {STUDY_REPORTS.name}, "
                          f"first {stray[0]}: regenerate the plan, or change the manifest with a STUDY.md note")
+    bad, _moved = ungradable(kit)
+    if bad:
+        raise SystemExit(f"{len(bad)} of the study's reports cannot be graded, first {bad[0]}")
     files += [(f"{name}/kit/{rel.as_posix()}", kit / rel) for rel in kept]
     files = [(arc, src) for arc, src in files if arc not in texts]
     # Windows' own line endings, so Notepad and cmd read them as lines.
@@ -277,12 +333,20 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("replies", help="MAPS's final replies into a kit, from a mirror of the root's transcripts")
     p.add_argument("--transcripts", type=Path, required=True)
     p.add_argument("--kit", type=Path, required=True)
+    c = sub.add_parser("check", help="the kit's plan against the frozen reports, and every report graded once")
+    c.add_argument("--kit", type=Path, required=True)
     b = sub.add_parser("bundle", help="the participant's one download: the kit, the code and the launchers")
     b.add_argument("--kit", type=Path, required=True)
     b.add_argument("--out", type=Path, required=True, help="the zip, outside the repository")
     b.add_argument("--contact", required=True, help="the address or addresses for questions and the results, as one phrase (\"a@x.edu and b@y.edu\")")
     b.add_argument("--video", type=Path, help=f"the tutorial video, shipped at the top as \"{VIDEO}\"")
     args = ap.parse_args(argv)
+    if args.cmd == "check":
+        stray, (bad, moved) = off_manifest(args.kit), ungradable(args.kit)
+        for line in [*(f"off the manifest: {e}" for e in stray), *bad, *moved]:
+            print(line)
+        print(f"{len(stray)} dealt off the manifest, {len(bad)} ungradable, {len(moved)} MAPS verdicts regraded on today's masks")
+        return 1 if stray or bad else 0
     if args.cmd == "bundle":
         print(f"{build_bundle(args.kit, args.out, args.contact, args.video)} files -> {args.out}")
         return 0

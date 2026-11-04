@@ -61,6 +61,24 @@ deals any report not in the manifest, so a regenerated plan cannot quietly drift
 change the set on purpose before the study starts: regenerate the plan, rewrite the manifest from
 it, and commit both with the reason.
 
+Grading uses the masks in `calcity.json` as committed, never the scores the MAPS run stored on
+Oct 21. `team_rows.masked_now` regrades MAPS's own answer on today's footprint before a team
+answer is scored, so a confirmed MAPS answer and a replaced one meet the same shape, and
+`maps_SR` in the scored rows is MAPS's score on that shape. The QA merge moved 8 of MAPS's
+verdicts this way (3 now right, 5 now wrong): MAPS alone scores 742 of 1,065 (69.67%), not the
+744 (69.86%) the run stored and `plan.json`'s `maps_sr` still records.
+
+Check a kit before building or sharing it:
+
+```sh
+python -m baselines.human.study_package check --kit "$KIT"
+```
+
+It lists any report the plan deals off the manifest, any session report that cannot be graded
+(its text is not the corpus's, it has no footprint, or a point inside its footprint does not
+score right and one 565 m off does not score wrong), and each MAPS verdict the current masks
+move. It exits 1 on the first two; `bundle` runs the same checks and refuses the build.
+
 ### Build and share the download
 
 The kit carries the console's built web code. After any change under `console/`, rebuild it
