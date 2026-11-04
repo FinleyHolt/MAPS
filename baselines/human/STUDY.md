@@ -27,7 +27,8 @@ The briefing awaits the owner's approval.
 
 Everything is in `READ ME FIRST.txt` inside the download ([its source](bundle/READ%20ME%20FIRST.txt)).
 In short: unzip, start the launcher for your system, read the information sheet in the page
-that opens and press "I agree", choose your first name, and follow the page. The first start fetches [uv](https://docs.astral.sh/uv/) and the console's
+that opens and press "I agree", type the participant code from your invitation email, and
+follow the page. The first start fetches [uv](https://docs.astral.sh/uv/) and the console's
 packages into the unzipped folder (uv keeps the Python it fetches in the user's own folder);
 that needs the internet once.
 A Mac with macOS 12 or later (macOS 11 or later on Apple silicon), a computer with 64-bit
@@ -71,18 +72,17 @@ to ...".
 Upload **the zip file itself** to Google Drive and share it by link. Never share an unzipped
 folder: Drive zips a folder on download and drops the Mac launcher's permission to run.
 
-The kit's `roster.json` maps each label to the participant's first name (`{"p01": "Tyler", ...}`,
-labels `p01` to `p15` in the roster's order); the visit page then offers the first names, in
-alphabetical order, in place of a typed label, and the results still name the label alone. The
-roster rides in the download, so first names only, and only when they are unique. The plan also
-holds two rehearsal labels for the study lead, `t01` (with MAPS) and `t02` (alone), listed as
-"Ryan (test MAPS)" and "Ryan (test control)" (`capacity plan --tests t01:team,t02:solo`): they
-leave the participants' conditions as dealt, and `study_qc` fails their runs, so collection
-records them flagged and the figure leaves them out. Without a
-roster the page asks for a label. Every participant gets the same invitation:
+Each participant's code is their plan label (`p01` to `p15`), and it alone picks their condition.
+The kit's `roster.json` maps each label to the participant's first name (`{"p01": "Tyler", ...}`):
+it is the lead's record of who holds which code and never ships in the download, so the visit
+page asks for the code. Run from a clone, a kit with a roster offers the names instead. The plan
+also holds two rehearsal labels for the study lead, `t01` (with MAPS) and `t02` (alone)
+(`capacity plan --tests t01:team,t02:solo`): they leave the participants' conditions as dealt,
+and `study_qc` fails their runs, so collection records them flagged and the figure leaves them
+out. Every participant gets the same invitation, with their own code:
 
-> Thank you for taking part in the search study. You will choose your first name from a list in
-> the study; your results carry only a code for it.
+> Thank you for taking part in the search study. Your participant code is <code>: the study
+> page asks for it, and your results carry only that code.
 >
 > Download the study here: <link>. It is one zip file of about 2.5 GB. Google Drive says it is
 > too large to preview and cannot scan it for viruses; both are normal, so press "Download
@@ -229,7 +229,7 @@ The kit is built from the bench's own files by `baselines.human.study_package` (
 MAPS's final replies to a kit from a copy of the run's transcripts alone), the OSM prior and
 labelled objects, and the plan (`baselines.human.capacity plan` for `p01` to `p15`: eight alone
 and seven with MAPS, dealt by the seed, each working every report in their own shuffled order;
-and `capacity practice`), and `roster.json`. The console's web
+and `capacity practice`), and the lead's `roster.json`. The console's web
 source is `baselines/human/console`; the kit carries the built copy in `console/`.
 
 Sessions run unsupervised, so nothing enforces the rule against other maps during a session;
