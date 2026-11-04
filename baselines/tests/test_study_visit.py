@@ -19,7 +19,13 @@ def _kit(tmp_path, contact: str | None = None):
                                                                               "p02": {"arm": "team"}}}))
     if contact:
         (tmp_path / "contact.txt").write_text(contact + "\n")
+    _agreed(tmp_path)
     return tmp_path
+
+
+def _agreed(kit) -> None:
+    (kit / "results").mkdir(parents=True, exist_ok=True)
+    (kit / "results" / "agreed.json").write_text("{}\n")
 
 
 def _session(folder, age_s: float = 0.0, answers: str = "") -> None:
@@ -158,6 +164,7 @@ def test_briefing_markdown(tmp_path) -> None:
 def test_a_mistyped_label_stays_in_the_box(tmp_path) -> None:
     (tmp_path / "plan").mkdir()
     (tmp_path / "plan" / "plan.json").write_text(json.dumps({"participants": {"p01": {"arm": "team"}}}))
+    _agreed(tmp_path)
     v = Visit(tmp_path)
     v.set_label("p83'")
     assert "value='p83&#x27;'" in v.page()
@@ -217,3 +224,21 @@ def test_a_roster_lists_first_names_and_keeps_the_label_in_the_results(tmp_path)
     assert v.participant == "p02" and "Welcome, Ann" in page and "Not you? Change it" in page
     _session(tmp_path / "results" / v.run / "team", age_s=3601)
     assert json.loads(v.results_json())["participant"] == "p02" and b"Ann" not in v.results_json()
+
+
+def test_the_information_sheet_comes_before_anything_else(tmp_path) -> None:
+    kit = _kit(tmp_path)
+    (kit / "results" / "agreed.json").unlink()
+    v = Visit(kit)
+    page = v.page()
+    assert "IRB protocol IRB-90304" in page and "I agree" in page and "/visit/label" not in page
+    v.set_label("p01")
+    assert v.participant is None and v.start("practice") is None
+    v.agree()
+    assert "agreed_at" in json.loads((kit / "results" / "agreed.json").read_text())
+    assert "I agree" not in v.page() and "/visit/label" in v.page()
+    # A relaunch remembers the agreement, and the agreement is no run of its own.
+    v = Visit(kit)
+    assert v.agreed and v.run is None
+    v.set_label("p01")
+    assert v.participant == "p01"

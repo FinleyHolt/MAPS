@@ -288,6 +288,12 @@ def build_app(kit: Path, console: Path, visit: Visit):
             raise HTTPException(404)
         return FileResponse(visit.video, media_type="video/mp4")
 
+    @app.post("/visit/agree")
+    def visit_agree() -> Response:
+        with lock:
+            visit.agree()
+        return RedirectResponse("/visit", status_code=303)
+
     @app.get("/visit/label")
     def visit_label(label: str = "") -> Response:
         with lock:
@@ -356,6 +362,8 @@ def open_session(kit: Path, run: str, condition: str) -> Any:
 
 
 BRIEFING = Path(__file__).with_name("briefing.md")
+#: The IRB-approved information sheet the participant agrees to before anything else.
+INFORMATION = Path(__file__).with_name("information.md")
 #: The tutorial video's name at the bundle's top, beside the READ ME.
 VIDEO = "Watch first - tutorial.mp4"
 STEPS = ("practice", "session")
@@ -386,9 +394,19 @@ class Visit:
         self.run = found[0] if len(found) == 1 else None
         self.participant, self.error = (label_of(self.run) if self.run else None), ""
         self.typed = ""
+        # Under results/, which a bundle never ships, so a rehearsal's agreement stays with the lead.
+        self.agreed_file = results / "agreed.json"
+        self.agreed = self.agreed_file.is_file()
         self.returning = self.participant is not None
         # A session whose clock ran on while the study was closed, until the participant returns to it.
         self.away = self.returning and self.status("session") == "running"
+
+    def agree(self) -> None:
+        """The participant agreed to the information sheet: recorded with its time, once."""
+        if not self.agreed:
+            self.agreed_file.parent.mkdir(parents=True, exist_ok=True)
+            self.agreed_file.write_text(json.dumps({"agreed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}) + "\n")
+            self.agreed = True
 
     def locked(self) -> bool:
         """Whether the label is fixed: once the session has started, its answers are under it."""
@@ -399,7 +417,9 @@ class Visit:
         the session discards the old run's practice and mints another."""
         label = label.strip().lower()
         self.typed = label
-        if not label:
+        if not self.agreed:
+            self.error, self.typed = "", ""
+        elif not label:
             self.error = "Choose your first name." if self.roster else "Type your label, for example p07."
         elif label not in self.plan:
             self.error = ("That is not a participant label in this study. Labels look like p07; "
@@ -495,6 +515,12 @@ class Visit:
         An error shows on the page that follows it, once."""
         err = f"<p class=err>{html.escape(self.error)}</p>" if self.error else ""
         typed, self.error, self.typed = self.typed, "", ""
+        if not self.agreed:
+            body = (f"<div class=brief>{self._markdown(INFORMATION.read_text())}</div>"
+                    "<form method=post action='/visit/agree'><button>I agree</button></form>"
+                    "<p class=note>If you do not want to take part, close this page and the text window. "
+                    "Nothing about you is kept.</p>")
+            return PAGE.format(body=body)
         if self.participant is None or (change and not self.locked()):
             if self.roster:
                 # By name, in the alphabet's order: the list says nothing of labels or conditions.
@@ -563,8 +589,6 @@ class Visit:
 
     def briefing(self) -> str:
         """The briefing as HTML: the participant's own session section, at the session's length."""
-        from markdown_it import MarkdownIt
-
         if not BRIEFING.is_file():
             return ""
         own = f"Your session: {CONDITIONS[self.condition('session')]}"
@@ -572,7 +596,12 @@ class Visit:
         kept = [parts[0]] + [t for t in parts[1:] if not t.startswith("Your session: ") or t.startswith(own + "\n")]
         session = self.session("session")
         minutes = round((float(session["session_s"]) if session else session_s()) / 60)
-        text = "\n## ".join(kept).replace("{MINUTES}", str(minutes))
+        return self._markdown("\n## ".join(kept).replace("{MINUTES}", str(minutes)))
+
+    @staticmethod
+    def _markdown(text: str) -> str:
+        from markdown_it import MarkdownIt
+
         return MarkdownIt("commonmark", {"html": False}).enable("table").render(text)
 
 

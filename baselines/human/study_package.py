@@ -211,7 +211,7 @@ def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) 
     name = "MAPS-study"
     code = subprocess.run(["git", "ls-files", "maps", "benchmarks", "baselines"], cwd=REPO, check=True,
                           capture_output=True, text=True).stdout.split()
-    code = [f for f in code if f.endswith(".py") and "/tests/" not in f] + ["baselines/human/briefing.md"]
+    code = [f for f in code if f.endswith(".py") and "/tests/" not in f] + ["baselines/human/briefing.md", "baselines/human/information.md"]
     texts = {f"{name}/READ ME FIRST.txt": (BUNDLE / "READ ME FIRST.txt").read_text().replace("{CONTACT}", contact),
              f"{name}/kit/contact.txt": contact + "\n"}
     files = [(f"{name}/{arc}", BUNDLE / src) for arc, src in TOP.items()]

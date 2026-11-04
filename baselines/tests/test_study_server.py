@@ -30,7 +30,10 @@ def _client(kit):
     db.execute("INSERT INTO tiles VALUES (14, 2900, ?, ?)", (2**14 - 1 - 6514, b"webp"))
     db.commit()
     db.close()
-    return TestClient(study_server.build_app(kit, kit / "console", Visit(kit)))
+    c = TestClient(study_server.build_app(kit, kit / "console", Visit(kit)))
+    assert "I agree" in c.get("/visit").text
+    c.post("/visit/agree")
+    return c
 
 
 @pytest.mark.parametrize("name", ["kit", "odd #1 (1)", "100%25 x"])
