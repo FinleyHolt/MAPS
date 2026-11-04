@@ -231,7 +231,7 @@ def test_the_information_sheet_comes_before_anything_else(tmp_path) -> None:
     (kit / "results" / "agreed.json").unlink()
     v = Visit(kit)
     page = v.page()
-    assert "IRB protocol IRB-90304" in page and "I agree" in page and "/visit/label" not in page
+    assert "Stanford IRB-90304" in page and "I agree" in page and "/visit/label" not in page
     v.set_label("p01")
     assert v.participant is None and v.start("practice") is None
     v.agree()
