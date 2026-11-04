@@ -11,7 +11,7 @@ import zipfile
 
 import pytest
 
-from baselines.human.study_package import BUNDLE, REQUIRED, build_bundle, main
+from baselines.human.study_package import BUNDLE, REQUIRED, STUDY_REPORTS, build_bundle, main, off_manifest
 
 
 def _kit(root):
@@ -168,3 +168,20 @@ def test_maps_reply_is_its_last_message_and_lands_beside_the_attempts_records(tm
     _transcript(mirror / wd / "flight/llm/transcript.jsonl", "the house at the corner")
     assert main(["replies", "--transcripts", str(mirror), "--kit", str(tmp_path / "kit")]) == 0
     assert (out / wd / "reply.md").read_text() == "the house at the corner"
+
+
+def test_the_study_manifest_names_real_reports_and_gates_the_bundle(tmp_path) -> None:
+    doc = json.loads(STUDY_REPORTS.read_text())
+    corpus = json.loads((STUDY_REPORTS.parents[2] / "benchmarks/calcity/data/calcity.json").read_text())
+    for eid in doc["session"] + doc["practice"] + doc["omitted"]:
+        ann, row = eid.removeprefix("calcity::").split("#")
+        assert corpus[int(row)]["ann_ids"][0] == int(ann), eid
+    assert len(set(doc["session"])) == len(doc["session"]) and not set(doc["session"]) & set(doc["omitted"])
+    kit = _kit(tmp_path / "kit")
+    (kit / "plan" / "p01").mkdir()
+    (kit / "plan" / "p01" / "team.txt").write_text(doc["session"][0] + "\n")
+    assert off_manifest(kit) == []
+    (kit / "plan" / "p01" / "team.txt").write_text(doc["omitted"][0] + "\n")
+    assert off_manifest(kit) == [doc["omitted"][0]]
+    with pytest.raises(SystemExit, match="outside study_reports.json"):
+        build_bundle(kit, tmp_path / "b.zip", contact="lead@example.org")

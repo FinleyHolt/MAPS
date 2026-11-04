@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import os
 import shutil
 import sqlite3
@@ -201,6 +202,16 @@ TOP = {"Start study (Mac).command": "mac.command", "Start study (Windows).bat": 
 STORED = (".mbtiles", ".jpg", ".png", ".webp", ".mp4")
 #: What a kit cannot start without: the console, the plan, the map and MAPS's run.
 REQUIRED = ("console/index.html", "plan/plan.json", "calcity_ortho.mbtiles", "maps_root/episodes.jsonl")
+#: The reports frozen for the study (IRB-90304): a kit whose plan deals anything else never ships.
+STUDY_REPORTS = Path(__file__).with_name("study_reports.json")
+
+
+def off_manifest(kit: Path, manifest: Path = STUDY_REPORTS) -> list[str]:
+    """Report ids the kit's plan deals that the study manifest does not list, sorted."""
+    doc = json.loads(manifest.read_text())
+    frozen = set(doc["session"]) | set(doc["practice"])
+    dealt = {ln.strip() for f in (kit / "plan").glob("*/*.txt") for ln in f.read_text().splitlines() if ln.strip()}
+    return sorted(dealt - frozen)
 
 
 
@@ -227,6 +238,10 @@ def build_bundle(kit: Path, out: Path, contact: str, video: Path | None = None) 
     missing = [rel for rel in REQUIRED if Path(rel) not in kept]
     if missing:
         raise SystemExit(f"{kit} is not a whole kit: it lacks {', '.join(missing)}")
+    stray = off_manifest(kit)
+    if stray:
+        raise SystemExit(f"{kit}'s plan deals {len(stray)} reports outside {STUDY_REPORTS.name}, "
+                         f"first {stray[0]}: regenerate the plan, or change the manifest with a STUDY.md note")
     files += [(f"{name}/kit/{rel.as_posix()}", kit / rel) for rel in kept]
     files = [(arc, src) for arc, src in files if arc not in texts]
     # Windows' own line endings, so Notepad and cmd read them as lines.
