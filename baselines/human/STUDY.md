@@ -50,8 +50,8 @@ so no later change to the corpus, the kit or the MAPS run can move it:
 
 | File | What it holds |
 |---|---|
-| [`reports.json`](study/reports.json) | The 1,065 session reports every participant's list deals (each its own shuffle), the 4 practice reports, and the 35 the mask QA pass in [`benchmarks/calcity/qa`](../../benchmarks/calcity/qa/README.md) left out. It names the MAPS run the console replays (`qwen38-flash-next-xhigh-c96`) and the plan seed. |
-| [`targets.json`](study/targets.json) | Per session report: the text participants read, the target point, and the footprint a commit must land in, exported off `calcity.json` at `c7a36d65`. Grading reads this file and never the corpus. |
+| [`reports.json`](study/reports.json) | The 1,064 session reports every participant's list deals (each its own shuffle), the 4 practice reports, and the 36 the mask QA pass in [`benchmarks/calcity/qa`](../../benchmarks/calcity/qa/README.md) left out. It names the MAPS run the console replays (`qwen38-flash-next-xhigh-c96`) and the plan seed. |
+| [`targets.json`](study/targets.json) | Per session report: the text participants read, the target point, and the footprint a commit must land in, exported off `calcity.json` at `25d607b2`. Grading reads this file and never the corpus. |
 | [`plan/`](study/plan/) | The lists `capacity plan` dealt, as the kit carries them. |
 | [`lock.json`](study/lock.json) | The sha256 of each file above, of the kit's MAPS ledger (`maps_root/episodes.jsonl`), and of the last zip `bundle` built, with the commit it was built from. |
 
@@ -61,9 +61,15 @@ capacity result rest on.
 **Grading.** `study_qc` scores every session with `team_rows --targets study/targets.json`.
 `team_rows.masked_now` first regrades MAPS's own answer on the frozen footprint, so a confirmed
 MAPS answer and a replaced one meet the same shape, and `maps_SR` in the scored rows is MAPS's
-score on that shape, never the score its run stored on Oct 21. The QA merge moved 8 of MAPS's
-verdicts this way (3 now right, 5 now wrong): MAPS alone scores 742 of 1,065 (69.67%), not the
-744 (69.86%) the run stored and `plan.json`'s `maps_sr` still records.
+score on that shape, never the score its run stored on Oct 21. The frozen footprints move 5 of MAPS's
+verdicts this way (rows 217, 342, 547 now right; 2455, 2622 now wrong): MAPS alone scores 745 of
+1,064 (70.02%), not the 744 (69.92%) the run stored and `plan.json`'s `maps_sr` records.
+
+**Refreeze of 2026-11-05.** Ryan's second mask pass (merge `177968ba`) redrew rows 48, 134, 217,
+254, 342, 441, 511, 547, 621, 1405, 2545 and 2622, kept 2455, and omitted row 36 (`calcity::37#36`:
+the sentence names more than one place and the pin sits 262 m from the only drawn pool). The plan
+was dealt again on seed 1234: every participant keeps their condition, and each list is a new
+shuffle of the 1,064 reports. No participant had started.
 
 **The download carries no answers.** `bundle` ships MAPS's ledger without each row's target
 point and every score but `steps_taken` (which prices a replacement against MAPS's budget), and

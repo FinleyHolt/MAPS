@@ -1,8 +1,8 @@
 {
  "_README": "The Cal City reports frozen for the capacity study (Stanford IRB-90304). session: the reports every participant's list deals, in no order (each list is its own shuffle). practice: the four practice reports. omitted: reports the QA pass left out, never dealt. Ids are calcity::<ann>#<row> into benchmarks/calcity/data/calcity.json, the 4,573-row superset. Grading reads targets.json beside this file, never the corpus; lock.json holds the checksum of every file the study rests on. study_package check and bundle refuse a kit that strays from either. A change after the first participant starts needs a note in STUDY.md and an IRB check.",
  "irb": "IRB-90304",
- "frozen": "2026-11-03",
- "corpus_commit": "c7a36d65",
+ "frozen": "2026-11-05",
+ "corpus_commit": "25d607b2",
  "maps_run": "qwen38-flash-next-xhigh-c96",
  "plan_seed": 1234,
  "session": [
@@ -42,7 +42,6 @@
   "calcity::34#33",
   "calcity::35#34",
   "calcity::36#35",
-  "calcity::37#36",
   "calcity::38#37",
   "calcity::39#38",
   "calcity::40#39",
@@ -1079,16 +1078,6 @@
   "calcity::1364#1363"
  ],
  "omitted": [
-  "calcity::67#66",
-  "calcity::362#361",
-  "calcity::621#620",
-  "calcity::770#769",
-  "calcity::825#824",
-  "calcity::827#826",
-  "calcity::838#837",
-  "calcity::844#843",
-  "calcity::847#846",
-  "calcity::848#847",
   "calcity::1022#1021",
   "calcity::1023#1022",
   "calcity::1032#1031",
@@ -1100,7 +1089,9 @@
   "calcity::3391#3390",
   "calcity::3480#3479",
   "calcity::3529#3528",
+  "calcity::362#361",
   "calcity::3660#3659",
+  "calcity::37#36",
   "calcity::3730#3729",
   "calcity::3798#3797",
   "calcity::3820#3819",
@@ -1113,6 +1104,15 @@
   "calcity::4422#4421",
   "calcity::4497#4496",
   "calcity::4532#4531",
-  "calcity::4545#4544"
+  "calcity::4545#4544",
+  "calcity::621#620",
+  "calcity::67#66",
+  "calcity::770#769",
+  "calcity::825#824",
+  "calcity::827#826",
+  "calcity::838#837",
+  "calcity::844#843",
+  "calcity::847#846",
+  "calcity::848#847"
  ]
 }

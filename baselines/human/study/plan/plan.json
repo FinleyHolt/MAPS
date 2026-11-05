@@ -1,8 +1,8 @@
 {
  "seed": 1234,
  "design": "between subjects",
- "episodes_n": 1065,
- "maps_sr": 0.6986,
+ "episodes_n": 1064,
+ "maps_sr": 0.6992,
  "participants": {
   "p01": {
    "arm": "team",
@@ -24,7 +24,7 @@
   "p06": {
    "arm": "team",
    "agents": 96,
-   "maps_ready_in_session": 1031
+   "maps_ready_in_session": 1026
   },
   "p07": {
    "arm": "team",
@@ -34,17 +34,17 @@
   "p08": {
    "arm": "team",
    "agents": 96,
-   "maps_ready_in_session": 1027
+   "maps_ready_in_session": 1028
   },
   "p09": {
    "arm": "team",
    "agents": 96,
-   "maps_ready_in_session": 1026
+   "maps_ready_in_session": 1021
   },
   "p10": {
    "arm": "team",
    "agents": 96,
-   "maps_ready_in_session": 1025
+   "maps_ready_in_session": 1024
   },
   "p11": {
    "arm": "solo"
@@ -58,7 +58,7 @@
   "p14": {
    "arm": "team",
    "agents": 96,
-   "maps_ready_in_session": 1028
+   "maps_ready_in_session": 1027
   },
   "p15": {
    "arm": "solo"
@@ -67,12 +67,12 @@
    "arm": "team",
    "test": true,
    "agents": 96,
-   "maps_ready_in_session": 1026
+   "maps_ready_in_session": 1023
   },
   "t02": {
    "arm": "solo",
    "test": true
   }
  },
- "omitted_n": 35
+ "omitted_n": 36
 }
