@@ -25,5 +25,10 @@
   "plan/practice/run_manifest.json": "35de2a3d61b8eeb9528fcf0cfce8fc502772900edaaffc6f1f02d2d6c3a8677c",
   "plan/t01/team.txt": "c8e438de7be9802dabdda74583e3ef904914bcd1cf34e62c1d2058e4d6a5e837",
   "plan/t02/solo.txt": "61d616616ad71e1fa95e313f691d4f78763bc3a420bbb647653bc92af9dbdcd7"
+ },
+ "zip": {
+  "sha256": "d4c5a8395bb6ce629d4cf8541a1fdceaa487a7a04acb7c9abe42a72ef9e010ee",
+  "bytes": 2504527239,
+  "commit": "53ae6778"
  }
 }
