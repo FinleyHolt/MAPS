@@ -35,7 +35,7 @@ row,episode_id,shape,prompt,verdict,note
 33,calcity::34#33,target_mask,A blue parked car outside the house on Quezon Avenue. South facing house. east of 85th Street and west of Orchid Drive.,,
 34,calcity::35#34,target_mask,"A red parked car, north facing off of Jimson Avenue, east of 85th Street and west of Orchid Drive.",,
 35,calcity::36#35,target_mask,"A red parked car outside a south-facing home on the corner of Quezon Avenue and 85th Street, just north of Quezon Avenue and East of 85th Street.",,
-36,calcity::37#36,target_mask,A circular swimming pool in the backyard of a house on Quezon Avenue.,,
+36,calcity::37#36,target_mask,A circular swimming pool in the backyard of a house on Quezon Avenue.,,"omitted from the capacity study (reviewer flag of 2026-11-04, PI's masks-to-check sheet): flagged: the sentence names more than one place; the pin sits 262 m from the only drawn pool"
 37,calcity::38#37,target_mask,"A red-roofed house with two roof sections south-facing on Heather Avenue, west of 85th Street, and east of 83rd.",,
 38,calcity::39#38,target_mask,"First house on the corner of Heather Avenue and 90th Street, south-facing.",,
 39,calcity::40#39,target_mask,"Second house from the corner of Heather Avenue and 90th Street, south facing.",,
@@ -47,7 +47,7 @@ row,episode_id,shape,prompt,verdict,note
 45,calcity::46#45,target_mask,"One of two small parking lot at the California City Family Health Center, south of North Loop Boulevard, east of Hacienda Boulevard. This lot is on the east side.",,
 46,calcity::47#46,target_mask,"Small parking lot at the California City Family Health Center. South of North Loop Boulevard, east of Hacienda Boulevard. This is the west parking lot out of the two.",,
 47,calcity::48#47,target_mask,"Big U-shaped building with a circular driveway at the corner of North Loop Boulevard and 95th Street, south facing.",,
-48,calcity::49#48,target_mask,"Small circular and round light blue swimming pool outside the back of a little house, south-facing, on Sally Avenue, west of 95th Street, east of Lyn Street.",,
+48,calcity::49#48,target_mask,"Small circular and round light blue swimming pool outside the back of a little house, south-facing, on Sally Avenue, west of 95th Street, east of Lyn Street.",mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 49,calcity::50#49,target_mask,"Medium-sized house with a couple of solar panels on top, west-facing, east of 95th Street and west of 96th Street.",,
 50,calcity::51#50,target_mask,"Medium-sized house, north-facing on Irene Avenue, has a terracotta bean-shaped decoration outside the front yard. No trees in the front yard, but one in the backyard. East of Shaw Street and west of 98th Street.",,
 51,calcity::52#51,target_mask,"Red-roofed house with 2 to 3 roof sections on Karen Avenue, north-facing, east of Shaw Street and west of 98th Street.",,
@@ -132,7 +132,7 @@ row,episode_id,shape,prompt,verdict,note
 131,calcity::132#131,target_mask,Rectangular pool in the backyard of a house on Glade Avenue. A shed next to it as well.,,
 132,calcity::133#132,target_mask,"White-roofed house, north-facing on Glade Avenue, with no immediate neighbors towards the east or west of it.",,
 133,calcity::134#133,target_mask,One of two houses on Moss Avenue. This one has a small round swimming pool in the backyard.,,
-134,calcity::135#134,target_mask,"Small round light blue swimming pool in the backyard of a house on Moss Avenue, south-facing.",,
+134,calcity::135#134,target_mask,"Small round light blue swimming pool in the backyard of a house on Moss Avenue, south-facing.",mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 135,calcity::136#135,target_mask,"A small white-roofed house with a couple of roof sections south-facing on Moss Avenue, with nothing in the backyard.",,
 136,calcity::137#136,target_mask,Large unorganized parking lot off of Willow Avenue.,,
 137,calcity::138#137,target_mask,Small and organized parking lot off of Willow Avenue.,,
@@ -215,7 +215,7 @@ row,episode_id,shape,prompt,verdict,note
 214,calcity::215#214,target_mask,A house with no immediate neighbors on the corner of Glade Avenue and Forest Boulevard.,,
 215,calcity::216#215,target_mask,The only east facing building between Forest Boulevard and Evergreen Avenue that is right across from Sherwood Avenue.,,
 216,calcity::217#216,target_mask,A south facing house off of Forest Boulevard with several roof sections. The house is on a corner touching 83rd Street.,,
-217,calcity::218#217,target_mask,A south facing house on Evergreen Avenue with a rectangular pool in the backyard. This house is one away from 83rd Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+217,calcity::218#217,target_mask,A south facing house on Evergreen Avenue with a rectangular pool in the backyard. This house is one away from 83rd Street.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 218,calcity::219#218,target_mask,A south facing house on the corner of Evergreen Avenue and 83rd Street.,,
 219,calcity::220#219,target_mask,"A long north facing house with a red roof and a couple roof sections on Viburnum Avenue. The house is on a corner so another street surrounds its west and south sides curving around this house's backyard. Also, this house has a large rectangular pool in the backyard.",,
 220,calcity::221#220,target_mask,"North facing house with solar panels and a grey roof on Viburnum Avenue, but facing 85th Street at the T intersection.",,
@@ -252,7 +252,7 @@ row,episode_id,shape,prompt,verdict,note
 251,calcity::252#251,target_mask,"A lone south facing house between 83rd Street and Moss Avenue laterally, and between Muir Avenue and Grove Avenue longitudinally.",,
 252,calcity::253#252,target_mask,The northernmost house that's west facing on Moss Avenue just south of Viburnum Avenue.,,
 253,calcity::254#253,target_mask,A house on the corner of Redwood Boulevard and 87th Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
-254,calcity::255#254,target_mask,An east facing house on the corner of Redwood Boulevard and Airway Boulevard.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+254,calcity::255#254,target_mask,An east facing house on the corner of Redwood Boulevard and Airway Boulevard.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 255,calcity::256#255,target_mask,A west facing house on the corner of Redwood Boulevard and Airway Boulevard.,,
 256,calcity::257#256,target_mask,A south facing house on the corner of Redwood Boulevard and 87th Street.,,
 257,calcity::258#257,target_mask,A house with solar panels and a pool in the backyard on the corner of Nipa Avenue and 87th Street.,,
@@ -340,7 +340,7 @@ row,episode_id,shape,prompt,verdict,note
 339,calcity::340#339,target_mask,The eastern end of Underwood Avenue on Airway Boulevard.,,
 340,calcity::341#340,target_mask,The eastern end of Willow Avenue on Airway Boulevard.,,
 341,calcity::342#341,target_mask,The western end of Sherwood Avenue on Airway Boulevard.,,
-342,calcity::343#342,target_mask,The east-facing house on Airway Boulevard at the western end of Grove Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+342,calcity::343#342,target_mask,The east-facing house on Airway Boulevard at the western end of Grove Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 343,calcity::344#343,target_mask,A south facing house on Redwood Boulevard with a round pool in the backyard. This house between 90th Street and Airway Boulevard.,,
 344,calcity::345#344,target_mask,A round swimming pool in the backyard of a south facing house on Redwood Boulevard slightly south of Peach Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
 345,calcity::346#345,target_mask,An east facing house with a grey roof and solar panels on top. This house is on Manzanita Avenue and one plot of land north of Nipa Avenue.,,
@@ -439,7 +439,7 @@ row,episode_id,shape,prompt,verdict,note
 438,calcity::439#438,target_mask,A south facing house on Viburnum Avenue with a small roud swimming pool in the backyard. This is the closest south facing house to Neuralia Road on Viburnum Avenue.,,
 439,calcity::440#439,target_mask,Small round swimming pool in the backyard of a south facing house on Viburnum Avenue close to Neuralia Road.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
 440,calcity::441#440,target_mask,A north facing house on Underwood Avenue with a small round pool in the backyard. To the east of the house is a dirt road that connects Viburnum Avenue up to Tamarack Avenue. To the west of the house is Neuralia Road.,,
-441,calcity::442#441,target_mask,"A small round swimming pool in the backyard of a north facing house on Underwood Avenue. There is another house four plots west, and one plot south, with a swimming pool in its backyard as well.",mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+441,calcity::442#441,target_mask,"A small round swimming pool in the backyard of a north facing house on Underwood Avenue. There is another house four plots west, and one plot south, with a swimming pool in its backyard as well.",mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 442,calcity::443#442,target_mask,A south facing house on Viburnum Avenue directly at the T-intersection connecting Viburnum Avenue with Evergreen Avenue.,,
 443,calcity::444#443,target_mask,A large north facing grey roofed house right beside Mason Street and north of Evergreen Avenue.,,
 444,calcity::445#444,target_mask,One of a few houses at the western end of Evergreen Avenue. This house is the only one perfectly east facing into the street.,,
@@ -509,7 +509,7 @@ row,episode_id,shape,prompt,verdict,note
 508,calcity::509#508,target_mask,A north-facing house on an unnamed street that connects from Viburnum Avenue and then eventually 86th Street. This house has a small round swimming pool in its backyard.,,
 509,calcity::510#509,target_mask,A small round swimming pool in the backyard of a house on an unnamed street that connects from Viburnum Avenue and then eventually 86th Street.,,
 510,calcity::511#510,target_mask,A north-facing house at the corner of 83rd Street and Viburnum Avenue.,,
-511,calcity::512#511,target_mask,Satellites on top of a north-facing house at the corner of 83rd Street and Viburnum Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+511,calcity::512#511,target_mask,Satellites on top of a north-facing house at the corner of 83rd Street and Viburnum Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 512,calcity::513#512,target_mask,"A west-facing house on 83rd Street, north of Evergreen Avenue but south of Viburnum Avenue. This is the northernmost west-facing house on 83rd Street.",,
 513,calcity::514#513,target_mask,A north-facing house on Viburnum Avenue with a turf field in its front yard. This house is just northeast of the end of Mason Street.,,
 514,calcity::515#514,target_mask,"A south-facing house with several roof sections on Evergreen Avenue, a little east of Mason Street, but on the same block.",,
@@ -545,7 +545,7 @@ row,episode_id,shape,prompt,verdict,note
 544,calcity::545#544,target_mask,A house at the corner of North Loop Boulevard and 98th street. This house is east of 98th street.,,
 545,calcity::546#545,target_mask,Twin homes at the corner of Sally Avenue and 98th street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
 546,calcity::547#546,target_mask,A south facing house at the corner of Sally Avenue and 98th street.,,
-547,calcity::548#547,target_mask,A house at the corner of Irene Avenue and 98th street. This house has a pool in the backyard.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+547,calcity::548#547,target_mask,A house at the corner of Irene Avenue and 98th street. This house has a pool in the backyard.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 548,calcity::549#548,target_mask,A small round swimming pool in the backyard of a house at the corner of Irene Avenue and 98th street.,,
 549,calcity::550#549,target_mask,A north facing house at the corner of Irene Avenue and 98th street. This house has no immediate neighbor to its east side because its an empty plot of land.,,
 550,calcity::551#550,target_mask,A south facing house with solar panels at the corner of Irene Avenue and 98th street.,,
@@ -617,7 +617,7 @@ row,episode_id,shape,prompt,verdict,note
 618,calcity::619#618,target_mask,The store called Oasis Laundromat.,,
 619,calcity::620#619,target_mask,The building named Rite Aid.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
 620,calcity::621#620,target_mask,The building named Subway.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-621,calcity::622#621,target_mask,The building named West Best Pizza Co.,,
+621,calcity::622#621,target_mask,The building named West Best Pizza Co.,mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 622,calcity::623#622,target_mask,The parking lot just northeast of Tierra del Sol Golf Course.,,
 623,calcity::624#623,target_mask,The swimming pool just northeast of Tierra del Sol Golf Course.,,
 625,calcity::626#625,target_mask,The parking lot just north of First Baptist Church.,,
@@ -766,7 +766,7 @@ row,episode_id,shape,prompt,verdict,note
 1381,calcity::1382#1381,target_mask,The intersection of 67th Street and Louise Court.,,
 1383,calcity::1384#1383,target_mask,The intersection of 67th Street and Mendiburu Frontage.,,
 1396,calcity::1397#1396,target_mask,The intersection of 69th Street and Jasmine Avenue.,,
-1405,calcity::1406#1405,target_mask,The intersection of 71st Street and Eucalyptus Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue)
+1405,calcity::1406#1405,target_mask,The intersection of 71st Street and Eucalyptus Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 1406,calcity::1407#1406,target_mask,The intersection of 71st Street and Fernwood Avenue.,,
 1408,calcity::1409#1408,target_mask,The intersection of 71st Street and Greenwood Avenue.,,
 1421,calcity::1422#1421,target_mask,The intersection of 72nd Street and Landis Drive.,,
@@ -905,7 +905,7 @@ row,episode_id,shape,prompt,verdict,note
 2536,calcity::2537#2536,target_mask,The intersection of Jasmine Avenue and Sauguaro Street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
 2537,calcity::2538#2537,target_mask,The intersection of Jasmine Avenue and Wisteria Street.,,
 2544,calcity::2545#2544,target_mask,The intersection of Jeremy Drive and Reed Place.,,
-2545,calcity::2546#2545,target_mask,The intersection of Jeremy Drive and Sheridan Street.,,
+2545,calcity::2546#2545,target_mask,The intersection of Jeremy Drive and Sheridan Street.,mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 2564,calcity::2565#2564,target_mask,The intersection of Karen Avenue and Lyn Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
 2568,calcity::2569#2568,target_mask,The intersection of Karen Avenue and Shaw Street.,,
 2581,calcity::2582#2581,target_mask,The intersection of Keller Court and North Loop Boulevard.,,
@@ -925,7 +925,7 @@ row,episode_id,shape,prompt,verdict,note
 2609,calcity::2610#2609,target_mask,The intersection of Lee Street and Wilson Drive.,,
 2617,calcity::2618#2617,target_mask,The intersection of Lehigh Street and South Loop Boulevard.,,
 2619,calcity::2620#2619,target_mask,The intersection of Lewis Avenue and Quick Drive.,,
-2622,calcity::2623#2622,target_mask,The intersection of Ley Place and Von Braun Way.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2622,calcity::2623#2622,target_mask,The intersection of Ley Place and Von Braun Way.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
 2627,calcity::2628#2627,target_mask,The intersection of Lime Avenue and Steward Court.,,
 2646,calcity::2647#2646,target_mask,The intersection of Lufbery Place and Rickenbacker Court.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
 2647,calcity::2648#2647,target_mask,The intersection of Lufbery Place and Rickthofen Court.,,

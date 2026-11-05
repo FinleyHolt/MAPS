@@ -3,6 +3,11 @@
  "maps_root": "qwen38-flash-next-xhigh-c96",
  "episodes": [
   {
+   "episode_id": "calcity::37#36",
+   "description": "A circular swimming pool in the backyard of a house on Quezon Avenue.",
+   "reason": "flagged by the reviewer on 2026-11-04 (the PI's masks-to-check sheet, row 36): the sentence names more than one place; the pin sits 262 m from the only drawn pool"
+  },
+  {
    "episode_id": "calcity::67#66",
    "description": "A yellow-roofed house on South Loop Boulevard. The house is on a curved road facing southwest. The house has lots of empty space on all sides with nothing filling its backyard.",
    "reason": "flagged: the sentence does not name the pinned place; answered wrong in review sheet capacity_study_first_80: the sentence does not name the pinned place"
