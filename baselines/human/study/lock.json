@@ -27,8 +27,8 @@
   "plan/t02/solo.txt": "61d616616ad71e1fa95e313f691d4f78763bc3a420bbb647653bc92af9dbdcd7"
  },
  "zip": {
-  "sha256": "d4c5a8395bb6ce629d4cf8541a1fdceaa487a7a04acb7c9abe42a72ef9e010ee",
-  "bytes": 2504527239,
-  "commit": "53ae6778"
+  "sha256": "a858ecfdd5c2965f0ad2078e28c8bf5b54b0349f6e796d646778f9df39c8f4f8",
+  "bytes": 2504527452,
+  "commit": "39d0542d"
  }
 }
