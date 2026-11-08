@@ -14,6 +14,7 @@ import type { GeoJSONSource, Map as MapLibreMap, Marker as MapLibreMarker, Style
 
 import { logEvent } from "@/app/events";
 import { boundsOf } from "@/app/fed";
+import { searchParts } from "@/app/capacityView";
 import { kindMatches } from "@/app/kindWords";
 import { buildingsAlong, closestApproach, crossings, metres, nearestOther, stretches, type LonLat } from "@/app/studyGeometry";
 
@@ -617,7 +618,7 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
   const [shut, setShut] = useState(false);
   const take = (fn: () => void) => { logEvent("search", { query }); fn(); setShut(true); };
   // "Reed & Keller", "Reed and Keller", "Reed / Keller": where the two cross.
-  const pair = query.split(/\s*(?:&|\/|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
+  const { pair, dangling, q } = searchParts(query);
   const best = (part: string) => {
     const lower = part.toLowerCase();
     const r = (n: PriorName) => { const name = n.name.toLowerCase(); return name === lower ? 0 : name.startsWith(lower) ? 1 : 2; };
@@ -628,7 +629,6 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
   // Two that never meet: where they come closest, which an instruction naming their corner means.
   const [pa, pb] = pair.length === 2 ? [best(pair[0])[0], best(pair[1])[0]] : [undefined, undefined];
   const approach = pair.length === 2 && cross.length === 0 && pa && pb && pa.name !== pb.name ? approachOf(pa.name, pb.name) : null;
-  const q = pair.length === 2 ? "" : query.trim().toLowerCase();
   const rank = (n: PriorName) => {
     const name = n.name.toLowerCase();
     return name === q ? 0 : name.startsWith(q) ? 1 : name.split(/\s+/).some((w) => w.startsWith(q)) ? 2 : 3;
@@ -666,6 +666,7 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
             </button>
           );
         })}
+        {dangling ? <p className="judge-hint">Now type the street it crosses.</p> : null}
         {pair.length === 2 && cross.length === 0 ? (
           approach && pa && pb ? (
             <button type="button" className="judge-row" onClick={() => take(() => onCross([approach.at], 0))}>
@@ -700,7 +701,7 @@ export function OsmSearch({ names, lit, onPick, onCross, crossingsOf, approachOf
             <span className="judge-dim">{k.m < 1000 ? `${k.m.toFixed(0)} m` : `${(k.m / 1000).toFixed(1)} km`} from {ctxStreet && ctx ? ctxStreet : "the map's center"}</span>
           </button>
         ))}
-        {q && hits.length === 0 && kinds.length === 0 ? <p className="judge-hint">No street, place or kind of place matches.</p> : null}
+        {q && !dangling && hits.length === 0 && kinds.length === 0 ? <p className="judge-hint">No street, place or kind of place matches.</p> : null}
       </div>
     </section>
   );

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { actBody, aKind, header, savedLine, keyCommand, mapTakesClicks, objectName, overLines, pollState, verifyHint } from "./capacityView.ts";
+import { actBody, aKind, header, savedLine, keyCommand, mapTakesClicks, objectName, overLines, pollState, searchParts, verifyHint } from "./capacityView.ts";
 
 const team = { arm: "team", practice: false, remaining_s: 723, over: false, current: { episode_id: "calcity::7#6", mode: "verify" } };
 const practice = { ...team, arm: "solo", practice: true, current: { episode_id: "calcity::1#0", mode: "search" } };
@@ -85,4 +85,12 @@ test("an answer says it landed, in the words a reopened report uses; other acts 
   assert.equal(savedLine(8, "replace"), "Report 8 saved: you picked another place.");
   assert.equal(savedLine(3, "skip"), "Report 3 skipped.");
   assert.equal(savedLine(3, "select"), null);
+});
+
+test("a crossing half typed awaits its second street instead of matching nothing", () => {
+  assert.deepEqual(searchParts("Redwood Boulevard & "), { pair: ["Redwood Boulevard"], dangling: true, q: "redwood boulevard" });
+  assert.deepEqual(searchParts("Redwood Boulevard and"), { pair: ["Redwood Boulevard"], dangling: true, q: "redwood boulevard" });
+  assert.deepEqual(searchParts("Redwood Boulevard & 88th"), { pair: ["Redwood Boulevard", "88th"], dangling: false, q: "" });
+  assert.deepEqual(searchParts("Grand"), { pair: ["Grand"], dangling: false, q: "grand" });
+  assert.deepEqual(searchParts("Reed / Keller"), { pair: ["Reed", "Keller"], dangling: false, q: "" });
 });

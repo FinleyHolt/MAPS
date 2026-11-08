@@ -19,6 +19,16 @@ export function verifyHint(sel: { refusal?: string | null } | null): string {
   return sel.refusal ?? "Your point is on the map. Press Pick another to answer with it.";
 }
 
+/** The search box's query split at "&", "and" or "/": the two names of a crossing, or one
+ * name. ``dangling`` while the joiner is typed and the second name is not yet: the first name
+ * stays the query then, and the box says the second is awaited rather than that nothing matches. */
+export function searchParts(query: string): { pair: string[]; dangling: boolean; q: string } {
+  const pair = query.split(/\s*(?:&|\/|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
+  const dangling = pair.length === 1 && /(?:&|\/|\band)\s*$/i.test(query.trim());
+  const q = pair.length === 2 ? "" : (dangling ? pair[0] : query.trim()).toLowerCase();
+  return { pair, dangling, q };
+}
+
 export type KeyCommand = "confirm" | "pick" | "clear" | "street" | "maps" | "back";
 
 /** The console's keys; a held key acts once. */
