@@ -6,9 +6,9 @@ import json
 
 import numpy as np
 
-from maps.search.analyze_scene import geom_program as gp
-from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.search.analyze_scene import row_geometry as RG
+from maps.query import program as gp
+from maps.query.surface import build_surface_from_graph
+from maps.query import row_geometry as RG
 from maps.world_state.graph import MapObject
 
 

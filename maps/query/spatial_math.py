@@ -13,7 +13,7 @@ import math
 
 import numpy as np
 
-from maps.util.polyline import clip_t
+from maps.query.polyline import clip_t
 
 # 8-point compass wedges over compass bearing (0=N, clockwise).
 _COMPASS8 = (

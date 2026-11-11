@@ -3,7 +3,7 @@ emits."""
 
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import _grouped_keys
+from maps.query.program import _grouped_keys
 
 
 def test_families_collapse_on_the_shipped_spelling():

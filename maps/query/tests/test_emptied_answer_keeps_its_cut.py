@@ -2,7 +2,7 @@
 serves the cut's stats (the nearest row it dropped and the bound that would
 admit it), and no line about a compare step the model never wrote."""
 
-from maps.search.analyze_scene import geom_program as GP
+from maps.query import program as GP
 
 
 def _sq(x0, y0, x1, y1):

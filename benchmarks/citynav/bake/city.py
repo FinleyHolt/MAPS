@@ -34,7 +34,7 @@ import numpy as np
 
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import BAKE_OUTPUT_SUFFIXES, TILES_DIR
-from maps.search.analyze_scene.geom_compute import is_closed_chain
+from maps.query.spatial_math import is_closed_chain
 
 log = logging.getLogger("bake_city")
 

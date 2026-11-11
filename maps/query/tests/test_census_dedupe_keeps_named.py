@@ -1,7 +1,7 @@
 """A census served once for two sets folds the second into a census_ref
 only when its named count is the same too, so no set loses its count."""
 
-from maps.search.analyze_scene import geom_program as GP
+from maps.query import program as GP
 
 
 def _rows(names):

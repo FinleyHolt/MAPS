@@ -1,7 +1,7 @@
 """A truthy cut, the census on an empty find, and the pre-takeoff phase notes."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import (
+from maps.query.program import (
     compact_results,
     run_program,
 )

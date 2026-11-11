@@ -3,7 +3,7 @@
 
 import pytest
 
-from maps.search.analyze_scene import geom_program as GP
+from maps.query import program as GP
 
 
 def test_an_empty_set_ref_refuses_cut_and_order_alike():

@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 
-from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.geom_program import compact_results, run_program
-from maps.search.analyze_scene.surface import build_surface_from_graph
+from maps.query import text_match as T
+from maps.query.program import compact_results, run_program
+from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 
 

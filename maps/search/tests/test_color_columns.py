@@ -2,8 +2,8 @@
 """The lazy color-column family ``color_<word>``."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import run_program, ProgramError
-from maps.search.analyze_scene import geom_compute as G
+from maps.query.program import run_program, ProgramError
+from maps.query import spatial_math as G
 
 _CANDS = [
     {"fid": "d0", "xy": [0.0, 0.0], "class": "car", "color": "blue", "color_conf": 0.9},

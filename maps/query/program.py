@@ -1,7 +1,7 @@
 """The analyze executor: runs a compiled op-program over the ``(cands, anchors)`` surface.
 
 :func:`run_program` executes the ``{"ops": [{ref, op, args}, ...]}`` the code
-surface compiles, with :mod:`maps.search.analyze_scene.geom_compute`
+surface compiles, with :mod:`maps.query.spatial_math`
 primitives; every op returns rows, and :func:`compact_results` renders them
 for the model. An ``items`` value is a handle -- ``rN`` (a result of this
 program or an earlier call) or a window ``rN[a:b]`` -- or a fid list; a ref is
@@ -15,9 +15,9 @@ import threading
 from collections import Counter
 from itertools import islice
 
-from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.row_geometry import chains_of, geom_of, place_geom
+from maps.query import spatial_math as G
+from maps.query import text_match as T
+from maps.query.row_geometry import chains_of, geom_of, place_geom
 from maps.search.render.look_render import LOOK_SET_ROWS
 from maps.util.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld

@@ -27,13 +27,13 @@ from typing import Callable
 import httpx
 
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled
-from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
-from maps.search.analyze_scene.geom_program import (
+from maps.query.spatial_math import COMPASS_UNIT
+from maps.query.program import (
     BROAD_DUMP_SOFT_ROWS,
     MODEL_UNSERVED_COLUMNS,
 )
-from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.search.analyze_scene.text_match import (
+from maps.query.surface import build_surface_from_graph
+from maps.query.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
     unmatched_query_tokens as _unmatched_query_tokens,
 )

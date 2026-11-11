@@ -35,7 +35,7 @@ import re
 import pytest
 
 from benchmarks.calcity import paths
-from maps.search.analyze_scene import geom_compute as G
+from maps.query import spatial_math as G
 
 _PRIOR = paths.TILES_DIR / "calcity_prior_layer.json"
 _META = paths.TILES_DIR / "calcity_meta.json"
@@ -168,7 +168,7 @@ def test_the_served_facing_column_matches_the_annotators():
     actually receives -- ``facing <road>`` -- asserting the compass WORD is
     the annotator's.
     """
-    from maps.search.analyze_scene.geom_program import run_program
+    from maps.query.program import run_program
 
     roads = _road_geoms()
     chains = _road_chains()

@@ -1,7 +1,7 @@
 """Shape-natural relation columns: ``compare{refs}`` attaches each ref's OWN geometry."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import ProgramError, run_program
+from maps.query.program import ProgramError, run_program
 
 
 def _compare(cands, anchors, refs):
@@ -54,7 +54,7 @@ def test_point_ref_carries_all_four_columns():
     # 'bearing from' stays a centroid-to-centroid NUMBER, ref->item;
     # 'facing' is the footprint WORD, item->ref. Opposites by construction,
     # which is the whole reason the word is served instead of the degrees.
-    from maps.search.analyze_scene import geom_compute as G
+    from maps.query import spatial_math as G
     assert r["facing xy"] == G._compass8((r["bearing from xy"] + 180) % 360), r
 
 
@@ -101,7 +101,7 @@ def test_crossing_boundaries_read_zero_gap():
 
 
 def test_centerline_row_renders_its_termini():
-    from maps.search.analyze_scene.surface import build_surface_from_graph
+    from maps.query.surface import build_surface_from_graph
 
     class _N:
         def __init__(self, **kw):
@@ -131,7 +131,7 @@ def test_dc_brg_derive_from_the_mask_centroid_not_from_an_xy():
     # A row ref carrying a mask but NO usable xy still serves dc_/brg_ --
     # the center is the mask's TRUE area centroid (10, 10), derived from the
     # mask itself. The ONE thing that withholds them is geometry that is
-    # several disjoint places (geom_compute.one_place), which this
+    # several disjoint places (spatial_math.one_place), which this
     # single ring is not.
     bare = {"fid": "lot_3", "name": "Bare", "xy": None, "class": "parking",
             "mask": [[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]]]}
@@ -149,7 +149,7 @@ def test_dc_brg_derive_from_the_mask_centroid_not_from_an_xy():
 def test_cells_realise_exactly_multiloop_and_holes():
     # The raster realisation is the EXACT ingested mask: every fragment kept,
     # holes excluded by even-odd membership, no decimation.
-    from maps.search.analyze_scene import geom_compute as G
+    from maps.query import spatial_math as G
 
     # a 3x3 block with the center cell missing (a donut) at cell_m=2
     cells = [(r, c) for r in range(3) for c in range(3) if (r, c) != (1, 1)]
@@ -178,7 +178,7 @@ def test_cells_realise_exactly_multiloop_and_holes():
 
 def test_a_chain_states_its_own_closure():
     """The one rule that tells a ring from a way."""
-    from maps.search.analyze_scene import geom_compute as G
+    from maps.query import spatial_math as G
 
     square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
     ring, way = square + [[0.0, 0.0]], list(square)
@@ -213,7 +213,7 @@ def test_a_chain_states_its_own_closure():
 
 def test_only_a_closed_chain_carries_area_or_an_area_centroid():
     """A way encloses nothing, so it has neither area nor an area centroid."""
-    from maps.search.analyze_scene import geom_compute as G
+    from maps.query import spatial_math as G
 
     square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
     ring, way = square + [[0.0, 0.0]], list(square)

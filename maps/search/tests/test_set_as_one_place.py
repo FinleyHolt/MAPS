@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from maps.search.analyze_scene import geom_program as gp
-from maps.search.analyze_scene.geom_program import compact_results
+from maps.query import program as gp
+from maps.query.program import compact_results
 from maps.search.tests.fakes import drive, ops_of_block, run, tool_results
 
 

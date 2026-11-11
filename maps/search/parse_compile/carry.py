@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 
-from maps.search.analyze_scene.geom_program import (
+from maps.query.program import (
     ProgramError,
     compact_results,
     is_color_column_key,

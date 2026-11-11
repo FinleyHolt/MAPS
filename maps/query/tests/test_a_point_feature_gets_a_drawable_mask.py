@@ -1,7 +1,7 @@
 """A row's ``mask`` is what the picture DRAWS, so it has to be a shape."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.surface import build_surface_from_graph
+from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 
 _CELL_M = 2.0

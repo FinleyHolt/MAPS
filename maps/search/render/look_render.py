@@ -165,7 +165,7 @@ def frame_arcs(boundary, w2p, w: int, h: int):
     A footprint bigger than its window is clipped, never dropped, and no
     edge runs along the frame edge (that would say the shape ends there).
     Half a stroke of buffer keeps a footprint hugging the frame."""
-    from maps.util.polyline import clip_ring_to_box  # noqa: PLC0415
+    from maps.query.polyline import clip_ring_to_box  # noqa: PLC0415
     if not (isinstance(boundary, list) and len(boundary) >= 3):
         return None
     pts = [w2p(*p) for p in xy_list(boundary)]
@@ -243,7 +243,7 @@ def look_xy(row: object) -> list[float] | None:
 def look_outline(row: object) -> list | None:
     """The display outline of a row: the largest loop of its ``mask``,
     Douglas-Peucker at half a 2 m cell (budget 256 vertices), at 2 dp."""
-    from maps.util.polyline import simplify_ring  # noqa: PLC0415
+    from maps.query.polyline import simplify_ring  # noqa: PLC0415
 
     m = row.get("mask") if isinstance(row, dict) else None
     if not (isinstance(m, list) and m):

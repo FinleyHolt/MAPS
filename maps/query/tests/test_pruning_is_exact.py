@@ -3,7 +3,7 @@ value and witness alike."""
 import numpy as np
 import pytest
 
-from maps.search.analyze_scene import geom_compute as G
+from maps.query import spatial_math as G
 from maps.search.tests.fakes import ring
 
 

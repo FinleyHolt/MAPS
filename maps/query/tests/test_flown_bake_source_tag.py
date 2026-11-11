@@ -3,7 +3,7 @@ the as-flown replays read such bakes, so the surface never serves that key."""
 
 from types import SimpleNamespace
 
-from maps.search.analyze_scene.surface import _row_tags
+from maps.query.surface import _row_tags
 
 
 def test_a_flown_bake_s_source_stamp_is_not_served():

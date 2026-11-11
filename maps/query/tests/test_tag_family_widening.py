@@ -1,8 +1,8 @@
 """``find <noun>`` reaches the noun's own tag FAMILY, exact hits first."""
 from __future__ import annotations
 
-from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.geom_program import run_program
+from maps.query import text_match as T
+from maps.query.program import run_program
 
 # `house` is a value of `building` here and of nothing else; `residential`
 # is a value of `highway`. A row keyed `highway` must therefore stay OUT of

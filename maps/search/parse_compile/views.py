@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import math
 
-from maps.search.analyze_scene.geom_compute import cell_centre_xy
+from maps.query.spatial_math import cell_centre_xy
 from maps.search.parse_compile.code_surface import HANDLE_RE, row_token
 from maps.search.render.look_render import (
     LOOK_MAX_BADGES,

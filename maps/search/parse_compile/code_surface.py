@@ -7,9 +7,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from maps.search.analyze_scene.geom_compute import CARDINALS as _GEOM_CARDINALS
-from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
-from maps.search.analyze_scene.geom_program import sanitize_token
+from maps.query.spatial_math import CARDINALS as _GEOM_CARDINALS
+from maps.query.spatial_math import COMPASS_UNIT
+from maps.query.program import sanitize_token
 from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.withhold import withheld
 

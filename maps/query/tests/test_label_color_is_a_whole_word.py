@@ -1,7 +1,7 @@
 """A class label names a color only as a whole word."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.surface import _color_of
+from maps.query.surface import _color_of
 
 
 def test_a_color_inside_another_word_is_not_the_labels_color():

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from maps.search.analyze_scene import text_match as T
-from maps.search.analyze_scene.geom_program import (
+from maps.query import text_match as T
+from maps.query.program import (
     ProgramError,
     run_program,
 )
@@ -78,7 +78,7 @@ def test_containment_fuzz_never_enters_the_exact_tier_bands():
     'Cambridge' vs a 'Museum of Cambridge' query) is a fuzz hit and must stay at or
     below the fuzz ceiling, never inside the k=v (0.80+) or name-phrase (0.90+) bands
     the served docs declare."""
-    from maps.search.analyze_scene.text_match import (
+    from maps.query.text_match import (
         TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
     q = fuzzy_prepare_query("Museum of Cambridge")
     idf = _flat("boundary administrative cambridge",
@@ -125,7 +125,7 @@ def test_a_query_is_scored_by_what_it_found_not_by_the_haystack_length():
 
 def test_single_token_generic_query_never_enters_name_phrase_tier():
     """Query 'building' stays out of the name-phrase band (>=0.90) for 'Baker Building'."""
-    from maps.search.analyze_scene.text_match import (
+    from maps.query.text_match import (
         KV_TIER_BASE, TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
     q = fuzzy_prepare_query("building")
     idf = _flat("baker building", "building terrace")
@@ -142,7 +142,7 @@ def test_single_token_generic_query_never_enters_name_phrase_tier():
 
 def test_multi_token_name_phrase_tier_kept():
     """'Downing Street' keeps its 1.0 exact / 0.9x phrase-inside-name scores."""
-    from maps.search.analyze_scene.text_match import find_score, fuzzy_prepare_query
+    from maps.query.text_match import find_score, fuzzy_prepare_query
     q = fuzzy_prepare_query("Downing Street")
     idf = _flat("downing street", "little downing street")
     exact = find_score(q, "downing street", name="Downing Street", tags={},
@@ -156,14 +156,14 @@ def test_multi_token_name_phrase_tier_kept():
 def test_single_token_exact_name_equality_still_perfect():
     # Equality is tier 1.0 regardless of token count — only the
     # phrase-INSIDE-a-longer-name tier requires a multi-token query.
-    from maps.search.analyze_scene.text_match import find_score, fuzzy_prepare_query
+    from maps.query.text_match import find_score, fuzzy_prepare_query
     q = fuzzy_prepare_query("grass")
     assert find_score(q, "grass", name="Grass", tags={},
                       idf=_flat("grass")) == 1.0
 
 
 def test_7872_multiword_value_coverage_separates_compound_query():
-    from maps.search.analyze_scene.text_match import find_score, fuzzy_prepare_query
+    from maps.query.text_match import find_score, fuzzy_prepare_query
     q = fuzzy_prepare_query("addr_street=Castle Street building=yes")
     idf = _flat("castle street building yes 12", "building yes")
     both = find_score(q, "castle street building yes", name=None,
@@ -181,7 +181,7 @@ def test_7872_multiword_value_coverage_separates_compound_query():
 def test_kv_value_extension_stops_at_the_next_pair():
     # 'a=b c=d' keeps two independent single-token pairs — the extension
     # consumes only BARE tokens, so pair grammar is unchanged.
-    from maps.search.analyze_scene.text_match import fuzzy_prepare_query
+    from maps.query.text_match import fuzzy_prepare_query
     (clause,) = fuzzy_prepare_query("landuse=grass building=yes")
     groups = clause[3]
     assert groups == ((("landuse", "grass"),), (("building", "yes"),))
@@ -190,7 +190,7 @@ def test_kv_value_extension_stops_at_the_next_pair():
 def test_a_query_token_no_matched_row_carries_is_named():
     # A junk token dilutes the token-bag ratio and never disqualifies, so a glued
     # spelling still binds.
-    from maps.search.analyze_scene.text_match import unmatched_query_tokens
+    from maps.query.text_match import unmatched_query_tokens
     rows = _rows("Ford Focus car", "Vauxhall car", "car amenity parking")
     assert unmatched_query_tokens("car withcolor", rows) == ["withcolor"]
     # the remaining glued spellings
@@ -216,7 +216,7 @@ def test_a_query_token_no_matched_row_carries_is_named():
 
 
 def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
-    from maps.search.analyze_scene.text_match import (
+    from maps.query.text_match import (
         COLORS, _colors_read, unmatched_query_tokens as U)
     coloured = _rows("car", "car", colour="gray 0.55 / black 0.30")
 

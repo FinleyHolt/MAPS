@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from maps.search.analyze_scene.geom_program import (
+from maps.query.program import (
     _GRID_COL_DROP,
     _TAG_RENDER_DROP,
     ProgramError,
@@ -79,7 +79,7 @@ def test_a_row_whose_tags_are_all_dropped_renders_the_absent_marker():
 
 def test_the_drop_is_a_render_cut_not_a_data_cut():
     """The node keeps every tag, so ``find`` still reaches a dropped key."""
-    from maps.search.analyze_scene.surface import _anchor_search_text
+    from maps.query.surface import _anchor_search_text
 
     class _Node:
         name = "Willmore Road"
@@ -92,7 +92,7 @@ def test_the_drop_is_a_render_cut_not_a_data_cut():
 
 
 def test_score_by_grid_orders_without_a_score_column():
-    from maps.search.analyze_scene.geom_program import (
+    from maps.query.program import (
         compact_results,
         run_program,
     )
@@ -122,7 +122,7 @@ def test_score_by_grid_orders_without_a_score_column():
 
 
 def test_a_footprint_carries_its_area_and_no_unserved_shape_column():
-    from maps.search.analyze_scene.geom_compute import (
+    from maps.query.spatial_math import (
         contour_shape_features,
         mask_shape_features,
     )
@@ -148,7 +148,7 @@ def test_an_absent_key_refusal_names_only_served_columns(op):
 
 
 def test_bake_bookkeeping_tags_never_reach_a_row():
-    from maps.search.analyze_scene.surface import _anchor_search_text, _row_tags
+    from maps.query.surface import _anchor_search_text, _row_tags
 
     class _Node:
         name = ""

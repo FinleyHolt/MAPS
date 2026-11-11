@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from maps.search.analyze_scene import geom_program as gp
+from maps.query import program as gp
 from maps.search.parse_compile.code_surface import CodeError
 from maps.search.tests.fakes import acts_of_block, ops_of_block, raising_ops_of_block
 

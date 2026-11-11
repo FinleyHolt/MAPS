@@ -1,14 +1,14 @@
 """A row's geometry: its cells, its mask chains, and the distance between
-served rows, mask to mask (:func:`geom_compute.gap_witness`, the quantity a
+served rows, mask to mask (:func:`spatial_math.gap_witness`, the quantity a
 ``distance to <ref>`` column carries). Geometry is read by fid off the live
 surface, since op output rows carry no mask; a set of places measures as its
-nearest member (:func:`geom_compute.set_gap`)."""
+nearest member (:func:`spatial_math.set_gap`)."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from maps.search.analyze_scene import geom_compute as G
+from maps.query import spatial_math as G
 from maps.util.xy_token import is_xy
 
 

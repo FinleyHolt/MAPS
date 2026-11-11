@@ -298,7 +298,7 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
     black, the rest white, each flight on its own line). ``evict_on_flight``
     = {flight_index: [fid, ...]} deletes nodes on that flight. Returns (tool
     results, the graph, the fids each flight added)."""
-    from maps.search.analyze_scene.surface import build_surface_from_graph
+    from maps.query.surface import build_surface_from_graph
     from maps.search.parse_compile.reasoner_loop import (
         MissionSpec,
         _Mission,
@@ -355,7 +355,7 @@ def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False)
     """``script`` (one block per turn) over two surveyed buildings (plus
     ``extra_priors``), each flight adding ``finds`` cars at one point, or
     along a row with ``spread``; returns (tool results, vision turns)."""
-    from maps.search.analyze_scene.surface import build_surface_from_graph
+    from maps.query.surface import build_surface_from_graph
     from maps.search.parse_compile.reasoner_loop import (
         MissionSpec,
         _Mission,

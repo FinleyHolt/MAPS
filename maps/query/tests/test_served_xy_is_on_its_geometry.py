@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import math
 
-from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.surface import build_surface_from_graph, representative_point
+from maps.query import spatial_math as G
+from maps.query.surface import build_surface_from_graph, representative_point
 from maps.world_state.graph import MapObject
 
 

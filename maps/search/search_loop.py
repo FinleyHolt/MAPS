@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from maps.search.analyze_scene.geom_compute import cell_centre_xy
+from maps.query.spatial_math import cell_centre_xy
 from maps.search.parse_compile.passes import spread
 from maps.search.parse_compile.perception_director import (
     PerceptionDirector, canon_concept)
@@ -84,7 +84,7 @@ class SearchLoop:
         built once (priors do not move). Under the lock."""
         if self._prior_xy_cache is not None:
             return self._prior_xy_cache
-        from maps.search.analyze_scene.surface import build_surface_from_graph  # noqa: PLC0415
+        from maps.query.surface import build_surface_from_graph  # noqa: PLC0415
 
         priors = [(f, n) for f, n in self.state.runtime_graph.nodes.items()
                   if n.provenance != "detected"]

@@ -9,12 +9,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.surface import build_surface_from_graph
+from maps.query import spatial_math as G
+from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))
+_REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
 _TILES = Path(os.environ.get("SEARCH_CALCITY_TILES")
               or os.path.join(_REPO, "benchmarks", "calcity", "tiles"))
 _HAS_BAKE = (_TILES / "calcity_features.json").is_file()

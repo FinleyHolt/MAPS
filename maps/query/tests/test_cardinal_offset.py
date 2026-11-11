@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from maps.search.analyze_scene.geom_compute import CARDINALS, cardinal_offset
+from maps.query.spatial_math import CARDINALS, cardinal_offset
 
 
 def road_ns(x=0.0, y0=-500.0, y1=500.0, n=501):
@@ -73,10 +73,10 @@ def test_empty_reference_abstains_and_a_diagonal_refuses():
 
 
 def test_band_width_is_not_load_bearing(monkeypatch):
-    from maps.search.analyze_scene import geom_compute
+    from maps.query import spatial_math
     road = road_ns()
     got = set()
     for w in (50.0, 150.0, 1000.0):
-        monkeypatch.setattr(geom_compute, "BAND_M", w)
+        monkeypatch.setattr(spatial_math, "BAND_M", w)
         got.add(cardinal_offset(road, (-80.0, 0.0), "west"))
     assert got == {80.0}

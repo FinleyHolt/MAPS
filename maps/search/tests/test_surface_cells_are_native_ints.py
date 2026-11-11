@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from maps.search.analyze_scene.row_geometry import cells_of
-from maps.search.analyze_scene.surface import build_surface_from_graph
+from maps.query.row_geometry import cells_of
+from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 
 

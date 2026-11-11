@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.search.analyze_scene import surface
+from maps.query import surface
 from maps.world_state.graph import MapObject
 
 

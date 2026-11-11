@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.geom_program import run_program
+from maps.query import spatial_math as G
+from maps.query.program import run_program
 from maps.search.parse_compile.code_surface import CodeError
 from maps.search.parse_compile.python_surface import (
     MissionPython, Row, Rows, _places)

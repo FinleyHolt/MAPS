@@ -85,7 +85,7 @@ def test_a_replay_the_executor_refuses_fails_the_read_and_the_next_read_retries(
         monkeypatch):
     """An executor refusal on the replay fails the read that asked, naming the
     handle; it is NOT marked fresh, so the next read tries again."""
-    from maps.search.analyze_scene.geom_program import ProgramError
+    from maps.query.program import ProgramError
 
     orig = rl.run_program
     refused = [0]

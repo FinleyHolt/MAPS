@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from maps.util.polyline import clip_ring_to_box, simplify_ring
+from maps.query.polyline import clip_ring_to_box, simplify_ring
 
 # A 2 m-quantized staircase ring around a 40 x 20 m block: the shape every
 # prior footprint arrives as (cells_boundary_loops output).

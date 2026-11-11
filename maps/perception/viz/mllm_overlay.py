@@ -111,7 +111,7 @@ def render_look_overlay(
                or not isinstance(a[0], (list, tuple)) for a in arcs):
             raise TypeError(
                 "poly must be a list of OPEN arcs [[[x, y], ...], ...] "
-                "(maps.util.polyline.clip_ring_to_box output), not a flat "
+                "(maps.query.polyline.clip_ring_to_box output), not a flat "
                 f"vertex list; got {arcs[0]!r}")
         return True
 

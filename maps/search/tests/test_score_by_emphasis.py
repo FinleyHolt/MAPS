@@ -1,8 +1,8 @@
 """AGENT-WEIGHTED ordering — the ``score_by{items, emphasis}`` contract."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import run_program, ProgramError
-from maps.search.analyze_scene import geom_compute as G
+from maps.query.program import run_program, ProgramError
+from maps.query import spatial_math as G
 from maps.search.parse_compile.reasoner_loop import (
     run_ops,
 )

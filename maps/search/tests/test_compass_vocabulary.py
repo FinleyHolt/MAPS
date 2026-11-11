@@ -5,7 +5,7 @@ import math
 
 import pytest
 
-from maps.search.analyze_scene.geom_compute import (
+from maps.query.spatial_math import (
     CARDINALS,
     COMPASS_UNIT,
     _COMPASS8,

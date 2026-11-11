@@ -4,7 +4,7 @@ filter_items, strata, union) the model never wrote."""
 
 import pytest
 
-from maps.search.analyze_scene import geom_program as GP
+from maps.query import program as GP
 
 _ROWS = [
     {"fid": "prior_1", "name": "Main St", "xy": [0.0, 0.0],

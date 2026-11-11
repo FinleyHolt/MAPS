@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.search.analyze_scene.surface import build_surface_from_graph
+from maps.query.surface import build_surface_from_graph
 from maps.search.tests.fakes import acts_of_block
 from maps.world_state.graph import MapObject
 
@@ -27,7 +27,7 @@ def test_detected_2_serves_before_detected_100():
 
 def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     """A street's initial reply is what it IS, not an arbitrary prefix."""
-    from maps.search.analyze_scene.geom_program import (
+    from maps.query.program import (
         _NAME_SET_SHAPE_ROWS,
         compact_results,
         run_program,
@@ -111,7 +111,7 @@ def test_look_without_marks_asks_for_none():
 def test_an_unresolvable_list_item_names_only_what_a_list_takes():
     import pytest
 
-    from maps.search.analyze_scene.geom_program import ProgramError, run_program
+    from maps.query.program import ProgramError, run_program
 
     with pytest.raises(ProgramError) as e:
         run_program([{"fid": "prior_1", "xy": [0.0, 0.0]}], [], {"ops": [

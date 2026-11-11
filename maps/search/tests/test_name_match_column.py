@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import run_program
+from maps.query.program import run_program
 
 _CANDS = [
     {"fid": "d0", "xy": [12.0, 10.0], "class": "car", "color": "white"},

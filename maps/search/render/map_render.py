@@ -160,7 +160,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
     stroked by :func:`render_map_from_spec`."""
     import numpy as np  # noqa: PLC0415
     from maps.perception.viz.osm_palette import paint_color  # noqa: PLC0415
-    from maps.search.analyze_scene.row_geometry import cells_of  # noqa: PLC0415
+    from maps.query.row_geometry import cells_of  # noqa: PLC0415
 
     x0, y0, x1, y1 = (float(v) for v in window)
     cs = float(cell_size_m)
@@ -222,8 +222,8 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         paint_color,
         paint_word,
     )
-    from maps.search.analyze_scene.geom_compute import cell_centre_xy  # noqa: PLC0415
-    from maps.search.analyze_scene.row_geometry import cells_of  # noqa: PLC0415
+    from maps.query.spatial_math import cell_centre_xy  # noqa: PLC0415
+    from maps.query.row_geometry import cells_of  # noqa: PLC0415
     from maps.search.render.look_render import (  # noqa: PLC0415
         frame_arcs,
         frame_echo,

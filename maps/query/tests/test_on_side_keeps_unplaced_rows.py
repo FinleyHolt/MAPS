@@ -2,7 +2,7 @@
 has its 'distance to'), the ref straddles every row, so every row is kept
 unplaced instead of the cut refusing a column it was told to read."""
 
-from maps.search.analyze_scene import geom_program as GP
+from maps.query import program as GP
 
 
 def _sq(x0, y0, x1, y1):

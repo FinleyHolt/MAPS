@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from maps.search.analyze_scene.geom_program import ProgramError, run_program
+from maps.query.program import ProgramError, run_program
 
 _CANDS = [
     {"fid": "d0", "xy": [30.0, 50.0], "class": "car"},

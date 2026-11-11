@@ -29,11 +29,11 @@ import types
 from dataclasses import dataclass
 from typing import Callable
 
-from maps.search.analyze_scene.geom_compute import COMPASS_UNIT
-from maps.search.analyze_scene.geom_program import (
+from maps.query.spatial_math import COMPASS_UNIT
+from maps.query.program import (
     AUTOATTACH_PREFIXES, BROAD_HEAD_ROWS, MODEL_UNSERVED_COLUMNS,
     STANDING_SIDE_PREFIXES, empty_window_refusal, sanitize_token, window_span)
-from maps.search.analyze_scene.row_geometry import SurfaceGeometry
+from maps.query.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
 from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.parse_compile.code_surface import (
@@ -732,7 +732,7 @@ class Row(_Cuts):
     def _miss(self, k) -> str:
         """Why this key is not here and what writes it: a relation column
         exists only where a compare named its ref
-        (``geom_program.AUTOATTACH_PREFIXES``), so the remedy is the relate.
+        (``AUTOATTACH_PREFIXES``), so the remedy is the relate.
         """
         row = object.__getattribute__(self, "_row")
         pre = next((p for p in AUTOATTACH_PREFIXES

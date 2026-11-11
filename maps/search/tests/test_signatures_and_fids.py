@@ -31,8 +31,8 @@ def test_a_positional_count_refusal_counts_the_models_arguments(monkeypatch):
 def test_two_missions_in_one_process_score_finds_on_their_own_surface():
     """The find memo is per surface; two threads on two surfaces must not
     share its idf or scored rows."""
-    from maps.search.analyze_scene import geom_program as gp
-    from maps.search.analyze_scene import text_match as T
+    from maps.query import program as gp
+    from maps.query import text_match as T
     a = [{"fid": f"prior_{i}", "xy": [i, 0], "search_text": "house" if i % 2 else "school",
           "name": None, "tags": {}} for i in range(4000)]
     b = [{"fid": f"prior_{i}", "xy": [i, 0], "search_text": "school", "name": None,

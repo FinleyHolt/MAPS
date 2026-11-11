@@ -58,7 +58,7 @@ from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.ortho.sensor_frame import footprint_m
-from maps.search.analyze_scene.geom_compute import point_in_polygon
+from maps.query.spatial_math import point_in_polygon
 
 FT_PER_M = 1.0 / 0.3048
 #: A gap between fixes longer than this is a hole in the recording.

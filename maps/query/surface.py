@@ -6,8 +6,8 @@ import re
 
 import numpy as np
 
-from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.row_geometry import cells_of, mask_center
+from maps.query import spatial_math as G
+from maps.query.row_geometry import cells_of, mask_center
 
 
 def _r2(p) -> list:

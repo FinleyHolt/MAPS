@@ -1,7 +1,7 @@
 """The staged-viewpoint surface in the executor (act.stage's vN handles)."""
 from __future__ import annotations
 
-from maps.search.analyze_scene.geom_program import (
+from maps.query.program import (
     _attach_standing_columns,
     run_program,
 )
@@ -102,7 +102,7 @@ def test_find_query_naming_a_fid_returns_that_row():
 
 
 def test_side_columns_render_contiguous_in_fixed_order():
-    from maps.search.analyze_scene.geom_program import _grid_columns
+    from maps.query.program import _grid_columns
     rows = [
         {"fid": "a", "xy": [1, 2], "right of v1": 3.0, "behind v1": 1.0,
          "distance to lot": 9.0},

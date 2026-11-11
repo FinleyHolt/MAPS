@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from maps.search.analyze_scene.geom_compute import point_in_polygon
+from maps.query.spatial_math import point_in_polygon
 
 
 @dataclass(frozen=True)

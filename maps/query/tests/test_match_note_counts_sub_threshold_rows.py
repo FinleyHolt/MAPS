@@ -2,7 +2,7 @@
 rows the name band cut: each row is counted once, in the line that says
 why it is not in the set."""
 
-from maps.search.analyze_scene import geom_program as GP
+from maps.query import program as GP
 
 
 def _row(fid, name, x, text):

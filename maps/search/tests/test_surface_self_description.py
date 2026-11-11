@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 
-from maps.search.analyze_scene.geom_program import (
+from maps.query.program import (
     run_program,
 )
 

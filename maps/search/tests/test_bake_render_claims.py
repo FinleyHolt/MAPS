@@ -8,14 +8,14 @@ import re
 
 import pytest
 
-from maps.search.analyze_scene import geom_compute as G
-from maps.search.analyze_scene.geom_program import (
+from maps.query import spatial_math as G
+from maps.query.program import (
     BROAD_DUMP_SOFT_ROWS,
     _COMPARE_COL_PREFIXES,
     compact_results,
     run_program,
 )
-from maps.search.analyze_scene.surface import build_surface_from_graph
+from maps.query.surface import build_surface_from_graph
 from maps.world_state.prior_graph import build_object_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
