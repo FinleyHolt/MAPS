@@ -382,7 +382,7 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
                         # the whole block: a flight past any cut would
                         # vanish from the transcript
                         said=str(args.get("code") or ""),
-                        # already capped (python_surface.PRINT_CHAR_CAP)
+                        # already capped (interpreter.PRINT_CHAR_CAP)
                         printed=str(out.get("printed") or ""),
                         errored="error" in out,
                         # stops this block flew, an errored block's included

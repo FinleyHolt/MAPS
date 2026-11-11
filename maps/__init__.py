@@ -1,10 +1,13 @@
 """MAPS: Multimodal Agentic Planning and Search.
 
-Five subpackages: ``sws`` (the structured world-state graph), ``perception``
-(the SAM 3.1 detection client, the nadir ortho crop and the color
-extractor), ``search`` (the single persistent reasoner, the ``analyze``
-op-program, and the commit), ``llm`` (the LLM/VLM transport), and ``util``
-(cross-cutting plumbing). The eval harness lives in ``benchmarks.citynav``
-(the bench runner and the canonical SR readers under
-``benchmarks.citynav.analysis``).
+Seven subpackages: ``mission`` (the mission conversation: one persistent
+reasoner, one served tool, the turn loop), ``library`` (the Python the model
+writes: the block interpreter, the calls and the rows they hand back),
+``query`` (the op program the calls compile onto, over the surface rows),
+``render`` (the look crop and the map schematic), ``world_state`` (the
+structured world-state graph), ``perception`` (the SAM 3.1 detection client,
+the nadir ortho crop and the colour read) and ``llm`` (the reasoner
+transport). ``withhold`` holds the bench ablation switches and ``xy_token``
+the ``[x, y]`` point grammar. The benchmarks and the flight harness live in
+``benchmarks``.
 """

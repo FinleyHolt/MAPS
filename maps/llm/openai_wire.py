@@ -6,7 +6,7 @@ assistant turn, ``name`` on a tool result) and ignores the rest. OpenAI's API
 validates each message against its own schema instead, so a model card marked
 ``wire: "openai"`` (``maps.llm.model_cards``) is sent each message with only
 the fields that schema names, its output cap under the name its reasoning
-models take, and no seed (``reasoner_agent.Reasoner.step_tool_call``). The
+models take, and no seed (``maps.mission.reasoner.Reasoner.step_tool_call``). The
 reasoner's own history keeps every field; only the request body is narrowed.
 
 The API also refuses a function description over 1,024 characters, and the

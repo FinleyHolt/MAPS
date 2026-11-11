@@ -1,5 +1,5 @@
 """The compiler behind the mission `run` block: each library call
-``python_surface`` executes compiles onto geom_program ops the executor
+the interpreter executes compiles onto the ops the op program (``maps.query.program``)
 already runs. A :class:`Program` holds one call's ops; the loop grounds its
 named anchors and runs it."""
 from __future__ import annotations

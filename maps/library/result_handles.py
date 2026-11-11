@@ -1,4 +1,4 @@
-"""The op-program runner and the carry: a result handle is a query, so a
+"""The op-program runner and the result handles it carries: a handle is a query, so a
 read after the surface moves re-runs the ops behind it (and the handles
 they read); a refused replay fails the read, naming the handle."""
 

@@ -9,7 +9,7 @@ def _sq(x0, y0, x1, y1):
     return [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]
 
 
-# The ops code_surface.compile_find emits for
+# The ops op_compiler.compile_find emits for
 # find("house", nearest="prior_0", dwithin=5).
 _OPS = [
     {"ref": "r0", "op": "find", "args": {"query": "house"}},

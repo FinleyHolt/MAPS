@@ -105,7 +105,7 @@ def test_an_unseen_row_is_not_buried_by_a_colour_ordering():
 # --------------------------------------------------------------------------- #
 
 
-def test_the_whole_chain_survives_the_reasoner_loop():
+def test_the_whole_chain_survives_the_mission_loop():
     """`near=<set>` end to end: compiled, dispatched, served."""
 
     cands = [

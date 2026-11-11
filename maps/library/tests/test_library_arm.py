@@ -41,7 +41,7 @@ def test_the_whole_vocabulary_in_one_episode():
     assert [o["script_lines"] for o in out[:3]] == [1, 5, 6], out
     assert "r4" in out[2]["handles"], out[2]
     # size= compiles to a footprint_area_m2 sort (asserted in
-    # code_surface.demo); this fixture's synthetic cars carry no footprint,
+    # op_compiler.demo); this fixture's synthetic cars carry no footprint,
     # so the executor says so rather than ordering by nothing.
     assert len(flights) == 1
     assert flights[0]["target_fid"] == "car_1", flights

@@ -185,7 +185,7 @@ _GRID_COL_DROP = frozenset({
 })
 
 # The column names the model never sees on any channel: the grid, the
-# python surface's Row, and the key echoes in refusals and notes.
+# library's Row, and the key echoes in refusals and notes.
 MODEL_UNSERVED_COLUMNS = (
     _GRID_COL_DROP
     | frozenset(_MODEL_HIDDEN_ROW_FIELDS)
@@ -291,7 +291,7 @@ def _render_grid_rows(rows, cols) -> str:
 
 
 # The relation column-key prefixes, each followed by its ref's label. The
-# side prefixes may name a staged viewpoint handle; the python surface reads
+# side prefixes may name a staged viewpoint handle; the library's rows read
 # them, and AUTOATTACH_PREFIXES, to name what writes a missing key.
 STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
 _COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",

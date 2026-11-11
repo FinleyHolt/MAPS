@@ -1,7 +1,7 @@
 """Print the served LLM contract: system text + the mission tools.
 
 What the model is served at this sha, read from the owners a run serves
-through (``prompts``); diff two shas by dumping at each.
+through (``served_text``); diff two shas by dumping at each.
 
   python -m maps.mission.contract
   python -m maps.mission.contract --sensor <rig> [--agl-m <m>]   # Cal City's height by default

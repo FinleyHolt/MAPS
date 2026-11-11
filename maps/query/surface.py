@@ -1,4 +1,4 @@
-"""The ``(cands, anchors)`` surface the analyze executor runs over: one row
+"""The ``(cands, anchors)`` surface the op program runs over: one row
 per graph node, detections as ``cands`` and priors as ``anchors``."""
 from __future__ import annotations
 

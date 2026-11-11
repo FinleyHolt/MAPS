@@ -48,7 +48,7 @@ def test_the_observation_ceiling_never_binds_on_the_citynav_test_split():
     # Every episode of the test split: the ceiling sits ABOVE the window
     # budget, so the budget is what clamps and the observation extent
     # never does. If this fails, the crop window narrowed and the
-    # look_render / reasoner_loop notes that say otherwise are stale.
+    # look_render / mission loop notes that say otherwise are stale.
     cfg = _cfg()
     rows = json.loads(SPLIT_FILE.read_text())
     spans = []

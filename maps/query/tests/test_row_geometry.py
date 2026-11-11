@@ -1,4 +1,4 @@
-"""The measuring call served on the Python surface: distance()."""
+"""The measuring call served in the library: distance()."""
 
 import math
 

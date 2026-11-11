@@ -56,7 +56,7 @@ def test_second_consecutive_empty_turn_still_ends_the_mission():
 
 # The wrong-channel reply is tested where its detector lives: the arm
 # serves `run`, so the shape that gets dropped is a BLOCK, not a sentence.
-# See test_code_surface_arm.py --
+# See maps/library/tests/test_library_arm.py --
 # test_a_block_written_into_the_reply_channel_is_repaired_not_an_ending,
 # test_a_second_block_in_the_reply_channel_still_ends_the_mission,
 # test_prose_that_narrates_a_call_is_a_real_ending.
