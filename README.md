@@ -411,13 +411,20 @@ SEARCH_SAMPLING_REASONING_EFFORT=medium \
 
 CityNav's episodes, the CityRefer catalog and the SensatUrban point clouds
 come from their upstream sources; this repository redistributes none of them.
+One step is yours: SensatUrban's authors release the point clouds through a
+[form](https://github.com/QingyongHu/SensatUrban) (name, email, institution;
+no account), whose confirmation page links `data_release.zip`. Its terms are
+CC BY-NC-SA, non-commercial research use, and no redistribution. Then one
+command fetches the annotations, rasterizes the blocks and bakes the prior:
 
 ```sh
 export CITYNAV_ROOT=~/datasets/citynav-arxiv
-benchmarks/citynav/data_prep/fetch_data.sh             # episodes and catalog; prints the SensatUrban steps
-benchmarks/citynav/data_prep/rasterize_citynav_native.sh   # nadir rasters from the block point clouds
-PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh   # the OSM prior, from the shipped caches
+benchmarks/citynav/data_prep/setup.sh --sensaturban <data_release.zip>
 ```
+
+It ends by naming the splits that are ready to fly. Each step is skipped
+where its output is on disk, and the three scripts it runs stand alone
+(`fetch_data.sh`, `rasterize_citynav_native.sh`, `bake_tiles.sh`).
 
 The rasterizer runs upstream's PDAL pipeline in an environment with `pdal`,
 `rasterio` and `pillow` (`RASTERIZE_PYTHON` names its interpreter). The bake

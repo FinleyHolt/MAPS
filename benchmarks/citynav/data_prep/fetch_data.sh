@@ -34,11 +34,11 @@ PLY_COUNT="$(find "${CITYNAV_ROOT}/raw_ply" -name '*.ply' 2>/dev/null | wc -l)"
 echo "   present: ${PLY_COUNT}/34 block PLYs under ${CITYNAV_ROOT}/raw_ply/"
 if [[ "${PLY_COUNT}" -lt 34 ]]; then
 	cat <<'EOF'
-   The 34 SensatUrban blocks are NOT auto-fetched:
-     - HF mirror covers 25/34: https://huggingface.co/datasets/AerialVLN/SensatUrban
-       (or the mirror the upstream README currently names)
-     - the remaining 9 full-density blocks: request via the OpenDataLab /
-       SensatUrban form (http://point-cloud-analysis.cs.ox.ac.uk/)
+   The 34 SensatUrban blocks are NOT auto-fetched: their authors release
+   them through a form (https://github.com/QingyongHu/SensatUrban, "Download"),
+   under CC BY-NC-SA, for non-commercial research, with no redistribution.
+   benchmarks/citynav/data_prep/setup.sh --sensaturban <data_release.zip>
+   unpacks, rasterizes and bakes them in one step.
    Place them at $CITYNAV_ROOT/raw_ply/{train,test}/<block>.ply.
    The tile bake reads its blocks off the rasters made from them: run
    benchmarks/citynav/data_prep/rasterize_citynav_native.sh, then
