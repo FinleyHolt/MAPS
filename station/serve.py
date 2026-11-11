@@ -56,6 +56,8 @@ STREAM_PERIOD_S, STREAM_KEEPALIVE_S = 0.5, 15.0
 #: The live trail's length, in ownship reads (one a second).
 TRAIL_POINTS = 3600
 LIVE = ("flying", "awaiting_tasking")
+#: What marks the id of a mission flown under the operator's own words, with no row in the split.
+OPERATOR = "::operator-"
 
 _PATHS = frozenset({"footway", "cycleway", "path", "service", "track", "steps", "pedestrian", "bridleway"})
 _PITCHES = frozenset({"pitch", "track", "stadium", "playground", "sports_centre", "golf_course"})
@@ -352,12 +354,14 @@ class Station:
             if self.mission is not None and self.mission.status in LIVE:
                 raise HTTPException(409, f"mission {self.mission.episode_id} is flying; stop it first")
             if episode_id is not None and episode_id not in self.by_id:
-                raise HTTPException(404, f"{self.split} holds no episode {episode_id}")
+                if OPERATOR not in episode_id:
+                    raise HTTPException(404, f"{self.split} holds no episode {episode_id}")
+                episode_id = None  # an operator's past tasking, picked again: its words fly as a mission of their own
             start_xy = None
             if episode_id is None:
                 b = map_bounds(self.tiles_dir, self.map_name)
                 start_xy = ((b.x_min + b.x_max) / 2, (b.y_min + b.y_max) / 2)
-                episode_id = f"{self.map_name}::operator-{time.strftime('%H%M%S', time.gmtime())}"
+                episode_id = f"{self.map_name}{OPERATOR}{time.strftime('%H%M%S', time.gmtime())}"
             cfg = flight_config(self.config)
             sensor = resolve_sensor(cfg.sensor)
             episode = resolve_episode(episode_id, self.split, start_xy)
@@ -405,7 +409,13 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
         words = (q or "").lower().split()
         hits = [e for e in station.catalog
                 if all(w in e.description.lower() or w in e.episode_id.lower() for w in words)]
-        return {"missions": [station.entry(e) for e in hits[:max(0, limit)]], "total": len(station.catalog)}
+        # A run flown under the operator's own words has no row in the split: it lists first, by its words.
+        own = {r["episode_id"]: {"episode_id": r["episode_id"], "instruction": r["instruction"],
+                                 "map": r["map_name"], "target_lonlat": None}
+               for r in reversed(station.runs()) if r["episode_id"] not in station.by_id}
+        mine = [m for m in own.values() if all(w in m["instruction"].lower() for w in words)]
+        return {"missions": mine + [station.entry(e) for e in hits[:max(0, limit)]],
+                "total": len(station.catalog) + len(own)}
 
     @app.get("/reasoner")
     def reasoner() -> dict[str, Any]:
