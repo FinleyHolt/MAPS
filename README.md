@@ -284,6 +284,7 @@ Extras:
 | Extra | For |
 |---|---|
 | `recording` | Reading a camera recording for the as-flown frame replay (`mcap`). |
+| `station` | The station's server (`fastapi`, `uvicorn`). |
 | `dev` | The test suite and linter. |
 
 The SAM 3.1 serve runs in its own environment, because Meta's `sam3` package
@@ -551,6 +552,22 @@ python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcit
 The twin, the live source and the frame registration stand each frame on
 the bake's `calcity_dem.tif` where it is present (see [Cal City](#cal-city)).
 
+## Watch a mission
+
+[`station/`](station/README.md) is a web console over the twin: pick a Cal
+City tasking or type your own, watch the model reason turn by turn, see the
+aircraft, each leg's area and the observation it brought back on the map,
+and re-task the model while it flies. Every finished run under its output
+root opens as a review with a scrubber.
+
+```sh
+pip install -e '.[station]'
+python -m station.serve --ortho <root>/data/rgbd_upstream      # then open http://127.0.0.1:8788
+```
+
+Without `--ortho` the station reviews finished runs only and needs no raster,
+model or GPU.
+
 ## Replay a flown run
 
 `python -m benchmarks.flight.replay` flies a recorded run again on this
@@ -575,6 +592,7 @@ directory as `--raster` to replay as flown.
 | [`benchmarks/citynav/analysis/`](benchmarks/citynav/analysis/README.md) | The run readers every number is derived with. |
 | [`benchmarks/calcity/`](benchmarks/calcity/README.md) | The Cal City bench: corpus, reviewed set, raster and bake build. |
 | [`benchmarks/flight/`](benchmarks/flight/README.md) | The flight harness, the twin, as-flown replay and the closed-loop measures. |
+| [`station/`](station/README.md) | The station: a web console over a twin mission and over finished runs. |
 | `serving/` | The SAM 3.1 serve. |
 | `configs/` | Bench configs: the CityNav control, Cal City, and the withhold arms. |
 | `envs/` | The SAM 3.1 serve environment. |
