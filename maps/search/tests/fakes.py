@@ -207,7 +207,7 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
         MissionSpec,
         _Mission,
     )
-    from maps.util.xy_token import parse_xy_token
+    from maps.xy_token import parse_xy_token
 
     flights: list[dict] = []
 

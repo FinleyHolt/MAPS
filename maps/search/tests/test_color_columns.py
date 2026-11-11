@@ -168,7 +168,7 @@ def test_an_off_palette_color_key_names_the_palette():
 
 
 def test_palette_equals_the_m6_emitted_vocabulary():
-    from maps.perception.viz.color import _VDW_TO_VOCAB
+    from maps.perception.color import _VDW_TO_VOCAB
     assert set(G.COLOR_ENUM) == set(_VDW_TO_VOCAB.values()), (
         G.COLOR_ENUM, sorted(set(_VDW_TO_VOCAB.values())))
     assert G.COLOR_COLUMNS == frozenset("color_" + w for w in G.COLOR_ENUM)

@@ -9,7 +9,7 @@ import pytest
 
 from maps.perception.observation import Observation
 from maps.perception.sam.detect_client import _SAM_INPUT_SIZE, SamDetectClient
-from maps.util.mask_codec import encode_mask_record
+from maps.perception.mask_codec import encode_mask_record
 from tests.serves import SegmentServe
 
 
@@ -153,7 +153,7 @@ def test_pick_url_is_round_robin():
 def test_cap_hit_says_whether_detections_were_dropped(adapter, monkeypatch, capsys, n_masks, cap_hit):
     """A frame filling the cap exactly drops nothing, so ``cap_hit`` is False; one past it is True."""
     from maps.perception.sam import detect_client as dc
-    from maps.util.mask_region import MaskRegion
+    from maps.perception.mask_region import MaskRegion
 
     monkeypatch.setattr(dc, "MAX_PER_STEP", 2)
     obs = _build_observation(_square_frame())

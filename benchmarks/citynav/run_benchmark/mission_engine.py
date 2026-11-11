@@ -24,7 +24,7 @@ from maps.perception.observation import ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
 from maps.search.parse_compile.reasoner_loop import MissionSpec, run_mission
 from maps.search.withhold import withheld
-from maps.util.xy_token import parse_xy_token
+from maps.xy_token import parse_xy_token
 
 log = logging.getLogger("run_benchmark")
 

@@ -10,7 +10,7 @@ import numpy as np
 
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.ortho.sensor_frame import frame_corners_px
-from maps.util.mask_region import MaskRegion
+from maps.perception.mask_region import MaskRegion
 
 
 def _fill_region(

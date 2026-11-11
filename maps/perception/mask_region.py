@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from maps.util.mask_codec import extent
+from maps.perception.mask_codec import extent
 
 
 @dataclass(frozen=True)

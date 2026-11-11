@@ -13,7 +13,7 @@ import pytest
 from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient
 from maps.perception.tests.regions import square_view
-from maps.util.mask_codec import encode_mask_record
+from maps.perception.mask_codec import encode_mask_record
 
 H = W = 128
 MAX_PER_STEP = 9  # 8 two-component dets = 16 packs -> cap hits mid-det

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from maps.perception.base import DetectedObject
+from maps.perception.detection import DetectedObject
 
 
 # χ²(2 dof, p=0.99) ≈ 9.21 — Mahalanobis gate for a 2-D position residual.

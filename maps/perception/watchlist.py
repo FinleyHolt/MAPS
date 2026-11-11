@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Callable
 
-from maps.util.xy_token import parse_xy_token
+from maps.xy_token import parse_xy_token
 
 log = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from maps.search.parse_compile.perception_director import PerceptionDirector
+from maps.perception.watchlist import PerceptionDirector
 from maps.search.tests.fakes import CANDS, drive, run, tool_results
 
 _CANDS = CANDS + [

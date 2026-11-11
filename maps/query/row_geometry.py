@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from maps.query import spatial_math as G
-from maps.util.xy_token import is_xy
+from maps.xy_token import is_xy
 
 
 def cells_of(row) -> np.ndarray:

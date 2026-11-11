@@ -359,7 +359,7 @@ def test_a_torn_recording_serves_a_frame_from_its_own_chunk_without_reading_from
 def test_the_recorded_segmenter_keeps_a_recorded_object_id_of_zero():
     from types import SimpleNamespace
 
-    from maps.util.mask_codec import encode_mask_record
+    from maps.perception.mask_codec import encode_mask_record
 
     mask = np.zeros((8, 8), bool)
     mask[2:5, 2:5] = True

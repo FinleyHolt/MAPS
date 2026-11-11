@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 
 from maps.perception.geometry.sensor_spec import SensorSpec, body_tilt_matrix, mount_rotation_matrix
-from maps.util.mask_region import MaskRegion
+from maps.perception.mask_region import MaskRegion
 
 
 @dataclass

@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 
 from maps.perception.observation import Observation
-from maps.util.mask_region import MaskRegion
+from maps.perception.mask_region import MaskRegion
 
 
 def region_of(mask: np.ndarray) -> MaskRegion | None:

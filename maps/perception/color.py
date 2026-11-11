@@ -11,7 +11,7 @@ import os
 
 import numpy as np
 
-from maps.util.mask_region import MaskRegion
+from maps.perception.mask_region import MaskRegion
 
 _log = logging.getLogger(__name__)
 _M6_FAIL_N = 0  # systematic-failure counter for the rate-limited warn below
@@ -159,7 +159,7 @@ def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
         if _M6_FAIL_N == 1 or _M6_FAIL_N % 100 == 0:
             _log.warning(
                 "m6_attributes failed (n=%d) — color extraction may be "
-                "systematically broken (check perception/viz/data/w2c.txt, cv2)",
+                "systematically broken (check perception/data/w2c.txt, cv2)",
                 _M6_FAIL_N, exc_info=True,
             )
         return None

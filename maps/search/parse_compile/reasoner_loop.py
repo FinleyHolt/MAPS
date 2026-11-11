@@ -71,7 +71,7 @@ from maps.search.render.look_render import (
     up_bearing_deg,
 )
 from maps.search.withhold import withheld
-from maps.util.xy_token import format_xy_token, parse_xy_token
+from maps.xy_token import format_xy_token, parse_xy_token
 
 # Transient LLM-side errors: a retry, never the end of the reasoner (a
 # non-2xx, a link fault, or a ValueError: an undecodable body or a collapsed

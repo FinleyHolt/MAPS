@@ -35,7 +35,7 @@ from maps.query.program import (
     STANDING_SIDE_PREFIXES, empty_window_refusal, sanitize_token, window_span)
 from maps.query.row_geometry import SurfaceGeometry
 from maps.search.withhold import withheld
-from maps.util.xy_token import format_xy_token, is_xy, parse_xy_token
+from maps.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.search.parse_compile.code_surface import (
     CARDINAL_ORDER, HANDLE_RE, VIEWPOINT_RE, Bind, CodeError, Program, Ref,
     act_needs_a_thing, bind_row, compile_filter, compile_find, compile_order,

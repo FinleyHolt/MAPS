@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import math
 
-from maps.util.xy_token import format_xy_token, parse_xy_token
+from maps.xy_token import format_xy_token, parse_xy_token
 
 
 def spread(seq: list, k: int) -> list:

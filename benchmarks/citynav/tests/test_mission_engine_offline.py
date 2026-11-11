@@ -43,7 +43,7 @@ def test_xy_token_is_a_point():
 
 
 def test_bare_xy_token_matches_the_one_grammar():
-    # maps.util.xy_token accepts the bracket-less form too.
+    # maps.xy_token accepts the bracket-less form too.
     out = _resolve("1530.5, -12")
     assert out == {"xy": (1530.5, -12.0), "provenance": "point"}
 

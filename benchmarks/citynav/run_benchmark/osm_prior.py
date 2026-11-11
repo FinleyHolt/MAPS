@@ -11,7 +11,7 @@ import logging
 import numpy as np
 
 from maps.perception.ortho.prior_overlay import build_prior_polys_ortho
-from maps.perception.viz.color import m6_attributes
+from maps.perception.color import m6_attributes
 
 log = logging.getLogger("run_benchmark")
 

@@ -37,5 +37,5 @@ exclude = ["*tests*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"maps.perception" = ["viz/data/*"]
+"maps.perception" = ["data/*"]
 "station" = ["web/dist/*", "web/dist/assets/*"]

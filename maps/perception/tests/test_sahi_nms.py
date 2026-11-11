@@ -17,7 +17,7 @@ import pytest
 from maps.perception.tests.regions import full, region_of, square_view
 from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient, _png_wire_bytes
-from maps.util.mask_codec import decode_mask_crop, encode_mask_record
+from maps.perception.mask_codec import decode_mask_crop, encode_mask_record
 
 
 def _reference_nms_full_masks(items, iou_thr):

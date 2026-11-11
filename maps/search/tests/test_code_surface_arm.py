@@ -81,7 +81,7 @@ def test_an_explore_flies_the_stops_and_ends_on_the_last_one():
     assert "error" not in out[0], out[0]
     # the stops of the thing, and NOTHING after them
     assert len(flights) == len(STOPS), flights
-    from maps.util.xy_token import parse_xy_token
+    from maps.xy_token import parse_xy_token
     flown = [list(parse_xy_token(f["target_fid"])) for f in flights]
     assert flown == STOPS, flown
     ack = out[0]["explored"]
@@ -1044,7 +1044,7 @@ def test_an_explore_of_a_NAME_covers_every_segment_bearing_it():
     """explore("Willow Avenue") is the whole street, not its first fragment."""
     import json as _json
 
-    from maps.util.xy_token import parse_xy_token
+    from maps.xy_token import parse_xy_token
     reply, out, flights, asked, _rend = explore_drive([
         [run('explore("Willow Avenue")\n')],
         "done",
@@ -1064,7 +1064,7 @@ def test_an_explore_of_a_NAME_covers_every_segment_bearing_it():
 def test_an_explore_of_a_handle_chains_members_and_reverses_a_far_end():
     """A member whose FAR end is nearer the chain tail flies reversed, so consecutive
     members join where they touch and the pass stays a line."""
-    from maps.util.xy_token import parse_xy_token
+    from maps.xy_token import parse_xy_token
     reply, out, flights, _a, _rend = explore_drive([
         [run('r1 = find("car")\n')],
         [run('explore(r1)\n')],
@@ -1080,7 +1080,7 @@ def test_an_explore_of_a_handle_chains_members_and_reverses_a_far_end():
 
 def test_a_set_pass_covers_a_long_street_rather_than_husbanding_stops():
     """The bound is a RUNAWAY backstop, not a budget the pass husbands."""
-    from maps.util.xy_token import parse_xy_token
+    from maps.xy_token import parse_xy_token
     long_stops = {
         "w1": [[float(x), 0.0] for x in range(0, 1200, 100)],
         "w2": [[float(x), 0.0] for x in range(1200, 2400, 100)],
@@ -1107,7 +1107,7 @@ def test_a_set_pass_covers_a_long_street_rather_than_husbanding_stops():
 
 def test_a_set_pass_dedupes_the_shared_endpoint_of_touching_members():
     """Two segments that join share a stop; the pass flies it once."""
-    from maps.util.xy_token import parse_xy_token
+    from maps.xy_token import parse_xy_token
     reply, out, flights, _a, _rend = explore_drive([
         [run('explore("Willow Avenue")\n')],
         "done",
@@ -1355,7 +1355,7 @@ def test_a_pass_hands_every_stop_the_stops_behind_it():
 
 
 def test_a_pass_takes_a_stop_the_recording_holds_first():
-    from maps.util.xy_token import parse_xy_token
+    from maps.xy_token import parse_xy_token
 
     asked: list[list] = []
 

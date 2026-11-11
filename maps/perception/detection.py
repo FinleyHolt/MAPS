@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from maps.util.mask_region import MaskRegion
+from maps.perception.mask_region import MaskRegion
 
 
 @dataclass
@@ -26,5 +26,5 @@ class DetectedObject:
     # folds them into a node's semantic_attributes as {key: {value: 1}} counters.
 
     # The segmentation mask, as a crop plus where it sits in the frame
-    # (``maps.util.mask_region``), so no consumer scans the whole frame.
+    # (``maps.perception.mask_region``), so no consumer scans the whole frame.
     mask: "MaskRegion | None" = None

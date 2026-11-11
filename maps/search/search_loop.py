@@ -14,10 +14,10 @@ import numpy as np
 
 from maps.query.spatial_math import cell_centre_xy
 from maps.search.parse_compile.passes import spread
-from maps.search.parse_compile.perception_director import (
+from maps.perception.watchlist import (
     PerceptionDirector, canon_concept)
 from maps.world_state.graph import GridDomain, MapObject
-from maps.util.mask_codec import encode_mask_record
+from maps.perception.mask_codec import encode_mask_record
 
 
 log = logging.getLogger(__name__)

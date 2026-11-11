@@ -79,7 +79,7 @@ def test_the_declared_union_is_canonical_and_keeps_first_seen_order():
 
 
 def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():
-    from maps.search.parse_compile.perception_director import PerceptionDirector
+    from maps.perception.watchlist import PerceptionDirector
 
     d = PerceptionDirector(retro_perceiver=lambda flown, cs: {"n_dets": 1, "stop": flown["stop_id"]})
     d.record_flown({"pose_xy": (100.0, 200.0), "stop_id": "stop_000", "target_fids": ["prior_1"]})
@@ -89,7 +89,7 @@ def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():
 
 
 def test_a_boost_at_an_unflown_stop_names_it_and_queues_nothing():
-    from maps.search.parse_compile.perception_director import PerceptionDirector
+    from maps.perception.watchlist import PerceptionDirector
 
     assert PerceptionDirector().boost_queue(["car"], ["stop_009"]) == {
         "error": "no boost target resolved; nothing was queued or re-segmented",

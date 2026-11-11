@@ -1,4 +1,4 @@
-from maps.util.xy_token import is_xy
+from maps.xy_token import is_xy
 
 
 def test_is_xy_takes_two_numbers_only():

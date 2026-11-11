@@ -16,13 +16,13 @@ from typing import Iterable
 
 import numpy as np
 
-from maps.perception.base import DetectedObject
+from maps.perception.detection import DetectedObject
 from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
 )
 from maps.perception.observation import Observation
-from maps.util.mask_codec import decode_mask_crop
-from maps.util.mask_region import MaskRegion
+from maps.perception.mask_codec import decode_mask_crop
+from maps.perception.mask_region import MaskRegion
 
 DEFAULT_SAM_SERVER_URL = "http://127.0.0.1:8772"
 

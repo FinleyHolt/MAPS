@@ -8,7 +8,7 @@ carrying the same index.
 """
 from __future__ import annotations
 
-from maps.perception.base import DetectedObject
+from maps.perception.detection import DetectedObject
 from maps.perception.world_tracker import WorldTracker
 from maps.search.search_loop import SearchLoop
 

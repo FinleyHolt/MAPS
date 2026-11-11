@@ -138,7 +138,7 @@ def test_each_crossing_is_a_row_with_its_own_fid_and_its_own_point():
     for r in rows:
         # the fid IS the point: the tree's uniform fid-or-point address, so
         # the row flies / stages / maps with no new plumbing
-        from maps.util.xy_token import parse_xy_token
+        from maps.xy_token import parse_xy_token
         assert parse_xy_token(r["fid"]) == tuple(r["xy"])
         assert r["name"] == "Zig Road x Straight Street"
     assert "3 distinct crossings" in " ".join(rows.notes)

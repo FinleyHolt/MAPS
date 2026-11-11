@@ -15,7 +15,7 @@ from maps.search.render.look_render import (
     up_bearing_deg,
 )
 from maps.search.withhold import withheld
-from maps.util.xy_token import parse_xy_token
+from maps.xy_token import parse_xy_token
 
 # The server's per-request image cap.
 LOOK_MAX_CROPS = 16
