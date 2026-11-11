@@ -22,7 +22,7 @@ import benchmarks.citynav.paths as citynav_paths
 import maps.perception.ortho.camera_model as camera_model
 from benchmarks.citynav.bake.city import BakeError, _cell_coverage, bake_block
 from benchmarks.citynav.eval import WorldBounds
-from maps.search.tests.ortho_fixture import write_rasters
+from maps.mission.tests.ortho_fixture import write_rasters
 
 BLOCK = "toy_block_0"
 

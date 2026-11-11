@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from maps.query import spatial_math as G
-from maps.search.tests.fakes import ring
+from maps.mission.tests.fakes import ring
 
 
 def _shapes(seed, n, span=600):

@@ -55,7 +55,7 @@ def test_bare_xy_token_matches_the_one_grammar():
 
 
 def _bare_loop():
-    from maps.search.tests.fakes import search_loop
+    from maps.mission.tests.fakes import search_loop
 
     pushes: list[list] = []
     return search_loop(sam_setter=pushes.append), pushes
@@ -128,7 +128,7 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
 
 
 def test_an_end_commit_withhold_flight_report_names_no_answer(stub_session, monkeypatch):
-    from maps.search import withhold
+    from maps import withhold
 
     monkeypatch.setenv(withhold.ENV, "end_commit")
     session = stub_session(update_perception=lambda **kw: [])

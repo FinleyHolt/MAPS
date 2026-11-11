@@ -21,7 +21,7 @@ order attempts by, so a retry is a new directory.
 turn and the reasons a turn was not a block); every ``append`` also lands the
 row in ``conversation.jsonl``, opened per append, so a mission killed between
 turns keeps every turn it flew. ``LiveRecorder`` appends one line per
-detection the step's perception fold produced (``maps.search.search_loop``'s
+detection the step's perception fold produced (``maps.mission.episode_world``'s
 record, masks packed) plus ``step`` to ``detections.jsonl``, flushed per line
 so a reader sees at most one torn final line; the file exists from the start.
 """

@@ -626,7 +626,7 @@ class Mission:
         from maps.llm.endpoint_spec import discover_from_env, install_spec, spec  # noqa: PLC0415
         from maps.llm.http import CallCanceled  # noqa: PLC0415
         from maps.llm.model_cards import check_effort  # noqa: PLC0415
-        from maps.search.parse_compile.reasoner_loop import continue_mission  # noqa: PLC0415
+        from maps.mission.loop import continue_mission  # noqa: PLC0415
 
         try:
             self._set(STATE_FLYING)

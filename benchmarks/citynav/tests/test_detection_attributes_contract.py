@@ -10,7 +10,7 @@ rename) cannot quietly break downstream consumers.
 from __future__ import annotations
 
 
-from maps.search.search_loop import _detection_to_mapobject
+from maps.mission.episode_world import _detection_to_mapobject
 from maps.perception.detection import DetectedObject
 
 

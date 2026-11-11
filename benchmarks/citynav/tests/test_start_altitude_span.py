@@ -3,7 +3,7 @@
 ``obs_span_m = 2 * (start_alt - ground)`` is the view-square side the
 mission hands every crop request (see
 ``maps/render/look_render.py``, and
-``maps/search/tests/test_look_obs_span_ceiling.py`` for what the
+``maps/render/tests/test_look_obs_span_ceiling.py`` for what the
 renderer does with it). On the CityNav test split it never binds: the
 pixel-budget ceiling, 100 m on a 0.1 m/px ortho, is what clamps the window.
 Upstream's start z puts 4 val_seen and 60 train_seen episodes low enough

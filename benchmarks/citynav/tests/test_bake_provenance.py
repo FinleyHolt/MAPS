@@ -14,7 +14,7 @@ import numpy as np
 
 import benchmarks.citynav.paths as citynav_paths
 from benchmarks.citynav.bake.city import bake_city
-from maps.search.tests.ortho_fixture import write_rasters
+from maps.mission.tests.ortho_fixture import write_rasters
 
 
 def test_a_city_bake_stamps_the_cache_it_read(tmp_path, monkeypatch):

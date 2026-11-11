@@ -34,8 +34,8 @@ from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
 from maps.perception.sam.detect_client import SamDetectClient
-from maps.search.search_loop import SearchLoop
-from maps.search.withhold import withheld
+from maps.mission.episode_world import SearchLoop
+from maps.withhold import withheld
 from maps.world_state.prior_graph import build_object_graph
 from maps.world_state.graph import GridDomain
 

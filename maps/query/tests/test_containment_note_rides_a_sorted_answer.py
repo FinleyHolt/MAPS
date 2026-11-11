@@ -2,7 +2,7 @@
 that sorted or cut the compared rows."""
 from __future__ import annotations
 
-from maps.search.tests.fakes import drive, run, tool_results
+from maps.mission.tests.fakes import drive, run, tool_results
 
 
 def _sq(x0, y0, x1, y1):

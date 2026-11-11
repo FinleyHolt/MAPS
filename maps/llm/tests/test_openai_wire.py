@@ -13,9 +13,10 @@ from maps.llm import endpoint_spec as E
 from maps.llm import openai_wire
 from maps.llm.flight_summary import reasoning_tokens_of, summarize
 from maps.llm.model_cards import CARDS, check_effort, sampling_kwargs
-from maps.search.parse_compile import compactor, reasoner_agent
-from maps.search.parse_compile.reasoner_agent import Reasoner
-from maps.search.tests.fakes import TEST_SPEC, jpeg
+from maps.mission import compactor
+from maps.mission import reasoner
+from maps.mission.reasoner import Reasoner
+from maps.mission.tests.fakes import TEST_SPEC, jpeg
 
 GPT = "gpt-5.6-sol"
 GPT_SPEC = replace(TEST_SPEC, model_id=GPT, tokenizer_name="openai/gpt-oss-120b")
@@ -90,7 +91,7 @@ def _serve(monkeypatch) -> list[dict]:
             "content": None, "tool_calls": [
                 {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{\"code\": \"x\"}"}}]}}]}
 
-    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     return sent
 
 
@@ -136,7 +137,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
     """A provider caches the longest prefix it has seen byte for byte: under the image
     cap and the budget, each turn's tools serialize as the last turn's did and its
     messages array opens with the last turn's bytes."""
-    from maps.search.parse_compile.prompts import served_tools
+    from maps.mission.served_text import served_tools
 
     sent: list[dict] = []
 
@@ -146,7 +147,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
             {"id": f"c{len(sent)}", "type": "function",
              "function": {"name": "run", "arguments": "{ \"code\":  \"look()\" }"}}]}}]}
 
-    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
     r.append_vision_user("look 0", [jpeg(64)] * 4)
     for k in range(1, 5):
@@ -162,7 +163,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
 def test_the_run_tool_s_documentation_rides_the_system_turn(monkeypatch) -> None:
     """OpenAI refuses a function description over 1,024 characters; the run tool's is far
     longer, so it moves verbatim into the system turn and the tool points at it."""
-    from maps.search.parse_compile.prompts import served_tools
+    from maps.mission.served_text import served_tools
 
     tools = served_tools()
     doc = tools[0]["function"]["description"]
@@ -202,7 +203,7 @@ def test_a_self_hosted_card_keeps_its_shape(monkeypatch) -> None:
 
 
 def test_the_request_never_carries_more_images_than_azure_takes(monkeypatch) -> None:
-    from maps.search.parse_compile.views import LOOK_MAX_CROPS
+    from maps.mission.picture_requests import LOOK_MAX_CROPS
 
     sent = _serve(monkeypatch)
     r = Reasoner(endpoint_spec=GPT_SPEC)
@@ -337,7 +338,7 @@ def test_a_responses_answer_reads_as_the_chat_answer_the_engine_takes(status, re
 def test_the_turn_s_encrypted_reasoning_rides_the_next_request(monkeypatch) -> None:
     """The reasoner keeps a Responses turn's reasoning items on its assistant turn and the
     wire narrowing passes them on; the compactor prices them by the tokens they took."""
-    from maps.search.parse_compile import compactor
+    from maps.mission import compactor
 
     sent: list[dict] = []
 
@@ -348,7 +349,7 @@ def test_the_turn_s_encrypted_reasoning_rides_the_next_request(monkeypatch) -> N
             "tool_calls": [{"id": f"c{len(sent)}", "type": "function", "function": {"name": "run", "arguments": "{}"}}]}}],
             "usage": {"completion_tokens_details": {"reasoning_tokens": 5000}}}
 
-    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="medium")
     r.append_user("find the truck")
     r.step_tool_call([])

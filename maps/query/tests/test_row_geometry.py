@@ -6,10 +6,10 @@ import pytest
 
 from maps.query import spatial_math as G
 from maps.query.program import run_program
-from maps.search.parse_compile.code_surface import CodeError
-from maps.search.parse_compile.python_surface import (
+from maps.library.op_compiler import CodeError
+from maps.library.interpreter import (
     MissionPython, Row, Rows, _places)
-from maps.search.tests.fakes import quiet_env
+from maps.mission.tests.fakes import quiet_env
 
 ROAD = {"fid": "prior_1", "name": "Poppy Boulevard", "class": "road",
         "mask": [[[0.0, 0.0], [0.0, 1198.0]]], "xy": [0.0, 599.0]}
@@ -128,7 +128,7 @@ def test_a_bare_name_is_refused_rather_than_grounded():
 
 def test_the_measuring_ceiling_names_the_pairwise_scan(monkeypatch):
     monkeypatch.setattr(
-        "maps.search.parse_compile.python_surface.MEASURE_CALL_CEILING", 3)
+        "maps.library.interpreter.MEASURE_CALL_CEILING", 3)
     mp = _mp({"prior_1": ROAD, "detected_1": CAR})
     for _ in range(3):
         mp._call_distance("detected_1", "prior_1")

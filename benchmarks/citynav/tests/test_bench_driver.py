@@ -77,7 +77,7 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
     from dataclasses import replace
 
     from maps.llm import endpoint_spec as E
-    from maps.search.tests.fakes import TEST_SPEC
+    from maps.mission.tests.fakes import TEST_SPEC
 
     asked: list[str] = []
 
@@ -488,7 +488,7 @@ def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
     from dataclasses import replace
 
     from maps.llm import endpoint_spec as E
-    from maps.search.tests.fakes import TEST_SPEC
+    from maps.mission.tests.fakes import TEST_SPEC
 
     asked: list[str] = []
     up: set[str] = set()

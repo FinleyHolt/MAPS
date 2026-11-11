@@ -68,7 +68,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
 
     from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
     from benchmarks.citynav.run_benchmark import mission_engine as me
-    from maps.search.tests.fakes import search_loop
+    from maps.mission.tests.fakes import search_loop
 
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
 

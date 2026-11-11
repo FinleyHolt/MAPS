@@ -51,7 +51,7 @@ The code lives in [`maps/`](maps/README.md). Print the served contract (the
 system turn and the tool schema the model receives) with:
 
 ```sh
-python -m maps.search.parse_compile.contract --sensor oryx_orx32_25mm_nadir   # --agl-m <m>, default configs/calcity.yaml's 914.4
+python -m maps.mission.contract --sensor oryx_orx32_25mm_nadir   # --agl-m <m>, default configs/calcity.yaml's 914.4
 ```
 
 ## The closed-loop flight
@@ -71,7 +71,7 @@ these places, the served-text changes among them:
 | A block whose Python parses but fails to compile (a repeated keyword argument) comes back as a tool error the model reads. | The flown engine ended such an episode as an infrastructure failure. |
 | A receipt that prints a row's type names the `maps` package. | The flown receipt named the flown package. |
 | The aircraft is reached through the `Vehicle` protocol (post a leg, read poses and recorded frames). | The station spoke to the recorder and cockpit display over HTTP with the same semantics. |
-| The bench ablation withholds (`maps/search/withhold.py`) exist; the flight mission refuses a run that names one. | None; a flight serves every part. |
+| The bench ablation withholds (`maps/withhold.py`) exist; the flight mission refuses a run that names one. | None; a flight serves every part. |
 | A mission that raises before its first report is out of the rates only on a serve fault (the bench's infra rule: a segmenter outage, a transient shared-server fault, an image-store refusal, or a reasoner that does not answer discovery); any other failure is a scored miss carrying its error. A mission that ends after a report without a new one (a crew Stop, the turn cap, an infeasible compaction, or a failure) is scored at its last report (that reply's end, time and flights stand; a failure's error is recorded), never infra. A config file the flight refuses is refused before the sortie folder is written. | The flown station marked every failed mission as infrastructure, out of every rate; a follow-up tasking that ended without a new report replaced the report with that ending. |
 | A Cal City bench episode succeeds when its commit point lies inside the target's mask as drawn, by the even-odd test the flight measures use, so a self-crossing mask keeps every lobe. | The flown sweep scored the six-action replay's final pose against the mask repaired with `buffer(0)`, which drops lobes of a self-crossing mask (4 reviewed masks), widened to a 5 m floor. |
 | The bench driver's wait for a down reasoner ends with `--max-wall-s` or an abort. | The driver waited for the reasoner indefinitely. |
@@ -381,7 +381,7 @@ bills; size the limit to the bench's concurrency on that count.
 export SEARCH_REASONER_URL=https://<resource>.openai.azure.com/openai/v1
 export SEARCH_REASONER_API_KEY=<deployment key>
 export SEARCH_ENDPOINT_SPEC_OVERRIDE=gpt-5.6-sol:262144
-python -m maps.llm.endpoint_preflight --effort none --effort medium --effort xhigh
+python -m maps.mission.endpoint_preflight --effort none --effort medium --effort xhigh
 ```
 
 The override pins the window Inkling Small is served with, so the compactor
@@ -497,7 +497,7 @@ python -m benchmarks.calcity.bench_fullset \
 ```
 
 E4, one root per ablation arm, per model. `configs/withhold/`
-holds one config per withhold (`maps/search/withhold.py`) and one per
+holds one config per withhold (`maps/withhold.py`) and one per
 family: `seeing` (look_for, look, images, map) and `text` (doc, system_turn).
 Under `end_commit` the mission still ends on a plain reply and scores the last
 flight; only what the model is told about it is withheld.

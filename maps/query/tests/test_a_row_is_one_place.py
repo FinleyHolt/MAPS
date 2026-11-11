@@ -161,7 +161,7 @@ def test_the_real_bake_lands_every_row_on_the_map():
 
 
 def test_the_flown_pose_is_the_row_s_served_xy():
-    from maps.search.tests.fakes import search_loop
+    from maps.mission.tests.fakes import search_loop
 
     ways = [("prior_1", _way("Lime Avenue", _row(range(0, 10)))),
             ("prior_2", _way("Lime Avenue", _row(range(10, 20)))),

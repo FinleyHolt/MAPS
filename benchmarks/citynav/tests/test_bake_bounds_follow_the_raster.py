@@ -15,7 +15,7 @@ import pytest
 
 import benchmarks.citynav.paths as citynav_paths
 from benchmarks.citynav.bake.city import BakeError, bake_block
-from maps.search.tests.ortho_fixture import write_rasters
+from maps.mission.tests.ortho_fixture import write_rasters
 
 BLOCK = "birmingham_block_9"
 POINT = ({"amenity": "bench", "osm_id": "n1"}, {"type": "Point", "coordinates": [810.0, 805.0]})

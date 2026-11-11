@@ -21,8 +21,8 @@ from typing import Any, Callable
 
 from benchmarks import REPO_ROOT
 from maps.perception.geometry.sensor_spec import resolve_sensor
-from maps.search.withhold import ENV as WITHHOLD_ENV
-from maps.search.withhold import WITHHOLDS
+from maps.withhold import ENV as WITHHOLD_ENV
+from maps.withhold import WITHHOLDS
 
 
 _NUM = (int, float)
@@ -84,7 +84,7 @@ class RunConfig:
     altitude_cap_m: float
     # A registered sensor name or an inline override (sensor_spec).
     sensor: str | dict
-    # Bench-only ablation withholds (maps.search.withhold); empty serves the
+    # Bench-only ablation withholds (maps.withhold); empty serves the
     # flown text exactly.
     withhold: list
     # A published method that chooses the stops in place of the mission

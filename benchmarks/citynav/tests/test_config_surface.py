@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.run_benchmark.config import load_config, resolve_config
-from maps.search.withhold import WITHHOLDS
+from maps.withhold import WITHHOLDS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

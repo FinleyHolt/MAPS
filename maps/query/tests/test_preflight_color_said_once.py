@@ -2,7 +2,7 @@
 note, not a second preflight note restating it."""
 from __future__ import annotations
 
-from maps.search.parse_compile.carry import _preflight_color_note, run_ops
+from maps.library.result_handles import _preflight_color_note, run_ops
 
 
 def test_a_dropped_colour_term_is_explained_once():
