@@ -21,7 +21,7 @@ from benchmarks.citynav.paths import selected_bench
 from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
 from benchmarks.run_record import episodes
 from benchmarks.run_record import run_manifest as _rm
-from benchmarks.run_record.config import export_withhold, load_config
+from benchmarks.run_record.config import engine_settings, load_config
 from benchmarks.run_record.episode_workdir import open_episode_dir
 
 log = logging.getLogger("run_benchmark")
@@ -125,9 +125,10 @@ def main(bench: Bench | None = None) -> int:
 
     bench.assert_available()
     cfg = load_config(args.config)
-    export_withhold(cfg)
+    # The engine's settings, built once: the run's environment, the config's withholds.
+    settings = engine_settings(cfg, bench.environ)
     try:
-        bench = _rm.install_endpoint(bench, cfg.policy)
+        bench = _rm.install_endpoint(bench, settings, cfg.policy)
     except _rm.EndpointRefused as exc:
         log.error("%s", exc)
         return 2
@@ -163,8 +164,8 @@ def main(bench: Bench | None = None) -> int:
         print(ep.dir, flush=True)
         try:
             dispatch_one(episode=episode, idx=0, total=1,
-                          objects_by_map=objects_by_map, cfg=cfg, bench=bench, split=args.split,
-                          recorder=ep.recorder,
+                          objects_by_map=objects_by_map, cfg=cfg, bench=bench, settings=settings,
+                          split=args.split, recorder=ep.recorder, routing_key=args.episode_id,
                           episode_dir=ep.dir)
         finally:
             ep.close()
@@ -204,9 +205,11 @@ def main(bench: Bench | None = None) -> int:
                 objects_by_map=objects_by_map,
                 cfg=cfg,
                 bench=bench,
+                settings=settings,
                 split=args.split,
                 recorder=ep.recorder,
                 episode_dir=ep.dir,
+                routing_key=episode.episode_id,
             )
             result["workdir"] = str(ep.dir.relative_to(out_root))
             episodes.append_row(out_root, result)

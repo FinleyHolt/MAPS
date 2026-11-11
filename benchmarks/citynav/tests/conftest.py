@@ -9,6 +9,7 @@ import pytest
 
 from benchmarks.citynav import bench_fullset as bf
 from benchmarks.citynav.paths import citynav_bench
+from maps.settings import Settings, from_environ
 
 
 @pytest.fixture
@@ -27,6 +28,7 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         # The bench as the test's environment places it, read when the driver is made.
         d.bench = citynav_bench(os.environ)
         d.config = bf._config_path(d.bench.environ)
+        d.endpoint = from_environ(d.bench.environ).endpoint
         d.out_root = root
         d.episodes_file = root / "episodes.jsonl"
         d.driver_log = root / "driver.log"
@@ -68,7 +70,7 @@ STUB_GRAPH = {
 def stub_session(monkeypatch: pytest.MonkeyPatch):
     """A ``MissionSession`` over a SearchLoop holding ``STUB_GRAPH``, a live
     ``observe`` frame and no render: ``make(**loop_overrides,
-    pose_xy=, rgb=)``."""
+    pose_xy=, rgb=, withhold=)``, ``withhold`` the parts its run withholds."""
     from types import SimpleNamespace
 
     from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
@@ -77,7 +79,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
 
-    def make(*, pose_xy=(10.0, 20.0), rgb=None, **loop_overrides) -> me.MissionSession:
+    def make(*, pose_xy=(10.0, 20.0), rgb=None, withhold=(), **loop_overrides) -> me.MissionSession:
         loop = search_loop({
             fid: SimpleNamespace(world_xy=xy, provenance="detected" if prov == "detected" else "prebaked")
             for fid, (xy, prov) in STUB_GRAPH.items()})
@@ -93,6 +95,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
             sensor=None, tile_frame=None, ground_z_m=0.0, search_loop=loop,
             # The bench as the test's environment places it, read when the session is made.
             bench=citynav_bench(os.environ),
+            settings=Settings(withhold=frozenset(withhold)), workdir=None, routing_key=None,
             perception=SimpleNamespace(detect=lambda obs: [], concepts=[]))
         return me.MissionSession(h, observe=lambda: frame)
 

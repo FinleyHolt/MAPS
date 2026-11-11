@@ -18,6 +18,7 @@ import urllib.error
 import pytest
 
 from maps.llm import endpoint_spec as E
+from maps.settings import Settings, from_environ
 from maps.llm.endpoint_spec import (
     EndpointDiscoveryError,
     EndpointOverride,
@@ -56,7 +57,7 @@ def _isolated(monkeypatch):
     """Fresh install slot + a stub tokenizer check per test (the
     tokenizer-failure test overrides the stub with the real path)."""
     monkeypatch.setattr(E, "_SPEC", None)
-    monkeypatch.setattr(E, "_require_tokenizer", lambda m: f"tok:{m}")
+    monkeypatch.setattr(E, "_require_tokenizer", lambda m, override="": f"tok:{m}")
     yield
 
 
@@ -157,7 +158,7 @@ def test_case_g_tokenizer_load_failure(monkeypatch):
     monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
     import maps.llm.tokenizer as tok
 
-    def _unloadable(m):
+    def _unloadable(m, tokenizer_name=""):
         raise RuntimeError(f"tokenizer for served model {m!r} failed to load")
 
     monkeypatch.setattr(tok, "load_tokenizer", _unloadable)
@@ -179,7 +180,7 @@ def test_case_g_discovery_refuses_a_template_that_cannot_render_a_tool_turn(monk
     monkeypatch.setattr(E, "_require_tokenizer", _REAL_REQUIRE_TOKENIZER)
     import maps.llm.tokenizer as tok
 
-    monkeypatch.setattr(tok, "load_tokenizer", lambda m: _NoToolTurnTemplate())
+    monkeypatch.setattr(tok, "load_tokenizer", lambda m, tokenizer_name="": _NoToolTurnTemplate())
     with pytest.raises(EndpointDiscoveryError, match="chat template"):
         discover(_URL_A)
 
@@ -411,13 +412,17 @@ def test_a_serve_that_is_busy_or_drops_its_body_is_unreachable_and_a_refusal_is_
 # --------------------------------------------------------------------------- #
 
 
+def _arm(effort: str) -> Settings:
+    """The settings of an environment whose SEARCH_SAMPLING_REASONING_EFFORT is ``effort``."""
+    return from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort})
+
+
 @pytest.mark.parametrize("model_id,effort", [
     ("inkling-small", "0.99"), ("qwen38-flash-next-nvfp4", "xhigh"), ("gemma4-e4b", "0.9"),
 ])
 def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", effort)
-    assert discover(_URL_A).model_id == model_id
+    assert discover(_URL_A, settings=_arm(effort)).model_id == model_id
 
 
 @pytest.mark.parametrize("model_id,effort,named", [
@@ -427,6 +432,5 @@ def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort)
 ])
 def test_discovery_refuses_an_effort_the_card_does_not_take(monkeypatch, model_id, effort, named):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", effort)
     with pytest.raises(EndpointDiscoveryError, match=f"SEARCH_SAMPLING_REASONING_EFFORT.*{named}"):
-        discover(_URL_A)
+        discover(_URL_A, settings=_arm(effort))

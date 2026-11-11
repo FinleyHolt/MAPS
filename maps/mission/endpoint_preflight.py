@@ -32,7 +32,6 @@ import argparse
 import io
 import json
 import logging
-import os
 import sys
 import tempfile
 import threading
@@ -41,6 +40,8 @@ from pathlib import Path
 from maps.llm import endpoint_spec
 from maps.llm.flight_summary import summarize
 from maps.llm.model_cards import check_effort, effort, speaks_openai
+from maps.settings import Settings, from_process
+from maps.withhold import withholding
 
 
 def _picture() -> bytes:
@@ -61,23 +62,26 @@ def _shape(out: dict) -> dict:
             "content": out["content"][:300]}
 
 
-def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir: Path) -> dict:
+def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir: Path,
+                  settings: Settings = Settings()) -> dict:
     from maps.mission.served_text import served_tools  # noqa: PLC0415
     from maps.mission.reasoner import Reasoner  # noqa: PLC0415
 
-    reasoner = Reasoner(endpoint_spec=spec, seed=1234, reasoning_effort=effort)
+    # one prompt-cache key per conversation, as one per episode
+    reasoner = Reasoner(endpoint_spec=spec, settings=settings, workdir=workdir,
+                        routing_key=f"preflight-{workdir.name}", seed=1234, reasoning_effort=effort)
     reasoner.append_vision_user(
         "Endpoint check. Name the colour of the square in this picture, then call run with the code "
         "print('ok').", [_picture()])
     first = reasoner.step_tool_call(served_tools())
-    after_first = summarize(workdir / "flight")
+    after_first = summarize(workdir / "flight", settings.endpoint.tokenizer_name)
     for call in first.get("tool_calls") or []:
         reasoner.append_tool_result(call["id"], call["function"]["name"], "ok")
     if not first.get("tool_calls"):
         reasoner.append_user("Call run with the code print('ok').")
     reasoner.cancel_event = threading.Event()  # never set: the call streams, as a flight's does
     second = reasoner.step_tool_call(served_tools())
-    meter = summarize(workdir / "flight")
+    meter = summarize(workdir / "flight", settings.endpoint.tokenizer_name)
     out = {"first": _shape(first), "second": _shape(second),
            "tokens": {k: meter[k] for k in ("prompt_tokens", "completion_tokens", "reasoning_tokens",
                                             "cached_tokens", "cache_write_tokens")},
@@ -110,8 +114,9 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
+    settings = from_process()
     try:
-        spec = endpoint_spec.discover_from_env(probe_sam=False)
+        spec = endpoint_spec.discover_from_settings(settings, probe_sam=False)
     except endpoint_spec.EndpointDiscoveryError as exc:
         print(f"discovery refused: {exc}", file=sys.stderr)
         return 2
@@ -119,30 +124,20 @@ def main(argv: list[str] | None = None) -> int:
           f"input budget {spec.input_budget}, output cap {spec.max_output_tokens}, "
           f"tokenizer {spec.tokenizer_name}")
 
-    efforts = args.effort or [effort()]
-    env_before = {k: os.environ.get(k) for k in ("SEARCH_COMPILE_WORKDIR", "SEARCH_LLM_ROUTING_KEY")}
+    efforts = args.effort or [effort(None, settings.sampling)]
     failed = 0
-    try:
+    with withholding(settings.withhold):
         for asked in efforts:
             with tempfile.TemporaryDirectory(prefix="maps-preflight-") as tmp:
-                os.environ["SEARCH_COMPILE_WORKDIR"] = tmp
-                # one prompt-cache key per conversation, as one per episode
-                os.environ["SEARCH_LLM_ROUTING_KEY"] = f"preflight-{Path(tmp).name}"
                 try:
                     if asked is not None:
                         check_effort(spec.model_id, asked)
-                    result = _conversation(spec, asked, Path(tmp))
+                    result = _conversation(spec, asked, Path(tmp), settings)
                 except Exception as exc:  # noqa: BLE001 — a refusal is the finding
                     failed += 1
                     print(f"effort {asked!r}: REFUSED {type(exc).__name__}: {exc}", file=sys.stderr)
                     continue
             print(f"effort {asked!r}: " + json.dumps(result, default=str))
-    finally:
-        for k, v in env_before.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
     return 1 if failed else 0
 
 

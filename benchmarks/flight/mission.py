@@ -22,7 +22,7 @@ import queue
 import threading
 import time
 from io import BytesIO
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +34,7 @@ from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
-from benchmarks.run_record.config import assert_flight_config, load_config
+from benchmarks.run_record.config import assert_flight_config, engine_settings, load_config
 from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
                                                    ConversationLog)
 from benchmarks.run_record.episodes import MANIFEST_NAME, STATUS_INFRA, STATUS_OK, upsert_row, write_episode_json
@@ -43,6 +43,7 @@ from maps.llm import endpoint_spec
 from maps.llm.http import CallCanceled
 from maps.llm.model_cards import check_effort, effort
 from maps.perception.observation import ground_sides_m
+from maps.settings import from_environ
 
 #: The engine's hydrated search stack (``EpisodeEngine.build_episode``), reached through the bench.
 Hydrated = Any
@@ -121,28 +122,31 @@ def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[f
     return engine.parse_episode(found[1], row_index=found[0])
 
 
-def flight_config(config: str):
-    """The config a flight flies, refused (before any sortie is written) when
-    it withholds a part of the flown engine; the loader refuses a missing or
+def flight_config(config: str, environ: Mapping[str, str]):
+    """The config a flight flies under ``environ`` (the run's,
+    ``Bench.environ``), refused (before any sortie is written) when either
+    withholds a part of the flown engine; the loader refuses a missing or
     unresolved sensor."""
     cfg = load_config(str(config))
-    assert_flight_config(cfg)
+    assert_flight_config(cfg, environ)
     return cfg
 
 
 def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: float,
-            start_xy: tuple[float, float] | None = None,
+            start_xy: tuple[float, float] | None = None, workdir: Path | None = None,
             perception_factory: Callable[[], Any] | None = None) -> Hydrated:
     """The engine for one mission, built by the bench's engine
     (``EpisodeEngine.build_episode``), at the operator's start and at
     ``agl_m``, the crew's commanded height above ground: the one height the
-    served sensor block and every leg read. ``perception_factory`` builds the
-    segmenter in place of the engine's own."""
+    served sensor block and every leg read. The mission records under
+    ``workdir`` and its requests ride its episode id as their routing key.
+    ``perception_factory`` builds the segmenter in place of the engine's own."""
     engine = bench.engine
-    cfg = flight_config(config)
+    cfg = flight_config(config, bench.environ)
     episode = resolve_episode(bench, episode_id, split, start_xy)
     h = engine.build_episode(cfg, episode, engine.load_assets(bench, episode.map_name), bench,
-                             perception_factory=perception_factory)
+                             settings=engine_settings(cfg, bench.environ), workdir=workdir,
+                             routing_key=episode_id, perception_factory=perception_factory)
     h.state.altitude_m = h.ground_z_m + float(agl_m)
     return h
 
@@ -625,14 +629,15 @@ class Mission:
         engine = self.bench.engine
         try:
             self._set(STATE_FLYING)
-            endpoint_spec.install_spec(endpoint_spec.discover_from_env())
+            endpoint_spec.install_spec(endpoint_spec.discover_from_settings(from_environ(self.bench.environ)))
             self.bench = settle_effort(self.bench)
             if self.reasoning_effort:
                 check_effort(endpoint_spec.spec().model_id, self.reasoning_effort)
             self._write_manifests()
 
             h = hydrate(bench=self.bench, episode_id=self.episode_id, split=self.split, config=self.config,
-                        start_xy=self._start_xy, agl_m=self.agl_m, perception_factory=self._perception_factory)
+                        start_xy=self._start_xy, agl_m=self.agl_m, workdir=self.workdir,
+                        perception_factory=self._perception_factory)
             self.hydrated = h
             instruction = self.instruction or h.episode.description
             # The override IS the operator's instruction, so the episode

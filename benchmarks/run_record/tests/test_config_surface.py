@@ -90,7 +90,29 @@ def test_the_flight_refuses_a_baseline_policy():
     cfg = load_config(REPO_ROOT / "configs" / "calcity.yaml")
     cfg.policy = "visa"
     with pytest.raises(ValueError, match="policy='visa' is a bench arm"):
-        assert_flight_config(cfg)
+        assert_flight_config(cfg, {})
+
+
+def test_the_config_owns_what_a_run_withholds():
+    """The engine's settings take the config's ``withhold``; a ``SEARCH_WITHHOLD`` left in the shell never
+    stands, and the rest of the environment is read as it is set."""
+    from benchmarks.run_record.config import engine_settings
+
+    control = load_config(REPO_ROOT / "configs" / "citynav.yaml")
+    arm = load_config(REPO_ROOT / "configs" / "withhold" / "prior.yaml")
+    shell = {"SEARCH_WITHHOLD": "look,images", "SEARCH_SAMPLING_REASONING_EFFORT": "0.9"}
+    assert engine_settings(control, shell).withhold == frozenset()
+    assert engine_settings(arm, shell).withhold == frozenset(arm.withhold) == {"prior"}
+    assert engine_settings(arm, shell).sampling.reasoning_effort == "0.9"
+
+
+def test_the_flight_refuses_an_environment_that_withholds_a_part():
+    from benchmarks.run_record.config import assert_flight_config
+
+    cfg = load_config(REPO_ROOT / "configs" / "calcity.yaml")
+    assert_flight_config(cfg, {"SEARCH_WITHHOLD": "  "})
+    with pytest.raises(ValueError, match="SEARCH_WITHHOLD='look' is a bench ablation"):
+        assert_flight_config(cfg, {"SEARCH_WITHHOLD": "look"})
 
 
 def test_a_base_loop_is_refused(tmp_path):

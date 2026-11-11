@@ -31,6 +31,7 @@ from maps.mission.tests.fakes import (
     map_mission,
     run,
     tool_results,
+    withhold_for_test,
 )
 
 #: The default arm's dump: the flown system turn and tools, plus the surface's
@@ -43,7 +44,7 @@ DEFAULT_SHA256 = {
 
 
 def _dump(monkeypatch, names: str, sensor: str | None = "oryx_orx32_25mm_nadir") -> str:
-    monkeypatch.setenv(W.ENV, names)
+    withhold_for_test(monkeypatch, names)
     return contract.dump_text(sensor=sensor, agl_m=914.4)
 
 
@@ -139,7 +140,7 @@ def test_each_withhold_takes_exactly_its_part(monkeypatch, name):
 
 
 def test_an_end_commit_withhold_keeps_the_cue_word_standard_as_one_bullet(monkeypatch):
-    monkeypatch.setenv(W.ENV, "end_commit")
+    withhold_for_test(monkeypatch, "end_commit")
     assert ("- When you know which object the instruction means -- and a cue word no\n"
             "  column carries is known only from a look, never from rank -- go_to()\n"
             "  its row, then reply.\n") in served_text.served_system_prompt()
@@ -160,7 +161,7 @@ def test_an_end_commit_withhold_serves_no_statement_of_the_end_or_the_answer(mon
               [run('go_to("prior_7")\n')], "done"]
 
     def served(names):
-        monkeypatch.setenv(W.ENV, names)
+        withhold_for_test(monkeypatch, names)
         reply, fr, flights, _d = drive(script)
         assert reply.ended_by == "reply" and flights == [{"target_fid": "prior_7"}]
         explored = explore_drive([[run('explore("prior_7")\n')], "done"])[1]
@@ -184,7 +185,7 @@ def test_a_look_for_withhold_serves_no_segmenter_in_the_sensor_block(monkeypatch
 
 
 def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
-    monkeypatch.setenv(W.ENV, "system_turn")
+    withhold_for_test(monkeypatch, "system_turn")
     assert served_text.served_system_prompt("RGB, nadir.") == ""
     spec = EndpointSpec(base_url="http://unused", model_id="inkling-small", max_model_len=262144,
                         tokenizer_name="qwen", max_output_tokens=40000)
@@ -198,7 +199,7 @@ def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
 
 
 def test_withheld_verbs_are_unbound(monkeypatch):
-    monkeypatch.setenv(W.ENV, "look_for,look")
+    withhold_for_test(monkeypatch, "look_for,look")
     assert "look_for" not in served_calls() and "look" not in served_calls()
     mp = MissionPython(quiet_env())
     b = mp.ns["__builtins__"]
@@ -209,12 +210,12 @@ def test_withheld_verbs_are_unbound(monkeypatch):
 
 def test_a_look_for_withhold_takes_its_remedies(monkeypatch):
     assert "look_for" in act_needs_a_thing(name="go_to", got="1, 2")
-    monkeypatch.setenv(W.ENV, "look_for")
+    withhold_for_test(monkeypatch, "look_for")
     assert "look_for" not in act_needs_a_thing(name="go_to", got="1, 2")
 
 
 def test_an_images_withhold_delivers_the_looks_caption(ortho_dir, monkeypatch):
-    monkeypatch.setenv(W.ENV, "images")
+    withhold_for_test(monkeypatch, "images")
     results, reqs, _recs, vision = look_drive(
         [[run('a = find("car")')], [run("look(a)")], "over"], cars(3), ortho_dir)
     assert reqs, "the look rendered"
@@ -222,15 +223,16 @@ def test_an_images_withhold_delivers_the_looks_caption(ortho_dir, monkeypatch):
     assert _PICTURE_WITHHELD_OF.format("crop") in json.dumps(results)
 
 
-def test_an_unknown_withhold_is_refused(monkeypatch):
-    monkeypatch.setenv(W.ENV, "pictures")
+def test_an_unknown_withhold_is_refused():
     with pytest.raises(ValueError, match="unknown withholds"):
-        W.active()
+        with W.withholding(["pictures"]):
+            W.active()
+    assert W.active() == frozenset()
 
 
 def _map_mission(script, monkeypatch, names="", renderer=None, finds=1):
     pytest.importorskip("cv2")
-    monkeypatch.setenv(W.ENV, names)
+    withhold_for_test(monkeypatch, names)
     return map_mission(script, renderer=renderer, finds=finds)
 
 
@@ -305,7 +307,7 @@ def test_a_prior_withhold_flies_to_a_point_and_serves_no_prior_row(monkeypatch):
     _reply, fr, flights, _d = drive(script, cands=[])
     assert "takes a THING" in (tool_results(fr)[0].get("error") or "")
     assert not flights
-    monkeypatch.setenv(W.ENV, "prior")
+    withhold_for_test(monkeypatch, "prior")
     _reply, fr, flights, _d = drive(script, cands=[])
     served = json.dumps(tool_results(fr))
     assert "error" not in served and "prior_" not in served, served
@@ -344,7 +346,7 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target(monke
         singles = {k: v for k, v in edits.items() if "+" not in k}
         for name, items in edits.items():
             assert set(name.split("+")) <= W.WITHHOLDS.keys(), name
-            monkeypatch.setenv(W.ENV, name.replace("+", ","))
+            withhold_for_test(monkeypatch, name.replace("+", ","))
             text = served_text._served(literal, singles, turn) if "+" in name else literal
             for e in items:
                 assert served_text._edit(text, e, turn) != text, (name, e)
@@ -366,7 +368,7 @@ def test_a_prior_withhold_empty_find_names_no_prior(monkeypatch):
         return compact_results({"r0": Result(kind="miss")})["r0"]["hint"]
 
     assert "searched every surface row (prior + runtime) and" in hint()
-    monkeypatch.setenv(W.ENV, "prior")
+    withhold_for_test(monkeypatch, "prior")
     assert "searched every surface row and matched nothing" in hint()
     assert "prior" not in hint()
 
@@ -376,7 +378,7 @@ def test_a_prior_withhold_map_caption_and_color_note_name_no_survey(monkeypatch)
     from maps.mission.picture_requests import map_vision_text
 
     assert "NNNN chip" in map_vision_text([]) and "priors" in _preflight_color_note()
-    monkeypatch.setenv(W.ENV, "prior")
+    withhold_for_test(monkeypatch, "prior")
     caption = map_vision_text([])
     for word in ("survey", "NNNN", "roads", "hatching", "landuse"):
         assert word not in caption, (word, caption)
@@ -413,7 +415,7 @@ def test_a_prior_withhold_empty_cut_and_semicolon_refusal_name_no_survey(monkeyp
 
     flown = served()
     assert "prior map" in flown and "surveyed" in flown and "OSM" in flown, flown
-    monkeypatch.setenv(W.ENV, "prior")
+    withhold_for_test(monkeypatch, "prior")
     got = served()
     assert "nothing_on_that_side" in got and "nothing_reads_those_words" in got, got
     for word in ("prior", "surveyed", "OSM"):
@@ -424,7 +426,7 @@ def test_a_look_withhold_coordinate_refusal_names_no_looking(monkeypatch):
     from maps.library.op_compiler import act_needs_a_thing
 
     assert "Points are for RELATING and LOOKING --" in act_needs_a_thing(name="go_to", got="1, 2")
-    monkeypatch.setenv(W.ENV, "look")
+    withhold_for_test(monkeypatch, "look")
     text = act_needs_a_thing(name="go_to", got="1, 2")
     assert "Points are for RELATING --" in text and "LOOKING" not in text, text
 
@@ -436,7 +438,7 @@ def test_a_look_withhold_loop_move_refusal_names_no_looking(monkeypatch):
         return str(e.value)
 
     assert "Loop to LOOK, then move once" in refusal()
-    monkeypatch.setenv(W.ENV, "look")
+    withhold_for_test(monkeypatch, "look")
     text = refusal()
     assert "Loop to read the rows, then move once" in text and "LOOK" not in text, text
 
@@ -445,7 +447,7 @@ def test_a_loop_withhold_lets_a_move_ride_a_loop(monkeypatch):
     block = "for r in find('car'):\n    go_to(r)\nf = go_to\n"
     with pytest.raises(CodeError, match="cannot go inside a loop"):
         scan_block(block)
-    monkeypatch.setenv(W.ENV, "loop")
+    withhold_for_test(monkeypatch, "loop")
     scan_block(block)
 
 
@@ -453,7 +455,7 @@ def test_a_loop_withhold_ends_the_mission_on_its_first_text_turn(monkeypatch):
     script = ["", [run('go_to("prior_7")')], "done"]
     _reply, fr, flights, _d = drive(script)
     assert flights and any("[Repair]" in str(m["content"]) for m in fr.messages)
-    monkeypatch.setenv(W.ENV, "loop")
+    withhold_for_test(monkeypatch, "loop")
     reply, fr, flights, _d = drive(script)
     assert reply.ended_by == "reply" and reply.turns_used == 1 and not flights
     assert not any("[Repair]" in str(m["content"]) for m in fr.messages)
@@ -463,7 +465,7 @@ def test_a_loop_withhold_reruns_an_identical_program(monkeypatch):
     script = [[run('a = find("car")\n')], [run('b = find("car")\n')], "done"]
     _reply, fr, _f, _d = drive(script)
     assert "no new information" in json.dumps(tool_results(fr)[1])
-    monkeypatch.setenv(W.ENV, "loop")
+    withhold_for_test(monkeypatch, "loop")
     _reply, fr, _f, _d = drive(script)
     second = tool_results(fr)[1]
     assert "no new information" not in json.dumps(second) and "car_1" in json.dumps(second)
@@ -471,11 +473,11 @@ def test_a_loop_withhold_reruns_an_identical_program(monkeypatch):
 
 def test_a_loop_withhold_flies_a_point_as_asked(monkeypatch):
     script = [[run("go_to([3, 4])\n")], "done"]
-    monkeypatch.setenv(W.ENV, "prior")
+    withhold_for_test(monkeypatch, "prior")
     _reply, fr, flights, _d = drive(script)
     assert flights == [{"target_fid": "prior_7"}], flights
     assert "own position" in json.dumps(tool_results(fr))
-    monkeypatch.setenv(W.ENV, "prior,loop")
+    withhold_for_test(monkeypatch, "prior,loop")
     _reply, fr, flights, _d = drive(script)
     assert flights == [{"target_fid": "[3, 4]"}], flights
     assert "own position" not in json.dumps(tool_results(fr))
@@ -484,13 +486,13 @@ def test_a_loop_withhold_flies_a_point_as_asked(monkeypatch):
 def test_a_loop_withhold_replays_no_reasoning(monkeypatch):
     from maps.mission.tests.fakes import TEST_SPEC
 
-    def _fake(url, api_key, **kwargs):
+    def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         return {"choices": [{"finish_reason": "stop", "message": {
             "content": "done", "reasoning_content": "I weighed two rooftops."}}]}
 
     monkeypatch.setattr(ra, "chat_completions_raw", _fake)
     for names, replayed in (("", "I weighed two rooftops."), ("loop", "")):
-        monkeypatch.setenv(W.ENV, names)
+        withhold_for_test(monkeypatch, names)
         r = ra.Reasoner(endpoint_spec=TEST_SPEC)
         out = r.step_tool_call([])
         assert out["reasoning"] == "I weighed two rooftops."
@@ -511,7 +513,7 @@ def test_a_map_withhold_unbinds_show_map_and_its_remedies(monkeypatch):
     stance = [[run('stand(at="prior_7")\n')], "done"]
     assert "show_map(around=)" in act_needs_a_thing(name="go_to", got="1, 2")
     assert "crops and maps render" in json.dumps(tool_results(drive(stance)[1]))
-    monkeypatch.setenv(W.ENV, "map")
+    withhold_for_test(monkeypatch, "map")
     assert "show_map" not in served_calls()
     assert "show_map" not in MissionPython(quiet_env()).ns
     text = act_needs_a_thing(name="go_to", got="1, 2")
@@ -527,7 +529,7 @@ _LIBRARY_SPELLED = re.compile(
 
 
 def test_a_library_withhold_unbinds_every_call_but_go_to_and_the_seeing_verbs(monkeypatch):
-    monkeypatch.setenv(W.ENV, "library")
+    withhold_for_test(monkeypatch, "library")
     assert served_calls() == ("look_for", "go_to", "look", "show_map")
     row = Row({"fid": "car_1", "xy": [0.0, 0.0], "class": "car"})
     for attr in ("filter", "order", "distance"):
@@ -538,7 +540,7 @@ def test_a_library_withhold_unbinds_every_call_but_go_to_and_the_seeing_verbs(mo
     for attr in ("exact", "tagged", "fuzzy", "filter"):
         with pytest.raises(AttributeError, match=f"'Rows' object has no attribute '{attr}'"):
             getattr(Rows("r1", None), attr)
-    monkeypatch.setenv(W.ENV, "")
+    withhold_for_test(monkeypatch, "")
     assert callable(row.distance) and callable(RowList([row]).filter)
 
 
@@ -551,7 +553,7 @@ def test_a_library_withhold_serves_no_library_name_on_the_paths_a_block_reaches(
         return json.dumps(tool_results(fr))
 
     assert _LIBRARY_SPELLED.search(answers(drive(script)[1])), "the flown arm names them"
-    monkeypatch.setenv(W.ENV, "library")
+    withhold_for_test(monkeypatch, "library")
     _reply, fr, flights, _d = drive(script)
     served = answers(fr)
     assert flights == [{"target_fid": "prior_7"}], flights
@@ -572,7 +574,7 @@ _COMBO_SPELLED = {"library": _LIBRARY_SPELLED, "map": re.compile(r"show_map|\bma
 def test_no_withheld_name_survives_a_combination(monkeypatch, names):
     """Each new withhold, alone or beside any other, and the research seeing
     and text families, serve no spelling of what they withhold."""
-    monkeypatch.setenv(W.ENV, names)
+    withhold_for_test(monkeypatch, names)
     served = (_dump(monkeypatch, names, "nadir_1008_90")
               + act_needs_a_thing(name="go_to/explore", got="1, 2"))
     for n in names.split(","):
@@ -581,13 +583,13 @@ def test_no_withheld_name_survives_a_combination(monkeypatch, names):
 
 
 def test_a_withheld_call_in_a_plain_reply_is_not_code(monkeypatch):
-    monkeypatch.setenv(W.ENV, "look_for")
+    withhold_for_test(monkeypatch, "look_for")
     assert looks_like_code('go_to("prior_7")')
     assert not looks_like_code('look_for("car")')
 
 
 def test_a_look_withhold_beside_a_prior_withhold_serves_no_looking_point(monkeypatch):
-    monkeypatch.setenv(W.ENV, "prior,look")
+    withhold_for_test(monkeypatch, "prior,look")
     doc = served_text.served_doc()
     assert "points RELATE, and go_to/explore fly to them." in doc, doc
     assert "LOOK," not in doc, doc
@@ -597,9 +599,53 @@ def test_a_library_withhold_says_how_to_read_a_row_of_a_set_it_cannot_order(monk
     """Under ``library`` nothing orders a flight's rows, so a set shows its
     census alone; the hint names the one way to read a row."""
     from maps.mission.tests.fakes import grow_drive
-    monkeypatch.setenv(W.ENV, "library")
+    withhold_for_test(monkeypatch, "library")
     out, _g, _a = grow_drive([[run('look_for("car")\nh = go_to("prior_7")\n')],
                               [run("h\n")], [run("print(h[0])\n")], "done"])
     hint = out[1]["result"]["results"]["h"]["hint"]
     assert hint.endswith("no fids: print(<set>[i]) reads row i's columns."), hint
     assert out[2]["printed"].startswith("<row fid="), out[2]
+
+
+def test_a_mission_keeps_the_set_it_was_built_under_for_every_turn():
+    """The set is fixed when the mission is built: a turn driven outside the
+    binding, or under another, runs under the mission's own."""
+    block = [run('look_for("pool")')]
+    with W.withholding(["look_for"]):
+        _reply, withheld_mission, _flights, declared = drive([block, "done"])
+    assert declared == [] and "error" in tool_results(withheld_mission)[0]
+    # The next operator turn, with nothing bound and then with another set bound.
+    withheld_mission.exhausted = 0   # the scripted reasoner's own guard counts replies across turns
+    drive([block, "done"], reasoner=withheld_mission)
+    withheld_mission.exhausted = 0
+    with W.withholding(["prior"]):
+        drive([block, "done"], reasoner=withheld_mission)
+    assert declared == [] and all("error" in r for r in tool_results(withheld_mission))
+
+    _reply, plain_mission, _flights, declared = drive([block, "done"])
+    plain_mission.exhausted = 0
+    with W.withholding(["look_for"]):
+        drive([block, "done"], reasoner=plain_mission)
+    assert len(declared) == 2 and not any("error" in r for r in tool_results(plain_mission))
+    assert W.active() == frozenset()
+
+
+def test_two_missions_in_one_process_withhold_their_own_sets():
+    """Two missions flying at once, each on its own thread, never read each other's set."""
+    import threading
+
+    both_bound = threading.Barrier(2)
+    seen: dict[str, tuple] = {}
+
+    def fly(name: str, names: list[str]) -> None:
+        with W.withholding(names):
+            both_bound.wait(timeout=10)
+            seen[name] = (W.withheld("prior"), W.withheld("look"), W.active())
+
+    threads = [threading.Thread(target=fly, args=("a", ["prior"])), threading.Thread(target=fly, args=("b", ["look"]))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert seen == {"a": (True, False, frozenset({"prior"})), "b": (False, True, frozenset({"look"}))}
+    assert W.active() == frozenset()

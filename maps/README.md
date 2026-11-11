@@ -9,6 +9,13 @@ hands the loop a `MissionSpec` (`mission/spec.py`)
 whose `fly` executes one move (resolve a stop, observe, segment, fold the
 detections into the graph) and returns the flight report the model reads.
 
+`maps` reads the environment in one place, `settings.py`: an entry point
+builds a `Settings` (endpoints, sampling, what a bench arm withholds) once
+and hands it to `run_mission`, with the mission's own directory and routing
+key beside it. The withheld set is fixed when a mission is built and bound
+for each of its turns (`withhold.py`), so two missions in one process keep
+their own settings, directory and withholds.
+
 ## Concepts and modules
 
 | Concept | Module |
@@ -34,6 +41,7 @@ detections into the graph) and returns the flight report the model reads.
 | The `look` crop and the `show_map` schematic | `render/look_render.py`, `render/map_render.py` |
 | Marks drawn on a picture, and the map's label rule and colours | `render/mark_overlay.py`, `render/osm_palette.py` |
 | The bench ablation withholds | `withhold.py` |
+| The run's settings, read from the environment once | `settings.py` |
 | The `[x, y]` point grammar every slot that takes a fid or a point reads | `xy_token.py` |
 | The world-state graph: map features and detected nodes, their upsert, the context a query reads it through | `world_state/` |
 | The orthographic observation: a pose to a cropped window of the raster | `perception/observation.py`, `perception/ortho/` |

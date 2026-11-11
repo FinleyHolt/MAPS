@@ -52,6 +52,7 @@ from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA
 from benchmarks.run_record.rows import iter_json_rows
 from maps.llm import endpoint_spec, model_cards
 from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.settings import from_environ
 
 log = logging.getLogger("station")
 
@@ -362,7 +363,7 @@ class Station:
                 b = map_bounds(self.tiles_dir, self.map_name)
                 start_xy = ((b.x_min + b.x_max) / 2, (b.y_min + b.y_max) / 2)
                 episode_id = f"{self.map_name}{OPERATOR}{time.strftime('%H%M%S', time.gmtime())}"
-            cfg = flight_config(self.config)
+            cfg = flight_config(self.config, self.bench.environ)
             sensor = resolve_sensor(cfg.sensor)
             episode = resolve_episode(self.bench, episode_id, self.split, start_xy)
             start_alt, ground = self.bench.engine.start_altitude_m(cfg, self.map_name, episode.start_z)
@@ -422,7 +423,7 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
         """The served model and the reasoning efforts its card takes; ``model`` is None while no reasoner answers."""
         try:
             model = (endpoint_spec.spec() if endpoint_spec.spec_installed()
-                     else endpoint_spec.discover_from_env()).model_id
+                     else endpoint_spec.discover_from_settings(from_environ(station.bench.environ))).model_id
         except Exception as exc:  # noqa: BLE001 -- a station with no reasoner still reviews
             return {"model": None, "efforts": [], "error": str(exc)}
         return {"model": model, "efforts": list(model_cards.card_for(model).get("efforts", ())), "error": None}

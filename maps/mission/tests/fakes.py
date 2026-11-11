@@ -20,6 +20,18 @@ TEST_SPEC = EndpointSpec(
 )
 
 
+def withhold_for_test(monkeypatch, names: str) -> None:
+    """Withhold ``names`` (comma separated) for the rest of the test, as a
+    mission withholds its set for its turns; the test's end restores the
+    process's own."""
+    from contextvars import ContextVar
+
+    from maps import withhold
+
+    bound = withhold.check(n.strip() for n in names.split(",") if n.strip())
+    monkeypatch.setattr(withhold, "_BOUND", ContextVar("maps.withhold", default=bound))
+
+
 class FakeReasoner:
     """Scripted turn source: a turn is a plain string (a text reply) or a list
     of (tool_name, args_dict) calls emitted together. Vision turns land in

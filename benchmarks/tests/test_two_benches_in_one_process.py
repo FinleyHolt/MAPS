@@ -13,7 +13,7 @@ from benchmarks.calcity.paths import calcity_bench
 from benchmarks.citynav.bake.city import bake_block
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import citynav_bench
-from benchmarks.run_record.config import load_config
+from benchmarks.run_record.config import engine_settings, load_config
 from benchmarks.run_record.episode_workdir import mint_workdir
 from benchmarks.run_record.run_manifest import arm_env_stamp
 
@@ -44,8 +44,9 @@ def _hydrate(bench, map_name: str, config: str):
     # An authored start carries no height: a CityNav row states its own.
     episode = dataclasses.replace(engine.authored_episode(f"{map_name}::t", (5.0, 5.0)), start_z=120.0)
     seen = SimpleNamespace(set_concepts=lambda concepts: None)
-    return engine.build_episode(load_config(config), episode, engine.load_assets(bench, map_name), bench,
-                                perception_factory=lambda: seen)
+    cfg = load_config(config)
+    return engine.build_episode(cfg, episode, engine.load_assets(bench, map_name), bench,
+                                settings=engine_settings(cfg, bench.environ), perception_factory=lambda: seen)
 
 
 def test_an_episode_of_each_bench_is_hydrated_from_its_own_bake_in_one_process(benches):

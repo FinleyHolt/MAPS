@@ -61,6 +61,7 @@ from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.ortho.sensor_frame import footprint_m
 from maps.query.spatial_math import point_in_polygon
+from maps.settings import from_environ
 
 FT_PER_M = 1.0 / 0.3048
 #: A gap between fixes longer than this is a hole in the recording.
@@ -432,12 +433,13 @@ def ended(row: dict[str, Any]) -> str:
     return str(row.get("ended_by") or "no run")
 
 
-def tokens(bases: list[Path]) -> dict[str, Any]:
-    """The run's reasoner use off its transcript (``maps.llm.flight_summary``)."""
-    from maps.llm.flight_summary import summarize  # noqa: PLC0415
+def tokens(bases: list[Path], tokenizer_name: str = "") -> dict[str, Any]:
+    """The run's reasoner use off its transcript (``maps.llm.flight_summary``);
+    ``tokenizer_name`` is the reader's tokenizer override."""
+    from maps.llm.flight_summary import summarize  # noqa: PLC0415  (the tokenizer's transformers)
 
     flight = next((b / "flight" for b in bases if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None)
-    llm = summarize(flight) if flight else {}
+    llm = summarize(flight, tokenizer_name) if flight else {}
     keys = ("prompt_tokens", "completion_tokens", "reasoning_tokens", "total_tokens")
     if not llm.get("requests"):
         return {k: None for k in (*keys, "reasoner_calls")}
@@ -446,7 +448,7 @@ def tokens(bases: list[Path]) -> dict[str, Any]:
 
 
 def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
-                 turn_radius_m: float) -> dict[str, Any]:
+                 turn_radius_m: float, tokenizer_name: str = "") -> dict[str, Any]:
     bases = run_bases(root, row)
     events = _conversation(bases)
     end = ended(row)
@@ -481,7 +483,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "track_source": None,
         "track_coverage": None, "time_to_id_s": round(t_end, 1) if determined and t_stop is not None else None,
         "spl": None, "spl_note": None, "path_ft": None, "final_leg_ft": None, "shortest_ft": None,
-        "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases),
+        "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases, tokenizer_name),
     }
     if target is None:
         return out
@@ -545,8 +547,10 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     return out
 
 
-def collect(roots: list[Path], truth: Truth) -> tuple[list[dict[str, Any]], float, int]:
-    """Every run under ``roots``, with the crews' turn radius over them all."""
+def collect(roots: list[Path], truth: Truth, tokenizer_name: str = "") -> tuple[list[dict[str, Any]], float, int]:
+    """Every run under ``roots``, with the crews' turn radius over them all;
+    ``tokenizer_name`` is the reader's tokenizer override
+    (``SEARCH_COMPACT_TOKENIZER_NAME``), for a reasoning span no serve counted."""
     tracks = [sorted(iter_json_rows(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M
@@ -555,7 +559,8 @@ def collect(roots: list[Path], truth: Truth) -> tuple[list[dict[str, Any]], floa
         entries = truth.entries(root.name)
         for row in iter_json_rows(root / EPISODES_JSONL):
             out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
-                                    truth=truth, track=track, turn_radius_m=radius))
+                                    truth=truth, track=track, turn_radius_m=radius,
+                                    tokenizer_name=tokenizer_name))
     out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))
     return out, radius, turns
 
@@ -603,7 +608,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     roots = sorted(r for r in args.root if (r / EPISODES_JSONL).is_file())
-    rows, radius, turns = collect(roots, Truth(args.truth, calcity_bench(os.environ)))
+    bench = calcity_bench(os.environ)
+    rows, radius, turns = collect(roots, Truth(args.truth, bench), from_environ(bench.environ).endpoint.tokenizer_name)
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
            "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"),
            "runs": rows}

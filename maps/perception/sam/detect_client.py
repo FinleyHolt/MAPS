@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import base64
 import itertools
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +16,7 @@ from typing import Iterable
 import numpy as np
 
 from maps.perception.detection import DetectedObject
+from maps.settings import Endpoint
 from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
 )
@@ -74,15 +74,15 @@ class SamRequestRefused(RuntimeError):
 _SAM_TRANSIENT_CLIENT_STATUSES = (408, 429)
 
 
-def sam_endpoints() -> list[str]:
-    """The segmenter's replica base URLs from ``SAM_SERVER_URL`` (a comma
-    list spreads calls across replicas), the one resolver the client and
-    endpoint discovery read. Unset is the default replica; set but blank,
-    or unset beside the flown station's ``SAM_VIDEO_SERVER_URL``, raises
-    ``ValueError``."""
-    if "SAM_SERVER_URL" not in os.environ and os.environ.get("SAM_VIDEO_SERVER_URL"):
+def sam_endpoints(endpoint: Endpoint = Endpoint()) -> list[str]:
+    """The segmenter's replica base URLs from the run's ``SAM_SERVER_URL``
+    (``endpoint.sam_server_url``; a comma list spreads calls across
+    replicas), the one resolver the client and endpoint discovery read. Unset
+    is the default replica; set but blank, or unset beside the flown
+    station's ``SAM_VIDEO_SERVER_URL``, raises ``ValueError``."""
+    if endpoint.sam_server_url is None and endpoint.sam_video_server_url:
         raise ValueError("SAM_VIDEO_SERVER_URL is not read; set SAM_SERVER_URL")
-    raw = os.environ.get("SAM_SERVER_URL", DEFAULT_SAM_SERVER_URL)
+    raw = DEFAULT_SAM_SERVER_URL if endpoint.sam_server_url is None else endpoint.sam_server_url
     eps = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
     if not eps:
         raise ValueError("SAM_SERVER_URL is empty")
@@ -98,7 +98,7 @@ def _pick_url(eps: list[str]) -> str:
     return eps[next(_rr) % len(eps)]
 
 
-def _post_segment(json_body: dict) -> dict | None:
+def _post_segment(json_body: dict, endpoint: Endpoint = Endpoint()) -> dict | None:
     """POST ``/segment``, the one retry layer: the parsed JSON, or ``None``.
 
     A 4xx outside ``_SAM_TRANSIENT_CLIENT_STATUSES`` raises
@@ -111,7 +111,7 @@ def _post_segment(json_body: dict) -> dict | None:
     import requests
 
     deadline = time.monotonic() + SEGMENT_DEADLINE_S
-    eps = sam_endpoints()
+    eps = sam_endpoints(endpoint)
     failed: set[str] = set()
     last: Exception | str | None = None
     for attempt in range(len(SEGMENT_BACKOFF_S) + 1):
@@ -308,6 +308,8 @@ class SamDetectClient:
     watchlist plus the classes of the boosts riding a flight."""
 
     concepts: list[str] = field(default_factory=list)
+    #: The run's settings for reaching the segmenter (its replica URLs).
+    endpoint: Endpoint = Endpoint()
     # SAHI tiles whose ``/segment`` gave no usable response after retries,
     # over this client's life (one episode; the row's ``sam_tiles_failed``).
     # A frame with some failed tiles is partial-blind, not empty.
@@ -407,7 +409,7 @@ class SamDetectClient:
                 "min_area_px": MIN_AREA_PX,
                 "max_per_image": MAX_PER_STEP,
                 "image_b64": base64.b64encode(_png_wire_bytes(tile)).decode("ascii"),
-            })
+            }, self.endpoint)
             if payload is None:
                 return None
             tile_out = []

@@ -22,6 +22,7 @@ from benchmarks.run_record.config import resolve_config
 from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME, atomic_write_json
 from maps.llm import endpoint_spec
 from maps.llm.model_cards import effort
+from maps.settings import Settings
 
 SCHEMA = "maps.run_manifest/v1"
 
@@ -122,14 +123,15 @@ class EndpointRefused(RuntimeError):
     arm's model has no dial-off."""
 
 
-def install_endpoint(bench: Bench, policy: str | None = None) -> Bench:
-    """Discover the serve, install its spec and settle the effort, once per
+def install_endpoint(bench: Bench, settings: Settings, policy: str | None = None) -> Bench:
+    """Discover the serve ``settings`` names (the engine's, built from
+    ``bench.environ``), install its spec and settle the effort, once per
     process before any inference or perception call; a baseline ``policy``
     (every arm makes dial-off calls) is refused here when its model has no
     dial-off. Returns ``bench`` with the effort settled
     (:func:`settle_effort`). Raises :class:`EndpointRefused`."""
     try:
-        spec = endpoint_spec.discover_from_env()
+        spec = endpoint_spec.discover_from_settings(settings)
     except endpoint_spec.EndpointDiscoveryError as exc:
         raise EndpointRefused(f"endpoint discovery failed: {exc}") from exc
     endpoint_spec.install_spec(spec)

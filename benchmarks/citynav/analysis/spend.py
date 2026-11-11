@@ -23,12 +23,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import Counter
 from pathlib import Path
 
 from benchmarks.run_record import rows as _rows
 from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME
 from maps.llm.flight_summary import summarize
+from maps.settings import from_environ
 
 #: USD per million tokens: input, cache read, cache write, output.
 PRICES = {"in": 5.0, "cached": 0.5, "write": 6.25, "out": 30.0}
@@ -44,9 +46,11 @@ def attempt_cost(llm: dict, prices: dict = PRICES) -> float:
             + llm["completion_tokens"] * prices["out"]) / 1e6
 
 
-def spend(out_root: Path, prices: dict = PRICES) -> dict:
+def spend(out_root: Path, prices: dict = PRICES, tokenizer_name: str = "") -> dict:
     """The root's spend: tokens and USD over every attempt, the scored
-    episodes' mean, and the projection for the selection's remainder."""
+    episodes' mean, and the projection for the selection's remainder.
+    ``tokenizer_name`` is the reader's tokenizer override
+    (``SEARCH_COMPACT_TOKENIZER_NAME``), for a reasoning span no serve counted."""
     out_root = Path(out_root)
     ledger = {r.get("workdir"): r for r in _rows.iter_json_rows(out_root / EPISODES_JSONL)}
     # A cache meter stays None until an attempt reports it.
@@ -56,7 +60,7 @@ def spend(out_root: Path, prices: dict = PRICES) -> dict:
     served: Counter = Counter()
     scored_ids: set[str] = set()
     for attempt in sorted(out_root.glob("w*/maps_*")):
-        llm = summarize(attempt / "flight")
+        llm = summarize(attempt / "flight", tokenizer_name)
         for k in totals:
             if llm[k] is not None:
                 totals[k] = (totals[k] or 0) + llm[k]
@@ -100,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
                         help=f"USD per million tokens (default {value})")
     args = ap.parse_args(argv)
     prices = {k: getattr(args, f"price_{k}") for k in PRICES}
-    print(json.dumps(spend(args.out_root, prices), indent=2))
+    print(json.dumps(spend(args.out_root, prices, from_environ(os.environ).endpoint.tokenizer_name), indent=2))
     return 0
 
 

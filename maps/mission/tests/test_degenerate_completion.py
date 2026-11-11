@@ -14,7 +14,7 @@ def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop",
     """Pin the transport to one canned completion; return the sent kwargs."""
     sent: dict = {}
 
-    def _fake(url, api_key, **kwargs):
+    def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.update(kwargs)
         return {"choices": [{
             "finish_reason": finish_reason,

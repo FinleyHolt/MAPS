@@ -78,11 +78,10 @@ def hosted(monkeypatch):
         monkeypatch.setenv("SEARCH_ENDPOINT_SPEC_OVERRIDE", "gpt-5.6-sol:262144")
         monkeypatch.setenv("SEARCH_REASONER_API_KEY", "fake-key")
         monkeypatch.delenv("SEARCH_REASONER_MODELS_URL", raising=False)
-        monkeypatch.delenv("SEARCH_LLM_ROUTING_KEY", raising=False)
         monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
         monkeypatch.delenv("SEARCH_ENDPOINT_OFFLINE", raising=False)
         # Discovery's tokenizer load is the hub's; these tests own the endpoint only.
-        monkeypatch.setattr(endpoint_spec, "_require_tokenizer", lambda m: f"tok:{m}")
+        monkeypatch.setattr(endpoint_spec, "_require_tokenizer", lambda m, override="": f"tok:{m}")
         return server, bodies, paths
     servers = []
     yield lambda c: servers.append(start(c)) or servers[-1]

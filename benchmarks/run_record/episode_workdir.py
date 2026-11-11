@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -137,18 +136,14 @@ def open_episode_dir(
     run_no: int | None = None,
 ) -> OpenEpisode:
     """Mint the attempt's directory under ``root`` (:func:`mint_workdir`) and
-    point this process at it, its log into ``<dir>/run.log``. ``close()``
-    detaches the log handler, so a batch's next episode logs elsewhere.
+    send this process's log into ``<dir>/run.log``. ``close()`` detaches the
+    log handler, so a batch's next episode logs elsewhere. The caller hands
+    ``dir`` to the engine as the mission's workdir: the wire log and the
+    frames shown land under it.
     """
     d = mint_workdir(Path(root), episode_id, run_no, benchmark=benchmark)
     flight = d / "flight"
     flight.mkdir(parents=True, exist_ok=True)
-
-    # Assigned, never setdefault: a batch's previous episode left a value,
-    # and the wire log resolves its directory from it at every call.
-    os.environ["SEARCH_COMPILE_WORKDIR"] = str(d)
-    # Router-affinity key: a key-affine router keeps the episode on one worker.
-    os.environ["SEARCH_LLM_ROUTING_KEY"] = episode_id
 
     handler = logging.FileHandler(d / RUN_LOG, mode="a")
     handler.setLevel(logging.INFO)

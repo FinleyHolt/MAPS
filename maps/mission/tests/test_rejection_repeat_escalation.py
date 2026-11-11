@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from maps.mission.tests.fakes import drive, run, tool_results
+from maps.mission.tests.fakes import drive, run, tool_results, withhold_for_test
 
 # Colour never cuts, so this block is refused every time it is served.
 _COLOR_FILTER_BLOCK = ('a = find("car")\n'
@@ -87,7 +87,7 @@ def test_a_prior_withhold_census_counts_no_prior_rows(monkeypatch):
     n = flown.count("prior map row fid(s)")
     assert n >= 3, flown
     assert all(m in flown for m in ("Live surface:", "rejected again", "still nothing new"))
-    monkeypatch.setenv("SEARCH_WITHHOLD", "prior")
+    withhold_for_test(monkeypatch, "prior")
     served = json.dumps(drive_blocks(blocks))
     assert served.count("detection fid(s)") == n, served
     assert "prior map row" not in served, served

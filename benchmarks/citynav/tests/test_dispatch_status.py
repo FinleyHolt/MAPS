@@ -17,6 +17,7 @@ import pytest
 from benchmarks.run_record import episodes
 from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark import dispatch
+from maps.settings import Settings
 
 
 @pytest.fixture
@@ -29,8 +30,8 @@ def light(monkeypatch):
 def _dispatch(tmp_path):
     return dispatch.dispatch_one(
         episode=SimpleNamespace(episode_id="b::1#0"), idx=0, total=1, objects_by_map={},
-        cfg=SimpleNamespace(source_path="x.yaml", policy=None), bench=citynav_bench({}), split="test", recorder=None,
-        episode_dir=tmp_path,
+        cfg=SimpleNamespace(source_path="x.yaml", policy=None), bench=citynav_bench({}), settings=Settings(),
+        split="test", recorder=None, episode_dir=tmp_path,
     )
 
 

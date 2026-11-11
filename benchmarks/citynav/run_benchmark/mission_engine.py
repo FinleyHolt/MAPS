@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import itertools
 import logging
-import os
 import time
 from pathlib import Path
 
@@ -24,21 +23,19 @@ from maps.perception.observation import ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
 from maps.mission.spec import MissionSpec
 from maps.mission.loop import run_mission
-from maps.withhold import withheld
 from maps.xy_token import parse_xy_token
 
 log = logging.getLogger("run_benchmark")
 
 
-def _write_tour_cursor(flights: list[dict]) -> None:
+def _write_tour_cursor(flights: list[dict], workdir: Path | None) -> None:
     """Persist the flown stops (id and xy, in flight order) to
     ``<workdir>/flight/tour_cursor.json``, the record ``replay.tour_stops``
-    takes a run's flights from. No-op without ``SEARCH_COMPILE_WORKDIR``."""
-    workdir_env = os.environ.get("SEARCH_COMPILE_WORKDIR")
-    if not workdir_env:
+    takes a run's flights from. No-op without a ``workdir``."""
+    if not workdir:
         return
     try:
-        atomic_write_json(Path(workdir_env) / TOUR_CURSOR, {
+        atomic_write_json(Path(workdir) / TOUR_CURSOR, {
             "stops_visited": [{"stop_id": f["target"], "xy": f["resolved_xy"]} for f in flights]})
     except Exception:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
@@ -179,6 +176,9 @@ class MissionSession:
         return run_mission(
             instruction=instruction,
             endpoint_spec=endpoint_spec(),
+            settings=h.settings,
+            workdir=h.workdir,
+            routing_key=h.routing_key,
             seed=_seed_base(h.bench.environ) & 0x7FFFFFFF,
             sensor_description=served_description(
                 h.sensor, agl_m=float(h.state.altitude_m) - h.ground_z_m),
@@ -245,7 +245,7 @@ class MissionSession:
             self.recorder.write_step(step=step_idx, detections=step_detections)
 
         # Prior colour enrichment: one frame, upserted onto the named priors.
-        if not withheld("prior"):
+        if "prior" not in h.settings.withhold:
             try:
                 for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
                     loop.upsert_prior_percept(pfid, pattrs, px=ppx)
@@ -275,7 +275,7 @@ class MissionSession:
                 "altitude_m": new_alt,
             }
         )
-        _write_tour_cursor(self.flights)
+        _write_tour_cursor(self.flights, h.workdir)
 
         report: dict = {
             "stop_id": stop_id,
@@ -285,11 +285,11 @@ class MissionSession:
             "new_detections": len(step_detections),
             **detected_digest(loop.last_flight_detections()),
             # The commit is the last flight's target, verbatim.
-            **({} if withheld("end_commit") else {"answer_if_you_reply_now": token}),
+            **({} if "end_commit" in h.settings.withhold else {"answer_if_you_reply_now": token}),
             # The operator instruction rides every flight report.
             "cue": episode.description,
         }
-        if not withheld("look_for"):
+        if "look_for" not in h.settings.withhold:
             report["watchlist"] = list(h.perception.concepts)
         return report
 
@@ -298,8 +298,7 @@ def run_mission_episode(session: MissionSession):
     """Drive the bench's one conversation and log its commit, the last
     flight's target. Returns the reply."""
     h = session.h
-    workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip() or None
-    transcript = ConversationLog(Path(workdir) / CONVERSATION_JSONL if workdir else None)
+    transcript = ConversationLog(Path(h.workdir) / CONVERSATION_JSONL if h.workdir else None)
     reply, _ = session.run(h.episode.description, transcript=transcript)
     flights = session.flights
     if flights:

@@ -70,7 +70,7 @@ def serves(monkeypatch):
                         max_output_tokens=40000)
     monkeypatch.setattr(endpoint_spec, "_SPEC", None)
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")   # no tokenizer to measure the prompt with
-    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: spec)
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: spec)
     sent: list[dict] = []
 
     def reply(url, headers, body, *, timeout, cancel_event):
@@ -91,7 +91,7 @@ def serves(monkeypatch):
 
     seen = SamDetectClient()
     seen.detect = lambda obs: []
-    monkeypatch.setattr(episode_runner, "make_perception", lambda: seen)
+    monkeypatch.setattr(episode_runner, "make_perception", lambda settings: seen)
     return sent
 
 
@@ -152,8 +152,8 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     from maps.llm import endpoint_spec
     from maps.perception.sam.detect_client import SamDetectClient
 
-    monkeypatch.setattr(episode_runner, "make_perception", SamDetectClient)
-    endpoint_spec.install_spec(endpoint_spec.discover_from_env())
+    monkeypatch.setattr(episode_runner, "make_perception", lambda settings: SamDetectClient())
+    endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
     h = M.hydrate(bench=calcity.bench, episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
     h.search_loop.declare_mission_concepts(["car", "tree"])
     assert h.perception.concepts == ["car", "tree"]
@@ -163,7 +163,7 @@ def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(calcity, 
     from benchmarks.flight import mission as M
     from maps.llm import endpoint_spec
 
-    endpoint_spec.install_spec(endpoint_spec.discover_from_env())
+    endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
     h = M.hydrate(bench=calcity.bench, episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=1828.8)
     assert h.state.altitude_m - h.ground_z_m == pytest.approx(1828.8)
 
@@ -257,8 +257,8 @@ def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path,
         s.bind(("127.0.0.1", 0))
         closed = s.getsockname()[1]
     monkeypatch.setattr(endpoint_spec, "_PROBE_TRIES", 1)
-    monkeypatch.setattr(endpoint_spec, "discover_from_env",
-                        lambda: endpoint_spec._get_json(f"http://127.0.0.1:{closed}/v1/models"))
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings",
+                        lambda settings: endpoint_spec._get_json(f"http://127.0.0.1:{closed}/v1/models"))
     out = tmp_path / "out"
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--out", str(out)]) == 1

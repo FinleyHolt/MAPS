@@ -7,6 +7,7 @@ import json
 import pytest
 
 from maps.mission import reasoner
+from maps.settings import from_environ
 from maps.mission.reasoner import Reasoner
 from maps.mission.spec import MissionReply
 from maps.mission.loop import run_mission
@@ -17,7 +18,7 @@ def _serve(monkeypatch) -> list[dict]:
     """Pin the transport to a plain text turn; return every sent body."""
     sent: list[dict] = []
 
-    def _fake(url, api_key, **kwargs):
+    def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.append(kwargs)
         return {"choices": [{
             "finish_reason": "stop",
@@ -33,9 +34,8 @@ def _serve(monkeypatch) -> list[dict]:
 def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch, word):
     """Two rounds on one reasoner both carry the mission's word as a string; "0.0" is a
     value (thinking off), not an absence."""
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     sent = _serve(monkeypatch)
-    r = Reasoner(endpoint_spec=TEST_SPEC,
+    r = Reasoner(endpoint_spec=TEST_SPEC, settings=from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "0.99"}),
                  reasoning_effort=word)
     r.append_user("find the truck")
     r.step_tool_call([])
@@ -45,11 +45,10 @@ def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch
 
 
 def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):
-    """VACUITY FLOOR: the environment is still the default, read at CALL time, so a rig
-    select mid-day reaches a mission that named none."""
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")
+    """VACUITY FLOOR: the arm's effort (the run's settings) is still the default for a
+    mission that named none."""
     sent = _serve(monkeypatch)
-    r = Reasoner(endpoint_spec=TEST_SPEC)
+    r = Reasoner(endpoint_spec=TEST_SPEC, settings=from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "0.9"}))
     r.append_user("find the truck")
     r.step_tool_call([])
     assert sent[0]["reasoning_effort"] == "0.9"
@@ -57,7 +56,6 @@ def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):
 
 def test_the_effort_reaches_no_served_byte(monkeypatch):
     """The model is never told a budget fact."""
-    monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
     sent = _serve(monkeypatch)
     r = Reasoner(endpoint_spec=TEST_SPEC,
                  reasoning_effort="0.3")

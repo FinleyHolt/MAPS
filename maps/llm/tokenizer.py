@@ -3,7 +3,6 @@ sizing (the compactor) and reasoning-token counts (``flight_summary``)."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 # Imported at module load: transformers' lazy module races when several
@@ -16,22 +15,22 @@ from maps.llm.model_cards import CARDS
 _TOKENIZER_CACHE: dict[str, Any] = {}
 
 
-def hf_tokenizer_name(model: str) -> str:
-    """The tokenizer repo for a served alias: ``SEARCH_COMPACT_TOKENIZER_NAME``,
-    else the model card's, else ``model`` itself."""
-    env = os.environ.get("SEARCH_COMPACT_TOKENIZER_NAME", "").strip()
-    if env:
-        return env
+def hf_tokenizer_name(model: str, tokenizer_name: str = "") -> str:
+    """The tokenizer repo for a served alias: ``tokenizer_name`` (the run's
+    ``SEARCH_COMPACT_TOKENIZER_NAME``, ``Endpoint.tokenizer_name``), else the
+    model card's, else ``model`` itself."""
+    if tokenizer_name:
+        return tokenizer_name
     card = CARDS.get((model or "").strip().lower())
     if card is not None:
         return card["tokenizer"]
     return model
 
 
-def load_tokenizer(model: str):
-    """The cached tokenizer for ``model``, loaded on first call; a repo that
-    cannot load raises ``RuntimeError`` naming it."""
-    hf_name = hf_tokenizer_name(model)
+def load_tokenizer(model: str, tokenizer_name: str = ""):
+    """The cached tokenizer for ``model`` (:func:`hf_tokenizer_name`), loaded
+    on first call; a repo that cannot load raises ``RuntimeError`` naming it."""
+    hf_name = hf_tokenizer_name(model, tokenizer_name)
     cached = _TOKENIZER_CACHE.get(hf_name)
     if cached is not None:
         return cached

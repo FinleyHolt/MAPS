@@ -53,6 +53,7 @@ from maps.llm import http
 from maps.llm.http import TRANSCRIPT_JSONL, CallCanceled
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.ortho.ground_level import GROUND_LEVEL
+from maps.settings import from_environ
 
 log = logging.getLogger("flight.replay")
 
@@ -542,10 +543,9 @@ def fly(rec: Recording, out: Path, bench: Bench, *, forced: bool = False, bank: 
                       "SEARCH_ENDPOINT_SPEC_OVERRIDE": f"{rec.params.get('model')}:{rec.window}"})
         if rec.params.get("seed") is not None:
             flags["SEARCH_SEED_BASE"] = str(rec.params["seed"])
-    # The replay flies under the recorded arm's flags: its rows stamp them and its engine reads them.
+    # The replay flies under the recorded arm's flags: its rows stamp them and its engine's settings read them.
     bench = bench.with_environ(flags)
-    os.environ.update(flags)
-    flight_config(config)
+    flight_config(config, bench.environ)
     row = rec.row
     episode_id, map_name = str(row["episode_id"]), rec.map_name
     script = None
@@ -559,7 +559,7 @@ def fly(rec: Recording, out: Path, bench: Bench, *, forced: bool = False, bank: 
         http.stream_chat_completions = script
 
         def perception_factory():
-            adapter = bench.engine.make_perception()
+            adapter = bench.engine.make_perception(from_environ(bench.environ))
             adapter.segment = functools.partial(recorded_segmenter(rec, lambda: mission.hydrated.state), adapter)
             return adapter
 

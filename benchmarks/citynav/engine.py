@@ -18,6 +18,7 @@ from typing import Any
 from benchmarks.bench import Bench
 from benchmarks.citynav import adapter
 from benchmarks.citynav.run_benchmark import assets
+from maps.settings import Settings
 
 
 def _episode_runner():
@@ -49,12 +50,14 @@ class Engine:
     def start_altitude_m(self, cfg: Any, map_name: str, start_z: float | None) -> tuple[float, float]:
         return _episode_runner().start_altitude_m(cfg, map_name, start_z)
 
-    def make_perception(self) -> Any:
-        return _episode_runner().make_perception()
+    def make_perception(self, settings: Settings) -> Any:
+        return _episode_runner().make_perception(settings)
 
     def build_episode(self, cfg: Any, episode: Any, block_assets: Any, bench: Bench, *,
+                      settings: Settings, workdir: Path | None = None, routing_key: str | None = None,
                       perception_factory: Callable[[], Any] | None = None) -> Any:
-        return _episode_runner().build_episode(cfg, episode, block_assets, bench,
+        return _episode_runner().build_episode(cfg, episode, block_assets, bench, settings=settings,
+                                               workdir=workdir, routing_key=routing_key,
                                                perception_factory=perception_factory)
 
     def open_session(self, h: Any, *, recorder: Any = None, observe: Any = None) -> Any:

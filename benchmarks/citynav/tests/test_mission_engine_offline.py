@@ -5,6 +5,7 @@ unknown) against a stubbed graph resolver.
 """
 
 from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target
+from maps.settings import Settings
 
 _GRAPH = {
     "building_7": ((100.0, 200.0), "prior"),
@@ -124,11 +125,8 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
     assert "error" in session.fly({"target_fid": "nowhere"}) and len(flights) == 1
 
 
-def test_an_end_commit_withhold_flight_report_names_no_answer(stub_session, monkeypatch):
-    from maps import withhold
-
-    monkeypatch.setenv(withhold.ENV, "end_commit")
-    session = stub_session(update_perception=lambda **kw: [])
+def test_an_end_commit_withhold_flight_report_names_no_answer(stub_session):
+    session = stub_session(withhold=["end_commit"], update_perception=lambda **kw: [])
     report = session.fly({"target_fid": "building_7"})
     assert report["target"] == "building_7" and "answer_if_you_reply_now" not in report
     assert session.flights[-1]["target"] == "building_7", "the commit is still the last flight"
@@ -168,6 +166,7 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
     session.h = SimpleNamespace(sensor=resolve_sensor("oryx_orx32_25mm_nadir"),
                                 cfg=SimpleNamespace(start_altitude_agl_m=914.4),
                                 state=SimpleNamespace(altitude_m=600.0),
-                                ground_z_m=100.0, bench=SimpleNamespace(environ={}))
+                                ground_z_m=100.0, bench=SimpleNamespace(environ={}),
+                                settings=Settings(), workdir=None, routing_key=None)
     session.run("find it")
     assert "at the 1,640 ft AGL this run flies" in served["sensor_description"], served["sensor_description"]

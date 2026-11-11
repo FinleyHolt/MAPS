@@ -14,6 +14,7 @@ import httpx
 import pytest
 
 from maps.llm import http as http_mod
+from maps.settings import IMAGE_STORE_ENV, from_environ
 from tests.serves import ChatServe
 
 _RAW = b"\x89PNG not really"
@@ -28,10 +29,10 @@ def _messages(url: str = "data:image/png;base64," + base64.b64encode(_RAW).decod
 
 
 def _store(monkeypatch, url: str = "http://store") -> list[tuple[str, dict]]:
-    """Point the store at ``url`` with nothing held; when ``url`` is the
+    """Point the store at ``url`` (the run's MAPS_IMAGE_STORE_URL, which every
+    ``_send`` of the test rides) with nothing held; when ``url`` is the
     default, record each PUT's (url, headers) instead of sending it."""
-    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
-    monkeypatch.setenv(http_mod.IMAGE_STORE_ENV, url)
+    monkeypatch.setitem(_RUN, "endpoint", from_environ({IMAGE_STORE_ENV: url}).endpoint)
     monkeypatch.setattr(http_mod, "_IMAGE_STORE_HELD", set())
     puts: list[tuple[str, dict]] = []
     if url == "http://store":
@@ -42,17 +43,20 @@ def _store(monkeypatch, url: str = "http://store") -> list[tuple[str, dict]]:
     return puts
 
 
+#: What a test's sends ride: the run's endpoint settings, set by ``_store``.
+_RUN: dict = {}
+
+
 def _send(serve, messages=None, **kw) -> dict:
     return http_mod.chat_completions_raw(
-        f"{serve.url}/v1", "sk-reasoner", model="m", messages=messages or _messages(), timeout=30.0, **kw)
+        f"{serve.url}/v1", "sk-reasoner", model="m", messages=messages or _messages(), timeout=30.0, **_RUN, **kw)
 
 
 def test_an_image_crosses_the_wire_once_by_its_sha(monkeypatch) -> None:
     puts = _store(monkeypatch)
-    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "ep-1")
     with ChatServe() as serve:
-        _send(serve)
-        _send(serve)
+        _send(serve, routing_key="ep-1")
+        _send(serve, routing_key="ep-1")
     assert [u for u, _ in puts] == [f"http://store/looks/{_SHA}"]
     assert puts[0][1] == {"Content-Type": "image/png"}
     assert all(b["messages"][0]["content"][1]["image_url"]["url"] == f"sha256:{_SHA}" for b in serve.bodies)

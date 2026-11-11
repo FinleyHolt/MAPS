@@ -15,6 +15,7 @@ import json
 import logging
 import threading
 import time
+from pathlib import Path
 from typing import Callable
 
 from maps.library.call_arguments import MissionEnv
@@ -38,7 +39,8 @@ from maps.mission.served_text import served_tools
 from maps.mission.spec import MissionReply, MissionSpec
 from maps.mission.surface_state import _SurfaceState, _surface_from_ctx
 from maps.mission.watch_verbs import _WatchVerbs
-from maps.withhold import withheld
+from maps.settings import Settings
+from maps.withhold import active, withheld, withholding
 from maps.world_state.context import ToolContext
 
 
@@ -54,6 +56,9 @@ def run_mission(
     *,
     instruction: str,
     endpoint_spec,
+    settings: Settings = Settings(),
+    workdir: Path | None = None,
+    routing_key: str | None = None,
     seed: int | None = None,
     sensor_description: str = "",
     cancel_event: "threading.Event | None" = None,
@@ -62,17 +67,25 @@ def run_mission(
     **turn,
 ) -> tuple[MissionReply, "_Mission"]:
     """THE mission entry: build the Reasoner and the mission over it, and run
-    the first operator turn (``turn`` is :class:`_Mission`'s). Returns the
-    reply and the mission, for :func:`continue_mission`."""
-    reasoner = Reasoner(
-        endpoint_spec=endpoint_spec,
-        seed=seed,
-        sensor_description=sensor_description,
-        cancel_event=cancel_event,
-        reasoning_effort=reasoning_effort,
-    )
-    mission = _Mission(reasoner=reasoner, rid_tag=rid_tag, preflight=True,
-                       compute_namespace=_surface_from_ctx(turn["ctx"]), **turn)
+    the first operator turn (``turn`` is :class:`_Mission`'s). ``settings``
+    is the run's (``maps.settings``), fixed for the mission; ``workdir`` is
+    the mission's own directory (its wire log and shown frames; None records
+    nothing) and ``routing_key`` its router-affinity key. Returns the reply
+    and the mission, for :func:`continue_mission`."""
+    # The mission is built under the set it withholds, which it keeps for every turn.
+    with withholding(settings.withhold):
+        reasoner = Reasoner(
+            endpoint_spec=endpoint_spec,
+            settings=settings,
+            workdir=workdir,
+            routing_key=routing_key,
+            seed=seed,
+            sensor_description=sensor_description,
+            cancel_event=cancel_event,
+            reasoning_effort=reasoning_effort,
+        )
+        mission = _Mission(reasoner=reasoner, workdir=workdir, rid_tag=rid_tag, preflight=True,
+                           compute_namespace=_surface_from_ctx(turn["ctx"]), **turn)
     return mission.converse(instruction.strip()), mission
 
 
@@ -82,9 +95,10 @@ def continue_mission(mission: "_Mission", instruction: str, *,
     field path: the reply is a report), reads the surface the mission's
     ``ctx`` holds now, and keeps every name, handle, flown stop, staged view
     and watched class of the turns before it."""
-    mission.rid_tag = rid_tag
-    mission._world_moved()
-    return mission.converse(instruction.strip())
+    with withholding(mission.withhold):
+        mission.rid_tag = rid_tag
+        mission._world_moved()
+        return mission.converse(instruction.strip())
 
 
 class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
@@ -108,8 +122,14 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
         obs_minor_m: float | None = None,
         preflight: bool = False,
         retask: Callable[[], str | None] | None = None,
+        workdir: Path | None = None,
     ):
         self.reasoner = reasoner
+        #: The mission's directory, where the frames it is shown are kept; None keeps none.
+        self.workdir = workdir
+        #: What the mission withholds, fixed when it is built: the set bound
+        #: then (``maps.withhold``), which every turn runs under.
+        self.withhold = active()
         self.ctx = ctx
         self.rid_tag = rid_tag
         self.transcript = transcript
@@ -230,10 +250,15 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
         return MissionReply(ended_by=ended_by, turns_used=int(turns))
 
     def converse(self, user_message: str) -> MissionReply:
-        """The mission's turn loop: append ``user_message``, then serve
-        ``run`` until the model's plain reply or a harness ending; an empty
-        turn, a block of code and a reply with no flight behind it are
-        repaired before a repeat is accepted as the ending."""
+        """The mission's turn loop, under the set the mission withholds:
+        append ``user_message``, then serve ``run`` until the model's plain
+        reply or a harness ending; an empty turn, a block of code and a reply
+        with no flight behind it are repaired before a repeat is accepted as
+        the ending."""
+        with withholding(self.withhold):
+            return self._converse(user_message)
+
+    def _converse(self, user_message: str) -> MissionReply:
         self._new_turn()
         if self.reasoner.compaction_infeasible:
             return self._mission_end("compaction_infeasible")

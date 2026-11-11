@@ -270,7 +270,7 @@ def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(dry,
     monkeypatch.setenv("SEARCH_CITYNAV_TILES", str(tiles))
     monkeypatch.setenv("SEARCH_CITYNAV_RGBD_DIR", str(rgbd))
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["blk::1#0"])
-    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: pytest.fail("asked a serve"))
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: pytest.fail("asked a serve"))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("flew"))
     monkeypatch.setattr(bf.Driver, "dry_run", lambda self: pytest.fail("previewed"))
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
@@ -612,7 +612,8 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, 
     """A bad selection is refused as the dry run refuses it: no serve asked, no root made, no lock taken."""
     from maps.llm import endpoint_spec
 
-    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: pytest.fail("a refused selection asked a serve"))
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings",
+                        lambda settings: pytest.fail("a refused selection asked a serve"))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused selection flew"))
     if refusal != "split":
         monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])

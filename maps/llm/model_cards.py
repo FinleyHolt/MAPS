@@ -5,8 +5,9 @@ refused."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
+
+from maps.settings import Sampling
 
 #: alias -> {tokenizer, top_p, top_k[, presence_penalty][, efforts][, effort_numbers]}, or for a
 #: hosted OpenAI model {tokenizer, wire: "openai", efforts[, max_images]}.
@@ -132,11 +133,11 @@ def speaks_openai(model_id: str | None) -> bool:
     return CARDS.get((model_id or "").strip().lower(), {}).get("wire") == "openai"
 
 
-def effort(reasoning_effort: str | None = None) -> str | None:
+def effort(reasoning_effort: str | None = None, sampling: Sampling = Sampling()) -> str | None:
     """The reasoning effort a request carries: the mission's own word, else
-    ``SEARCH_SAMPLING_REASONING_EFFORT``, stripped; empty is none."""
-    raw = reasoning_effort if reasoning_effort is not None else os.environ.get(
-        "SEARCH_SAMPLING_REASONING_EFFORT", "")
+    the arm's (``sampling.reasoning_effort``, ``SEARCH_SAMPLING_REASONING_EFFORT``),
+    stripped; empty is none."""
+    raw = reasoning_effort if reasoning_effort is not None else sampling.reasoning_effort
     return raw.strip() or None
 
 
@@ -146,7 +147,8 @@ def speaks_responses(model_id: str | None) -> bool:
     return CARDS.get((model_id or "").strip().lower(), {}).get("api") == "responses"
 
 
-def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[str, Any]:
+def sampling_kwargs(model_id: str, reasoning_effort: str | None = None,
+                    sampling: Sampling = Sampling()) -> dict[str, Any]:
     """The request's sampling keys, flat at the top level (a hosted endpoint
     drops an ``extra_body`` object whole). A chat-template card sends
     temperature 1.0, its ``top_p``/``top_k`` (and ``presence_penalty`` where it
@@ -165,7 +167,7 @@ def sampling_kwargs(model_id: str, reasoning_effort: str | None = None) -> dict[
                   "chat_template_kwargs": {"enable_thinking": True}}
         if "presence_penalty" in card:
             kwargs["presence_penalty"] = card["presence_penalty"]
-    chosen = effort(reasoning_effort)
+    chosen = effort(reasoning_effort, sampling)
     if chosen == "none" and "thinking_off" in card:
         # the card names its own off switch (the Gemma 26B template): send it
         # in place of a `reasoning_effort` the template never reads

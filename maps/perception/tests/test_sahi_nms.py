@@ -191,7 +191,7 @@ def test_segment_keeps_what_the_full_frame_reference_keeps(monkeypatch):
     client, obs, payload_by_b64, ref = _build_tile_case()
     requested: list[str] = []
 
-    def serve(json_body):
+    def serve(json_body, endpoint=None):
         requested.append(json_body["image_b64"])
         return payload_by_b64[json_body["image_b64"]]
 
@@ -209,7 +209,7 @@ def test_tile_order_survives_out_of_order_completion(monkeypatch):
     completion_order: list[int] = []
     tile1_done = threading.Event()
 
-    def serve(json_body):
+    def serve(json_body, endpoint=None):
         idx = idx_by_b64[json_body["image_b64"]]
         if idx == 0:
             assert tile1_done.wait(timeout=5.0), "tile 1 never completed"

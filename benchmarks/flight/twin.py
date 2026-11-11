@@ -195,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
 
     bench = calcity_bench(os.environ)
     split = args.split or bench.default_split
-    cfg = flight_config(args.config)
+    cfg = flight_config(args.config, bench.environ)
     sensor = resolve_sensor(cfg.sensor)
     episode = resolve_episode(bench, args.episode, split, args.start_xy)
     map_name = episode.map_name

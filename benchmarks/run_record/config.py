@@ -11,17 +11,18 @@ left out; an absent one takes its ``RunConfig`` default.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import importlib.util
 import json
-import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 from benchmarks import REPO_ROOT
 from maps.perception.geometry.sensor_spec import resolve_sensor
-from maps.withhold import ENV as WITHHOLD_ENV
+from maps.settings import WITHHOLD_ENV, Settings, from_environ
 from maps.withhold import WITHHOLDS
 
 
@@ -94,22 +95,26 @@ class RunConfig:
     source_path: str | None = None
 
 
-def export_withhold(cfg: RunConfig) -> None:
-    """The config's ``withhold`` -> ``SEARCH_WITHHOLD``. The config owns it:
-    a value left in the shell never stands."""
-    os.environ[WITHHOLD_ENV] = ",".join(cfg.withhold)
+def engine_settings(cfg: RunConfig, environ: Mapping[str, str]) -> Settings:
+    """The engine's settings (``maps.settings``) for a run of ``cfg`` under
+    ``environ``, the run's environment (``Bench.environ``): what the
+    environment states, with the config's ``withhold`` in place of
+    ``SEARCH_WITHHOLD``. The config owns it: a value left in the shell never
+    stands."""
+    return dataclasses.replace(from_environ(environ), withhold=frozenset(cfg.withhold))
 
 
-def assert_flight_config(cfg: RunConfig) -> None:
+def assert_flight_config(cfg: RunConfig, environ: Mapping[str, str]) -> None:
     """The flight mission flies the flown engine: refuse a config, or an
-    environment, that withholds any part of it or names a baseline policy."""
+    environment (``environ``, the run's), that withholds any part of it or
+    names a baseline policy."""
     if cfg.policy is not None:
         raise ValueError(f"{cfg.source_path}: the flight mission flies MAPS; policy={cfg.policy!r} is a bench arm")
-    if cfg.withhold or os.environ.get(WITHHOLD_ENV, "").strip():
+    if cfg.withhold or environ.get(WITHHOLD_ENV, "").strip():
         raise ValueError(
             f"{cfg.source_path}: the flight mission serves the flown engine; "
             f"withhold={cfg.withhold} {WITHHOLD_ENV}="
-            f"{os.environ.get(WITHHOLD_ENV, '')!r} is a bench ablation")
+            f"{environ.get(WITHHOLD_ENV, '')!r} is a bench ablation")
 
 
 def _locate(path: str | Path | None) -> Path:

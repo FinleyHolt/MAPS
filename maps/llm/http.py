@@ -11,11 +11,12 @@ call with a ``cancel_event`` streams (SSE), and the event shuts its socket
 down and raises :class:`CallCanceled`; an answer that lands as the event fires
 is never handed back or recorded.
 
-``flight/llm/transcript.jsonl`` stores the conversation once: per-call
-message deltas, params written once per distinct body, image parts as sha
-refs.
+``<workdir>/flight/llm/transcript.jsonl`` stores the conversation once, under
+the mission's own directory (a caller's ``workdir``): per-call message
+deltas, params written once per distinct body, image parts as sha refs.
 
-With ``MAPS_IMAGE_STORE_URL`` set (an image store standing one fast hop from
+With an image store named (``Endpoint.image_store_url``, the run's
+``MAPS_IMAGE_STORE_URL``: a store standing one fast hop from
 the reasoner, for a slow link), each inline image crosses the wire once: its
 bytes are PUT to ``<store>/looks/<sha>`` and the request names it
 ``sha256:<sha>``, which the store expands back to the same data URL beside
@@ -32,7 +33,6 @@ import binascii
 import hashlib
 import json
 import logging
-import os
 import socket
 import threading
 import time
@@ -40,6 +40,8 @@ import uuid
 from pathlib import Path
 
 import httpx
+
+from maps.settings import Endpoint
 
 from . import endpoint_spec, openai_wire
 from .model_cards import speaks_responses
@@ -159,18 +161,18 @@ def _shutdown(sock: socket.socket) -> None:
 _WARNED_NO_WORKDIR = False
 
 
-def _resolved_flight_log_dir() -> Path | None:
-    """``$SEARCH_COMPILE_WORKDIR/flight/llm``, or None without a workdir
-    (a unit test), warned once so an unrecorded mission cannot pass silently."""
-    workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip()
+def _resolved_flight_log_dir(workdir: str | Path | None) -> Path | None:
+    """``<workdir>/flight/llm`` for the mission's directory, or None without
+    one (a unit test), warned once so an unrecorded mission cannot pass silently."""
+    workdir = str(workdir).strip() if workdir is not None else ""
     if not workdir:
         global _WARNED_NO_WORKDIR
         if not _WARNED_NO_WORKDIR:
             _WARNED_NO_WORKDIR = True
             log.warning(
-                "SEARCH_COMPILE_WORKDIR is unset: this process is making LLM "
+                "no mission workdir: this process is making LLM "
                 "calls that NOTHING is recording. Expected for a unit test; "
-                "a flying mission sets it and gets flight/llm/transcript.jsonl."
+                "a flying mission names one and gets flight/llm/transcript.jsonl."
             )
         return None
     return Path(workdir).expanduser() / "flight" / "llm"
@@ -228,8 +230,6 @@ def _image_ref(part: dict, media_type: str, raw: bytes | None) -> dict:
             "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
 
 
-#: The image store a slow link sends each image to once (module docstring).
-IMAGE_STORE_ENV = "MAPS_IMAGE_STORE_URL"
 # shas the store holds; a 409 from it drops the ones it names.
 _IMAGE_STORE_HELD: set[str] = set()
 
@@ -261,11 +261,12 @@ def _put_image(url: str, raw: bytes, media_type: str,
             watch.close()
 
 
-def _wire_body(body: dict, cancel_event: threading.Event | None = None) -> dict:
-    """``body`` as it crosses the wire: with an image store set, every
+def _wire_body(body: dict, cancel_event: threading.Event | None = None, image_store_url: str = "") -> dict:
+    """``body`` as it crosses the wire: with an image store set
+    (``image_store_url``, the run's ``MAPS_IMAGE_STORE_URL``), every
     data-URL image part rides as ``sha256:<sha>``, its bytes PUT once; a
     part whose base64 does not decode rides inline."""
-    base = os.environ.get(IMAGE_STORE_ENV, "").strip().rstrip("/")
+    base = image_store_url
     if not base or not isinstance(body.get("messages"), list):
         return body
 
@@ -376,14 +377,13 @@ def _flight_response_record(
         })
 
 
-def _request_headers(api_key: str | None) -> dict[str, str]:
-    """Headers for one POST. ``SEARCH_LLM_ROUTING_KEY``, read per call (the
-    runner sets one per episode), rides as an affinity header so a key-affine
-    router keeps an episode on one worker's prefix cache."""
+def _request_headers(api_key: str | None, routing_key: str | None = None) -> dict[str, str]:
+    """Headers for one POST. ``routing_key`` (the mission's: the runner names
+    one per episode) rides as an affinity header so a key-affine router keeps
+    an episode on one worker's prefix cache."""
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    routing_key = os.environ.get("SEARCH_LLM_ROUTING_KEY")
     if routing_key:
         headers["x-smg-routing-key"] = routing_key
     return headers
@@ -574,14 +574,15 @@ def stream_responses(
     return openai_wire.from_responses(final)
 
 
-def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusal: str) -> None:
+def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusal: str,
+                                    endpoint: Endpoint = Endpoint()) -> None:
     """On a 404, re-probe the served ids and raise when the request's model is
     no longer among them (the server behind the URL changed since discovery).
     Returns when the probe fails or the model is still served."""
     if not requested:
         return
     try:
-        served = [str(m.get("id")) for m in endpoint_spec.probe_models(base_url)]
+        served = [str(m.get("id")) for m in endpoint_spec.probe_models(base_url, endpoint)]
     except endpoint_spec.EndpointDiscoveryError:
         return
     if requested not in served:
@@ -605,17 +606,23 @@ def chat_completions_raw(
     *,
     timeout: float,
     cancel_event: threading.Event | None = None,
+    workdir: str | Path | None = None,
+    routing_key: str | None = None,
+    endpoint: Endpoint = Endpoint(),
     **kwargs,
 ) -> dict:
     """Send one chat completion and return the response JSON, retrying as
-    the module docstring says."""
+    the module docstring says. ``kwargs`` is the request body. ``workdir`` is
+    the mission's directory, whose ``flight/llm/transcript.jsonl`` records the
+    call; ``routing_key`` its affinity key; ``endpoint`` the run's settings
+    (the image store, and the models URL a 404 is checked against)."""
     body = kwargs
-    flight_dir = _resolved_flight_log_dir()
+    flight_dir = _resolved_flight_log_dir(workdir)
     # A Responses card takes the same body translated at the wire, and its
     # answer comes back in the chat shape (maps.llm.openai_wire).
     responses = speaks_responses(body.get("model"))
     url = base_url.rstrip("/") + (openai_wire.RESPONSES_PATH if responses else "/chat/completions")
-    headers = _request_headers(api_key)
+    headers = _request_headers(api_key, routing_key)
 
     request_id = uuid.uuid4().hex
     if flight_dir is not None:
@@ -635,7 +642,7 @@ def chat_completions_raw(
         try:
             if cancel_event is not None and cancel_event.is_set():
                 raise CallCanceled("canceled before dispatch")
-            wire = _wire_body(body, cancel_event)
+            wire = _wire_body(body, cancel_event, endpoint.image_store_url)
             if responses:
                 wire = openai_wire.to_responses(wire)
             if use_stream:
@@ -708,7 +715,7 @@ def chat_completions_raw(
                 attempt += 1
                 continue
             if status == 404:
-                _raise_on_served_model_mismatch(base_url, body.get("model"), e.response.text)
+                _raise_on_served_model_mismatch(base_url, body.get("model"), e.response.text, endpoint)
             if status is not None and status < 500:
                 msgs = body.get("messages") or []
                 log.error(

@@ -330,6 +330,10 @@ thinking mode at temperature 1.0, and `max_tokens` is the output reserve of
 the discovered window (the OpenAI-wire card below takes both in OpenAI's own
 terms).
 
+Each entry point reads the client variables once, when it starts
+(`maps/settings.py`), and a run carries what it read: a value changed in a
+shell reaches the next process, not a running one.
+
 | Variable | Read by | Meaning |
 |---|---|---|
 | `SEARCH_REASONER_URL` | client | The reasoner's base URL, one endpoint. Default `http://127.0.0.1:8001/v1`. |

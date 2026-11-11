@@ -20,12 +20,11 @@ from maps.withhold import withheld
 log = logging.getLogger(__name__)
 
 
-def _deliver_frames(jpegs: list[bytes], sink: list[str]) -> None:
+def _deliver_frames(jpegs: list[bytes], sink: list[str], workdir: Path | None = None) -> None:
     """Record every image about to reach the model: its sha256 (the wire
     log's ``image_ref.sha256``) into ``sink`` and the bytes into
-    ``<workdir>/frames/<sha256>.jpg`` when a mission is recording. Never
-    raises: a full disk must not end the turn."""
-    workdir = os.environ.get("SEARCH_COMPILE_WORKDIR", "").strip()
+    ``<workdir>/frames/<sha256>.jpg`` when a mission is recording (it has a
+    ``workdir``). Never raises: a full disk must not end the turn."""
     for jpeg in jpegs:
         if not jpeg:
             continue
@@ -86,7 +85,7 @@ class _PictureVerbs:
         fv_note = ("the view follows." if shown else
                     _PICTURE_WITHHELD_OF.format("view"))
         if shown:
-            _deliver_frames(fj, self._block_frames)
+            _deliver_frames(fj, self._block_frames, self.workdir)
         self.pending_vision.append((fv_text, fj if shown else []))
         _add_note(report, fv_note)
 
@@ -102,7 +101,7 @@ class _PictureVerbs:
             return False
         if jpegs:
             ack["note"] = f"the {kind} follows in the next message"
-            _deliver_frames(jpegs, self._block_frames)
+            _deliver_frames(jpegs, self._block_frames, self.workdir)
             self.pending_vision.append((vis_text, jpegs))
             return True
         ack["error"] = f"render returned no image bytes; no {kind} will follow"

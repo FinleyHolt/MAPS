@@ -23,7 +23,6 @@ def _err(status: int, headers: dict | None = None, payload: dict | None = None):
 def transport(monkeypatch):
     """Run ``chat_completions_raw`` against a ChatServe scripted with ``answers``; returns
     ``(result_or_exc, bodies, sleeps)`` with the backoff sleeps captured, not taken."""
-    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
     sleeps: list[float] = []
     monkeypatch.setattr(http_mod.time, "sleep", sleeps.append)
 
@@ -96,14 +95,14 @@ def _posted_body(transport, **kwargs) -> dict:
 def test_an_arm_naming_no_effort_puts_no_effort_key_on_the_wire(monkeypatch, transport) -> None:
     """Unset carries no key at all (not a null), and the named effort is the only difference on the wire."""
     from maps.llm.model_cards import sampling_kwargs
+    from maps.settings import from_environ
 
-    monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
-    quiet = _posted_body(transport, **sampling_kwargs("inkling-small"))
+    quiet = _posted_body(transport, **sampling_kwargs("inkling-small", sampling=from_environ({}).sampling))
     assert "reasoning_effort" not in quiet
     assert "reasoning_effort" not in json.dumps(quiet)
 
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    named = _posted_body(transport, **sampling_kwargs("inkling-small"))
+    arm = from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "0.99"}).sampling
+    named = _posted_body(transport, **sampling_kwargs("inkling-small", sampling=arm))
     assert named["reasoning_effort"] == "0.99"
     assert '"reasoning_effort": "0.99"' in json.dumps(named)
     assert {k: v for k, v in named.items() if k != "reasoning_effort"} == quiet
@@ -161,7 +160,6 @@ class _RaisingClient:
 
 
 def _run_raising(monkeypatch, exc: Exception) -> list[int]:
-    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
     monkeypatch.setattr(http_mod.time, "sleep", lambda _s: None)
     calls: list[int] = []
     monkeypatch.setattr(
@@ -209,7 +207,7 @@ def test_a_404_for_a_model_no_longer_served_is_named_on_both_paths(transport, mo
 
     from maps.llm import endpoint_spec
 
-    monkeypatch.setattr(endpoint_spec, "probe_models", lambda _url: [{"id": "another-model"}])
+    monkeypatch.setattr(endpoint_spec, "probe_models", lambda _url, _endpoint: [{"id": "another-model"}])
     result, calls, _sleeps = transport([_err(404)], **({"cancel_event": threading.Event()} if stream else {}))
     assert isinstance(result, RuntimeError), result
     assert "served-model mismatch" in str(result) and "another-model" in str(result)
@@ -242,7 +240,6 @@ def test_an_empty_delta_stream_is_logged_as_one_not_as_a_timeout(monkeypatch, ca
     names the empty stream instead of telling the operator to raise the reasoner timeout."""
     import threading
 
-    monkeypatch.delenv("SEARCH_COMPILE_WORKDIR", raising=False)
     monkeypatch.setattr(http_mod, "_EMPTY_STREAM_CHUNKS", 3)
     sse = b'data: {"choices":[{"delta":{}}]}\n\n' * 3
     real = httpx.Client

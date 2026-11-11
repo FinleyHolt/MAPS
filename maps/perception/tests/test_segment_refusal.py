@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 import maps.perception.sam.detect_client as dc
+from maps.settings import from_environ
 from tests.serves import SegmentServe
 
 _REFUSED = {"detail": "concepts: too many items"}
@@ -27,9 +28,8 @@ def clock(monkeypatch):
 
 def _post(*serves_or_urls):
     urls = [getattr(s, "url", s) for s in serves_or_urls]
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setenv("SAM_SERVER_URL", ",".join(urls))
-        return dc._post_segment({"concepts": ["car"], "image_b64": ""})
+    endpoint = from_environ({"SAM_SERVER_URL": ",".join(urls)}).endpoint
+    return dc._post_segment({"concepts": ["car"], "image_b64": ""}, endpoint)
 
 
 def test_a_refused_request_raises_at_once_and_is_not_an_outage():

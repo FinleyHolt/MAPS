@@ -300,7 +300,7 @@ def _is_script_block(message: dict) -> bool:
 
 def _drop_spent_turns(
     messages: list[dict], *, before: int, shed_tokens: int, model: str,
-    tools: list[dict] | None,
+    tools: list[dict] | None, tokenizer_name: str = "",
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_turns_folded, tokens_freed)``: the oldest foldable
     turns of ``messages`` (``before`` input tokens) folded into script
@@ -321,7 +321,7 @@ def _drop_spent_turns(
     for span in candidates:
         folded.append(span)
         out = _folded(messages, folded)
-        after = _estimate_input_tokens(out, model=model, tools=tools)
+        after = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
         freed = before - after
         if freed >= shed_tokens:
             break
@@ -335,11 +335,12 @@ def _estimate_input_tokens(
     *,
     model: str,
     tools: list[dict] | None = None,
+    tokenizer_name: str = "",
 ) -> int:
     """The chat-templated input tokens the server will see, crops priced by
     their pixels and a Responses turn's carried reasoning by the tokens it
     took to write; a tokenizer or template failure raises."""
-    tok = load_tokenizer(model)
+    tok = load_tokenizer(model, tokenizer_name)
     text = tok.apply_chat_template(
         _messages_for_tokenization(messages),
         tools=tools,
@@ -452,7 +453,7 @@ def _degrade_tool_result_content(
     return json.dumps(obj, default=str), had_colors
 
 
-def _stub_until(out, idxs, *, keep_color, source, bound, tokens, model, tools):
+def _stub_until(out, idxs, *, keep_color, source, bound, tokens, model, tools, tokenizer_name=""):
     """``(stubbed, colored, tokens)``: each of ``idxs`` in turn rewritten in
     ``out`` as the stub of ``source[i]``, until ``tokens`` is at or under
     ``bound``; the indices stubbed, those that kept a colour table, and the
@@ -470,7 +471,7 @@ def _stub_until(out, idxs, *, keep_color, source, bound, tokens, model, tools):
         stubbed.append(i)
         if had_colors:
             colored.append(i)
-        tokens = _estimate_input_tokens(out, model=model, tools=tools)
+        tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
     return stubbed, colored, tokens
 
 
@@ -489,14 +490,16 @@ def compact_transcript(
     target_input_tokens: int,
     model: str,
     tools: list[dict] | None = None,
+    tokenizer_name: str = "",
 ) -> list[dict]:
     """``messages`` fitted under ``target_input_tokens`` by the steps of the
-    module docstring; ``CompactionInvariantError`` if a step broke the tool
+    module docstring, measured with ``model``'s tokenizer (``tokenizer_name``
+    in its place when the run names one); ``CompactionInvariantError`` if a step broke the tool
     protocol."""
     if len(messages) <= _CHEAP_GATE_MSG_COUNT:
         return messages
 
-    input_tokens = _estimate_input_tokens(messages, model=model, tools=tools)
+    input_tokens = _estimate_input_tokens(messages, model=model, tools=tools, tokenizer_name=tokenizer_name)
 
     if input_tokens <= target_input_tokens:
         return messages
@@ -511,7 +514,7 @@ def compact_transcript(
     output_tokens = input_tokens
     out, folded_turns, freed_fold = _drop_spent_turns(
         messages, before=input_tokens, shed_tokens=input_tokens - low_water,
-        model=model, tools=tools,
+        model=model, tools=tools, tokenizer_name=tokenizer_name,
     )
     if folded_turns:
         output_tokens = input_tokens - freed_fold
@@ -525,7 +528,7 @@ def compact_transcript(
     # Steps 2-4.
     base = out
     out = list(out)
-    _est = {"model": model, "tools": tools}
+    _est = {"model": model, "tools": tools, "tokenizer_name": tokenizer_name}
     cleared, colored, output_tokens = _stub_until(
         out, _dump_result_indices(out)[:-1], keep_color=True, source=base,
         bound=low_water, tokens=output_tokens, **_est)
@@ -557,7 +560,7 @@ def compact_transcript(
                 out[i] = _with_content(m, body)
                 stripped = True
         if stripped:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
+            output_tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
             log.info("compaction stripped block findings -> %s/%d",
                      output_tokens, target_input_tokens)
 
@@ -568,7 +571,7 @@ def compact_transcript(
             out, shed_tokens=output_tokens - target_input_tokens, newest=False
         )
         if n_evicted:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
+            output_tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
             log.info(
                 "compaction evicted %d stale crop(s), freed ~%d tok -> %s/%d",
                 n_evicted, freed, output_tokens, target_input_tokens,
@@ -581,7 +584,7 @@ def compact_transcript(
             out, shed_tokens=output_tokens - target_input_tokens, newest=True
         )
         if evicted_newest:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools)
+            output_tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
             log.info(
                 "compaction evicted %d of the newest crop-bearing message's "
                 "crops, freed ~%d tok -> %s/%d",

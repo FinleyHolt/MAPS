@@ -20,6 +20,7 @@ from benchmarks.run_record.run_manifest import arm_stamp
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, ImageStoreError
 from maps.perception.sam.detect_client import SamServerOutage
+from maps.settings import Settings
 
 log = logging.getLogger("run_benchmark")
 
@@ -105,11 +106,14 @@ def dispatch_one(
     objects_by_map: dict,
     cfg: RunConfig,
     bench: Bench,
+    settings: Settings,
     split: str,
     recorder: LiveRecorder | None,
     episode_dir: Path,
+    routing_key: str | None = None,
 ) -> dict:
-    """Run one episode of ``bench``, write its row to ``<episode_dir>/episode.json`` and
+    """Run one episode of ``bench`` under ``settings`` (its wire log and frames
+    under ``episode_dir``, its requests under ``routing_key``), write its row to ``<episode_dir>/episode.json`` and
     return it. ``status`` is ``ok`` for a scored attempt (a method exception
     included) and ``infra`` when an infrastructure fault raised or the
     mission ended ``transient_failures``.
@@ -123,7 +127,8 @@ def dispatch_one(
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}
 
     try:
-        rec = run_episode(episode, objects_by_map, cfg, bench, recorder=recorder)
+        rec = run_episode(episode, objects_by_map, cfg, bench, recorder=recorder, settings=settings,
+                          workdir=episode_dir, routing_key=routing_key)
     except Exception as e:
         # exc_info lands the traceback in run.log through the root
         # handler; a bare print_exc reaches only stderr.

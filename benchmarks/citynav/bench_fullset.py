@@ -46,7 +46,8 @@ from benchmarks.run_record import episodes
 from benchmarks.run_record import rows as _rows
 from benchmarks.run_record import run_manifest as _rm
 from benchmarks.run_record.config import resolve_config
-from maps.llm.endpoint_spec import models_url, reasoner_api_key, spec
+from maps.llm.endpoint_spec import models_url, spec
+from maps.settings import from_environ
 
 REPO = Path(__file__).resolve().parents[2]
 #: The config a run flies when ``CITYNAV_BENCH_CONFIG`` names none.
@@ -168,6 +169,8 @@ class Driver:
     def __init__(self, args: argparse.Namespace, bench: Bench, config: Path) -> None:
         self.bench = bench
         self.config = Path(config)
+        #: How the reasoner is reached, for the driver's own probes.
+        self.endpoint = from_environ(bench.environ).endpoint
         self.workers = args.workers
         self.split = args.split
         self.episode_timeout_s = args.episode_timeout_s
@@ -345,7 +348,7 @@ class Driver:
         """True when the installed spec's reasoner answers its model list, at
         the URL discovery read it from (``endpoint_spec.models_url``), asked
         with the chat path's bearer (hosted endpoints auth ``/v1/models``)."""
-        return _answers(models_url(spec().base_url), reasoner_api_key())
+        return _answers(models_url(spec().base_url, self.endpoint), self.endpoint.reasoner_api_key)
 
     @staticmethod
     def _sam_answers() -> bool:
@@ -824,7 +827,7 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
         return driver.dry_run()
     # Once, so an unreachable or wrong serve fails here, before any worker spawns.
     try:
-        driver.bench = _rm.install_endpoint(bench, resolved.get("policy"))
+        driver.bench = _rm.install_endpoint(bench, from_environ(bench.environ), resolved.get("policy"))
     except _rm.EndpointRefused as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2

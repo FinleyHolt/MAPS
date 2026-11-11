@@ -29,7 +29,7 @@ class _Tok:
 
 @pytest.fixture(autouse=True)
 def _chars(monkeypatch):
-    monkeypatch.setattr(C, "load_tokenizer", lambda model: _Tok())
+    monkeypatch.setattr(C, "load_tokenizer", lambda model, tokenizer_name="": _Tok())
 
 
 def _est(msgs) -> int:
@@ -106,7 +106,7 @@ def test_an_unmeasurable_prompt_raises(monkeypatch):
     class _NoTools(_Tok):
         def apply_chat_template(self, messages, tools=None, **_kw):
             raise TypeError("no tools kwarg")
-    monkeypatch.setattr(C, "load_tokenizer", lambda model: _NoTools())
+    monkeypatch.setattr(C, "load_tokenizer", lambda model, tokenizer_name="": _NoTools())
     with pytest.raises(TypeError):
         compact_transcript(_head() + _units(3), target_input_tokens=10, model="m",
                            tools=[{"type": "function"}])

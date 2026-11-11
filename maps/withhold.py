@@ -1,16 +1,21 @@
 """Bench-only ablation withholds over the flown engine.
 
 Each name takes one served part away; with none named the model is served
-exactly what flew. The bench config's ``withhold:`` list reaches the engine
-as ``SEARCH_WITHHOLD`` (comma separated), read at call time, and the flight
-mission refuses a run that names any.
+exactly what flew. A set of names is fixed for a mission: the mission binds
+its own (:func:`withholding`) for every turn it runs, and the served text
+and the verbs ask :func:`withheld` under that binding. The bench config's
+``withhold:`` list names the set (``SEARCH_WITHHOLD`` in a shell names it
+for the contract printer alone), and the flight mission refuses a run that
+names any.
 """
 
 from __future__ import annotations
 
-import os
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 
-ENV = "SEARCH_WITHHOLD"
+from maps.settings import WITHHOLD_ENV as ENV
 
 # name -> what the model loses.
 WITHHOLDS: dict[str, str] = {
@@ -42,15 +47,40 @@ WITHHOLDS: dict[str, str] = {
 }
 
 
-def active() -> frozenset[str]:
-    names = frozenset(n.strip() for n in os.environ.get(ENV, "").split(",") if n.strip())
+# The set the running mission withholds. A context variable, so two missions
+# in one process (each on its own thread, or one after the other) never read
+# each other's.
+# ponytail: bound around a mission's turns rather than passed to each of the
+# text builders and verbs that ask; pass it down if a caller ever needs two
+# sets inside one turn.
+_BOUND: ContextVar[frozenset[str]] = ContextVar("maps.withhold", default=frozenset())
+
+
+def check(names: Iterable[str]) -> frozenset[str]:
+    """``names`` as a set, refused when one is no withhold."""
+    names = frozenset(names)
     unknown = sorted(names - WITHHOLDS.keys())
     if unknown:
         raise ValueError(f"{ENV} names unknown withholds {unknown}; known: {sorted(WITHHOLDS)}")
     return names
 
 
+@contextmanager
+def withholding(names: Iterable[str]) -> Iterator[None]:
+    """Withhold ``names`` for the block: what a mission binds around its turns."""
+    token = _BOUND.set(check(names))
+    try:
+        yield
+    finally:
+        _BOUND.reset(token)
+
+
+def active() -> frozenset[str]:
+    """The names the running mission withholds; none outside a mission."""
+    return _BOUND.get()
+
+
 def withheld(name: str) -> bool:
     if name not in WITHHOLDS:
         raise KeyError(f"{name!r} is not a withhold (maps/withhold.py)")
-    return name in active()
+    return name in _BOUND.get()

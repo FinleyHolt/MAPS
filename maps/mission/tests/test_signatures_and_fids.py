@@ -3,7 +3,7 @@ import inspect
 import threading
 
 
-from maps import withhold as W
+from maps.mission.tests.fakes import withhold_for_test
 from maps.mission import served_text
 from maps.library.interpreter import MissionPython
 
@@ -11,7 +11,7 @@ from maps.library.interpreter import MissionPython
 def test_the_doc_withhold_serves_keyword_only_calls_as_keyword_only(monkeypatch):
     """Under ``doc`` the run description is the calls' signatures; a call that
     refuses positional arguments must not be served as taking them."""
-    monkeypatch.setenv(W.ENV, "doc")
+    withhold_for_test(monkeypatch, "doc")
     doc = served_text.served_doc()
     for call in ("stand", "look"):
         sig = inspect.signature(getattr(MissionPython, f"_call_{call}"))
@@ -88,7 +88,7 @@ def test_a_five_digit_detection_fid_is_a_row_like_a_four_digit_one():
 def test_the_doc_withhold_serves_no_parameter_that_only_refuses(monkeypatch):
     """find's extra queries, a cut's unknown keywords and show_map's missing
     centre are refused, so the signatures the doc arm reads do not offer them."""
-    monkeypatch.setenv(W.ENV, "doc")
+    withhold_for_test(monkeypatch, "doc")
     doc = served_text.served_doc()
     assert "*more" not in doc and "**kw" not in doc, doc
     assert "around=None" not in doc, doc

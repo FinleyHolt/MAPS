@@ -9,6 +9,7 @@ from benchmarks.citynav.adapter import parse_episode
 from benchmarks.calcity.paths import calcity_bench
 from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark import episode_runner as er
+from maps.settings import Settings
 from maps.mission.spec import MissionReply
 
 _ROW = {"area": "b", "block": 1, "descriptions": ["the church"], "ann_ids": [0],
@@ -23,8 +24,8 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
         ground_z_m=0.0, search_loop=SimpleNamespace(set_retro_perceiver=lambda f: None),
         perception=SimpleNamespace(sahi_tiles_failed=0))
 
-    def build(cfg, ep, assets, bench):
-        h.episode = ep
+    def build(cfg, ep, assets, bench, *, settings, workdir, routing_key):
+        h.episode, h.workdir = ep, workdir
         return h
 
     def session(h, **kw):
@@ -40,11 +41,13 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
     monkeypatch.setattr(er, "build_episode", build)
     monkeypatch.setattr(er, "MissionSession", session)
     monkeypatch.setattr(er, "synthesize_compliant_trajectory", fly)
-    monkeypatch.setattr(er.flight_summary, "summarize", lambda d: {"calls": 2})
-    monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(tmp_path))
+    # The attempt's directory is the value the runner is handed: the summary reads its flight log.
+    monkeypatch.setattr(er.flight_summary, "summarize",
+                        lambda d, tokenizer_name="": {"calls": 2} if d == tmp_path / "flight" else {})
     cfg = SimpleNamespace(spawn="dataset", start_altitude_agl_m=None, altitude_cap_m=1000.0, success_radius_m=20.0,
                           policy=policy)
-    return er.run_episode(parse_episode(row), {"b_block_1": [object()]}, cfg, bench or citynav_bench({}))
+    return er.run_episode(parse_episode(row), {"b_block_1": [object()]}, cfg, bench or citynav_bench({}),
+                          settings=Settings(), workdir=tmp_path)
 
 
 def test_a_flying_episode_records_its_commit_and_final_pose(monkeypatch, tmp_path) -> None:
@@ -106,12 +109,12 @@ def test_the_bench_resolves_its_sensor_as_the_flight_does(monkeypatch) -> None:
     from maps.perception.geometry.sensor_spec import resolve_sensor
 
     loop = SimpleNamespace(start=lambda g: None)
-    monkeypatch.setattr(er, "_episode_graph", lambda assets: None)
+    monkeypatch.setattr(er, "_episode_graph", lambda assets, settings: None)
     monkeypatch.setattr(er, "start_altitude_m", lambda cfg, m, z: (100.0, 0.0))
-    monkeypatch.setattr(er, "make_perception", lambda: SimpleNamespace(set_concepts=None))
+    monkeypatch.setattr(er, "make_perception", lambda settings: SimpleNamespace(set_concepts=None))
     monkeypatch.setattr(er, "SearchLoop", lambda *a, **kw: loop)
     assets = SimpleNamespace(grid_shape=(2, 2), cell_size_m=1.0, map_name="b_block_1",
                              bounds=SimpleNamespace(x_min=0.0, y_min=0.0))
     episode = SimpleNamespace(map_name="b_block_1", start_z=100.0, start_xy=(0.0, 0.0))
-    h = er.build_episode(SimpleNamespace(sensor={}), episode, assets, citynav_bench({}))
+    h = er.build_episode(SimpleNamespace(sensor={}), episode, assets, citynav_bench({}), settings=Settings())
     assert h.sensor == resolve_sensor({})

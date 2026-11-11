@@ -324,6 +324,11 @@ def test_the_recorded_reasoner_settings_stand_only_in_a_forced_replay():
     forced = mine.with_environ(R._arm_env(rec, forced=True)).environ
     assert forced["SEARCH_COMPACT_TOKENIZER_NAME"] == "recorded/tok"
     assert forced["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"
+    # The engine's settings are built from that environment: the forced replay speaks as the recording did.
+    from maps.settings import from_environ
+
+    assert from_environ(forced).endpoint.tokenizer_name == "recorded/tok"
+    assert from_environ(forced).sampling.reasoning_effort == "0.9" and from_environ(flown).sampling.reasoning_effort == ""
 
 
 def test_a_torn_recording_serves_a_frame_from_its_own_chunk_without_reading_from_the_top(tmp_path, monkeypatch):

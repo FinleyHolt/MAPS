@@ -3,11 +3,11 @@
 :func:`discover` reads the served model and its window off
 ``GET models_url(url)`` and checks the SAM replicas' ``/health``; any
 divergence raises :class:`EndpointDiscoveryError` naming the URL and what was
-seen. An entry point runs ``install_spec(discover_from_env())``; the reasoner
+seen. An entry point runs ``install_spec(discover_from_settings(settings))``; the reasoner
 gets the spec injected, and other readers call :func:`spec`, which raises when
 nothing was installed.
 
-Explicit pins:
+Explicit pins, read from the run's settings (``maps.settings``):
 
   ``SEARCH_ENDPOINT_OFFLINE=1``
       Offline / replay: probe nothing; requires the override below.
@@ -27,12 +27,13 @@ from __future__ import annotations
 import http.client
 import json
 import logging
-import os
 import threading
 import urllib.error
 import time
 import urllib.request
 from dataclasses import dataclass
+
+from maps.settings import Endpoint, Settings
 
 log = logging.getLogger(__name__)
 
@@ -108,12 +109,6 @@ class EndpointSpec:
                 - _WINDOW_MARGIN_TOKENS)
 
 
-def reasoner_api_key() -> str | None:
-    """``SEARCH_REASONER_API_KEY``, the reasoner's bearer, or None when unset
-    or blank (a self-hosted serve takes no Authorization header)."""
-    return os.environ.get("SEARCH_REASONER_API_KEY") or None
-
-
 #: One full turn at the 40,000-token output pin, decoded at ~20 tok/s under a
 #: saturated batch: the output cap, not the serve's load, bounds a turn. A
 #: shorter wait cuts long thinking at a point that moves with load and
@@ -121,11 +116,11 @@ def reasoner_api_key() -> str | None:
 REASONER_TIMEOUT_DEFAULT_S = 2400.0
 
 
-def reasoner_timeout_s() -> float:
-    """Per-call transport timeout from ``SEARCH_REASONER_TIMEOUT_S`` (unset:
-    the default); anything but a positive number of seconds up to
+def reasoner_timeout_s(raw: str = "") -> float:
+    """Per-call transport timeout from ``raw``, the run's
+    ``SEARCH_REASONER_TIMEOUT_S`` (``Endpoint.reasoner_timeout_s``; empty: the
+    default); anything but a positive number of seconds up to
     ``threading.TIMEOUT_MAX`` raises."""
-    raw = os.environ.get("SEARCH_REASONER_TIMEOUT_S", "").strip()
     if not raw:
         return REASONER_TIMEOUT_DEFAULT_S
     value = float(raw)   # loud on garbage, deliberately
@@ -171,33 +166,35 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
         ) from exc
 
 
-def models_url(base_url: str) -> str:
+def models_url(base_url: str, endpoint: Endpoint = Endpoint()) -> str:
     """Where the reasoner at ``base_url`` lists its served models, for
-    discovery and every later probe alike."""
-    explicit = os.environ.get("SEARCH_REASONER_MODELS_URL", "").strip()
+    discovery and every later probe alike: the run's
+    ``SEARCH_REASONER_MODELS_URL`` (``endpoint.reasoner_models_url``), else
+    ``/v1/models`` under the base."""
+    explicit = endpoint.reasoner_models_url
     if explicit:
         return explicit
     base = base_url.rstrip("/")
     return f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
 
 
-def probe_models(base_url: str) -> list[dict]:
-    """``GET models_url(base_url)`` -> the ``data`` model list (non-empty)."""
-    payload = _get_json(models_url(base_url), bearer=reasoner_api_key())
+def probe_models(base_url: str, endpoint: Endpoint = Endpoint()) -> list[dict]:
+    """``GET models_url(base_url, endpoint)`` -> the ``data`` model list (non-empty)."""
+    payload = _get_json(models_url(base_url, endpoint), bearer=endpoint.reasoner_api_key)
     data = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(data, list) or not data:
         raise EndpointDiscoveryError(
-            f"{models_url(base_url)} returned no served models "
+            f"{models_url(base_url, endpoint)} returned no served models "
             f"(data={data!r}): the server is up but serves nothing"
         )
     return [m for m in data if isinstance(m, dict)]
 
 
 def _facts_from_endpoint(
-    base_url: str, override: EndpointOverride | None
+    base_url: str, override: EndpointOverride | None, endpoint: Endpoint = Endpoint()
 ) -> tuple[str, int]:
     """One endpoint's ``(model_id, max_model_len)``."""
-    models = probe_models(base_url)
+    models = probe_models(base_url, endpoint)
     ids = [str(m.get("id") or "") for m in models]
     if override is not None:
         from maps.llm.model_cards import speaks_openai  # noqa: PLC0415
@@ -208,14 +205,14 @@ def _facts_from_endpoint(
             # the live check, and an alias it does not deploy is refused on
             # the first request.
             log.info("discovery: %s answers with %d listed models; %r is a deployment name, "
-                     "confirmed by the first request", models_url(base_url), len(ids), override.model_id)
+                     "confirmed by the first request", models_url(base_url, endpoint), len(ids), override.model_id)
             return override.model_id, override.max_model_len
         # The override never bypasses the live check: the pinned id must be
         # among the served ids.
         if override.model_id not in ids:
             raise EndpointDiscoveryError(
                 f"SEARCH_ENDPOINT_SPEC_OVERRIDE names {override.model_id!r} "
-                f"but {models_url(base_url)} serves {ids}: the pin does "
+                f"but {models_url(base_url, endpoint)} serves {ids}: the pin does "
                 f"not match the live endpoint"
             )
         served_len = next(m for m in models if m.get("id") == override.model_id).get("max_model_len")
@@ -228,7 +225,7 @@ def _facts_from_endpoint(
         return override.model_id, override.max_model_len
     if len(models) != 1:
         raise EndpointDiscoveryError(
-            f"{models_url(base_url)} serves {len(models)} models ({ids}); "
+            f"{models_url(base_url, endpoint)} serves {len(models)} models ({ids}); "
             f"refusing to guess; set SEARCH_ENDPOINT_SPEC_OVERRIDE="
             f"'<model_id>:<max_model_len>' to pin one"
         )
@@ -237,11 +234,11 @@ def _facts_from_endpoint(
     max_model_len = model.get("max_model_len")
     if not model_id:
         raise EndpointDiscoveryError(
-            f"{models_url(base_url)} model entry has no id: {model!r}"
+            f"{models_url(base_url, endpoint)} model entry has no id: {model!r}"
         )
     if not max_model_len:
         raise EndpointDiscoveryError(
-            f"{models_url(base_url)} reports no max_model_len for "
+            f"{models_url(base_url, endpoint)} reports no max_model_len for "
             f"{model_id!r}: cannot derive a token budget. If this is a "
             f"non-vLLM endpoint, set SEARCH_ENDPOINT_SPEC_OVERRIDE="
             f"'<model_id>:<max_model_len>'"
@@ -289,15 +286,16 @@ _TEMPLATE_PROBE = {
 }
 
 
-def _require_tokenizer(model_id: str) -> str:
-    """Load the tokenizer for ``model_id`` and render its chat template over
-    :data:`_TEMPLATE_PROBE`; either failing raises naming the repo. The
-    import is local so spec readers never load transformers."""
+def _require_tokenizer(model_id: str, override: str = "") -> str:
+    """Load the tokenizer for ``model_id`` (``override``, the run's
+    ``SEARCH_COMPACT_TOKENIZER_NAME``, in the card's place) and render its
+    chat template over :data:`_TEMPLATE_PROBE`; either failing raises naming
+    the repo. The import is local so spec readers never load transformers."""
     from maps.llm.tokenizer import hf_tokenizer_name, load_tokenizer
 
-    tokenizer_name = hf_tokenizer_name(model_id)
+    tokenizer_name = hf_tokenizer_name(model_id, override)
     try:
-        tok = load_tokenizer(model_id)
+        tok = load_tokenizer(model_id, override)
     except RuntimeError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     try:
@@ -318,12 +316,15 @@ def discover(
     *,
     offline: bool = False,
     override: EndpointOverride | None = None,
+    settings: Settings = Settings(),
 ) -> EndpointSpec:
     """Discover the endpoint facts, or raise :class:`EndpointDiscoveryError`.
 
     ``base_url`` is one URL (a comma-list is refused: the engine balances its
     own replicas); ``sam_urls`` the replicas to health-check (none skips);
-    ``offline=True`` probes nothing and requires ``override``.
+    ``offline=True`` probes nothing and requires ``override``. ``settings``
+    supplies the bearer and the models URL the probe uses, the arm's effort
+    the served card is asked to take, and the tokenizer override.
     """
     url = str(base_url or "").strip().rstrip("/")
     if "," in url:
@@ -349,7 +350,7 @@ def discover(
             raise EndpointDiscoveryError(
                 "no reasoner endpoint to probe: SEARCH_REASONER_URL is empty"
             )
-        model_id, max_model_len = _facts_from_endpoint(url, override)
+        model_id, max_model_len = _facts_from_endpoint(url, override, settings.endpoint)
         if sam_urls:
             _probe_sam_health(sam_urls)
 
@@ -359,12 +360,12 @@ def discover(
         card_for(model_id)  # the sampling envelope: refused at startup, not mid-mission
     except ValueError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
-    if chosen := effort():
+    if chosen := effort(None, settings.sampling):
         try:
             check_effort(model_id, chosen)
         except ValueError as exc:
             raise EndpointDiscoveryError(f"SEARCH_SAMPLING_REASONING_EFFORT: {exc}") from exc
-    tokenizer_name = _require_tokenizer(model_id)
+    tokenizer_name = _require_tokenizer(model_id, settings.endpoint.tokenizer_name)
 
     spec = EndpointSpec(
         base_url=url,
@@ -384,24 +385,26 @@ def discover(
     return spec
 
 
-def discover_from_env(*, probe_sam: bool = True) -> EndpointSpec:
-    """:func:`discover` over ``SEARCH_REASONER_URL``, the SAM replicas (none
-    when ``probe_sam`` is False) and the ``SEARCH_ENDPOINT_OFFLINE`` /
+def discover_from_settings(settings: Settings, *, probe_sam: bool = True) -> EndpointSpec:
+    """:func:`discover` over the run's settings (``maps.settings``): its
+    reasoner URL (``SEARCH_REASONER_URL``), the SAM replicas (none when
+    ``probe_sam`` is False) and the ``SEARCH_ENDPOINT_OFFLINE`` /
     ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` pins."""
 
     from maps.perception.sam.detect_client import sam_endpoints  # noqa: PLC0415
 
-    override_raw = os.environ.get("SEARCH_ENDPOINT_SPEC_OVERRIDE", "").strip()
+    endpoint = settings.endpoint
     try:
         # the replicas the run posts to
-        sam_urls = tuple(sam_endpoints()) if probe_sam else ()
+        sam_urls = tuple(sam_endpoints(endpoint)) if probe_sam else ()
     except ValueError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     return discover(
-        os.environ.get("SEARCH_REASONER_URL", DEFAULT_REASONER_URL),
+        DEFAULT_REASONER_URL if endpoint.reasoner_url is None else endpoint.reasoner_url,
         sam_urls,
-        offline=os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1",
-        override=parse_override(override_raw) if override_raw else None,
+        offline=endpoint.offline,
+        override=parse_override(endpoint.spec_override) if endpoint.spec_override else None,
+        settings=settings,
     )
 
 
@@ -436,7 +439,7 @@ def spec() -> EndpointSpec:
     if _SPEC is None:
         raise EndpointDiscoveryError(
             "no EndpointSpec installed: the process entry point must run "
-            "install_spec(discover_from_env()) before any consumer reads "
+            "install_spec(discover_from_settings(...)) before any consumer reads "
             "spec()"
         )
     return _SPEC

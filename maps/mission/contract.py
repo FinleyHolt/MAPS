@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -22,7 +21,8 @@ import yaml
 
 from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
 from maps.mission import served_text
-from maps.withhold import withheld
+from maps.settings import Settings, from_process
+from maps.withhold import withheld, withholding
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
 _CALCITY = Path(__file__).resolve().parents[2] / "configs" / "calcity.yaml"
@@ -120,11 +120,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="dump what a bench arm withholding these serves "
                          "(comma separated; maps.withhold)")
     args = ap.parse_args(argv)
-    if args.withhold is not None:
-        from maps.withhold import ENV, active  # noqa: PLC0415
-        os.environ[ENV] = args.withhold
-        active()
+    # The one read of the environment: what a shell withholds, and the tokenizer it names.
+    settings = from_process()
+    names = settings.withhold if args.withhold is None else (n.strip() for n in args.withhold.split(",") if n.strip())
+    with withholding(names):
+        return _print(args, settings)
 
+
+def _print(args: argparse.Namespace, settings: Settings) -> int:
     if not args.rendered:
         sys.stdout.write(dump_text(sensor=args.sensor, agl_m=args.agl_m))
         return 0
@@ -133,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     from maps.llm.tokenizer import load_tokenizer
 
     c = assemble(sensor=args.sensor, agl_m=args.agl_m)
-    tok = load_tokenizer(args.model)
+    tok = load_tokenizer(args.model, settings.endpoint.tokenizer_name)
     rendered = tok.apply_chat_template(
         [{"role": "system", "content": c["system"]},
          {"role": "user", "content": _SAMPLE_INSTRUCTION}],

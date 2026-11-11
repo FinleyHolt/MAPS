@@ -5,19 +5,20 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from maps.llm import openai_wire
-from maps.llm.endpoint_spec import EndpointSpec, reasoner_api_key, reasoner_timeout_s
+from maps.llm.endpoint_spec import EndpointSpec, reasoner_timeout_s
 from maps.llm.http import CallCanceled, chat_completions_raw
 from maps.llm.model_cards import card_for, sampling_kwargs, speaks_openai
 from maps.llm.vision_content import build_vision_user_content
 from maps.mission.compactor import bound_image_count, compact_transcript
 from maps.mission.served_text import served_system_prompt
+from maps.settings import Settings
 from maps.withhold import withheld
 
 log = logging.getLogger(__name__)
@@ -129,11 +130,19 @@ class Reasoner:
     """The mission's message history and its request settings.
     ``endpoint_spec`` (server-discovered) supplies the base URL, the model
     name, ``max_tokens`` and the compaction budget, so prompt + completion
-    fits the served window."""
+    fits the served window; ``settings`` (the run's, ``maps.settings``) the
+    bearer, the per-call timeout, the arm's effort and the tokenizer
+    override. ``workdir`` is the mission's directory (its wire log and the
+    frames it was shown land there; None records nothing) and
+    ``routing_key`` its router-affinity key."""
 
     endpoint_spec: EndpointSpec
-    api_key: str | None = field(default_factory=reasoner_api_key)
-    timeout: float = field(default_factory=reasoner_timeout_s)
+    settings: Settings = Settings()
+    workdir: Path | None = None
+    routing_key: str | None = None
+    #: The reasoner's bearer and the per-call timeout: the settings' unless given.
+    api_key: str | None = None
+    timeout: float | None = None
     seed: int | None = None
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
@@ -149,6 +158,10 @@ class Reasoner:
         return self.endpoint_spec.model_id
 
     def __post_init__(self) -> None:
+        if self.api_key is None:
+            self.api_key = self.settings.endpoint.reasoner_api_key
+        if self.timeout is None:
+            self.timeout = reasoner_timeout_s(self.settings.endpoint.reasoner_timeout_s)
         system = served_system_prompt(self.sensor_description)
         if not self.messages and system:
             self.messages.append({"role": "system", "content": system})
@@ -195,6 +208,7 @@ class Reasoner:
             target_input_tokens=self.endpoint_spec.input_budget,
             model=self.model,
             tools=tools,
+            tokenizer_name=self.settings.endpoint.tokenizer_name,
         )
         wire = speaks_openai(self.model)
         sent = self.messages
@@ -208,7 +222,7 @@ class Reasoner:
             # No `stop` sequence: engines trim the matched text, so a stopped
             # collapse would arrive as an empty turn the guard cannot see, and
             # a hosted endpoint 400s on the engine-specific no-trim flags.
-            **sampling_kwargs(self.model, self.reasoning_effort),
+            **sampling_kwargs(self.model, self.reasoning_effort, self.settings.sampling),
             "tools": tools,
             "tool_choice": "auto",
         }
@@ -219,7 +233,7 @@ class Reasoner:
         # A hosted provider's prefix cache is matched within a key: the bench
         # worker's (SEARCH_LLM_CACHE_KEY, shared by the episodes it flies in
         # turn), else the episode's routing key.
-        cache_key = os.environ.get("SEARCH_LLM_CACHE_KEY") or os.environ.get("SEARCH_LLM_ROUTING_KEY")
+        cache_key = self.settings.endpoint.cache_key or self.routing_key
         if wire and cache_key:
             kwargs["prompt_cache_key"] = cache_key
         if self.cancel_event is not None:
@@ -229,7 +243,8 @@ class Reasoner:
                 )
             kwargs["cancel_event"] = self.cancel_event
 
-        resp = chat_completions_raw(self.endpoint_spec.base_url, self.api_key, **kwargs)
+        resp = chat_completions_raw(self.endpoint_spec.base_url, self.api_key, workdir=self.workdir,
+                                    routing_key=self.routing_key, endpoint=self.settings.endpoint, **kwargs)
         choice = resp["choices"][0]
         msg = choice.get("message", {})
         # The reasoning rides the assistant turn back to the next request (the
