@@ -194,12 +194,9 @@ def test_a_diagonal_filter_kwarg_refuses_and_names_the_conjunction(kw, pair):
 
 
 def test_an_unknown_filter_kwarg_is_refused_never_dropped():
-    from maps.library.interpreter import (
-        CodeError,
-        MissionPython,
-        Row,
-        RowList,
-    )
+    from maps.library.op_compiler import CodeError
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Row, RowList
     from maps.mission.tests.fakes import quiet_env
 
     mp = MissionPython(quiet_env())
@@ -557,7 +554,7 @@ def test_a_direction_COMPOSES_so_southwest_faces_south_and_west():
 
 
 def test_a_direction_ORDERS_globally_and_takes_no_anchor():
-    from maps.library.interpreter import Row, RowList, _direction_key
+    from maps.library.rows import Row, RowList, _direction_key
 
     rows = RowList([Row({"fid": f, "xy": list(xy), "class": "pool"}, None)
                     for f, xy in (("p_n", [0.0, 500.0]),
@@ -593,7 +590,7 @@ def test_a_direction_ORDERS_globally_and_takes_no_anchor():
 
 def test_order_takes_reverse_on_a_key_and_names_the_word_on_a_direction():
     """`sorted()`'s own kwarg, because that is what the model writes."""
-    from maps.library.interpreter import Row, RowList
+    from maps.library.rows import Row, RowList
 
     rows = RowList([Row({"fid": f, "xy": list(xy), "class": "pool"}, None)
                     for f, xy in (("a", [0.0, 0.0]), ("b", [10.0, 0.0]),

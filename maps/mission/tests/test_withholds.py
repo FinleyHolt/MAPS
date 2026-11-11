@@ -15,7 +15,10 @@ from maps.llm.endpoint_spec import EndpointSpec
 from maps import withhold as W
 from maps.mission import contract
 from maps.mission import served_text
-from maps.library import interpreter as ps
+from maps.library.op_compiler import CodeError
+from maps.library.interpreter import MissionPython
+from maps.library.rows import Row, RowList, Rows
+from maps.library.block_scan import looks_like_code, scan_block, served_calls
 from maps.mission import reasoner as ra
 from maps.library.op_compiler import act_needs_a_thing
 from maps.mission.loop import _PICTURE_WITHHELD_OF
@@ -196,8 +199,8 @@ def test_the_system_turn_withhold_serves_no_system_message(monkeypatch):
 
 def test_withheld_verbs_are_unbound(monkeypatch):
     monkeypatch.setenv(W.ENV, "look_for,look")
-    assert "look_for" not in ps.served_calls() and "look" not in ps.served_calls()
-    mp = ps.MissionPython(quiet_env())
+    assert "look_for" not in served_calls() and "look" not in served_calls()
+    mp = MissionPython(quiet_env())
     b = mp.ns["__builtins__"]
     assert "look_for" not in b and "look" not in b and "go_to" in b
     out = json.dumps(mp.run_block('look_for("pool")'))
@@ -319,7 +322,7 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target(monke
         ln[2:] for ln in served_text.CODE_DOC.partition("This is one block:\n")[2]
         .partition("\nEach line runs")[0].splitlines() if ln.startswith("  "))
     assert worked.count("\n") >= 5, worked
-    tree = ps.scan_block(worked)
+    tree = scan_block(worked)
     calls = [n.func.id for n in ast.walk(tree)
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
     assert {"look_for", "find", "look", "explore", "go_to"} <= set(calls), calls
@@ -427,8 +430,8 @@ def test_a_look_withhold_coordinate_refusal_names_no_looking(monkeypatch):
 
 def test_a_look_withhold_loop_move_refusal_names_no_looking(monkeypatch):
     def refusal():
-        with pytest.raises(ps.CodeError) as e:
-            ps.scan_block("for r in find('car'):\n    go_to(r)\n")
+        with pytest.raises(CodeError) as e:
+            scan_block("for r in find('car'):\n    go_to(r)\n")
         return str(e.value)
 
     assert "Loop to LOOK, then move once" in refusal()
@@ -439,10 +442,10 @@ def test_a_look_withhold_loop_move_refusal_names_no_looking(monkeypatch):
 
 def test_a_loop_withhold_lets_a_move_ride_a_loop(monkeypatch):
     block = "for r in find('car'):\n    go_to(r)\nf = go_to\n"
-    with pytest.raises(ps.CodeError, match="cannot go inside a loop"):
-        ps.scan_block(block)
+    with pytest.raises(CodeError, match="cannot go inside a loop"):
+        scan_block(block)
     monkeypatch.setenv(W.ENV, "loop")
-    ps.scan_block(block)
+    scan_block(block)
 
 
 def test_a_loop_withhold_ends_the_mission_on_its_first_text_turn(monkeypatch):
@@ -508,8 +511,8 @@ def test_a_map_withhold_unbinds_show_map_and_its_remedies(monkeypatch):
     assert "show_map(around=)" in act_needs_a_thing(name="go_to", got="1, 2")
     assert "crops and maps render" in json.dumps(tool_results(drive(stance)[1]))
     monkeypatch.setenv(W.ENV, "map")
-    assert "show_map" not in ps.served_calls()
-    assert "show_map" not in ps.MissionPython(quiet_env()).ns
+    assert "show_map" not in served_calls()
+    assert "show_map" not in MissionPython(quiet_env()).ns
     text = act_needs_a_thing(name="go_to", got="1, 2")
     assert "show_map" not in text and "near=, within=, stand(at=)." in text, text
     served = json.dumps(tool_results(drive(stance)[1]))
@@ -524,18 +527,18 @@ _LIBRARY_SPELLED = re.compile(
 
 def test_a_library_withhold_unbinds_every_call_but_go_to_and_the_seeing_verbs(monkeypatch):
     monkeypatch.setenv(W.ENV, "library")
-    assert ps.served_calls() == ("look_for", "go_to", "look", "show_map")
-    row = ps.Row({"fid": "car_1", "xy": [0.0, 0.0], "class": "car"})
+    assert served_calls() == ("look_for", "go_to", "look", "show_map")
+    row = Row({"fid": "car_1", "xy": [0.0, 0.0], "class": "car"})
     for attr in ("filter", "order", "distance"):
         with pytest.raises(AttributeError, match="carries no"):
             getattr(row, attr)
         with pytest.raises(AttributeError, match=f"'RowList' object has no attribute '{attr}'"):
-            getattr(ps.RowList([row]), attr)
+            getattr(RowList([row]), attr)
     for attr in ("exact", "tagged", "fuzzy", "filter"):
         with pytest.raises(AttributeError, match=f"'Rows' object has no attribute '{attr}'"):
-            getattr(ps.Rows("r1", None), attr)
+            getattr(Rows("r1", None), attr)
     monkeypatch.setenv(W.ENV, "")
-    assert callable(row.distance) and callable(ps.RowList([row]).filter)
+    assert callable(row.distance) and callable(RowList([row]).filter)
 
 
 def test_a_library_withhold_serves_no_library_name_on_the_paths_a_block_reaches(monkeypatch):
@@ -578,8 +581,8 @@ def test_no_withheld_name_survives_a_combination(monkeypatch, names):
 
 def test_a_withheld_call_in_a_plain_reply_is_not_code(monkeypatch):
     monkeypatch.setenv(W.ENV, "look_for")
-    assert ps.looks_like_code('go_to("prior_7")')
-    assert not ps.looks_like_code('look_for("car")')
+    assert looks_like_code('go_to("prior_7")')
+    assert not looks_like_code('look_for("car")')
 
 
 def test_a_look_withhold_beside_a_prior_withhold_serves_no_looking_point(monkeypatch):

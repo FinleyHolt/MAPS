@@ -187,7 +187,7 @@ def test_a_snake_case_class_is_the_class_it_spells():
 
 def test_look_for_refuses_a_class_that_is_not_a_string():
     # A list would arm the segmenter on the class "['car']".
-    from maps.library.interpreter import CodeError
+    from maps.library.op_compiler import CodeError
     with pytest.raises(CodeError) as e:
         acts_of_block('look_for(["car"])\n')
     assert 'look_for takes class names as strings: look_for("house", "pool")' \
@@ -266,7 +266,7 @@ def test_a_name_constraint_gates_or_fails_loud_never_vanishes():
 
 def test_a_name_with_no_query_is_refused_as_the_query_itself():
     """``find(name=X)`` alone browsed every row; the name is the query."""
-    from maps.library.interpreter import CodeError
+    from maps.library.op_compiler import CodeError
     with pytest.raises(CodeError, match=r"the name IS the query: find\('Mill Lane'\)"):
         raising_ops_of_block('r1 = find(name="Mill Lane")\n')
 
@@ -337,7 +337,7 @@ def test_no_argument_is_dropped_on_the_floor():
 
 
 def test_an_empty_colour_orders_by_nothing_and_is_refused():
-    from maps.library.interpreter import CodeError
+    from maps.library.op_compiler import CodeError
     with pytest.raises(CodeError, match="order ranks by nearest= or color="):
         raising_ops_of_block('r1 = find("car")\nr2 = r1.order(color="")\n')
 
@@ -423,7 +423,7 @@ def test_a_selected_crossing_can_anchor_the_next_call():
     # ...and the point rides every one-place slot the same way. The row a
     # selection binds carries the point in `bind`, which is what every
     # slot reads -- the token that spells it never reaches one.
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
     pt = {"r2": Row({"fid": "[10, 20]", "xy": [10.0, 20.0]})}
     assert grounded_in_block('r3 = find("car", nearest=r2)\n', pt) == []
     assert ops_of_block('r3 = find("car", nearest=r2)\n', pt)[1]["args"]["refs"] \
@@ -682,7 +682,7 @@ def test_look_for_arms_the_segmenter_the_footer_already_advertises():
     assert declared[-1] == ["pool", "car", "parking lot"]
     # ...and free means loop-legal: the pre-scan cuts the MOVING calls out
     # of a loop body and nothing else.
-    from maps.library.interpreter import scan_block
+    from maps.library.block_scan import scan_block
     assert scan_block('for c in r1:\n    look_for("pool")\n')
 
 
@@ -734,7 +734,7 @@ def test_stand_adopts_the_viewpoint_and_its_columns_ride_the_rows():
     import pytest
 
     from maps.library.op_compiler import CodeError
-    from maps.library.interpreter import scan_block
+    from maps.library.block_scan import scan_block
     assert calls_of_block('stand(at="the church", facing="the gate")\n') == [
         ("ground", {"the church": "stage", "the gate": "facing"}),
         ("stand", "<the church>", "<the gate>")]
@@ -797,7 +797,7 @@ def test_more_of_pages_a_long_result_and_stops_at_the_end():
 
 
 def test_three_ordinary_python_forms_that_were_refused_outright():
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
 
     # 1. a literal binding (57). What a one-place slot takes -- a fid off
     #    a served row, a world point off a caption -- binds and rides; a
@@ -920,11 +920,9 @@ def test_the_legend_documents_every_call_the_surface_serves():
     import inspect
 
     from maps.mission.served_text import CODE_DOC
-    from maps.library.interpreter import (
-        MissionPython,
-        Rows,
-        served_calls,
-    )
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+    from maps.library.block_scan import served_calls
 
     names = served_calls()
     assert len(names) >= 9, names                    # vacuity floor

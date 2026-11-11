@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import pytest
 
-from maps.library.interpreter import (
-    CodeError,
-    Row,
-    scan_block,
-)
+from maps.library.op_compiler import CodeError
+from maps.library.rows import Row
+from maps.library.block_scan import scan_block
 from maps.mission.tests.fakes import (
     quiet_env,
     drive,
@@ -407,7 +405,7 @@ def test_a_bare_fid_reads_as_its_row_and_still_flies():
 
 
 def test_row_get_resolves_aliases_instead_of_defaulting():
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
 
     r = Row({"fid": "f1", "xy": [1.5, 2.5], "distance to p0": 5.0})
     assert r.get("distance_to_p0", 9999) == 5.0
@@ -421,7 +419,7 @@ def test_a_ref_column_is_spelled_by_its_places_real_name():
     """The model spells a column with the name the CUE gave it; the producer spells it
     with the name it sanitized."""
     from maps.query.program import sanitize_token
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
 
     lbl = sanitize_token("Poppy Boulevard")
     assert lbl == "poppy_boulevard", lbl        # the producer's own rule
@@ -448,7 +446,7 @@ def test_a_ref_column_is_spelled_by_its_places_real_name():
 def test_an_ambiguous_column_spelling_resolves_to_nothing():
     """Two served columns that normalise alike is a silent bind waiting to happen, so
     this refuses rather than picking one."""
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
 
     r = Row({"fid": "prior_1", "facing a_b": "north", "facing a b": "south"})
     assert r.get("facing A B") is None
@@ -656,7 +654,8 @@ def test_a_bound_handle_beats_a_coincidental_fid_suggestion():
 
 def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
     """The ways of ONE name tie, so no row is its first."""
-    from maps.library.interpreter import MissionPython, Rows
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
 
     rows = [{"fid": f"prior_{i}", "name": "Neuralia Road"} for i in range(12)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: True)
@@ -684,7 +683,8 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
 
 def test_an_ordered_result_stays_subscriptable():
     """The refusal is about TIES, not about find results."""
-    from maps.library.interpreter import MissionPython, Rows
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
 
     rows = [{"fid": f"detected_{i}", "class": "car"} for i in range(6)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
@@ -695,7 +695,8 @@ def test_an_ordered_result_stays_subscriptable():
 
 def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
     """print(road) must not hand back what the head withholds."""
-    from maps.library.interpreter import MissionPython, Rows
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
 
     rows = [{"fid": f"prior_{5775 + i}", "name": "Neuralia Road",
              "xy": [2242.27 + i, 3048.07 + i]} for i in range(64)]
@@ -803,7 +804,8 @@ def test_a_move_reaching_a_loop_by_another_spelling_is_refused(code):
 def test_a_window_of_a_window_composes_the_python_way():
     """A window never grows past its parent, and a negative end counts from
     the parent's end."""
-    from maps.library.interpreter import MissionPython, Rows
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
 
     rows = [{"fid": f"detected_{i}"} for i in range(20)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
@@ -817,7 +819,8 @@ def test_a_window_of_a_window_composes_the_python_way():
 def test_an_empty_window_of_a_window_names_its_own_span_and_parent():
     """The refusal reads the window the model wrote and the rows its parent
     holds, not the composed absolute span over the whole set."""
-    from maps.library.interpreter import MissionPython, Rows
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
 
     rows = [{"fid": f"detected_{i}"} for i in range(20)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
@@ -863,7 +866,8 @@ def test_a_distance_after_a_flight_in_the_same_block_measures_the_new_surface():
 def test_distance_refuses_a_place_with_nothing_to_measure(arg, says):
     """A fid the surface does not hold and an empty set are refused, not
     measured as an infinite gap."""
-    from maps.library.interpreter import MissionPython, Rows
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
 
     rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
                         "mask": [[[0.0, 0.0]]]}}

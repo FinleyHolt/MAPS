@@ -451,8 +451,7 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
 def quiet_env(**kw):
     """A MissionEnv whose verbs do nothing and refuse nothing; ``kw``
     overrides any field."""
-    from maps.library import interpreter as ps
-
+    from maps.library.call_arguments import MissionEnv
     def nop(*_a):
         return {}
 
@@ -465,7 +464,7 @@ def quiet_env(**kw):
         row_of_fid=lambda fid: None, tied_of_ref=lambda ref: False,
         version=lambda: 0)
     fields.update(kw)
-    return ps.MissionEnv(**fields)
+    return MissionEnv(**fields)
 
 
 def record_block(code: str, bound: dict | None = None, rn: int = 0,
@@ -478,8 +477,11 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
     result handle, any other string a row's fid, anything else as is."""
     import re
 
-    from maps.library import interpreter as ps
 
+
+    from maps.library.interpreter import MissionPython
+
+    from maps.library.rows import Row, Rows
     calls: list[tuple] = []
     counter = [rn]
 
@@ -499,16 +501,16 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
         counter[0] = max(counter[0], rn_end)
         return {}
 
-    mp = ps.MissionPython(quiet_env(
+    mp = MissionPython(quiet_env(
         plan_rn=counter, widened=widened if widened is not None else {},
         ground=ground, analyze=analyze,
         **{v: verb(v) for v in ("stand", "move", "cover", "crops", "map",
                                 "watch", "boost")}))
     for name, held in (bound or {}).items():
         if isinstance(held, str) and re.fullmatch(r"r\d+", held):
-            mp.ns[name] = ps.Rows(held, mp)
+            mp.ns[name] = Rows(held, mp)
         elif isinstance(held, str):
-            mp.ns[name] = ps.Row({"fid": held}, mp=mp)
+            mp.ns[name] = Row({"fid": held}, mp=mp)
         else:
             mp.ns[name] = held
     return calls, mp.run_block(code)
@@ -518,11 +520,10 @@ def calls_of_block(code: str, bound: dict | None = None, rn: int = 0,
                    widened: dict | None = None) -> list[tuple]:
     """The verb calls ONE block makes, raising its refusal when it made
     none."""
-    from maps.library import interpreter as ps
-
+    from maps.library.op_compiler import CodeError
     calls, out = record_block(code, bound, rn, widened)
     if "error" in out and not calls:
-        raise ps.CodeError(str(out["error"]))
+        raise CodeError(str(out["error"]))
     return calls
 
 
@@ -536,11 +537,10 @@ def raising_ops_of_block(code: str, bound: dict | None = None,
                          rn: int = 0) -> list[dict]:
     """Every op ONE block compiles, raising the block's own refusal even when
     an earlier line already ran."""
-    from maps.library import interpreter as ps
-
+    from maps.library.op_compiler import CodeError
     calls, out = record_block(code, bound, rn)
     if "error" in out:
-        raise ps.CodeError(str(out["error"]))
+        raise CodeError(str(out["error"]))
     return [op for c in calls if c[0] == "analyze" for op in c[1]]
 
 

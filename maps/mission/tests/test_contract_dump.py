@@ -49,8 +49,8 @@ def test_unknown_sensor_dies_loud_naming_the_registry():
 def test_the_dump_surface_section_names_every_call_the_namespace_serves():
     import inspect
 
-    from maps.library.interpreter import (
-        _LIBRARY_CALLS, MissionPython)
+    from maps.library.block_scan import _LIBRARY_CALLS
+    from maps.library.interpreter import MissionPython
     text = contract.dump_text()
     assert "=== SURFACE" in text
     section = text.split("=== SURFACE", 1)[1].split("=== USER TURN", 1)[0]

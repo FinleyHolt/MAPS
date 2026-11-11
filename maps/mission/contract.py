@@ -52,8 +52,9 @@ def surface_lines() -> list[str]:
     """Every call the namespace serves, with its real signature, read off
     the executing functions themselves (``MissionPython._call_*`` for each
     served call, then the ``Rows`` methods)."""
-    from maps.library.interpreter import (
-        MissionPython, Rows, served_calls)
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+    from maps.library.block_scan import served_calls
 
     def _params(fn) -> str:
         # A parameter that exists only to refuse (find's extra queries, a

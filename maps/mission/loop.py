@@ -38,7 +38,10 @@ from maps.query.text_match import (
     unmatched_query_tokens as _unmatched_query_tokens,
 )
 from maps.world_state.context import ToolContext
-from maps.library import interpreter as _py_surface
+from maps.library.call_arguments import MissionEnv
+from maps.library.interpreter import MissionPython
+from maps.library.rows import UNNAMED
+from maps.library.block_scan import looks_like_code
 from maps.library.result_handles import (
     Carry,
     program_dedup_key,
@@ -361,7 +364,7 @@ def _code_reply(text: str) -> bool:
     (prose narrating a call does not) and carries a library call (plain
     prose that happens to parse does not)."""
     t = _CODE_FENCE_RE.sub("", str(text or "").strip()).strip()
-    return bool(t) and _py_surface.looks_like_code(t)
+    return bool(t) and looks_like_code(t)
 
 
 def _not_a_reply(content: str) -> tuple[str, str, str] | None:
@@ -475,7 +478,7 @@ class _Mission:
         self._map_feats: list[dict] = []
 
         self.carry = Carry(compute_namespace, name=lambda ref: (
-            self._mission_py.ref_name(ref) or _py_surface.UNNAMED))
+            self._mission_py.ref_name(ref) or UNNAMED))
         # The mission's flights so far, over every operator turn.
         self.flights = 0
         # The watched classes, in declaration order.
@@ -507,7 +510,7 @@ class _Mission:
         # read by _finish.
         self._call: dict = {}
 
-        self._mission_py = _py_surface.MissionPython(_py_surface.MissionEnv(
+        self._mission_py = MissionPython(MissionEnv(
             rows_of_ref=lambda ref: list(self.carry.read(ref) or []),
             tied_of_ref=lambda ref: bool(
                 getattr(self.carry.read(ref), "name_set", False)),

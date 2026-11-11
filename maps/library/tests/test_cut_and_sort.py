@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from maps.library.interpreter import CodeError
+from maps.library.op_compiler import CodeError
 from maps.mission.tests.fakes import (
     drive, quiet_env, raising_ops_of_block, run, tool_results)
 
@@ -111,7 +111,7 @@ def test_a_bare_filter_reads_one_refusal_on_every_receiver():
 
 
 def test_a_predicate_and_a_cut_kwarg_read_one_refusal_on_every_receiver():
-    from maps.library.interpreter import Row, RowList
+    from maps.library.rows import Row, RowList
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = r1.filter(lambda r: True, facing="A")\n')
     assert _PRED_OR_CUT in str(e.value), str(e.value)
@@ -127,7 +127,7 @@ def test_a_predicate_and_a_cut_kwarg_read_one_refusal_on_every_receiver():
     '.filter("x")', '.order("x")', '.order(direction="north", reverse=True)',
     '.order(lambda r: 1, nearest="A")', '.order(direction="north", nearest="A")'])
 def test_a_row_and_a_list_refuse_a_cut_or_sort_with_the_sets_own_text(call):
-    from maps.library.interpreter import Row, RowList
+    from maps.library.rows import Row, RowList
     with pytest.raises(CodeError) as e:
         _ops(f'r1 = find("car")\nr1{call}\n')
     on_set = str(e.value)
@@ -175,7 +175,7 @@ def test_a_cut_and_a_sort_chain_into_one_expression():
 
 def test_the_retired_free_calls_name_where_they_went():
     """A model reaching for narrow() gets the method, not a bare NameError."""
-    from maps.library.interpreter import _MOVED_TO_METHOD
+    from maps.library.block_scan import _MOVED_TO_METHOD
 
     assert set(_MOVED_TO_METHOD) == {"narrow", "order_by", "gap"}
     with pytest.raises(CodeError) as e:
@@ -210,7 +210,7 @@ def test_colour_never_cuts_and_the_refusal_names_the_sort():
     assert "never CUTS" in msg and 'order(color=' in msg, msg
 
     # ...and a single Row cuts through the same guard, not a bare TypeError.
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
     with pytest.raises(CodeError) as e:
         Row({"fid": "detected_1"}).filter(color="red")
     assert "never CUTS" in str(e.value), str(e.value)
@@ -253,7 +253,7 @@ def test_the_two_spellings_are_one_cut_and_one_sort():
 def test_a_row_serves_no_second_point_to_subtract():
     """There is ONE distance here and it is the footprint gap, so a row must not hand
     over a second point the model can difference by hand."""
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
 
     r = Row({"fid": "detected_1", "xy": [10.0, 20.0],
              "mask_centroid": [11.0, 21.0], "class": "car"})
@@ -266,7 +266,7 @@ def test_a_row_serves_no_second_point_to_subtract():
 
 
 def test_a_predicate_filter_is_not_a_one_way_door():
-    from maps.library.interpreter import Row, RowList
+    from maps.library.rows import Row, RowList
 
     seen = []
 
@@ -344,7 +344,7 @@ def test_ddwithin_with_no_anchor_at_all_still_refuses_and_names_both():
 
 
 def test_a_set_handed_to_go_to_is_told_to_index_not_told_it_is_a_coordinate():
-    from maps.library.interpreter import Row
+    from maps.library.rows import Row
     rows = [Row({"fid": "detected_68"}), Row({"fid": "detected_69"})]
     with pytest.raises(CodeError) as e:
         _ops('go_to(x)\n')          # unbound -> different path; use the API
