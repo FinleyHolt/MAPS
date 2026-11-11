@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.analysis import arm_table
-from benchmarks.citynav.analysis.tests.ledger import write_ledger
+from benchmarks.run_record.tests.ledger import write_ledger
 
 
 def _ledger(eid: str, stamp: str, sr: int, criterion: str = "shape",

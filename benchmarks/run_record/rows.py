@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator
 
-from benchmarks.citynav.episodes import EPISODES_JSONL, MANIFEST_NAME, STATUS_INFRA, STATUS_OK, STATUS_TIMED_OUT
+from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME, STATUS_INFRA, STATUS_OK, STATUS_TIMED_OUT
 
 
 def metrics(row: dict) -> dict:

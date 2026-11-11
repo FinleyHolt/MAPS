@@ -10,7 +10,7 @@ from __future__ import annotations
 
 
 from benchmarks.citynav.analysis.ab_report import _run_provenance
-from benchmarks.citynav.analysis.tests.ledger import write_ledger
+from benchmarks.run_record.tests.ledger import write_ledger
 
 _PROV = {
     "git_commit": "abc1234",

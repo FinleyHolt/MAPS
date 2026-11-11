@@ -10,12 +10,12 @@ from pathlib import Path
 
 from benchmarks import repo_provenance
 from benchmarks.citynav.adapter import CityNavEpisode
-from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
-from benchmarks.citynav.episode_workdir import LiveRecorder
-from benchmarks.citynav.run_benchmark.config import RunConfig
+from benchmarks.run_record import rows as _rows
+from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
+from benchmarks.run_record.episode_workdir import LiveRecorder
+from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
-from benchmarks.citynav.run_manifest import arm_stamp
+from benchmarks.run_record.run_manifest import arm_stamp
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, ImageStoreError
 from maps.perception.sam.detect_client import SamServerOutage

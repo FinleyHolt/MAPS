@@ -31,7 +31,7 @@ from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
-from benchmarks.citynav.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
+from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
                                                 ConversationLog)
 from maps.llm.model_cards import effort
 
@@ -124,8 +124,8 @@ def flight_config(config: str):
     """The config a flight flies, refused (before any sortie is written) when
     it withholds a part of the flown engine; the loader refuses a missing or
     unresolved sensor."""
-    from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
+    from benchmarks.run_record.config import load_config  # noqa: PLC0415
+    from benchmarks.run_record.config import assert_flight_config  # noqa: PLC0415
 
     cfg = load_config(str(config))
     assert_flight_config(cfg)
@@ -622,7 +622,7 @@ class Mission:
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
         from benchmarks.citynav.run_benchmark.dispatch import is_infra_fault  # noqa: PLC0415
         from benchmarks.citynav.run_benchmark.mission_engine import MissionSession  # noqa: PLC0415
-        from benchmarks.citynav.run_manifest import settle_effort  # noqa: PLC0415
+        from benchmarks.run_record.run_manifest import settle_effort  # noqa: PLC0415
         from maps.llm.endpoint_spec import discover_from_env, install_spec, spec  # noqa: PLC0415
         from maps.llm.http import CallCanceled  # noqa: PLC0415
         from maps.llm.model_cards import check_effort  # noqa: PLC0415
@@ -720,8 +720,8 @@ class Mission:
     def _write_manifests(self) -> None:
         """The sortie's ``run_manifest.json`` (by its first mission) and this
         mission's own in its workdir; a failure is logged."""
-        from benchmarks.citynav.episodes import MANIFEST_NAME  # noqa: PLC0415
-        from benchmarks.citynav.run_manifest import build_manifest, emit_or_verify  # noqa: PLC0415
+        from benchmarks.run_record.episodes import MANIFEST_NAME  # noqa: PLC0415
+        from benchmarks.run_record.run_manifest import build_manifest, emit_or_verify  # noqa: PLC0415
 
         sortie = self.workdir.parent
         common = dict(config_path=Path(self.config), split=self.split, sample_seed=None,
@@ -782,8 +782,8 @@ class Mission:
     def row(self) -> dict[str, Any]:
         """The mission as a ledger row with a bench row's keys; the commit is the last of ``visited_xy``."""
         from benchmarks.citynav import paths  # noqa: PLC0415
-        from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK  # noqa: PLC0415
-        from benchmarks.citynav.run_manifest import arm_env_stamp  # noqa: PLC0415
+        from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK  # noqa: PLC0415
+        from benchmarks.run_record.run_manifest import arm_env_stamp  # noqa: PLC0415
         from maps.llm.endpoint_spec import spec, spec_installed  # noqa: PLC0415
 
         episode = self.hydrated.episode if self.hydrated else None
@@ -813,7 +813,7 @@ class Mission:
         ``episodes.jsonl``, replaced at every report, then the track flown
         since; a row that will not land is logged, never raised. A start
         without a fix takes its UTC at the first bank with one."""
-        from benchmarks.citynav.episodes import upsert_row, write_episode_json  # noqa: PLC0415
+        from benchmarks.run_record.episodes import upsert_row, write_episode_json  # noqa: PLC0415
 
         try:
             if self.started_at_utc is None and self._t0 is not None and (utc := self._utc_now()) is not None:

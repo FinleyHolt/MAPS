@@ -37,10 +37,10 @@ from typing import Any
 import numpy as np
 
 import benchmarks.calcity
-from benchmarks.citynav.analysis.rows import iter_json_rows
-from benchmarks.citynav.episode_workdir import (CONVERSATION_JSONL, DETECTIONS_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR,
+from benchmarks.run_record.rows import iter_json_rows
+from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, DETECTIONS_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR,
                                                 TRACK_JSONL)
-from benchmarks.citynav.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
+from benchmarks.run_record.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, coverage_record, open_live, ortho_observation
 from benchmarks.flight.measures import frame_agl, run_bases, sortie_of
@@ -513,7 +513,7 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
     flown engine was hydrated; else the recorded run's: the median camera
     height of its observations, else of its GNSS track over the run."""
     if forced:
-        from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
+        from benchmarks.run_record.config import load_config  # noqa: PLC0415
 
         return float(load_config(config).start_altitude_agl_m)
     map_name = rec.map_name
@@ -537,7 +537,7 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
     _arm_env(rec, forced=forced)
     benchmarks.calcity.use()
     flight_config(config)
-    from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
+    from benchmarks.run_record.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
 
@@ -657,7 +657,7 @@ def main(argv: list[str] | None = None) -> int:
         benchmarks.calcity.use()
         from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
         from benchmarks.flight.recorded_ring import RecordedRing, run_window  # noqa: PLC0415
-        from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
+        from benchmarks.run_record.config import load_config  # noqa: PLC0415
         from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
 
         t0 = time.perf_counter()

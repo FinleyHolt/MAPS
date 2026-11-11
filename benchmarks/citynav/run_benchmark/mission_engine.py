@@ -15,8 +15,8 @@ import os
 import time
 from pathlib import Path
 
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, ConversationLog
-from benchmarks.citynav.episodes import DEADLINE_ENV, TOUR_CURSOR, atomic_write_json
+from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, ConversationLog
+from benchmarks.run_record.episodes import DEADLINE_ENV, TOUR_CURSOR, atomic_write_json
 from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description

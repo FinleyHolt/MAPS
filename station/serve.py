@@ -38,10 +38,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from benchmarks.citynav.analysis.rows import iter_json_rows
-from benchmarks.citynav.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL,
+from benchmarks.run_record.rows import iter_json_rows
+from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL,
                                                 open_episode_dir)
-from benchmarks.citynav.episodes import EPISODES_JSONL, STATUS_INFRA
+from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA
 from benchmarks.flight import map_render
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local, map_bounds
 

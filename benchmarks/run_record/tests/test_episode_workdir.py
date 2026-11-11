@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from benchmarks.citynav import episode_workdir as ew
+from benchmarks.run_record import episode_workdir as ew
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +32,7 @@ def test_each_benchmark_mints_its_own_name_and_the_stamp_reader_reads_it(tmp_pat
     canonical reader must recover each name's stamp, because that stamp is
     what orders an episode's attempts.
     """
-    from benchmarks.citynav.analysis import rows
+    from benchmarks.run_record import rows
 
     assert ew.BENCHMARKS == ("citynav", "calcity")
 
@@ -91,8 +91,8 @@ def test_a_flight_attempt_names_its_run_number_and_a_bench_attempt_names_none(
 ):
     """A flight mission's directory carries its sortie run number (two digits
     at least) through ``open_episode_dir``; a bench attempt's carries none.
-    The stamp stays first, because ``analysis.rows`` orders attempts by it."""
-    from benchmarks.citynav.analysis import rows
+    The stamp stays first, because ``run_record.rows`` orders attempts by it."""
+    from benchmarks.run_record import rows
 
     monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
     ep = ew.open_episode_dir(tmp_path, episode_id="calcity::8#0", run_no=3)

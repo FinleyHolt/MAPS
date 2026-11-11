@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.run_benchmark.config import load_config, resolve_config
+from benchmarks.run_record.config import load_config, resolve_config
 from maps.withhold import WITHHOLDS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -85,7 +85,7 @@ def test_policy_is_the_one_key_a_config_may_leave_out():
 
 
 def test_the_flight_refuses_a_baseline_policy():
-    from benchmarks.citynav.run_benchmark.config import assert_flight_config
+    from benchmarks.run_record.config import assert_flight_config
 
     cfg = load_config(REPO_ROOT / "configs" / "calcity.yaml")
     cfg.policy = "visa"

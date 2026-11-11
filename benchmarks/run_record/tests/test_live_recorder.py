@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from benchmarks.citynav.episode_workdir import LiveRecorder
+from benchmarks.run_record.episode_workdir import LiveRecorder
 from maps.perception.mask_codec import encode_mask_record
 
 

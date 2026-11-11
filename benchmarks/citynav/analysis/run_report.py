@@ -1,4 +1,4 @@
-"""SR report for a run root, over the ``metrics`` of the attempts ``analysis.rows`` picks.
+"""SR report for a run root, over the ``metrics`` of the attempts ``run_record.rows`` picks.
 
 Usage:
     python -m benchmarks.citynav.analysis.run_report output/run_a [output/run_b ...]
@@ -19,8 +19,8 @@ from pathlib import Path, PurePosixPath
 import yaml
 
 from benchmarks import REPO_ROOT
-from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.analysis.rows import read_manifest
+from benchmarks.run_record import rows as _rows
+from benchmarks.run_record.rows import read_manifest
 
 
 def load_run(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:

@@ -20,7 +20,7 @@ import pytest
 
 from benchmarks.citynav import paths
 from benchmarks.citynav.adapter import map_name_for_row
-from benchmarks.citynav.run_benchmark.config import load_config
+from benchmarks.run_record.config import load_config
 from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
 from maps.render.look_render import look_window_bounds_m
 

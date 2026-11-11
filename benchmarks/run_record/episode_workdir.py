@@ -36,7 +36,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from benchmarks.citynav.episodes import RUN_LOG, json_default
+from benchmarks.run_record.episodes import RUN_LOG, json_default
 
 CONVERSATION_JSONL = "conversation.jsonl"
 DETECTIONS_JSONL = "detections.jsonl"

@@ -26,8 +26,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.episodes import EPISODES_JSONL, MANIFEST_NAME
+from benchmarks.run_record import rows as _rows
+from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME
 from maps.llm.flight_summary import summarize
 
 #: USD per million tokens: input, cache read, cache write, output.

@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 from benchmarks import repo_provenance
-from benchmarks.citynav.episodes import EPISODES_JSONL, MANIFEST_NAME, atomic_write_json
+from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME, atomic_write_json
 from maps.llm.model_cards import effort
 
 SCHEMA = "maps.run_manifest/v1"
@@ -196,7 +196,7 @@ def build_manifest(
     stream, not a seed, selects its episodes."""
     import yaml  # noqa: PLC0415
 
-    from benchmarks.citynav.run_benchmark.config import resolve_config  # noqa: PLC0415
+    from benchmarks.run_record.config import resolve_config  # noqa: PLC0415
 
     resolved = resolve_config(config_path)[0]
     arm = arm_stamp(resolved.get("policy"))

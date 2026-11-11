@@ -192,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
                                            resolve_episode, summary_line)
 
     benchmarks.calcity.use()
-    from benchmarks.citynav.episode_workdir import open_episode_dir  # noqa: PLC0415
+    from benchmarks.run_record.episode_workdir import open_episode_dir  # noqa: PLC0415
     from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
     from benchmarks.flight.live_source import open_live  # noqa: PLC0415
     from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415

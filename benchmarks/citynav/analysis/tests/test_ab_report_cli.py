@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.analysis.ab_report import main, wilson_ci
-from benchmarks.citynav.analysis.tests.ledger import write_ledger
+from benchmarks.run_record.tests.ledger import write_ledger
 
 
 def _write_run(root: Path, sha: str, srs: dict[str, int], criterion: str = "ring") -> None:

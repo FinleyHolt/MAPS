@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.analysis import rows
+from benchmarks.run_record import rows
 from benchmarks.citynav.analysis.run_report import load_run
-from benchmarks.citynav.analysis.tests.ledger import ledger_row, write_ledger
+from benchmarks.run_record.tests.ledger import ledger_row, write_ledger
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "attempt_pick"
 

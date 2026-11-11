@@ -16,7 +16,7 @@ from benchmarks.citynav.action_snap import (
     apply_action,
     snap_to_actions,
 )
-from benchmarks.citynav.run_benchmark.config import RunConfig
+from benchmarks.run_record.config import RunConfig
 
 log = logging.getLogger("run_benchmark")
 

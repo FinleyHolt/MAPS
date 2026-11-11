@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from benchmarks.citynav import episodes
+from benchmarks.run_record import episodes
 from benchmarks.citynav.run_benchmark import dispatch
 
 
@@ -153,7 +153,7 @@ def test_rows_are_strict_json(tmp_path):
     the rows other people parse must not carry Python's dialect."""
     import json
 
-    from benchmarks.citynav import episodes
+    from benchmarks.run_record import episodes
 
     row = {"episode_id": "e", "status": "ok", "sensor": {"max_range_m": float("inf")},
            "metrics": {"NE": float("nan"), "SR": 1}, "visited_xy": [[1.0, float("-inf")]]}
@@ -173,7 +173,7 @@ def test_rows_are_strict_json(tmp_path):
 def test_a_cut_last_line_loses_only_its_own_row(tmp_path):
     """A worker killed mid-append leaves a cut last line; the next append
     starts a line of its own, so only the cut row is lost."""
-    from benchmarks.citynav.analysis import rows
+    from benchmarks.run_record import rows
 
     episodes.append_row(tmp_path, {"episode_id": "A", "status": "ok"})
     cut = json.dumps({"episode_id": "B", "status": "ok"})

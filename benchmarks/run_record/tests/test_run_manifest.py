@@ -9,8 +9,9 @@ from __future__ import annotations
 import json
 import pytest
 
-from benchmarks.citynav import paths, run_manifest
-from benchmarks.citynav.episodes import MANIFEST_NAME
+from benchmarks.citynav import paths
+from benchmarks.run_record import run_manifest
+from benchmarks.run_record.episodes import MANIFEST_NAME
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.endpoint_spec import EndpointSpec
 
@@ -244,6 +245,6 @@ def test_a_capacity_session_s_selection_names_its_stream_and_no_seed(monkeypatch
 
 def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
     # The wait bounds a turn, so a run that sets it says so.
-    from benchmarks.citynav import run_manifest as RM
+    from benchmarks.run_record import run_manifest as RM
     monkeypatch.setenv("SEARCH_REASONER_TIMEOUT_S", "240")
     assert RM._audited_env()["SEARCH_REASONER_TIMEOUT_S"] == "240"

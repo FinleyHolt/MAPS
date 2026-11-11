@@ -589,6 +589,7 @@ directory as `--raster` to replay as flown.
 |---|---|
 | [`maps/`](maps/README.md) | The method: mission loop, model-facing library, op program, world state, perception client, LLM transport. |
 | [`benchmarks/citynav/`](benchmarks/citynav/README.md) | The CityNav bench: episode runner, scoring, prior bake, data preparation. |
+| `benchmarks/run_record/` | The run record both benches and the flight harness write: ledger, attempt directory, manifest, config, attempt pick. |
 | [`benchmarks/citynav/analysis/`](benchmarks/citynav/analysis/README.md) | The run readers every number is derived with. |
 | [`benchmarks/calcity/`](benchmarks/calcity/README.md) | The Cal City bench: corpus, reviewed set, raster and bake build. |
 | [`benchmarks/flight/`](benchmarks/flight/README.md) | The flight harness, the twin, as-flown replay and the closed-loop measures. |

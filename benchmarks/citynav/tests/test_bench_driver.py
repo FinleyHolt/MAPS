@@ -17,10 +17,10 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav import bench_fullset as bf
-from benchmarks.citynav import episodes
-from benchmarks.citynav import run_manifest as rm
-from benchmarks.citynav.analysis.rows import iter_json_rows
-from benchmarks.citynav.analysis.tests.ledger import ledger_row
+from benchmarks.run_record import episodes
+from benchmarks.run_record import run_manifest as rm
+from benchmarks.run_record.rows import iter_json_rows
+from benchmarks.run_record.tests.ledger import ledger_row
 
 # A pytest.fail inside a worker thread fails its test instead of only warning.
 pytestmark = pytest.mark.filterwarnings("error::pytest.PytestUnhandledThreadExceptionWarning")
@@ -239,7 +239,7 @@ def test_a_spent_wall_budget_stops_the_run(driver, monkeypatch, no_flight) -> No
 def test_a_second_run_into_a_held_root_is_refused(driver, tmp_path, monkeypatch) -> None:
     holder = subprocess.Popen(
         [sys.executable, "-c",
-         "import sys, time\nfrom pathlib import Path\nfrom benchmarks.citynav import episodes\n"
+         "import sys, time\nfrom pathlib import Path\nfrom benchmarks.run_record import episodes\n"
          "lock = episodes.hold_root(Path(sys.argv[1]))\nprint('held', flush=True)\n"
          "time.sleep(60)\n", str(tmp_path)],
         cwd=REPO, stdout=subprocess.PIPE, text=True)
@@ -348,7 +348,7 @@ def test_a_sigkilled_driver_takes_its_attempt_with_it() -> None:
 _INTERRUPTED = (
     "import sys, time\n"
     "from pathlib import Path\n"
-    "from benchmarks.citynav import bench_fullset as bf, run_manifest as rm\n"
+    "from benchmarks.citynav import bench_fullset as bf\nfrom benchmarks.run_record import run_manifest as rm\n"
     "d = bf.Driver.__new__(bf.Driver)\n"
     "root = Path(sys.argv[1])\n"
     "d.out_root, d.episodes_file, d.driver_log = root, root / 'episodes.jsonl', root / 'driver.log'\n"

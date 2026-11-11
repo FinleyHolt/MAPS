@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from benchmarks.citynav.analysis import rows as _rows
+from benchmarks.run_record import rows as _rows
 
 
 def wilson_ci(k: int, n: int) -> tuple[float, float]:

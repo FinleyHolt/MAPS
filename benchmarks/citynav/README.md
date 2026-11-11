@@ -94,17 +94,26 @@ python -m benchmarks.citynav.run_benchmark --config configs/citynav.yaml --split
 config names it with `base:` and holds only the keys it changes
 (`configs/calcity.yaml`, `configs/withhold/*.yaml`). Unknown keys are refused
 and every value is checked by type and range at load
-(`run_benchmark/config.py`).
+(`benchmarks/run_record/config.py`).
 
 ## Modules
 
 | Module | Role |
 |---|---|
 | `bench_fullset.py` | The full-split driver. |
-| `run_benchmark/` | The runner: config, episode setup, the mission engine (`mission_engine.py`), scoring rows. |
-| `adapter.py`, `episodes.py`, `paths.py` | The dataset, the ledger, the file layout. |
-| `episode_workdir.py` | An attempt's directory, its `run.log`, and the `conversation.jsonl` and `detections.jsonl` written as the mission runs. |
+| `run_benchmark/` | The runner: episode setup, the mission engine (`mission_engine.py`), scoring rows. |
+| `adapter.py`, `paths.py` | The dataset, the file layout. |
 | `eval.py` | Scoring: NE, SR, OSR, SPL, and the shape criterion the Cal City bench uses. |
 | `action_snap.py` | The six-action alphabet a flight is replayed in. |
 | `bake/city.py` | The OSM prior bake. |
+
+The run record both benches and the flight harness share lives in
+`benchmarks/run_record/`:
+
+| Module | Role |
+|---|---|
+| `episodes.py` | The ledger and the attempt's row. |
+| `episode_workdir.py` | An attempt's directory, its `run.log`, and the `conversation.jsonl` and `detections.jsonl` written as the mission runs. |
 | `run_manifest.py` | The run manifest and the audited environment. |
+| `config.py` | The run config and its loader. |
+| `rows.py` | Which attempt is an episode's result. |

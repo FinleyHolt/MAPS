@@ -19,10 +19,10 @@ from typing import Any
 
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.eval import score_arrival
-from benchmarks.citynav.episode_workdir import LiveRecorder
+from benchmarks.run_record.episode_workdir import LiveRecorder
 from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, SUCCESS_CRITERION, tile_stem
 from benchmarks.citynav.run_benchmark.assets import BlockAssets, load_episode_assets
-from benchmarks.citynav.run_benchmark.config import RunConfig
+from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.mission_engine import (
     MissionSession,
     perceive,

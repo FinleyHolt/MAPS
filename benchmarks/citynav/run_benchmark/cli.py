@@ -15,12 +15,12 @@ import signal
 from datetime import datetime
 from pathlib import Path
 
-from benchmarks.citynav import episodes
-from benchmarks.citynav import run_manifest as _rm
+from benchmarks.run_record import episodes
+from benchmarks.run_record import run_manifest as _rm
 from benchmarks.citynav.adapter import episode_ids, find_row, load_objects, load_split, parse_episode
-from benchmarks.citynav.episode_workdir import benchmark, open_episode_dir
+from benchmarks.run_record.episode_workdir import benchmark, open_episode_dir
 from benchmarks.citynav.paths import DEFAULT_SPLIT, OBJECTS_JSON, assert_available, split_path
-from benchmarks.citynav.run_benchmark.config import export_withhold, load_config
+from benchmarks.run_record.config import export_withhold, load_config
 from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
 
 log = logging.getLogger("run_benchmark")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.citynav.analysis.rows import EPISODES_JSONL
+from benchmarks.run_record.rows import EPISODES_JSONL
 
 
 def ledger_row(eid: str, stamp: str, sr: int | None = None, *, status: str = "ok",

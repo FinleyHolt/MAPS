@@ -38,8 +38,9 @@ import urllib.request
 from collections import Counter, deque
 from pathlib import Path
 
-from benchmarks.citynav import episodes, paths
-from benchmarks.citynav.analysis import rows as _rows
+from benchmarks.citynav import paths
+from benchmarks.run_record import episodes
+from benchmarks.run_record import rows as _rows
 
 REPO = Path(__file__).resolve().parents[2]
 CONFIG = REPO / (os.environ.get("CITYNAV_BENCH_CONFIG", "").strip() or "configs/citynav.yaml")
@@ -197,7 +198,7 @@ class Driver:
 
     def _absorb(self, row: dict) -> None:
         """Count a ledger row: its episode is done, or it is one more infra
-        attempt (``analysis.rows.is_infra_abort``: excluded from SR and
+        attempt (``run_record.rows.is_infra_abort``: excluded from SR and
         re-queued; a timeout is a miss, not one) with its cause."""
         eid = row.get("episode_id")
         if not isinstance(eid, str):
@@ -634,7 +635,7 @@ class Driver:
             self.log(self._selection_note)
         # Written before anything flies; a resume under another identity is
         # refused (run_manifest.emit_or_verify).
-        from benchmarks.citynav import run_manifest as _rm
+        from benchmarks.run_record import run_manifest as _rm
 
         try:
             fresh_manifest = _rm.build_manifest(
@@ -794,7 +795,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--arrivals selects the session's episodes; drop --episode-allowlist, --limit "
                      "and --sample-seed")
     # The config is refused here, before an out-root exists or a serve is asked.
-    from benchmarks.citynav.run_benchmark.config import resolve_config
+    from benchmarks.run_record.config import resolve_config
 
     try:
         resolved = resolve_config(CONFIG)[0]
@@ -815,7 +816,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         return driver.dry_run()
     # Once, so an unreachable or wrong serve fails here, before any worker spawns.
-    from benchmarks.citynav.run_manifest import EndpointRefused, install_endpoint
+    from benchmarks.run_record.run_manifest import EndpointRefused, install_endpoint
 
     try:
         install_endpoint(resolved.get("policy"))

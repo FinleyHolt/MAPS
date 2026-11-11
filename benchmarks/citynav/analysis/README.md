@@ -15,7 +15,7 @@ stderr.
 
 | Reader | Reads | Prints |
 |---|---|---|
-| `rows.py` | One root's ledger | Nothing: the library every reader picks attempts with. |
+| `benchmarks/run_record/rows.py` | One root's ledger | Nothing: the library every reader picks attempts with. |
 | `run_report.py <root>...` | Each root in turn | SR, NE, SPL, OSR and the OSR x SR joint, SR by target shape, SR by referent bucket and by intel quality (Cal City; a recorded row's own class; a pick without one is bucketed by its recorded description and graded from the run's split), commit provenance, the bake check. |
 | `arm_table.py <root>...` | Many roots, one per arm | One row per arm: effort, n, SR, OSR, shape and radius SR, NE; refuses roots that mix success criteria, discs of two radii included. `--json` for the rows. |
 | `ab_report.py <a> <b>` | Two roots | Paired SR with a bootstrap interval on the difference, McNemar, and the flip counts. |

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from benchmarks.citynav.episode_workdir import OBSERVATIONS_DIR, TRACK_JSONL
+from benchmarks.run_record.episode_workdir import OBSERVATIONS_DIR, TRACK_JSONL
 from benchmarks.flight import mission as M
 from benchmarks.flight.tests import world
 

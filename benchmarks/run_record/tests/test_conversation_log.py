@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, ConversationLog
+from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, ConversationLog
 
 
 def _lines(path):

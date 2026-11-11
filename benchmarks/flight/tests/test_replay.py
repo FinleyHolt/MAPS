@@ -84,7 +84,8 @@ def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers_an
     from types import SimpleNamespace
 
     import benchmarks.calcity
-    from benchmarks.citynav import episode_workdir, paths
+    from benchmarks.citynav import paths
+    from benchmarks.run_record import episode_workdir
 
     monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
     monkeypatch.setattr(paths, "TILES_DIR", built[0])
