@@ -115,10 +115,7 @@ def test_score_by_grid_orders_without_a_score_column():
 
 
 def test_a_footprint_carries_its_area_and_no_unserved_shape_column():
-    from maps.query.spatial_math import (
-        contour_shape_features,
-        mask_shape_features,
-    )
+    from maps.query.spatial_math import contour_shape_features, mask_shape_features
 
     cells = mask_shape_features([(0, 0), (0, 1), (1, 0), (1, 1)], 2.0)
     assert cells == {"footprint_area_m2": 16.0}, cells

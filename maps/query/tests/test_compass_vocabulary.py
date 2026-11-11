@@ -6,13 +6,7 @@ import math
 import pytest
 
 from maps.query.spatial_math import (
-    CARDINALS,
-    COMPASS_UNIT,
-    _COMPASS8,
-    _compass8,
-    cardinal,
-    cardinal_offset,
-)
+    CARDINALS, COMPASS_UNIT, _COMPASS8, _compass8, cardinal, cardinal_offset)
 
 _EIGHT = {"north", "northeast", "east", "southeast",
           "south", "southwest", "west", "northwest"}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from maps.query.program import run_program
 from maps.query.op_io import ProgramError
+from maps.query import color_words
 from maps.query import spatial_math as G
 
 _CANDS = [
@@ -45,8 +46,8 @@ def test_emphasis_attaches_the_color_column_it_names():
     rows = out["results"]["r1"]
     by_fid = {r["fid"]: r for r in rows}
     # the column attached on every color-carrying row; the colorless row omits it
-    assert by_fid["d0"]["color_blue"] == round(G.color_match("blue", "blue", 0.9), 3)
-    assert by_fid["d2"]["color_blue"] == round(G.color_match("gray", "blue", 0.9), 3)
+    assert by_fid["d0"]["color_blue"] == round(color_words.color_match("blue", "blue", 0.9), 3)
+    assert by_fid["d2"]["color_blue"] == round(color_words.color_match("gray", "blue", 0.9), 3)
     assert "color_blue" not in by_fid["d3"], by_fid["d3"]
     # the sort ran (rank 0 = the blue car, which is both the color match
     # and nearest the shed)
@@ -87,7 +88,7 @@ def test_off_palette_word_errors_loud_with_the_palette():
         {"ref": "r0", "op": "find", "args": {}},
         {"ref": "r1", "op": "score_by", "args": {"items": "r0", "emphasis": [
             {"key": "color_chartreuse", "w": 1}]}},
-    ], "closed palette", ", ".join(G.COLOR_ENUM))
+    ], "closed palette", ", ".join(color_words.COLOR_ENUM))
 
 
 def test_open_word_normalization_is_noted():
@@ -170,15 +171,15 @@ def test_an_off_palette_color_key_names_the_palette():
 
 def test_palette_equals_the_m6_emitted_vocabulary():
     from maps.perception.color import _VDW_TO_VOCAB
-    assert set(G.COLOR_ENUM) == set(_VDW_TO_VOCAB.values()), (
-        G.COLOR_ENUM, sorted(set(_VDW_TO_VOCAB.values())))
-    assert G.COLOR_COLUMNS == frozenset("color_" + w for w in G.COLOR_ENUM)
+    assert set(color_words.COLOR_ENUM) == set(_VDW_TO_VOCAB.values()), (
+        color_words.COLOR_ENUM, sorted(set(_VDW_TO_VOCAB.values())))
+    assert color_words.COLOR_COLUMNS == frozenset("color_" + w for w in color_words.COLOR_ENUM)
 
 
 # --- ONE-FAMILY guard: a word scores in the family its column is named for ---
 
 
 def test_a_word_shares_a_family_with_its_canonical_column():
-    for w in G.COLOR_FAMILY:
-        assert G.COLOR_FAMILY[w] == G.COLOR_FAMILY[G.normalize_color(w)], w
-    assert G.color_match("gold", G.normalize_color("gold")) >= 0.8
+    for w in color_words.COLOR_FAMILY:
+        assert color_words.COLOR_FAMILY[w] == color_words.COLOR_FAMILY[color_words.normalize_color(w)], w
+    assert color_words.color_match("gold", color_words.normalize_color("gold")) >= 0.8

@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from collections import Counter
 
-from maps.query import spatial_math as G, text_match as T
+from maps.query import color_words
+from maps.query import text_match as T
 from maps.render.look_render import LOOK_SET_ROWS
 from maps.withhold import withheld
 
@@ -40,7 +41,7 @@ def _render_color_cell(row):
         shade = row.get("color_shade")
         # A palette mixture's second word is glass or shadow: only a
         # color-name read (shade set) serves it.
-        out["color"] = G.compact_color_cell(
+        out["color"] = color_words.compact_color_cell(
             c, shade=shade if shade in ("dk", "lt") else None,
             uncertain=uncertain, rich=shade is not None)
     return out

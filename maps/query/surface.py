@@ -6,6 +6,7 @@ import re
 
 import numpy as np
 
+from maps.query import color_words
 from maps.query import spatial_math as G
 from maps.query.row_geometry import cells_of, mask_center
 
@@ -48,7 +49,7 @@ def _anchor_search_text(n) -> str:
 def _color_of(label: str) -> str:
     """The first palette word the label carries as a whole word, else ""."""
     words = set(re.findall(r"[a-z]+", (label or "").lower()))
-    return next((w for w in G.COLOR_FAMILY if w in words), "")
+    return next((w for w in color_words.COLOR_FAMILY if w in words), "")
 
 
 def _color_fields(n) -> dict:

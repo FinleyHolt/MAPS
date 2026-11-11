@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import threading
 
-from maps.query import spatial_math as G, text_match as T
+from maps.query import color_words
+from maps.query import text_match as T
 from maps.query.op_io import (
     ProgramError, Result, _as_rows, _attach_standing_columns, _ordered, _quote)
 from maps.query.result_tables import STANDING_SIDE_PREFIXES, _census_note
@@ -102,8 +103,8 @@ def _miss_notes(query, q_data) -> tuple[str, list]:
         w = str(cl[0] or "").strip()
         if not w or " " in w:
             continue
-        canon = G.normalize_color(w)
-        if canon in G.COLOR_ENUM:
+        canon = color_words.normalize_color(w)
+        if canon in color_words.COLOR_ENUM:
             return cond, [
                 f"{_quote(w)} is a color word on the closed palette: color "
                 f"is not row text -- it rides the color_{canon} column, which "

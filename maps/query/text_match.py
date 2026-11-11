@@ -19,7 +19,7 @@ import functools
 import math
 import re
 
-from maps.query.spatial_math import COLOR_FAMILY
+from maps.query.color_words import COLOR_FAMILY
 
 # The abbreviations query and row words expand to, before matching.
 _FUZZY_ABBREVS: dict[str, str] = {

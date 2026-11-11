@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from maps.query import color_words
 from maps.query import spatial_math as G
 from maps.query.op_io import (
     ProgramError, Result, _as_rows, _contact_fact, _ordered, _present_keys_hint,
@@ -21,12 +22,12 @@ def _resolve_color_word(word: str) -> "tuple[str, str | None]":
     note set when the word was normalized (navy -> blue). Off-palette
     raises."""
     w = str(word or "").strip().lower()
-    canon = G.normalize_color(w)
-    if canon not in G.COLOR_ENUM:
+    canon = color_words.normalize_color(w)
+    if canon not in color_words.COLOR_ENUM:
         raise ProgramError(
             f"{_quote(w)} is not a color on the closed palette; color columns "
             f"are color_<word> with word one of: "
-            f"{', '.join(G.COLOR_ENUM)} (an open word that maps onto the "
+            f"{', '.join(color_words.COLOR_ENUM)} (an open word that maps onto the "
             f"palette is accepted, e.g. navy -> blue).")
     note = (None if canon == w else
             f"color {_quote(w)} maps onto the closed palette as {_quote(canon)}; "
@@ -43,7 +44,7 @@ def _attach_color_column(items, canon):
         c = it.get("color") if isinstance(it, dict) else None
         if isinstance(c, str) and c.strip():
             out.append({**it, col: round(
-                G.color_match(c, canon, it.get("color_conf")), 3)})
+                color_words.color_match(c, canon, it.get("color_conf")), 3)})
         else:
             out.append(it)
     return out
