@@ -1,3 +1,0 @@
-# baselines/geonav_released.yaml on Cal City: calcity.yaml with policy geonav_released.
-base: ../calcity.yaml
-policy: geonav_released

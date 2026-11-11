@@ -1,4 +1,4 @@
-"""Each layer imports only what sits below it (maps <- benchmarks <- baselines; serving beside them), and every in-repo import resolves."""
+"""Each layer imports only what sits below it (maps <- benchmarks; serving beside them), and every in-repo import resolves."""
 
 from __future__ import annotations
 
@@ -9,9 +9,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN = {
-    "maps": {"benchmarks", "baselines", "serving"},
-    "benchmarks": {"baselines", "serving"},
-    "baselines": {"serving"},
+    "maps": {"benchmarks", "serving"},
+    "benchmarks": {"serving"},
 }
 
 

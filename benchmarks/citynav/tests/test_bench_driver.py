@@ -578,36 +578,6 @@ def test_arrivals_refuse_the_shuffle_flags(flags, monkeypatch, capsys) -> None:
     assert "--arrivals selects" in capsys.readouterr().err
 
 
-def test_a_baseline_arm_whose_model_has_no_dial_off_is_refused_at_start(tmp_path, monkeypatch, capsys) -> None:
-    from types import SimpleNamespace
-
-    from maps.llm import endpoint_spec
-
-    monkeypatch.setattr(bf, "CONFIG", REPO / "configs/baselines/geonav.yaml")
-    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
-    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: SimpleNamespace(model_id="gemma4-e2b"))
-    monkeypatch.setattr(endpoint_spec, "install_spec", lambda spec: None)
-    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused arm flew"))
-    assert bf.main(["--out-root", str(tmp_path / "r")]) == 2
-    assert not (tmp_path / "r" / episodes.EPISODES_JSONL).exists()
-    assert "gemma4-e2b" in capsys.readouterr().err
-
-
-def test_a_session_with_no_reports_reads_as_offered_nothing(driver, tmp_path, monkeypatch, no_flight) -> None:
-    from benchmarks.capacity import reader
-
-    stream = tmp_path / "stream.json"
-    stream.write_text(json.dumps({"load_per_h": 0.5, "hours": 1.0, "seed": 3, "reports": []}))
-    d = driver(tmp_path / "s")
-    d.out_root.mkdir()
-    d.arrivals_path = stream
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
-    d._selection = d._select_episodes()
-    assert d.run() == 0
-    s = reader.session(d.out_root)
-    assert (s["offered"], s["finds_per_h"]) == (0, 0.0)
-
-
 def test_a_session_s_preview_names_its_stream_not_a_seed(driver, tmp_path, monkeypatch, capsys) -> None:
     stream = tmp_path / "stream.json"
     stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))

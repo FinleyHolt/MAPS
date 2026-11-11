@@ -46,9 +46,18 @@ same episodes on every run.
 `--episode-allowlist` keeps only the listed ids and refuses a list naming
 an id outside the split. A refused selection exits 2 before the out-root
 exists or a serve is asked. Rerunning a command resumes its root. `--dry-run` prints the selection and launches nothing.
-`--arrivals <stream.json>` flies a capacity session in place of the shuffle
-(`benchmarks/capacity/README.md`).
+`--arrivals <stream.json>` flies a report stream in place of the shuffle: a
+JSON object whose `reports` list holds `{"episode_id", "arrival_s"}` rows, each
+episode released at its arrival time on the session clock.
 `CITYNAV_BENCH_CONFIG` names the config (default `configs/citynav.yaml`).
+
+A config's optional `policy: <name>` hands each built episode to another
+method in place of the mission conversation; the replay, the scorer and the
+row stay the bench's. The bench reaches that method by name through a
+`baselines` package this repository does not ship: `baselines/<name>/policy.py`
+must exist, and `baselines.seam` supplies `fly(harness, name)` (returning
+`.flights` and `.metrics`), `REASONING_EFFORT`, `dial_off(model_id)` and
+`NoDialOff`.
 
 A run holds its root for its lifetime (`.bench.lock`); a second run into it
 is refused. Startup refuses a selection whose blocks lack their bake files or

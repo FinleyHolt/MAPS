@@ -37,8 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 
-# The briefed area of operations the C-12 flew, WGS84 (w, s, e, n): the box the
-# operator console frames each report on (baselines/human/study_server.py).
+# The briefed area of operations the C-12 flew, WGS84 (w, s, e, n).
 AO_BBOX_WGS84: tuple[float, float, float, float] = (-118.003686, 35.1017, -117.922950, 35.140292)
 
 # The one map, ``calcity``, as a WGS84 bbox (w, s, e, n): the briefed area of

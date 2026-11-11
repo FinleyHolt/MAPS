@@ -27,14 +27,10 @@ dependencies = [
 [project.optional-dependencies]
 # Reading a camera recording (benchmarks.flight.recorded_ring).
 recording = ["mcap"]
-# The baselines (GeoNav's cognitive map, the ViSA figures) draw with matplotlib.
-baselines = ["matplotlib"]
-# The capacity study's operator console (baselines.human.study_server, STUDY.md).
-study = ["fastapi", "uvicorn", "markdown-it-py"]
-dev = ["pytest==9.1.1", "ruff==0.17.0", "mcap", "matplotlib"]
+dev = ["pytest==9.1.1", "ruff==0.17.0", "mcap"]
 
 [tool.setuptools.packages.find]
-include = ["maps*", "benchmarks*", "baselines*", "figures*"]
+include = ["maps*", "benchmarks*"]
 exclude = ["*tests*"]
 namespaces = false
 

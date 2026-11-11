@@ -182,17 +182,3 @@ def test_a_cut_last_line_loses_only_its_own_row(tmp_path):
     episodes.append_row(tmp_path, {"episode_id": "C", "status": "ok"})
     got = [r["episode_id"] for r in rows.iter_json_rows(tmp_path / episodes.EPISODES_JSONL)]
     assert got == ["A", "C"]
-
-
-def test_a_fixed_dial_baseline_row_stamps_the_effort_its_requests_carry(tmp_path, monkeypatch):
-    """geonav_released sends its dial off whatever the arm's environment says,
-    and its rows say so, as its manifest does."""
-    pytest.importorskip("baselines.seam")
-    monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags, **kw: {"search_env_flags": flags})
-    monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: _rec())
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    row = dispatch.dispatch_one(
-        episode=SimpleNamespace(episode_id="b::1#0"), idx=0, total=1, objects_by_map={}, split="test", recorder=None, episode_dir=tmp_path,
-        cfg=SimpleNamespace(source_path="x.yaml", policy="geonav_released"),
-    )
-    assert row["provenance"]["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "none"

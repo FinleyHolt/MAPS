@@ -1,9 +1,0 @@
-# CityNav under the protocol the released baselines evaluate under: the MAPS
-# arm beside baselines/released/. Their code starts every episode 50 m above
-# the block's ground (CityNav MGP, GeoNav, FlightGPT, HETT and HTNav all pass
-# --altitude 50), and MGP and HTNav cap the walk at 100 primitive actions
-# (eval_max_timestep 20 x move_iteration 5). A MAPS flight holds the altitude
-# it starts at, so 50 m is the altitude of every frame.
-base: ../citynav.yaml
-max_steps: 100
-start_altitude_agl_m: 50.0

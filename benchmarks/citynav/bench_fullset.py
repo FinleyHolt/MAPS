@@ -8,12 +8,13 @@ re-run into the same ``--out-root`` resumes: an episode with a non-infra row in
 (``--max-wall-s``) is spent, or a window of infra casualties aborts it (exit 3).
 The out-root's layout is in ``benchmarks/citynav/README.md``.
 
-``--arrivals <stream.json>`` (``benchmarks.capacity.streams``) flies a
-capacity session instead: the stream's episodes in arrival order, each
-claimable only once its ``arrival_s`` has passed on the session clock, so a
-report that lands while every worker is busy waits its turn. Each row then
-carries ``arrival_s`` and ``claimed_s`` (session seconds), and the stream is
-copied to ``<out-root>/arrivals.json`` for ``benchmarks.capacity.reader``.
+``--arrivals <stream.json>`` flies a report stream instead (a JSON object
+whose ``reports`` list holds ``{"episode_id", "arrival_s"}`` rows): the
+stream's episodes in arrival order, each claimable only once its
+``arrival_s`` has passed on the session clock, so a report that lands while
+every worker is busy waits its turn. Each row then carries ``arrival_s`` and
+``claimed_s`` (session seconds), and the stream is copied to
+``<out-root>/arrivals.json``.
 """
 
 from __future__ import annotations
@@ -767,7 +768,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--arrivals",
         default=None,
-        help="a capacity session's report stream (benchmarks.capacity.streams): its "
+        help="a report stream (JSON, reports: [{episode_id, arrival_s}]): its "
         "episodes, each released at its arrival time; refused with --episode-allowlist, "
         "--limit or --sample-seed",
     )

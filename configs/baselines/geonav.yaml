@@ -1,6 +1,0 @@
-# GeoNav (arXiv 2504.09587, code github.com/Xhtshr/geonav-official) on
-# CityNav: citynav.yaml with the stops chosen by baselines/geonav/, so the
-# sensor, the OSM prior, the budget, the replay and the scorer are the MAPS
-# arm's. baselines/README.md tables every substitution.
-base: ../citynav.yaml
-policy: geonav

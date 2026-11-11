@@ -152,7 +152,7 @@ def test_turns_tokens_and_latency(tmp_path: Path) -> None:
     assert s["total_tokens"] == 2150
 
     assert s["latency_s_sum"] == 12.5
-    # Every key has a reader (measures, the figures, the endpoint check).
+    # Every key has a reader (measures, the endpoint check).
     assert set(s) == set(flight_summary.blank()) == {
         "turns", "requests", "unanswered", "prompt_tokens", "completion_tokens",
         "total_tokens", "reasoning_tokens", "latency_s_sum",

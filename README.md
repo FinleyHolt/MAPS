@@ -125,10 +125,7 @@ these places, the served-text changes among them:
 | A move is refused inside a `def` or `lambda` and when its name is read as a value (`list(map(go_to, r1))`, `g = go_to`); a function defined in an earlier block runs under the line and time ceilings; `filter(dwithin=)` without `near=` is refused; `r[a:b][c:d]` holds what the same slice of a list holds; a repeated program's handles re-derive after the world moves; the stray "Eight words here too." is gone.; a move's name the model binds (an assignment, a comprehension or function parameter, `except ... as`, `import ... as`) is its variable where it is bound | A move wrapped in a def or lambda, or passed as a value, flew every row; an earlier block's function ran unbounded; `dwithin=` was dropped beside a compass or facing cut; a window of a window could grow past its parent; a repeated program's handles kept their old rows; the sentence was served. |
 | Under the images withhold a pass's catch keeps its delivered, shown and not-drawn facts beside the withheld note, and a flight view's note says its picture is not served. | The whole catch was replaced by the note, and the view note read "the view's caption follows." (withholds never flew). |
 | An error's repeat class ignores a "line N: " prefix and reads a run of quoted names (a column list) as one, so repeats of one refusal escalate. | A refusal's class took the first 100 characters as written, so one error listing a different set of columns counted as a new class. |
-| A baseline's thinking-off call sends `reasoning_effort: none` where the served card lists it, else `enable_thinking=false`, and an arm whose model has neither switch is refused before any request. | Baselines sent `reasoning_effort: none` on every card (a Qwen serve refused it; Gemma ignored it). |
-| Effort `none` on Gemma 4 26B-A4B NVFP4 sends its template's `enable_thinking=false` and no `reasoning_effort`, for a mission and for a baseline's dial-off alike. | It sent `enable_thinking=true` plus a `reasoning_effort` the template never reads, so a `none` arm thought while stamped `none`, and Gemma baseline arms were refused. |
-| ViSA plans over the search window held inside the block. | The port planned an unclipped 1,024 m square around the start when nothing matched, flying off a CityNav block. |
-| A baseline answer whose scalar types or array lengths miss its schema goes to the reshape call; a GeoNav Locate that answers no position commits the pose under `geonav:locate_pose`. | Such an answer crashed the policy (`int("mark 3")`, a short point list); the answerless Locate was recorded under the timeout tier. |
+| Effort `none` on Gemma 4 26B-A4B NVFP4 sends its template's `enable_thinking=false` and no `reasoning_effort` | It sent `enable_thinking=true` plus a `reasoning_effort` the template never reads, so a `none` arm thought while stamped `none`. |
 | A detection without tile cells takes the graph cell its world point lies in (floored), and the compactor's stub hint says the rows were trimmed to fids. | The cell offset truncated toward zero, putting a point south or west of the tile origin one cell north-east; the stub hint claimed a census it did not carry. |
 | A reasoner stream that closes with neither a finish reason nor `[DONE]` is a transport fault, re-sent within the transport retry budget. | Such a stream was read as a complete answer ending `stop`. |
 | A rebind whose right-hand side raises anywhere in its statement (inside a function it calls, or on a later line) unbinds the name; `find(near=<a list or an [x, y] point>, dwithin=d)` cuts against the nearest member or the point, as `filter` does, and only a list in `nearest=` with `dwithin=` is refused; a repeat-error escalation after an unpunctuated error starts a new sentence. | The name was unbound only when the error came on the assignment's first line in the block's own code; `find` refused any list or point in near= with dwithin=; the escalation ran into the error text. |
@@ -144,7 +141,6 @@ these places, the served-text changes among them:
 | The bench driver holds a launch while no SAM replica answers `/health`, and kills an attempt after two failed probes a minute apart as `sam_down_midrun` (an infra casualty, re-queued). | A launch waited on the reasoner alone, and an episode flown with SAM down served each failed segmentation as its run block's error. |
 | A perceived "gold" scores in the yellow family its column is named for: a gold row reads 0.8 on `color_yellow`, and gold/yellow mixtures stay one family. | Gold sat in the warm family: 0.0 on `color_yellow`, the column a gold cue normalises to, and 0.8 on `color_orange`. |
 | A view turned off the square counts no-data from its own window, and its caption says the corners outside the turned window render dark. | The rotated mask counted the turn's corners as no-data, so the caption said up to 17% of the window lay past the raster edge (in flight, not imaged yet); the flown turns were 0 and 180 degrees, which are unaffected. |
-| A baseline model call that raises (an image-store refusal, a served-model change) ends the episode under the bench's infra rule; only a call with no schema answer after two tries takes the method's released fallback (stay put, an empty graph, an empty chain). | GeoNav took any failed call, image-store refusals and server changes included, as its released fallback and the episode was scored. |
 | The bench refuses an `--episode-allowlist` naming any id outside the split or no id at all, a bad selection (with or without `--dry-run`) and an unreadable `--arrivals` stream, each with exit 2 before an out-root is made or a serve is asked. | Unknown allowlist ids were dropped (a list matching nothing ran nothing and exited 0); the dry run made the out-root and exited 1; a malformed stream raised a traceback; an empty list made the out-root, flew nothing and exited 0. |
 | A quoted handle (`go_to("r1")`, `explore("r2")`) moves as the set it names; a row indexed from a window (`w = r1[2:5]; w[0]`, `for r in w`) shows the row it is; `look([names])` grounds each name as `look(name)` does; a fold of one turn reads "1 earlier turn folded". | A quoted handle served "'r0' is a result handle ..." naming an internal handle; a window's row showed the result's row at the window-relative index; a look list of names was refused as not on the live surface; the header read "1 earlier turns folded". |
 | The Cal City corpus is 4,573 rows, 1,100 of them reviewed, each naming its `intel_quality` (G, M or P) where its candidate count was graded; a Cal City row records it and `run_report` reports SR by it. | The corpus was 1,023 rows, 603 reviewed, with no intel-quality field. |
@@ -153,16 +149,14 @@ these places, the served-text changes among them:
 | The SAM client's split log says `cap_hit=True` only when detections past the cap were dropped; `run_report` and `ab_report` name the success disc by the run's configured `success_radius_m`. | A frame whose detections filled the cap exactly logged `cap_hit=True`; the readers said "the 20 m disc" whatever radius was configured. |
 | After a look_for re-declares a watched class, every later segmenter request lists the classes in declared order, the re-declared class last; `look` takes a flown stop id or a staged `vN` handle as a subject or a mark, as `stand` and `show_map` do. | A flight's start or recorded stop re-pushed the order from before the re-declare (1 of 90 flown runs re-declares), and the segmenter caps detections in that order; `look` refused a stop or handle as not on the live surface. |
 | A find over rows read tan or gold does not name the colour word as unmatched, and a preflight colour term that ranked nothing is explained once. | The find note named a perceived tan or gold as a word that narrowed nothing; the dropped preflight colour was explained twice. |
-| A baseline policy's action budget starts at the episode's start heading, the pose the six-action replay flies from, and a baseline row's LLM spend is `metrics.llm` alone. | The budget started every policy facing north while the replay started at the episode's heading; rows also carried `<policy>_llm_calls` and `<policy>_reasoning_tokens`, restating it. |
 | The bake writes each block's `_meta.json` and `_features.json`; the episode graph is built from the features, and `bake_sha256` hashes those two files. | The bake also wrote `_graph.npz` and `_nodes.json`, which nothing at run time read, and the stamp hashed them. |
 | `spend` counts a scored episode that sent no request and leaves unreported cache meters null; `arm_table` refuses ring arms scored on discs of different radii. | A zero-request episode dropped out of the per-episode spend; unreported cache meters read 0; ring arms of any radius tabled together. |
 | Each element of a `look` list resolves as one place: a set or slice is refused under the model's own spelling with the form that crops its rows (`look([top[0], ...])`), an unnamed set is asked to be bound first, a nested non-point list is refused, and a quoted point is canonicalised; `distance()` refuses an empty set, and a token naming no row with what it measures between (rows, result sets, `[x, y]` points). | The set's label or the list's text was sent as a crop token and skipped with no refusal, a quoted point was sent as typed, and `distance()` printed `inf` for an empty set or an absent fid. |
 | A twin, bank or forced replay refuses a map whose bake has no georef or no `<map>_features.json` before its run folder opens. | The bank and forced replays opened the run and recorded the missing bake as the method's failed miss. |
-| `ab_report` refuses two runs whose criterion labels differ, discs of different radius included, and no waiver overrides it; `run_report`'s by-class lines read a recorded row's own `referent_bucket` and `intel_quality`, and a pick that records no class (a released baseline's row, a pick without metrics) takes its bucket from the description it records, else its split row's, and its intel quality from the run's split. | Two ring runs paired whatever their radius (only the config hash caught it, and `--allow-provenance-mismatch` waived that); a miss without a record counted under `?`. |
+| `ab_report` refuses two runs whose criterion labels differ, discs of different radius included, and no waiver overrides it; `run_report`'s by-class lines read a recorded row's own `referent_bucket` and `intel_quality`, and a pick that records no class (a pick without metrics) takes its bucket from the description it records, else its split row's, and its intel quality from the run's split. | Two ring runs paired whatever their radius (only the config hash caught it, and `--allow-provenance-mismatch` waived that); a miss without a record counted under `?`. |
 | A `show_map(around=X)` whose frame on the badged set would not contain X is centred on X at X's own window size (200 m for a point); otherwise the frame is as flown. | The window framed the badged set and the centre's outline only, so a point centre away from the set fell off the map (4 forced-replay renders in 2 recorded runs). |
 | An empty watchlist is told once per run, in the run's `watching` line. | Each zero-detection flight's note also said "the watchlist is empty -- nothing is segmented on any flight; call look_for(...)" (8 recorded Cal City runs carry it). |
 | Every set is named to the model by its own spelling: a bound name, else its result's name with its window (`cars[0:2]`, `cars.exact`, `find('car')[0:2]`), in reprs, result keys (an unbound find by its call, `find('car')`, unless another key already says it), slot columns, explore acks and refusals; a set with no such name takes one number for the mission, shared by its `(unnamed n)` key, its `unnamed_n` column and its acks (`(unnamed)` in reprs), and the `go_to`/`show_map`/`look_for(at=)` refusals ask for it to be bound first. | Slices, tier views, filter results and windows were served under the executor's ref (`<r4: 3 row(s)>`, `r0[0:2]`, `r9.tagged`, "distance to r3", "pass over r7"), which the model cannot type; a bare `cars.exact` served the table twice; an unbound find's table was keyed `(unnamed n)`, numbered per block. |
-| ViSA's SAM prompts drop the bare target class (and its plural) from every concept source. | The port dropped it from the concept list only, so a surrounding or landmark naming the class still prompted it. |
 | A bank or forced replay's leg row gives the recorded observation's mosaic frame count ("in 7 frame(s)"); a frame row that records no mosaic names no count. | The replay tiers said "in 1 frame(s)" for every held area, whatever the flight had said. |
 | A 4xx from the reasoner other than 402, 408 and 429 ends the mission `request_refused` at its first send, never re-sent. | Such a refusal was re-sent as a transient failure: the bench ended `request_refused` after six sends (about 32 s of backoff), and a live mission re-sent it until the operator stopped. |
 | `explore()` over a set holding termini (`ends_of`) flies each terminus's point, as `go_to(e[0])` does, and so does a typed terminus fid (`go_to("end_0")`, the newest held `ends_of` row); a set pass whose members have no footprint says "<set> has no footprint to cover, so this pass is its N stops". | The pass sent the bare `end_N` fids and served the resolver's refusal, and a typed `end_N` was refused as an unknown fid; the footprint-less set pass said "covered N places in N stops; each fits inside one observation". |
@@ -203,7 +197,7 @@ these places, the served-text changes among them:
 | Provenance trusts git only when its work tree is the checkout itself, so an export inside another repository records its `.commit`. | The enclosing repository's HEAD and dirty flag were recorded. |
 | The reasoner call waits 2,400 s by default, so the 40,000-token output cap bounds a turn on a loaded bench. | The flown default was 240 s: on a bench at ~80 concurrent episodes a turn was cut near 8,000 tokens, at a point that moved with load, and retried. |
 | A block that calls one kind twice serves each call's receipt part: flights run on in one `flown` list, any other kind lists its parts in call order. | A second call of one kind replaced the first call's part (its stop, detections, new rows, notes). |
-| A reasoner call's and an image-store PUT's connect phase is bounded at 15 s and retried as a transport fault, so a stop during a connect lands within it; baseline calls wait the same `SEARCH_REASONER_TIMEOUT_S`. | The connect phase waited the whole call timeout (a stop during an unanswered connect waited ~130 s of kernel retries); baseline calls waited a fixed 1,800 s; the image-store PUT connected for up to 30 s. |
+| A reasoner call's and an image-store PUT's connect phase is bounded at 15 s and retried as a transport fault, so a stop during a connect lands within it. | The connect phase waited the whole call timeout (a stop during an unanswered connect waited ~130 s of kernel retries); baseline calls waited a fixed 1,800 s; the image-store PUT connected for up to 30 s. |
 | A set read as a row, handed to a one-place slot or to go_to, or a value bound over a mission call, gets a remedy that binds (its first row, a tied view's `s.order(nearest=<place>)[0]`, for an empty set that it holds 0 rows; a column its row does not carry names that row's columns; a row method with its call; calling a set, a list of rows a cut or a sum returns, or a row says what it is and names the call it was bound over with `del <name>` (a builtin calling it names the set); a set method's signature error counts no self and names no class; a row or set called through a subscript is named as written (`cars[0]`); a printed set or row method names no class; a row's or list's filter signature error names every filter keyword); `del` of a call nothing is bound over says the call stays. | The remedy sent calls and row methods to `<name>[0].<k>`, named an unbound list "these rows", named `<set>[0]` on an empty set and on a tied view where that index refuses, and a non-set binding served a bare "not callable". |
 | A crossing of a set whose rows carry different names is named by the rows it lies on; a set's map badges and look marks sit at the rows it holds. | Every crossing took the set's one name or all its names joined; a terminus of an older ends_of set was drawn at the newest one of its fid. |
 | A row's tags read as a dict whose slice is refused with the reads it takes (`r.tags["building"]`, `r.tags.get("amenity")`, `str(r.tags)`). | Slicing tags as the text the table serves raised `KeyError: slice(None, 60, None)` (5 flown Cal City runs). |
@@ -257,12 +251,8 @@ lists the exact commands.
 | Experiment | Split and episodes | Arms | Config and flags | Reader |
 |---|---|---|---|---|
 | E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 26B-A4B; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
-| E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table`, `figures.plot_effort_ladder` |
+| E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table` |
 | E4 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | Per model: its ablation arms (below), each paired with the model's E2 root on the shared episodes | `configs/withhold/<arm>.yaml` | `arm_table`, `ab_report` |
-| E7 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | Inkling Small at 0.0, 0.1 ... 0.9 (10 rungs), each for MAPS, ViSA and GeoNav | `configs/citynav.yaml`, `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `figures.plot_effort_ladder` |
-| E8 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | ViSA and GeoNav at each Qwen 3.8 Flash Next effort (`low`, `medium`, `xhigh`), paired with the E2 roots on shared ids | `configs/baselines/{visa,geonav}.yaml` | `arm_table`, `ab_report` |
-| E9 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `xhigh` under the released baselines' protocol (100 actions, a 50 m start) | `configs/baselines/released_protocol.yaml` | `arm_table`, `outcome_rows pair` |
-| E5 | E2 and E3 roots | Every arm | none beyond E2 and E3 | `figures.capability_effort_arms`, `figures.plot_capability_effort` |
 
 ## Install
 
@@ -295,7 +285,6 @@ Extras:
 |---|---|
 | `recording` | Reading a camera recording for the as-flown frame replay (`mcap`). |
 | `dev` | The test suite and linter. |
-| `baselines` | The GeoNav and ViSA baseline arms and the ViSA figures (`matplotlib`). |
 
 The SAM 3.1 serve runs in its own environment, because Meta's `sam3` package
 requires `numpy<2`:
@@ -527,91 +516,16 @@ The control is the model's E2 root (Inkling Small at 0.99, Qwen 3.8 Flash Next a
 26B-A4B with none), whose 5,311 episodes hold each arm's 1,000; `ab_report` pairs them on the
 shared episodes and refuses a pair whose efforts differ.
 
-E7, the Inkling Small CityNav ladder for MAPS and the two baselines, and E8,
-the baselines at each Qwen effort (the MAPS side of E8 is E2):
-
-```sh
-for e in 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9; do
-  SEARCH_SAMPLING_REASONING_EFFORT=$e python -m benchmarks.citynav.bench_fullset --split test_unseen \
-    --limit 1000 --sample-seed 1234 --out-root output/e7/inkling-small-maps-e$e
-  for policy in visa geonav; do
-    SEARCH_SAMPLING_REASONING_EFFORT=$e CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
-      python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
-      --out-root output/e7/inkling-small-$policy-e$e
-  done
-done
-for e in low medium xhigh; do
-  for policy in visa geonav; do
-    SEARCH_SAMPLING_REASONING_EFFORT=$e CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
-      python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
-      --out-root output/e8/qwen38-flash-next-$policy-$e
-  done
-done
-```
-
-E9, Qwen 3.8 Flash Next under the released baselines' protocol:
-
-```sh
-SEARCH_SAMPLING_REASONING_EFFORT=xhigh CITYNAV_BENCH_CONFIG=configs/baselines/released_protocol.yaml \
-  python -m benchmarks.citynav.bench_fullset --split test_unseen --out-root output/e9/qwen38-flash-next
-```
-
 Read the results:
 
 ```sh
 python -m benchmarks.citynav.analysis.arm_table output/e2/*            # SR, OSR, NE per arm
 python -m benchmarks.citynav.analysis.run_report output/e2/inkling-small-0.99   # one root in full
 python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/e4/<model>/<arm>
-python -m figures.plot_effort_ladder output/e3/inkling-small-e*
-for p in maps visa geonav; do python -m figures.plot_effort_ladder --stem effort_ladder_e7_$p output/e7/inkling-small-$p-e*; done
-python -m figures.plot_capability_effort --split test_unseen output/e2/*
-python -m figures.plot_capability_effort --split calcity --cost total output/e3/*
 ```
 
-Figures land in `output/figures/` as light and dark SVGs. Every claimed
-number and figure maps to its reader in
+Every claimed number maps to its reader in
 [`benchmarks/citynav/analysis/README.md`](benchmarks/citynav/analysis/README.md).
-
-## Rerun the baselines
-
-[`baselines/`](baselines/README.md) holds the published methods the paper
-compares against. GeoNav, GeoNav as released, and the ViSA-inspired policy
-fly the bench in place of the mission conversation: a config's `policy:`
-hands each episode to the method, and the sensor, prior, budget, replay,
-scorer and row are the bench's. Each config in `configs/baselines/` is a
-control config plus `policy:`, so a baseline root reads as an arm of the
-MAPS root it shares a selection with. The methods draw with matplotlib, which
-the `baselines` extra installs (`pip install -e '.[baselines]'`; `dev` carries
-it too):
-
-```sh
-for policy in geonav geonav_released visa; do
-  SEARCH_SAMPLING_REASONING_EFFORT=<model's E2 effort> CITYNAV_BENCH_CONFIG=configs/baselines/$policy.yaml \
-    python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
-    --out-root output/baselines/<model>/$policy
-  SEARCH_SAMPLING_REASONING_EFFORT=<the E3 root's effort> CITYNAV_BENCH_CONFIG=configs/baselines/calcity_$policy.yaml \
-    python -m benchmarks.calcity.bench_fullset --episode-allowlist output/reviewed_episodes.txt \
-    --out-root output/baselines/<model>/calcity_$policy
-done
-python -m benchmarks.citynav.analysis.run_report output/baselines/<model>/visa
-python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/baselines/<model>/visa
-```
-
-For Qwen 3.8 Flash Next the `visa` and `geonav` CityNav roots are E8's `xhigh` roots.
-
-The released checkpoints (CityNav MGP, HETT, FlightGPT) run under their
-authors' own evaluators, from pinned clones, through
-`baselines/released/released.sh`; their rows read with `run_report` and pair
-against a MAPS root with `python -m baselines.released.outcome_rows pair`.
-[`baselines/released/README.md`](baselines/released/README.md) has the
-stages and every deviation from upstream.
-
-## Run the human study
-
-The capacity study (a person alone, and a person checking MAPS's answers as they arrive)
-needs no GPU, no model and no account: a participant unzips one download, double-clicks its
-launcher and follows the page, setup included in under two hours.
-[`baselines/human/STUDY.md`](baselines/human/STUDY.md) builds the download and scores the results.
 
 ## Fly the method
 
@@ -661,11 +575,8 @@ directory as `--raster` to replay as flown.
 | [`benchmarks/citynav/analysis/`](benchmarks/citynav/analysis/README.md) | The run readers every number is derived with. |
 | [`benchmarks/calcity/`](benchmarks/calcity/README.md) | The Cal City bench: corpus, reviewed set, raster and bake build. |
 | [`benchmarks/flight/`](benchmarks/flight/README.md) | The flight harness, the twin, as-flown replay and the closed-loop measures. |
-| [`benchmarks/capacity/`](benchmarks/capacity/README.md) | The human-capacity study: seeded report streams and the finds-per-hour reader. |
-| [`baselines/`](baselines/README.md) | The published methods re-measured on the bench (GeoNav, ViSA) and the released checkpoints' runner. |
-| `figures/` | The effort-ladder and capability-effort figures. |
 | `serving/` | The SAM 3.1 serve. |
-| `configs/` | Bench configs: the CityNav control, Cal City, the withhold arms and the baseline arms. |
+| `configs/` | Bench configs: the CityNav control, Cal City, and the withhold arms. |
 | `envs/` | The SAM 3.1 serve environment. |
 
 ## Citation

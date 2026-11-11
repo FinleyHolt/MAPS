@@ -1,5 +1,0 @@
-# The ViSA-inspired baseline (arXiv 2603.08007; no code release) on CityNav:
-# citynav.yaml with the stops chosen by baselines/visa/. baselines/README.md
-# tables every substitution.
-base: ../citynav.yaml
-policy: visa

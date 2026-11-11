@@ -242,19 +242,6 @@ def test_a_capacity_session_s_selection_names_its_stream_and_no_seed(monkeypatch
     assert run_manifest.identity_drift(m, other)
 
 
-def test_a_policy_with_a_fixed_dial_stamps_the_effort_its_requests_carry(monkeypatch, tmp_path, bake):
-    """geonav_released sends its dial off whatever the arm's environment says;
-    a policy that rides the arm's effort keeps the arm's stamp."""
-    pytest.importorskip("baselines.seam")
-    monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "high")
-    common = dict(out_root=tmp_path, split="train_seen", sample_seed=1, limit=0, allowlist_path=None, episodes=["e"])
-    fixed = run_manifest.build_manifest(config_path=paths.REPO_ROOT / "configs/baselines/geonav_released.yaml", **common)
-    assert fixed["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "none"
-    rides = run_manifest.build_manifest(config_path=paths.REPO_ROOT / "configs/baselines/geonav.yaml", **common)
-    assert rides["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "high"
-
-
 def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
     # The wait bounds a turn, so a run that sets it says so.
     from benchmarks.citynav import run_manifest as RM
