@@ -33,6 +33,7 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
     assert state["kind"] == "twin" and state["path"]
     assert client.post("/mission/next", json={"instruction": "another"}).status_code == 409
     parked = _until(lambda: s if (s := station.seat_state())["status"] == "awaiting_tasking" else None)
+    assert parked["reply_text"] == "The church is under the last flight."
     waypoint = next(r for r in parked["transcript"] if r["kind"] == "waypoint")
     assert waypoint["n"] == 1 and math.isfinite(waypoint["lon"]) and waypoint["coverageFloor"] > 0
     leg = next(r for r in parked["transcript"] if r["kind"] == "leg" and r.get("area"))
@@ -66,5 +67,19 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
     ty = int((1 - math.asinh(math.tan(math.radians(loc["center"]["lat"]))) / math.pi) / 2 * 2 ** z)
     assert client.get(f"/tiles/{z}/{tx}/{ty}.png").content[:4] == b"\x89PNG"
     assert client.get(f"/tiles/{z}/0/0.png").status_code == 404
+    # A reviewing station draws its map from a picture of the bake's extent, and flies nothing.
+    from PIL import Image
+
+    Image.new("RGB", (640, 480), (200, 160, 90)).save(tmp_path / "basemap.jpg")
+    reviewer = serve.Station(config="configs/calcity.yaml", out=tmp_path / "out", ortho_dir=None, register=None,
+                             basemap=tmp_path / "basemap.jpg")
+    review = TestClient(serve.build_app(reviewer, web=None))
+    b = review.get("/location").json()["bounds"]
+    assert b == review.get("/area").json()["bbox"] and len(review.get("/missions/runs").json()["runs"]) == 1
+    cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+    rx = int((cx + 180) / 360 * 2 ** 12)
+    ry = int((1 - math.asinh(math.tan(math.radians(cy))) / math.pi) / 2 * 2 ** 12)
+    assert review.get(f"/tiles/12/{rx}/{ry}.png").content[:4] == b"\x89PNG"
+    assert review.post("/mission/next", json={"instruction": "fly"}).status_code == 409
     groups = {g for g, _ in client.get("/mission/prior.json").json()}
     assert "building" in groups and len(client.get("/area").json()["bbox"]) == 4

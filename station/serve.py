@@ -56,6 +56,8 @@ STREAM_PERIOD_S, STREAM_KEEPALIVE_S = 0.5, 15.0
 #: The live trail's length, in ownship reads (one a second).
 TRAIL_POINTS = 3600
 LIVE = ("flying", "awaiting_tasking")
+#: What marks the id of a mission flown under the operator's own words, with no row in the split.
+OPERATOR = "::operator-"
 
 _PATHS = frozenset({"footway", "cycleway", "path", "service", "track", "steps", "pedestrian", "bridleway"})
 _PITCHES = frozenset({"pitch", "track", "stadium", "playground", "sports_centre", "golf_course"})
@@ -135,7 +137,8 @@ def tile_png(ortho, tiles_dir, map_name: str, z: int, x: int, y: int) -> bytes |
 class Station:
     """The seat, the catalog and the finished runs of one map."""
 
-    def __init__(self, *, config: str, out: Path, ortho_dir: Path | None, register: Path | None) -> None:
+    def __init__(self, *, config: str, out: Path, ortho_dir: Path | None, register: Path | None,
+                 basemap: Path | None = None) -> None:
         import benchmarks.calcity  # noqa: PLC0415
 
         benchmarks.calcity.use()
@@ -153,10 +156,23 @@ class Station:
         if ortho_dir is not None and self.ortho is None:
             raise SystemExit(f"no {self.map_name} raster under {ortho_dir}: a raster directory holds "
                              f"{map_render.raster_pair(self.map_name)}")
+        #: What the map's tiles are cut from: the raster, else a north-up picture of the bake's whole extent.
+        self.basemap = self.ortho if self.ortho is not None else self._picture(basemap)
         self._lock = threading.Lock()
         self.mission: Any = None
         self._sortie: Path | None = None
         self._trail: list[list[float]] = []
+
+    def _picture(self, path: Path | None):
+        """``path`` as ``(rgb, bounds, px_per_m)`` over the bake's bounds, or None without a picture or a bake."""
+        from PIL import Image  # noqa: PLC0415
+
+        if path is None or not self.baked:
+            return None
+        Image.MAX_IMAGE_PIXELS = None  # a basemap of a whole block is large by design
+        rgb = np.asarray(Image.open(path).convert("RGB"))
+        bounds = map_bounds(self.tiles_dir, self.map_name)
+        return rgb, bounds, rgb.shape[1] / (bounds.x_max - bounds.x_min)
 
     # -- placing things on the basemap --------------------------------------
 
@@ -195,6 +211,23 @@ class Station:
                         "world_window": window, "shape": f.get("shape"), "t_s": f.get("t_s") or 0.0})
         return out
 
+    @staticmethod
+    def _reported(workdir: Path, transcript: list[dict[str, Any]]) -> str | None:
+        """The model's reports, read off the wire record (``flight/llm/transcript.jsonl``: each
+        answer with no tool call) onto the transcript: every report but the last rides its
+        ``mission_end`` row as ``said``, and the last is returned as the mission's report."""
+        replies = []
+        for row in iter_json_rows(workdir / "flight" / "llm" / "transcript.jsonl"):
+            message = ((row.get("response") or {}).get("choices") or [{}])[0].get("message") or {}
+            if row.get("kind") == "response" and not message.get("tool_calls") and message.get("content"):
+                replies.append(str(message["content"]))
+        ends = [i for i, r in enumerate(transcript) if r.get("kind") == "mission_end" and r.get("ended_by") == "reply"]
+        if len(ends) != len(replies) or not replies:
+            return None  # a turn in flight, or a record that does not pair: no report is claimed
+        for i, text in zip(ends[:-1], replies[:-1]):
+            transcript[i] = {**transcript[i], "said": text}
+        return replies[-1]
+
     def _flights(self, points, targets: list[str | None]) -> list[dict[str, Any]]:
         return [self._placed({"step_idx": i, "target": targets[i] if i < len(targets) else None,
                               "resolved_xy": [float(xy[0]), float(xy[1])]}, xy) for i, xy in enumerate(points)]
@@ -204,12 +237,13 @@ class Station:
         workdir = sortie / row["workdir"]
         prov = row.get("provenance") or {}
         transcript = list(iter_json_rows(workdir / CONVERSATION_JSONL))
+        report = self._reported(workdir, transcript)
         return {
             "version": 0, "path": f"{sortie.name}/{row['workdir']}", "episode_id": row.get("episode_id"),
             "split": row.get("split"), "kind": "replay", "run_no": row.get("run_no"),
             "status": "failed" if row.get("status") == STATUS_INFRA else "ended",
             "instruction": row.get("description") or "", "ended_by": row.get("ended_by"), "error": row.get("error"),
-            "reply_text": None, "turns_used": row.get("turns_used") or 0,
+            "reply_text": report, "turns_used": row.get("turns_used") or 0,
             "flights_flown": row.get("flights_flown") or 0, "started_at": row.get("ts"),
             "git_commit": prov.get("git_commit"), "git_dirty": prov.get("git_dirty"),
             "map_name": row.get("map_name"), "target_lonlat": self.target_lonlat(row.get("episode_id") or ""),
@@ -227,12 +261,13 @@ class Station:
         targets = [str(f.get("target") or f.get("target_fid") or "") or None for f in flights]
         transcript = list(m.transcript)
         observations = self._observations(m.workdir, targets)
+        report = self._reported(m.workdir, transcript) if m.status in ("awaiting_tasking", "ended") else None
         return {
             "version": hash((m.status, len(transcript), len(flights), len(observations), m.error,
                              json.dumps(m.waiting, default=str))),
             "path": f"{m.workdir.parent.name}/{m.workdir.name}", "episode_id": m.episode_id, "split": m.split,
             "kind": "twin", "run_no": m.run_no, "status": "ready" if m.status == "idle" else m.status,
-            "instruction": m.instruction, "ended_by": m.ended_by, "error": m.error, "reply_text": None,
+            "instruction": m.instruction, "ended_by": m.ended_by, "error": m.error, "reply_text": report,
             "turns_used": m.turns(), "flights_flown": len(flights), "started_at": m.started_at,
             "git_commit": m.git_commit, "git_dirty": m.git_dirty, "map_name": m.map_name or self.map_name,
             "target_lonlat": self.target_lonlat(m.episode_id), "transcript": transcript,
@@ -319,12 +354,14 @@ class Station:
             if self.mission is not None and self.mission.status in LIVE:
                 raise HTTPException(409, f"mission {self.mission.episode_id} is flying; stop it first")
             if episode_id is not None and episode_id not in self.by_id:
-                raise HTTPException(404, f"{self.split} holds no episode {episode_id}")
+                if OPERATOR not in episode_id:
+                    raise HTTPException(404, f"{self.split} holds no episode {episode_id}")
+                episode_id = None  # an operator's past tasking, picked again: its words fly as a mission of their own
             start_xy = None
             if episode_id is None:
                 b = map_bounds(self.tiles_dir, self.map_name)
                 start_xy = ((b.x_min + b.x_max) / 2, (b.y_min + b.y_max) / 2)
-                episode_id = f"{self.map_name}::operator-{time.strftime('%H%M%S', time.gmtime())}"
+                episode_id = f"{self.map_name}{OPERATOR}{time.strftime('%H%M%S', time.gmtime())}"
             cfg = flight_config(self.config)
             sensor = resolve_sensor(cfg.sensor)
             episode = resolve_episode(episode_id, self.split, start_xy)
@@ -372,7 +409,13 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
         words = (q or "").lower().split()
         hits = [e for e in station.catalog
                 if all(w in e.description.lower() or w in e.episode_id.lower() for w in words)]
-        return {"missions": [station.entry(e) for e in hits[:max(0, limit)]], "total": len(station.catalog)}
+        # A run flown under the operator's own words has no row in the split: it lists first, by its words.
+        own = {r["episode_id"]: {"episode_id": r["episode_id"], "instruction": r["instruction"],
+                                 "map": r["map_name"], "target_lonlat": None}
+               for r in reversed(station.runs()) if r["episode_id"] not in station.by_id}
+        mine = [m for m in own.values() if all(w in m["instruction"].lower() for w in words)]
+        return {"missions": mine + [station.entry(e) for e in hits[:max(0, limit)]],
+                "total": len(station.catalog) + len(own)}
 
     @app.get("/reasoner")
     def reasoner() -> dict[str, Any]:
@@ -454,21 +497,21 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
 
     @app.get("/location")
     def location() -> dict[str, Any]:
-        """The basemap: the raster's tiles over the raster's extent; 404 on a station with no raster."""
-        if station.ortho is None:
-            raise HTTPException(404, "no raster: the map draws no basemap")
-        b = station.ortho[1]
+        """The basemap: tiles over the raster's (or the picture's) extent; 404 on a station with neither."""
+        if station.basemap is None:
+            raise HTTPException(404, "no raster or picture: the map draws no basemap")
+        b = station.basemap[1]
         (w, s), (e, n) = station.lonlat((b.x_min, b.y_min)), station.lonlat((b.x_max, b.y_max))
         return {"name": station.map_name, "label": station.map_name, "bounds": [w, s, e, n],
                 "center": {"lat": (s + n) / 2, "lon": (w + e) / 2}, "tiles": "tiles/{z}/{x}/{y}.png",
                 "minzoom": TILE_ZOOMS[0], "maxzoom": TILE_ZOOMS[1], "attribution": ""}
 
     tile = functools.lru_cache(maxsize=1024)(
-        lambda z, x, y: tile_png(station.ortho, station.tiles_dir, station.map_name, z, x, y))
+        lambda z, x, y: tile_png(station.basemap, station.tiles_dir, station.map_name, z, x, y))
 
     @app.get("/tiles/{z}/{x}/{y}.png")
     def tiles(z: int, x: int, y: int) -> Response:
-        png = tile(z, x, y) if station.ortho is not None and TILE_ZOOMS[0] <= z <= TILE_ZOOMS[1] else None
+        png = tile(z, x, y) if station.basemap is not None and TILE_ZOOMS[0] <= z <= TILE_ZOOMS[1] else None
         if png is None:
             raise HTTPException(404)
         return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
@@ -488,8 +531,10 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
         @app.get("/{path:path}")
         def console(path: str) -> FileResponse:
             target = (root / path).resolve()
-            return FileResponse(target if path and target.is_relative_to(root) and target.is_file()
-                                else root / "index.html")
+            if path and target.is_relative_to(root) and target.is_file():
+                return FileResponse(target)
+            # The page names its hashed assets, so it is asked for again on every load.
+            return FileResponse(root / "index.html", headers={"Cache-Control": "no-cache"})
 
     return app
 
@@ -501,6 +546,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="the raster directory the twin's frames and the basemap are cut from; unset reviews runs only")
     ap.add_argument("--register", type=Path, default=None,
                     help="the raster directory each frame is registered against; unset registers nothing")
+    ap.add_argument("--basemap", type=Path, default=None,
+                    help="a north-up picture of the bake's whole extent, for a reviewing station's map; --ortho replaces it")
     ap.add_argument("--out", type=Path, default=Path("output/station"), help="where runs land and are reviewed from")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8788)
@@ -510,7 +557,8 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn  # noqa: PLC0415
 
     args.out.mkdir(parents=True, exist_ok=True)
-    station = Station(config=args.config, out=args.out, ortho_dir=args.ortho, register=args.register)
+    station = Station(config=args.config, out=args.out, ortho_dir=args.ortho, register=args.register,
+                      basemap=args.basemap)
     if not (WEB_DIST / "index.html").is_file():
         log.warning("no built console at %s: run `npm ci && npm run build` in station/web", WEB_DIST)
     uvicorn.run(build_app(station), host=args.host, port=args.port, log_level="warning")
