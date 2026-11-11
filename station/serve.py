@@ -135,7 +135,8 @@ def tile_png(ortho, tiles_dir, map_name: str, z: int, x: int, y: int) -> bytes |
 class Station:
     """The seat, the catalog and the finished runs of one map."""
 
-    def __init__(self, *, config: str, out: Path, ortho_dir: Path | None, register: Path | None) -> None:
+    def __init__(self, *, config: str, out: Path, ortho_dir: Path | None, register: Path | None,
+                 basemap: Path | None = None) -> None:
         import benchmarks.calcity  # noqa: PLC0415
 
         benchmarks.calcity.use()
@@ -153,10 +154,23 @@ class Station:
         if ortho_dir is not None and self.ortho is None:
             raise SystemExit(f"no {self.map_name} raster under {ortho_dir}: a raster directory holds "
                              f"{map_render.raster_pair(self.map_name)}")
+        #: What the map's tiles are cut from: the raster, else a north-up picture of the bake's whole extent.
+        self.basemap = self.ortho if self.ortho is not None else self._picture(basemap)
         self._lock = threading.Lock()
         self.mission: Any = None
         self._sortie: Path | None = None
         self._trail: list[list[float]] = []
+
+    def _picture(self, path: Path | None):
+        """``path`` as ``(rgb, bounds, px_per_m)`` over the bake's bounds, or None without a picture or a bake."""
+        from PIL import Image  # noqa: PLC0415
+
+        if path is None or not self.baked:
+            return None
+        Image.MAX_IMAGE_PIXELS = None  # a basemap of a whole block is large by design
+        rgb = np.asarray(Image.open(path).convert("RGB"))
+        bounds = map_bounds(self.tiles_dir, self.map_name)
+        return rgb, bounds, rgb.shape[1] / (bounds.x_max - bounds.x_min)
 
     # -- placing things on the basemap --------------------------------------
 
@@ -473,21 +487,21 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
 
     @app.get("/location")
     def location() -> dict[str, Any]:
-        """The basemap: the raster's tiles over the raster's extent; 404 on a station with no raster."""
-        if station.ortho is None:
-            raise HTTPException(404, "no raster: the map draws no basemap")
-        b = station.ortho[1]
+        """The basemap: tiles over the raster's (or the picture's) extent; 404 on a station with neither."""
+        if station.basemap is None:
+            raise HTTPException(404, "no raster or picture: the map draws no basemap")
+        b = station.basemap[1]
         (w, s), (e, n) = station.lonlat((b.x_min, b.y_min)), station.lonlat((b.x_max, b.y_max))
         return {"name": station.map_name, "label": station.map_name, "bounds": [w, s, e, n],
                 "center": {"lat": (s + n) / 2, "lon": (w + e) / 2}, "tiles": "tiles/{z}/{x}/{y}.png",
                 "minzoom": TILE_ZOOMS[0], "maxzoom": TILE_ZOOMS[1], "attribution": ""}
 
     tile = functools.lru_cache(maxsize=1024)(
-        lambda z, x, y: tile_png(station.ortho, station.tiles_dir, station.map_name, z, x, y))
+        lambda z, x, y: tile_png(station.basemap, station.tiles_dir, station.map_name, z, x, y))
 
     @app.get("/tiles/{z}/{x}/{y}.png")
     def tiles(z: int, x: int, y: int) -> Response:
-        png = tile(z, x, y) if station.ortho is not None and TILE_ZOOMS[0] <= z <= TILE_ZOOMS[1] else None
+        png = tile(z, x, y) if station.basemap is not None and TILE_ZOOMS[0] <= z <= TILE_ZOOMS[1] else None
         if png is None:
             raise HTTPException(404)
         return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
@@ -522,6 +536,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="the raster directory the twin's frames and the basemap are cut from; unset reviews runs only")
     ap.add_argument("--register", type=Path, default=None,
                     help="the raster directory each frame is registered against; unset registers nothing")
+    ap.add_argument("--basemap", type=Path, default=None,
+                    help="a north-up picture of the bake's whole extent, for a reviewing station's map; --ortho replaces it")
     ap.add_argument("--out", type=Path, default=Path("output/station"), help="where runs land and are reviewed from")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8788)
@@ -531,7 +547,8 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn  # noqa: PLC0415
 
     args.out.mkdir(parents=True, exist_ok=True)
-    station = Station(config=args.config, out=args.out, ortho_dir=args.ortho, register=args.register)
+    station = Station(config=args.config, out=args.out, ortho_dir=args.ortho, register=args.register,
+                      basemap=args.basemap)
     if not (WEB_DIST / "index.html").is_file():
         log.warning("no built console at %s: run `npm ci && npm run build` in station/web", WEB_DIST)
     uvicorn.run(build_app(station), host=args.host, port=args.port, log_level="warning")

@@ -24,6 +24,7 @@ map, and with a raster it draws the basemap.
 | Flag | What it sets |
 |---|---|
 | `--ortho <dir>` | The raster directory the twin's frames and the basemap tiles are cut from. Unset, the station reviews runs only. |
+| `--basemap <image>` | A north-up picture of the bake's whole extent, for a reviewing station's map. `--ortho` replaces it. |
 | `--register <dir>` | The raster directory each frame is registered against. Unset registers nothing. |
 | `--out <dir>` | Where runs land and are reviewed from (default `output/station`). |
 | `--config <yaml>` | The flight config (default `configs/calcity.yaml`). |
