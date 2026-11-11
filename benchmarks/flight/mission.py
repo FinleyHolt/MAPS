@@ -94,6 +94,13 @@ def _holds(cov: dict[str, Any] | None) -> bool:
     return bool(cov) and float(cov.get("fraction") or 0.0) >= COVERED_FRACTION
 
 
+def _held_points(cov: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A coverage answer as a run record states it: the share held, one flag per area point, the frames asked."""
+    if not cov:
+        return None
+    return {"fraction": cov["fraction"], "held": [b is not None for b in cov["best"]], "frames": cov["frames"]}
+
+
 def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
     """The split's row named ``episode_id``; with ``start_xy``, a mission
     flown under the operator's own words: the map its id names, the start
@@ -243,6 +250,8 @@ class Mission:
         self._held: tuple[Any, dict[str, Any]] | None = None
         #: The nearest the pose came to the last leg's point since it was posted, re-flies included.
         self._closest_m = float("inf")
+        #: The leg being waited on (its area and the share the recording holds so far), None between legs.
+        self.waiting: dict[str, Any] | None = None
 
         from benchmarks import git_provenance  # noqa: PLC0415
 
@@ -350,6 +359,8 @@ class Mission:
         reach = max(math.dist(xy, p) for p in area)
         shorts = 0
         self._closest_m = float("inf")
+        self.waiting = {"n": step + 1, "flight": step, "target": token, "area": area_ll,
+                        "coverageFloor": COVERED_FRACTION, "coverage": None, "posted_at": self._vehicle.now()}
         while True:
             outcome, last_cov = self._wait_arrival(xy, area=area_ll, timeout_s=ARRIVAL_TIMEOUT_S, after=after,
                                                    reach_m=reach if shorts < SHORT_PASS_REQUESTS else None)
@@ -360,17 +371,24 @@ class Mission:
             self._post(Leg(target=token, point=(moved[0], moved[1]), step=step, area=area_ll,
                            ahead=ahead, revision=shorts, note=note))
         waited = self._wait_departure(xy) if outcome == "arrived" else 0.0
+        self.waiting = None
         if self._cancel.is_set():
             return None
         held = self._held_frame(area_ll, xy, after)
-        self._said(self._outcome_words(outcome, at, held, waited))
+        self.transcript.append({"kind": "leg", "said": self._outcome_words(outcome, at, held, waited),
+                                "area": area_ll, "coverageFloor": COVERED_FRACTION,
+                                "coverage": _held_points(last_cov)})
         return held
 
     def _post(self, leg: Leg) -> None:
-        """Hand ``leg`` to the aircraft; a ``waypoint`` row says when, at the
+        """Hand ``leg`` to the aircraft; a ``waypoint`` row says when and where, at the
         commanded height (what the measures' turn radius and height fallback read)."""
         self._vehicle.post(leg)
-        self.transcript.append({"kind": "waypoint", "altitudeAglMeters": self.agl_m})
+        row = {"kind": "waypoint", "altitudeAglMeters": self.agl_m, "flight": leg.step, "n": leg.step + 1,
+               "label": leg.target, "coverageFloor": COVERED_FRACTION}
+        if (at := self._area_lonlat([leg.point])[0]) is not None:
+            row["lon"], row["lat"] = at
+        self.transcript.append(row)
 
     def _outcome_words(self, outcome: str, at: str, held: tuple[Any, dict[str, Any]] | None, waited: float) -> str:
         """The ``leg`` row of a leg that arrived or was lost: what the pass
@@ -529,6 +547,8 @@ class Mission:
             # The recording decides arrival; the aircraft's own pose only the
             # short pass and the timeout's start.
             cov = self.live.coverage(area, after)
+            if self.waiting is not None:
+                self.waiting = {**self.waiting, "coverage": _held_points(cov), "closest_m": self._closest_m}
             if _holds(cov):
                 return "arrived", cov
             fraction = float((cov or {}).get("fraction") or 0.0)
@@ -564,7 +584,9 @@ class Mission:
                "corners_xy": last.get("corners_xy"), "boresight": last.get("boresight"),
                "off_nadir_deg": last.get("off_nadir_deg"),
                "registration": last.get("registration"), "mosaic": last.get("mosaic"),
-               "observation": last.get("observation"), "flight": len(self.flights)}
+               "observation": last.get("observation"), "flight": len(self.flights),
+               "world_window": [float(v) for v in obs.world_window], "shape": [int(v) for v in obs.rgb.shape[:2]],
+               "t_s": self.elapsed_s()}
         try:
             with (self.workdir / FRAMES_JSONL).open("a", encoding="utf-8") as f:
                 f.write(json.dumps(row, default=str) + "\n")

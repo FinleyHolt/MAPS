@@ -135,6 +135,12 @@ and read by no measure or decision: in `frames.jsonl`, `log_time`, `t_host`,
 `age_s`, `attitude`, `boresight` and `registration` (with its `frames`
 count); in the ledger row, `ts` (the host's wall clock at the start). The
 replay tiers' `leg` rows read `mosaic`'s `asked` and `fetch_failed`.
+A `waypoint` row names the leg posted (`flight`, `n`, `label`, `lon`, `lat`,
+`coverageFloor`), the `leg` row that ends a posted leg carries its `area` and
+the `coverage` the recording held of it (`fraction`, one `held` flag per area
+point, `frames`), and a `frames.jsonl` row states the observation's ground
+(`world_window`, `shape`) and time (`t_s`): what the station
+([`station/`](../../station/README.md)) draws, read by no measure or decision.
 `conversation.jsonl`'s diagnostic rows (`malformed_envelope`, `empty_turn`,
 `code_shaped_reply`, `truncated_turn`, `no_flight_reply`, `transient_error`,
 `oversize_rejection`, `content_filter`, `request_refused`, and a `run` row's `reasoning`, `said`, `printed`,
