@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 
-from maps.sws.graph.model import MapObject, ObjectGraph
+from maps.world_state.graph import MapObject, ObjectGraph
 
 # Feature keys that never become tags: the geometry the builder reads, ``name``
 # (its own field) and OSM's ``orientation`` (not served). Everything else rides

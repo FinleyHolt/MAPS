@@ -36,8 +36,8 @@ from maps.perception.observation import crop_observation
 from maps.perception.sam.detect_client import SamDetectClient
 from maps.search.search_loop import SearchLoop
 from maps.search.withhold import withheld
-from maps.sws.graph.builder import build_object_graph
-from maps.sws.graph.model import GridDomain
+from maps.world_state.prior_graph import build_object_graph
+from maps.world_state.graph import GridDomain
 
 log = logging.getLogger("run_benchmark")
 

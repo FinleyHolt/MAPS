@@ -12,7 +12,7 @@ import pytest
 
 from benchmarks.calcity.data_prep import bake_tiles
 from benchmarks.calcity.data_prep.bake_tiles import bake_block
-from maps.sws.graph.builder import build_object_graph
+from maps.world_state.prior_graph import build_object_graph
 
 
 def _bundle(monkeypatch, features):

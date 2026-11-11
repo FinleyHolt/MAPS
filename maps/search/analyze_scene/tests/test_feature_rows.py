@@ -5,7 +5,7 @@ import numpy as np
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.geom_program import run_program
 from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 
 def _way(name, cells, tags=None):

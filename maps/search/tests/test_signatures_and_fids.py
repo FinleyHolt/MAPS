@@ -67,7 +67,7 @@ def test_two_missions_in_one_process_score_finds_on_their_own_surface():
 
 
 def test_a_five_digit_detection_fid_is_a_row_like_a_four_digit_one():
-    """A Cal City mission's detections pass detected_9999 (runtime.py mints
+    """A Cal City mission's detections pass detected_9999 (upsert.py mints
     detected_<count>): the bare name is the row, and a quoted one is a fid,
     not a name to ground."""
     import json

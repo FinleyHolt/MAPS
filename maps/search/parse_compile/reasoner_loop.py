@@ -37,7 +37,7 @@ from maps.search.analyze_scene.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
     unmatched_query_tokens as _unmatched_query_tokens,
 )
-from maps.search.analyze_scene.tools import ToolContext
+from maps.world_state.context import ToolContext
 from maps.search.parse_compile import python_surface as _py_surface
 from maps.search.parse_compile.carry import (
     Carry,

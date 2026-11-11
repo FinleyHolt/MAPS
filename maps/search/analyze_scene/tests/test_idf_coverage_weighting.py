@@ -10,7 +10,7 @@ import pytest
 from maps.search.analyze_scene import text_match as T
 from maps.search.analyze_scene.geom_program import run_program
 from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.sws.graph.builder import build_object_graph
+from maps.world_state.prior_graph import build_object_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))

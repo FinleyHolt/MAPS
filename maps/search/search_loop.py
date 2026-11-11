@@ -16,7 +16,7 @@ from maps.search.analyze_scene.geom_compute import cell_centre_xy
 from maps.search.parse_compile.passes import spread
 from maps.search.parse_compile.perception_director import (
     PerceptionDirector, canon_concept)
-from maps.sws.graph.model import GridDomain, MapObject
+from maps.world_state.graph import GridDomain, MapObject
 from maps.util.mask_codec import encode_mask_record
 
 
@@ -242,7 +242,7 @@ class SearchLoop:
         with a projected footprint through the tracked upsert, the rest
         centroid-only. Returns the per-step detection records the recorder
         writes."""
-        from maps.sws.graph.runtime import (  # noqa: PLC0415
+        from maps.world_state.upsert import (  # noqa: PLC0415
             upsert_detected_centroid_only,
             upsert_tracked_detected,
         )
@@ -314,7 +314,7 @@ class SearchLoop:
         (e.g. ``{"color": "gray", "color_rgb": "128,130,131"}``) onto its
         node. Never raises: the per-frame enrichment calls it inline."""
         try:
-            from maps.sws.graph.runtime import (
+            from maps.world_state.upsert import (
                 upsert_prior_percept as _upsert_prior_percept,
             )
 
@@ -328,7 +328,7 @@ class SearchLoop:
 
     def tool_ctx(self):
         """The :class:`ToolContext` over the live graph and the tile frame."""
-        from maps.search.analyze_scene.tools import ToolContext
+        from maps.world_state.context import ToolContext
 
         with self._lock:
             return ToolContext(

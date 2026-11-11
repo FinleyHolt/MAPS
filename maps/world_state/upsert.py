@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.sws.graph.builder import mask_centerline
-from maps.sws.graph.model import MapObject, ObjectGraph
+from maps.world_state.prior_graph import mask_centerline
+from maps.world_state.graph import MapObject, ObjectGraph
 
 
 # The color attrs of one best-view read, overwritten together.

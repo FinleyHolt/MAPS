@@ -6,7 +6,7 @@ import json
 
 from maps.search.analyze_scene.row_geometry import cells_of
 from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 
 def _node(cells, provenance="prebaked"):

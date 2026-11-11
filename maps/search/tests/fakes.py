@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from maps.llm.endpoint_spec import EndpointSpec
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 TEST_SPEC = EndpointSpec(
     base_url="http://unused",
@@ -87,7 +87,7 @@ def search_loop(nodes=None, *, cell_size_m=2.0, sam_setter=None):
     """A started SearchLoop over a graph holding ``nodes`` (``{fid: node}``),
     tile origin (0, 0)."""
     from maps.search.search_loop import SearchLoop
-    from maps.sws.graph.model import GridDomain
+    from maps.world_state.graph import GridDomain
 
     loop = SearchLoop(GridDomain(height=10, width=10, cell_size_m=cell_size_m),
                       tile_origin_xy=(0.0, 0.0), map_name="test", sam_setter=sam_setter,

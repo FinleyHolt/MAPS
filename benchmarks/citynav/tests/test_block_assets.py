@@ -27,7 +27,7 @@ needs_block_bake = pytest.mark.skipif(
 def test_per_block_graph_has_no_cross_block_leakage():
     import json
 
-    from maps.sws.graph.builder import build_object_graph
+    from maps.world_state.prior_graph import build_object_graph
 
     stem = tile_stem("birmingham_block_0")
     meta = json.loads(Path(f"{stem}_meta.json").read_text())

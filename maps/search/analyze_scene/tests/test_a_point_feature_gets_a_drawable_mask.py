@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from maps.search.analyze_scene.surface import build_surface_from_graph
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 _CELL_M = 2.0
 _ORIGIN = (0.0, 0.0)

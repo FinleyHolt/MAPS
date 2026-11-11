@@ -9,7 +9,7 @@ import numpy as np
 from maps.search.analyze_scene import geom_program as gp
 from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.search.analyze_scene import row_geometry as RG
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 
 def _node(r, c, name=None, provenance="prebaked", cls="building", w=4, h=3):

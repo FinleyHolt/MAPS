@@ -5,7 +5,7 @@ import math
 
 from maps.search.analyze_scene import geom_compute as G
 from maps.search.analyze_scene.surface import build_surface_from_graph, representative_point
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 
 def _node(contour, name=None, world_xy=None):

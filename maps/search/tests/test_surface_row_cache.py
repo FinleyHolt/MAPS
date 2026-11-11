@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from maps.search.analyze_scene import surface
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 
 def _node(r, c, name=None, provenance="prebaked", cls="building"):

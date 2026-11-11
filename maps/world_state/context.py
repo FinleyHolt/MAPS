@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from maps.sws.graph.model import ObjectGraph
+from maps.world_state.graph import ObjectGraph
 
 
 @dataclass

@@ -12,7 +12,7 @@ import json
 
 from benchmarks.citynav.bake.city import bake_block
 from benchmarks.citynav.eval import WorldBounds
-from maps.sws.graph.builder import build_object_graph
+from maps.world_state.prior_graph import build_object_graph
 
 
 TOY = WorldBounds(x_min=0.0, y_min=0.0, x_max=40.0, y_max=40.0)

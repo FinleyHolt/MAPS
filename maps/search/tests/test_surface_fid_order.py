@@ -5,7 +5,7 @@ import numpy as np
 
 from maps.search.analyze_scene.surface import build_surface_from_graph
 from maps.search.tests.fakes import acts_of_block
-from maps.sws.graph.model import MapObject
+from maps.world_state.graph import MapObject
 
 
 def _node(i):
