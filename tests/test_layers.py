@@ -1,4 +1,4 @@
-"""Each layer imports only what sits below it (maps <- benchmarks; serving beside them), and every in-repo import resolves."""
+"""Each layer imports only what sits below it (maps <- benchmarks <- station; serving beside them), and every in-repo import resolves."""
 
 from __future__ import annotations
 
@@ -9,14 +9,18 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN = {
-    "maps": {"benchmarks", "serving"},
-    "benchmarks": {"serving"},
+    "maps": {"benchmarks", "station", "serving"},
+    "benchmarks": {"station", "serving"},
+    "station": {"serving"},
 }
+
+# The vacuity floor: a scan that found fewer imports than this read nothing. The station is one module.
+FLOOR = {"station": 20}
 
 
 def _imports(layer: str) -> list[tuple[str, str]]:
     found = []
-    for py in sorted((ROOT / layer).rglob("*.py")):
+    for py in sorted(p for p in (ROOT / layer).rglob("*.py") if "node_modules" not in p.parts):
         for node in ast.walk(ast.parse(py.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
                 found += [(str(py.relative_to(ROOT)), a.name) for a in node.names]
@@ -33,7 +37,7 @@ def _resolves(mod: str) -> bool:
 @pytest.mark.parametrize("layer", sorted(FORBIDDEN))
 def test_a_layer_imports_nothing_above_or_beside_it(layer):
     imports = _imports(layer)
-    assert len(imports) > 100
+    assert len(imports) > FLOOR.get(layer, 100)
     assert [(f, m) for f, m in imports if m.split(".")[0] in FORBIDDEN[layer]] == []
 
 
