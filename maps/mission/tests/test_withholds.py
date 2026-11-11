@@ -609,25 +609,39 @@ def test_a_library_withhold_says_how_to_read_a_row_of_a_set_it_cannot_order(monk
 
 def test_a_mission_keeps_the_set_it_was_built_under_for_every_turn():
     """The set is fixed when the mission is built: a turn driven outside the
-    binding, or under another, runs under the mission's own."""
-    block = [run('look_for("pool")')]
-    with W.withholding(["look_for"]):
-        _reply, withheld_mission, _flights, declared = drive([block, "done"])
-    assert declared == [] and "error" in tool_results(withheld_mission)[0]
-    # The next operator turn, with nothing bound and then with another set bound.
-    withheld_mission.exhausted = 0   # the scripted reasoner's own guard counts replies across turns
-    drive([block, "done"], reasoner=withheld_mission)
-    withheld_mission.exhausted = 0
-    with W.withholding(["prior"]):
-        drive([block, "done"], reasoner=withheld_mission)
-    assert declared == [] and all("error" in r for r in tool_results(withheld_mission))
+    binding, or under another, runs under the mission's own. The probe is the
+    ``loop`` withhold, asked at each turn: under it an empty text turn ends
+    the mission at once, and without it the turn is repaired and the flight
+    behind it flies."""
+    script = ["", [run('go_to("prior_7")')], "done"]
 
-    _reply, plain_mission, _flights, declared = drive([block, "done"])
-    plain_mission.exhausted = 0
-    with W.withholding(["look_for"]):
-        drive([block, "done"], reasoner=plain_mission)
-    assert len(declared) == 2 and not any("error" in r for r in tool_results(plain_mission))
-    assert W.active() == frozenset()
+    def repaired(fr) -> bool:
+        return any("[Repair]" in str(m["content"]) for m in fr.messages)
+
+    with W.withholding(["loop"]):
+        reply, kept, flights, _d = drive(script)
+    assert reply.turns_used == 1 and not flights and not repaired(kept)
+    # The next operator turn through continue_mission, with nothing bound.
+    kept.turns, kept.exhausted = [], 0
+    reply = drive(script, reasoner=kept)[0]
+    assert reply.turns_used == 1 and not flights and not repaired(kept)
+    # A turn driven on the mission itself, under another set.
+    kept.turns, kept.exhausted = list(script), 0
+    with W.withholding(["prior"]):
+        reply = kept.mission[0].converse("Find the goal object.")
+    assert reply.turns_used == 1 and not flights and not repaired(kept)
+
+    # A mission built with nothing withheld keeps repairing under a later binding.
+    _reply, plain, flights, _d = drive(script)
+    assert len(flights) == 1 and repaired(plain)
+    plain.turns, plain.exhausted = [], 0
+    with W.withholding(["loop"]):
+        drive(script, reasoner=plain)
+    assert len(flights) == 2
+    plain.turns, plain.exhausted = list(script), 0
+    with W.withholding(["loop"]):
+        plain.mission[0].converse("Find the goal object.")
+    assert len(flights) == 3 and W.active() == frozenset()
 
 
 def test_two_missions_in_one_process_withhold_their_own_sets():
