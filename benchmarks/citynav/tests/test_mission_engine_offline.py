@@ -56,16 +56,16 @@ def test_bare_xy_token_matches_the_one_grammar():
 
 
 def _bare_loop():
-    from maps.mission.tests.fakes import search_loop
+    from maps.mission.tests.fakes import episode_world
 
     pushes: list[list] = []
-    return search_loop(sam_setter=pushes.append), pushes
+    return episode_world(sam_setter=pushes.append), pushes
 
 
 def test_declare_arms_the_director_on_first_call():
     loop, pushes = _bare_loop()
     assert loop.declare_mission_concepts(["car"]) is None
-    d = loop.state.perception_director
+    d = loop.state.segmenter_tasking
     assert d is not None
     assert d.watchlist == ["car"]
     assert pushes[-1] == ["car"]
@@ -74,9 +74,9 @@ def test_declare_arms_the_director_on_first_call():
 def test_redeclare_is_latest_wins_on_the_same_director():
     loop, pushes = _bare_loop()
     loop.declare_mission_concepts(["car"])
-    director_first = loop.state.perception_director
+    director_first = loop.state.segmenter_tasking
     loop.declare_mission_concepts(["building"])
-    d = loop.state.perception_director
+    d = loop.state.segmenter_tasking
     assert d is director_first, "a redeclare updates the live director, never rebuilds"
     assert d.watchlist == ["building"]
     assert pushes[-1] == ["building"]

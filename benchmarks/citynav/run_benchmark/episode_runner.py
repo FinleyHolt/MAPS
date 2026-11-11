@@ -35,7 +35,7 @@ from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.sam.detect_client import SamDetectClient
-from maps.mission.episode_world import SearchLoop
+from maps.mission.episode_world import EpisodeWorld
 from maps.settings import Settings
 from maps.withhold import withholding
 from maps.world_state.prior_graph import build_object_graph
@@ -47,7 +47,7 @@ log = logging.getLogger("run_benchmark")
 @dataclass
 class EpisodeState:
     """The aircraft's pose during the mission and the stop it is flying; the
-    graph lives on the ``SearchLoop``."""
+    graph lives on the ``EpisodeWorld``."""
 
     pose_xy: tuple[float, float]
     altitude_m: float
@@ -146,7 +146,7 @@ class Hydrated:
     # The block's ground datum: every height above ground is read off it.
     ground_z_m: float
     perception: Any
-    search_loop: SearchLoop
+    world: EpisodeWorld
     #: The bench the episode is flown on: its rasters, its bake, its criterion.
     bench: Bench
     #: The run's engine settings (``maps.settings``): endpoints, sampling, what is withheld.
@@ -174,7 +174,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, 
     """The engine for one episode on ``bench`` under ``settings``: its graph,
     the start pose, the segmenter wired to the director's watchlist (the
     declared classes plus the boosts riding a flight), and the started
-    SearchLoop. ``workdir`` and ``routing_key`` are the mission's own
+    EpisodeWorld. ``workdir`` and ``routing_key`` are the mission's own
     (:class:`Hydrated`). ``perception_factory`` builds the segmenter in place
     of :func:`make_perception` (the flight's forced replay brings the
     recorded one)."""
@@ -184,7 +184,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, 
     # ``make_perception`` is a module global looked up at call time: a test swaps it.
     perception = perception_factory() if perception_factory is not None else make_perception(settings)
     grid_h, grid_w = assets.grid_shape
-    search_loop = SearchLoop(
+    world = EpisodeWorld(
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         map_name=assets.map_name,
@@ -194,19 +194,19 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, 
     )
     # Runtime observations accumulate in this same graph; ``provenance``
     # separates them from the prebaked nodes.
-    search_loop.start(graph)
+    world.start(graph)
     return Hydrated(
         cfg=cfg, state=state, assets=assets, episode=episode,
         sensor=resolve_sensor(cfg.sensor),
         tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
                              cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
-        ground_z_m=ground, perception=perception, search_loop=search_loop, bench=bench,
+        ground_z_m=ground, perception=perception, world=world, bench=bench,
         settings=settings, workdir=workdir, routing_key=routing_key,
     )
 
 
-def _detected_fids(search_loop) -> set[str]:
-    return {nid for nid, node in search_loop.state.runtime_graph.nodes.items()
+def _detected_fids(world) -> set[str]:
+    return {nid for nid, node in world.state.runtime_graph.nodes.items()
             if node.provenance == "detected"}
 
 
@@ -231,13 +231,13 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
         log.exception("retro segment failed")
         return {"error": f"segment failed: {type(exc).__name__}: {exc}"}
-    before = _detected_fids(h.search_loop)
+    before = _detected_fids(h.world)
     try:
         perceive(h, obs, dets)
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
         log.exception("retro ingest failed")
         return {"error": f"ingest failed: {type(exc).__name__}: {exc}"}
-    new = sorted(_detected_fids(h.search_loop) - before)
+    new = sorted(_detected_fids(h.world) - before)
     sid = flown_entry.get("stop_id")
     return {
         "n_dets": len(dets),
@@ -290,7 +290,7 @@ def _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdi
     log.info("  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, episode=%s)",
              state.altitude_m, f"AGL {agl:.0f} m" if agl is not None else f"row z={episode.start_z:.2f}",
              ground, float(cfg.altitude_cap_m), episode.episode_id)
-    h.search_loop.set_retro_perceiver(functools.partial(retro_perceive, h))
+    h.world.set_retro_perceiver(functools.partial(retro_perceive, h))
 
     # The takeoff pose, before the mission moves the drone: the replay flies
     # from exactly here, facing upstream's start heading.

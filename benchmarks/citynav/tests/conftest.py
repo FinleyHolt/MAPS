@@ -68,19 +68,19 @@ STUB_GRAPH = {
 
 @pytest.fixture
 def stub_session(monkeypatch: pytest.MonkeyPatch):
-    """A ``MissionSession`` over a SearchLoop holding ``STUB_GRAPH``, a live
+    """A ``MissionSession`` over a EpisodeWorld holding ``STUB_GRAPH``, a live
     ``observe`` frame and no render: ``make(**loop_overrides,
     pose_xy=, rgb=, withhold=)``, ``withhold`` the parts its run withholds."""
     from types import SimpleNamespace
 
     from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
     from benchmarks.citynav.run_benchmark import mission_engine as me
-    from maps.mission.tests.fakes import search_loop
+    from maps.mission.tests.fakes import episode_world
 
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
 
     def make(*, pose_xy=(10.0, 20.0), rgb=None, withhold=(), **loop_overrides) -> me.MissionSession:
-        loop = search_loop({
+        loop = episode_world({
             fid: SimpleNamespace(world_xy=xy, provenance="detected" if prov == "detected" else "prebaked")
             for fid, (xy, prov) in STUB_GRAPH.items()})
         for k, v in loop_overrides.items():
@@ -92,7 +92,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
             assets=SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0,
                                    grid_shape=(10, 10)),
             episode=SimpleNamespace(map_name="calcity", description="the largest building"),
-            sensor=None, tile_frame=None, ground_z_m=0.0, search_loop=loop,
+            sensor=None, tile_frame=None, ground_z_m=0.0, world=loop,
             # The bench as the test's environment places it, read when the session is made.
             bench=citynav_bench(os.environ),
             settings=Settings(withhold=frozenset(withhold)), workdir=None, routing_key=None,

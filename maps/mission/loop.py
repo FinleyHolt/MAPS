@@ -41,7 +41,7 @@ from maps.mission.surface_state import _SurfaceState, _surface_from_ctx
 from maps.mission.watch_verbs import _WatchVerbs
 from maps.settings import Settings
 from maps.withhold import active, withheld, withholding
-from maps.world_state.context import ToolContext
+from maps.world_state.context import QueryContext
 
 
 log = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
         self,
         *,
         reasoner: Reasoner,
-        ctx: ToolContext,
+        ctx: QueryContext,
         compute_namespace: dict,
         mission_spec: MissionSpec,
         boost_queue: Callable[[list, list], dict],

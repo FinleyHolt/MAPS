@@ -88,7 +88,7 @@ def hydrated(sensor, cells=None):
     """The parts of a hydrated mission the leg reads."""
     return SimpleNamespace(
         sensor=sensor, state=SimpleNamespace(pose_xy=(600.0, 100.0), altitude_m=AGL_M), ground_z_m=0.0,
-        search_loop=SimpleNamespace(node_cells_xy=lambda token: cells))
+        world=SimpleNamespace(node_cells_xy=lambda token: cells))
 
 
 def session(h, fly):

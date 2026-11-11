@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from maps.perception.watchlist import PerceptionDirector
+from maps.perception.watchlist import SegmenterTasking
 from maps.mission.tests.fakes import CANDS, drive, run, tool_results
 
 _CANDS = CANDS + [
@@ -146,7 +146,7 @@ def test_a_nameless_set_has_one_number_in_keys_and_acks(code):
     (f'look_for("car", at={_FILTERED})\n', "Bind it first (s = ...)"),
 ])
 def test_look_for_at_a_set_is_refused_and_queues_nothing(code, said):
-    pd = PerceptionDirector()
+    pd = SegmenterTasking()
     _, fr, _, _ = drive([[run(code)], "done"], cands=_CANDS,
                         boost_queue=pd.boost_queue)
     out = tool_results(fr)[0]

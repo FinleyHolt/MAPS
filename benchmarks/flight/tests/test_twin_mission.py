@@ -155,7 +155,7 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     monkeypatch.setattr(episode_runner, "make_perception", lambda settings: SamDetectClient())
     endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
     h = M.hydrate(bench=calcity.bench, episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
-    h.search_loop.declare_mission_concepts(["car", "tree"])
+    h.world.declare_mission_concepts(["car", "tree"])
     assert h.perception.concepts == ["car", "tree"]
 
 

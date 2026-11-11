@@ -21,7 +21,7 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
     h = SimpleNamespace(
         episode=None,
         state=SimpleNamespace(altitude_m=100.0, pose_xy=(0.0, 0.0)),
-        ground_z_m=0.0, search_loop=SimpleNamespace(set_retro_perceiver=lambda f: None),
+        ground_z_m=0.0, world=SimpleNamespace(set_retro_perceiver=lambda f: None),
         perception=SimpleNamespace(sahi_tiles_failed=0))
 
     def build(cfg, ep, assets, bench, *, settings, workdir, routing_key):
@@ -112,7 +112,7 @@ def test_the_bench_resolves_its_sensor_as_the_flight_does(monkeypatch) -> None:
     monkeypatch.setattr(er, "_episode_graph", lambda assets, settings: None)
     monkeypatch.setattr(er, "start_altitude_m", lambda cfg, m, z: (100.0, 0.0))
     monkeypatch.setattr(er, "make_perception", lambda settings: SimpleNamespace(set_concepts=None))
-    monkeypatch.setattr(er, "SearchLoop", lambda *a, **kw: loop)
+    monkeypatch.setattr(er, "EpisodeWorld", lambda *a, **kw: loop)
     assets = SimpleNamespace(grid_shape=(2, 2), cell_size_m=1.0, map_name="b_block_1",
                              bounds=SimpleNamespace(x_min=0.0, y_min=0.0))
     episode = SimpleNamespace(map_name="b_block_1", start_z=100.0, start_xy=(0.0, 0.0))

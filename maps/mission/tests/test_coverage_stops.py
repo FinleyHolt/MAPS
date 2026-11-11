@@ -1,9 +1,9 @@
-"""The stops an ``explore`` flies: ``SearchLoop.node_coverage_stops``."""
+"""The stops an ``explore`` flies: ``EpisodeWorld.node_coverage_stops``."""
 from __future__ import annotations
 
 import numpy as np
 
-from maps.mission.tests.fakes import search_loop
+from maps.mission.tests.fakes import episode_world
 
 _CELL_M = 2.0
 # The mission's flight budget, the stop bound it passes.
@@ -18,13 +18,13 @@ def _cover(lp, fid, spacing_m, minor_spacing_m=1e9):
 
 
 def _loop_over(cells):
-    """A SearchLoop whose one node carries these raster cells."""
+    """A EpisodeWorld whose one node carries these raster cells."""
     class _Node:
         pass
 
     _Node.cells = np.array(cells)
     _Node.centroid = (cells[0][0], cells[0][1])
-    return search_loop({"prior_9": _Node()}, cell_size_m=_CELL_M)
+    return episode_world({"prior_9": _Node()}, cell_size_m=_CELL_M)
 
 
 def _cell_centres(cells):

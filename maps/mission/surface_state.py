@@ -13,7 +13,7 @@ from maps.withhold import withheld
 
 
 def _surface_from_ctx(ctx) -> dict:
-    """The ``{cands, anchors, cell_m}`` surface of a :class:`ToolContext`'s
+    """The ``{cands, anchors, cell_m}`` surface of a :class:`QueryContext`'s
     graph."""
     cell_m = float(ctx.cell_size_m)
     cands, anchors = build_surface_from_graph(

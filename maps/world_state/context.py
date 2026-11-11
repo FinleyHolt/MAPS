@@ -1,4 +1,4 @@
-"""The tool context: the world the reasoner's analyze programs query."""
+"""The query context: the world the model's programs query."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from maps.world_state.graph import ObjectGraph
 
 
 @dataclass
-class ToolContext:
-    """The shared state every tool queries: the one world-state graph (prebake
+class QueryContext:
+    """The shared state every program queries: the one world-state graph (prebake
     seed plus every in-flight detection; nodes carry ``provenance``
     "prebaked" / "detected") and the tile frame it sits in."""
 

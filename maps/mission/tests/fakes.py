@@ -95,13 +95,13 @@ def bare_ctx(graph=None, grid_shape=(10, 10), pose_xy=None):
                            pose_xy=pose_xy)
 
 
-def search_loop(nodes=None, *, cell_size_m=2.0, sam_setter=None):
-    """A started SearchLoop over a graph holding ``nodes`` (``{fid: node}``),
+def episode_world(nodes=None, *, cell_size_m=2.0, sam_setter=None):
+    """A started EpisodeWorld over a graph holding ``nodes`` (``{fid: node}``),
     tile origin (0, 0)."""
-    from maps.mission.episode_world import SearchLoop
+    from maps.mission.episode_world import EpisodeWorld
     from maps.world_state.graph import GridDomain
 
-    loop = SearchLoop(GridDomain(height=10, width=10, cell_size_m=cell_size_m),
+    loop = EpisodeWorld(GridDomain(height=10, width=10, cell_size_m=cell_size_m),
                       tile_origin_xy=(0.0, 0.0), map_name="test", sam_setter=sam_setter,
                       rgbd_dir="")
     loop.start(SimpleNamespace(nodes=dict(nodes or {})))

@@ -58,7 +58,7 @@ def test_an_episode_of_each_bench_is_hydrated_from_its_own_bake_in_one_process(b
     for h, bench, name, shape in ((first, citynav, "Elm Church", (20, 20)), (second, calcity, "North Barn", (30, 30)),
                                   (third, citynav, "Elm Church", (20, 20))):
         assert h.bench is bench and h.assets.grid_shape == shape
-        names = {n.name for n in h.search_loop.state.runtime_graph.nodes.values()}
+        names = {n.name for n in h.world.state.runtime_graph.nodes.values()}
         assert names == {name}
     # A block one bench bakes is not the other's.
     with pytest.raises(FileNotFoundError, match="calcity_meta.json"):

@@ -44,9 +44,9 @@ def test_digest_empty_flight_serves_nothing():
 def test_state_stash_replaces_whole_each_step():
     """A step folding nothing must leave an empty list, never the previous
     flight's finds. Exercised at the state seam the loop writes."""
-    from maps.mission.tests.fakes import search_loop
+    from maps.mission.tests.fakes import episode_world
 
-    loop = search_loop()
+    loop = episode_world()
     loop.state.last_flight_detections = [_det(1)]
     got = loop.last_flight_detections()
     assert got == [_det(1)]

@@ -161,7 +161,7 @@ def test_the_real_bake_lands_every_row_on_the_map():
 
 
 def test_the_flown_pose_is_the_row_s_served_xy():
-    from maps.mission.tests.fakes import search_loop
+    from maps.mission.tests.fakes import episode_world
 
     ways = [("prior_1", _way("Lime Avenue", _row(range(0, 10)))),
             ("prior_2", _way("Lime Avenue", _row(range(10, 20)))),
@@ -171,7 +171,7 @@ def test_the_flown_pose_is_the_row_s_served_xy():
                              [[r, 40] for r in range(0, 20)]
                              + [[19, c] for c in range(40, 60)]))]
 
-    loop = search_loop(dict(ways), cell_size_m=2.0)
+    loop = episode_world(dict(ways), cell_size_m=2.0)
 
     _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
     assert anchors, "fixture built no rows"

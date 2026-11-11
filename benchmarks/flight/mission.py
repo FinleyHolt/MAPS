@@ -161,7 +161,7 @@ def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:
     """The ground a leg is flown for, in tile metres: the target's footprint
     cells (at most ``AREA_POINTS``), else a disc of half the observation span
     about the point (a centre, six points at a quarter span, twelve at half)."""
-    cells = h.search_loop.node_cells_xy(token) if token else None
+    cells = h.world.node_cells_xy(token) if token else None
     # Three cells at least: fewer is a point or a line, which no coverage
     # fraction answers. A row that thin is flown as a cover stop.
     if cells and len(cells) >= 3:
@@ -653,7 +653,7 @@ class Mission:
             self._tiles_dir = self.bench.tiles_dir
 
             # look crops what this run captured, never the bake's raster.
-            h.search_loop.look_imagery = self._imagery
+            h.world.look_imagery = self._imagery
 
             def observe():
                 # The pass fused over the flight's area, fetched by the flight

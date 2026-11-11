@@ -72,7 +72,7 @@ class _Boost:
 
 
 @dataclass
-class PerceptionDirector:
+class SegmenterTasking:
     """The watchlist, the queued boosts, the flown stops and the
     retrospective executor."""
 

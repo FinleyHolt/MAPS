@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from maps.mission.watch_verbs import _named_feature_note
-from maps.mission.tests.fakes import drive, run, search_loop, tool_results
+from maps.mission.tests.fakes import drive, run, episode_world, tool_results
 
 
 def test_named_feature_note_fires_on_a_world_state_name():
@@ -37,13 +37,13 @@ def test_setter_failure_reaches_the_receipt():
     def _boom(_cs):
         raise RuntimeError("sam server gone")
 
-    rcpt = search_loop(sam_setter=_boom).declare_mission_concepts(
+    rcpt = episode_world(sam_setter=_boom).declare_mission_concepts(
         ["house"])
     assert "sam server gone" in rcpt
 
 
 def test_clean_setter_keeps_a_clean_receipt():
-    assert search_loop(sam_setter=lambda cs: None).declare_mission_concepts(
+    assert episode_world(sam_setter=lambda cs: None).declare_mission_concepts(
         ["house"]) is None
 
 
@@ -73,15 +73,15 @@ def test_a_retro_boost_at_a_flown_stop_also_arms_the_standing_watchlist():
 
 def test_the_declared_union_is_canonical_and_keeps_first_seen_order():
     pushed = []
-    search_loop(sam_setter=pushed.append).declare_mission_concepts(
+    episode_world(sam_setter=pushed.append).declare_mission_concepts(
         ["Red  Car", "tree", "None", "red car", None])
     assert pushed[0] == ["red car", "tree"]
 
 
 def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():
-    from maps.perception.watchlist import PerceptionDirector
+    from maps.perception.watchlist import SegmenterTasking
 
-    d = PerceptionDirector(retro_perceiver=lambda flown, cs: {"n_dets": 1, "stop": flown["stop_id"]})
+    d = SegmenterTasking(retro_perceiver=lambda flown, cs: {"n_dets": 1, "stop": flown["stop_id"]})
     d.record_flown({"pose_xy": (100.0, 200.0), "stop_id": "stop_000", "target_fids": ["prior_1"]})
     ack = d.boost_queue(["pool"], ["[110, 205]"])
     assert ack["retro"] == [{"where": [110.0, 205.0], "n_dets": 1, "stop": "stop_000"}], ack
@@ -89,9 +89,9 @@ def test_a_quoted_point_boost_re_segments_the_flown_stop_it_falls_on():
 
 
 def test_a_boost_at_an_unflown_stop_names_it_and_queues_nothing():
-    from maps.perception.watchlist import PerceptionDirector
+    from maps.perception.watchlist import SegmenterTasking
 
-    assert PerceptionDirector().boost_queue(["car"], ["stop_009"]) == {
+    assert SegmenterTasking().boost_queue(["car"], ["stop_009"]) == {
         "error": "no boost target resolved; nothing was queued or re-segmented",
         "unknown_where": ["stop_009"]}
 
@@ -100,7 +100,7 @@ def test_a_queued_boost_rides_every_flight_until_its_target_flies():
     from maps.perception.sam.detect_client import SamDetectClient
 
     prov = SamDetectClient()
-    loop = search_loop(sam_setter=prov.set_concepts)
+    loop = episode_world(sam_setter=prov.set_concepts)
     loop.declare_mission_concepts(["car"])
     assert loop.boost_queue(["pool"], ["prior_1"])["queued"] == ["pool"]
     for target in ("prior_2", "prior_1"):  # the boost rides until prior_1 flies
@@ -116,7 +116,7 @@ def test_the_segmenter_keeps_the_declared_order_across_a_flight():
     """A re-declared class moves to the end of the declared union, and every
     later push (a flight's start, its recorded stop) sends that same order."""
     pushed = []
-    loop = search_loop(sam_setter=pushed.append)
+    loop = episode_world(sam_setter=pushed.append)
     loop.declare_mission_concepts(["car", "house"])
     loop.declare_mission_concepts(["house", "car"])
     loop.boost_queue(["pool"], ["prior_1"])

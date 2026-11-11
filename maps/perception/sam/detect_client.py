@@ -304,7 +304,7 @@ _DECODE_WORKERS = 4
 class SamDetectClient:
     """Adapter onto the SAM 3.1 image server: every ``/segment`` call ships
     the full concept list, decoded in one forward. ``concepts`` is what the
-    ``PerceptionDirector`` last pushed through :meth:`set_concepts`: the
+    ``SegmenterTasking`` last pushed through :meth:`set_concepts`: the
     watchlist plus the classes of the boosts riding a flight."""
 
     concepts: list[str] = field(default_factory=list)

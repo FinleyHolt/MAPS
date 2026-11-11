@@ -15,7 +15,7 @@ import numpy as np
 from maps.query.spatial_math import cell_centre_xy
 from maps.mission.explore_stops import spread
 from maps.perception.watchlist import (
-    PerceptionDirector, canon_concept)
+    SegmenterTasking, canon_concept)
 from maps.world_state.graph import GridDomain, MapObject
 from maps.perception.mask_codec import encode_mask_record
 
@@ -27,17 +27,17 @@ _NULL_CONCEPTS = frozenset({"none", "null", "n/a", "na"})
 
 @dataclass
 class _State:
-    """Mutable internal state, read and written under ``SearchLoop._lock``."""
+    """Mutable internal state, read and written under ``EpisodeWorld._lock``."""
 
     runtime_graph: object  # ObjectGraph
     # {fid, class, xy, conf} the last update_perception folded: the flight
     # report serves them.
     last_flight_detections: list[dict] = field(default_factory=list)
-    # The PerceptionDirector: the watchlist and the boost.
-    perception_director: Any = None
+    # The SegmenterTasking: the watchlist and the boost.
+    segmenter_tasking: Any = None
 
 
-class SearchLoop:
+class EpisodeWorld:
     """One episode's world graph, its tile frame and the segmenter hooks."""
 
     def __init__(
@@ -77,7 +77,7 @@ class SearchLoop:
         """Bind the episode's graph (the prior seed every detection folds
         into) and an empty watchlist."""
         self._state = _State(runtime_graph=graph,
-                             perception_director=PerceptionDirector(push=self._sam_setter))
+                             segmenter_tasking=SegmenterTasking(push=self._sam_setter))
 
     def _prior_surface_xy_locked(self) -> dict:
         """``{fid: (x, y)}`` for every prior row as the surface serves it,
@@ -196,31 +196,32 @@ class SearchLoop:
     @property
     def state(self) -> _State:
         if self._state is None:
+            # The text keeps the class's former name: a failed run's row can carry it.
             raise RuntimeError("SearchLoop.start must be called before update.")
         return self._state
 
     def boost_queue(self, concepts, where) -> dict:
         """The boost channel the mission's ``look_for(..., at=)`` calls."""
         with self._lock:
-            return self.state.perception_director.boost_queue(concepts, where)
+            return self.state.segmenter_tasking.boost_queue(concepts, where)
 
     def set_retro_perceiver(self, fn) -> None:
         """Install the retrospective executor: re-render a flown stop's
         recorded pose, re-segment it with the boost's classes, fold it, and
         return the delta."""
         with self._lock:
-            self.state.perception_director.retro_perceiver = fn
+            self.state.segmenter_tasking.retro_perceiver = fn
 
     def start_flight(self) -> None:
         """Put the queued boosts' classes on the coming flight's segmenter."""
         with self._lock:
-            self.state.perception_director.start_flight()
+            self.state.segmenter_tasking.start_flight()
 
     def record_flown_stop(self, flown: dict) -> None:
         """Log a perceived flight's stop for the boost to address, and
         re-push the watchlist."""
         with self._lock:
-            self.state.perception_director.record_flown(flown)
+            self.state.segmenter_tasking.record_flown(flown)
 
     def declare_mission_concepts(self, classes: list[str]) -> str | None:
         """Make the declared classes the director's watchlist and push it to
@@ -231,7 +232,7 @@ class SearchLoop:
         watch = [c for c in map(canon_concept, classes) if c and c not in _NULL_CONCEPTS]
         with self._lock:
             # never a clean receipt over a segmenter that kept its old classes
-            err = self.state.perception_director.set_watchlist(watch)
+            err = self.state.segmenter_tasking.set_watchlist(watch)
         if err:
             return (f"the segmenter did not take this declaration "
                     f"({err}); say it again")
@@ -326,12 +327,12 @@ class SearchLoop:
             log.debug("upsert_prior_percept failed for %s", fid, exc_info=True)
             return False
 
-    def tool_ctx(self):
-        """The :class:`ToolContext` over the live graph and the tile frame."""
-        from maps.world_state.context import ToolContext
+    def query_context(self):
+        """The :class:`QueryContext` over the live graph and the tile frame."""
+        from maps.world_state.context import QueryContext
 
         with self._lock:
-            return ToolContext(
+            return QueryContext(
                 grid_shape=(int(self._grid.height), int(self._grid.width)),
                 graph=self.state.runtime_graph,
                 tile_origin_xy=self._tile_origin_xy,

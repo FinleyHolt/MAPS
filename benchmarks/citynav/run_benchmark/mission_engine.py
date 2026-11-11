@@ -107,7 +107,7 @@ def detected_digest(dets: list[dict]) -> dict:
 
 
 def echo_pose(ctx, report: dict) -> None:
-    """After a successful flight the ToolContext's pose follows the drone.
+    """After a successful flight the QueryContext's pose follows the drone.
     The context already holds the live ``state.runtime_graph``."""
     if "error" not in report:
         ctx.pose_xy = (float(report["pose_xy"][0]), float(report["pose_xy"][1]))
@@ -119,12 +119,12 @@ def perceive(h, obs, detections) -> list[dict]:
     one ingest path a flight and the bench's retrospective boost share."""
     projected = project_and_stamp_ortho_detections(
         detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame)
-    return h.search_loop.update_perception(detections=detections, projected_masks=projected)
+    return h.world.update_perception(detections=detections, projected_masks=projected)
 
 
 class MissionSession:
     """The engine's half of one mission conversation over a hydrated
-    episode (``episode_runner.Hydrated``): the ToolContext, the MissionSpec
+    episode (``episode_runner.Hydrated``): the QueryContext, the MissionSpec
     its verbs call back into, and the flights. The flight mission re-tasks a
     mission by driving another turn over the same session.
 
@@ -140,8 +140,8 @@ class MissionSession:
         self.observe = observe
         self.flights: list[dict] = []
         self.prior_enrich_fails = 0
-        loop = h.search_loop
-        self.ctx = loop.tool_ctx()
+        world = h.world
+        self.ctx = world.query_context()
         state = h.state
         self.ctx.pose_xy = (float(state.pose_xy[0]), float(state.pose_xy[1]))
         sides = ground_sides_m(float(state.altitude_m), h.ground_z_m, h.sensor)
@@ -153,7 +153,7 @@ class MissionSession:
         self.obs_minor_m = min(sides)
         self.mission_spec = MissionSpec(
             fly=self.fly,
-            declare_concepts=loop.declare_mission_concepts,
+            declare_concepts=world.declare_mission_concepts,
             coverage_stops=self._coverage_stops,
             deadline_epoch=_mission_deadline_epoch(h.bench.environ),
         )
@@ -162,10 +162,10 @@ class MissionSession:
         self.run_kwargs = dict(
             ctx=self.ctx,
             mission_spec=self.mission_spec,
-            look_renderer=loop.render_candidate_crops,
+            look_renderer=world.render_candidate_crops,
             obs_span_m=obs_span_m,
             obs_minor_m=self.obs_minor_m,
-            boost_queue=loop.boost_queue,
+            boost_queue=world.boost_queue,
         )
 
     def run(self, instruction: str, **extra):
@@ -188,12 +188,12 @@ class MissionSession:
 
     def _coverage_stops(self, fid: str, spacing_m: float):
         # The flight budget bounds a pass: a stop IS a flight.
-        return self.h.search_loop.node_coverage_stops(
+        return self.h.world.node_coverage_stops(
             fid, spacing_m, max_stops=self.mission_spec.flight_budget, minor_spacing_m=self.obs_minor_m)
 
     def resolve(self, token: str) -> dict:
         """``token`` as :func:`resolve_flight_target` resolves it over the live graph."""
-        return resolve_flight_target(token, node_xy=self.h.search_loop.node_xy)
+        return resolve_flight_target(token, node_xy=self.h.world.node_xy)
 
     def fly(self, item: dict) -> dict:
         """One flight (``MissionSpec.fly``), then the pose echo follows it."""
@@ -206,7 +206,7 @@ class MissionSession:
         fold, enrich. The flight report, or ``{"error": ...}`` when the target
         does not resolve; the flight joins ``flights``."""
         h = self.h
-        state, episode, loop = h.state, h.episode, h.search_loop
+        state, episode, world = h.state, h.episode, h.world
         token = str(item.get("target_fid") or "")
         resolved = self.resolve(token)
         if "error" in resolved:
@@ -219,7 +219,7 @@ class MissionSession:
 
         # Queued boosts segment on THIS flight.
         try:
-            loop.start_flight()
+            world.start_flight()
         except Exception:  # noqa: BLE001 - perception direction never kills a flight
             log.exception("boost start failed; flight proceeds un-boosted")
 
@@ -248,7 +248,7 @@ class MissionSession:
         if "prior" not in h.settings.withhold:
             try:
                 for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
-                    loop.upsert_prior_percept(pfid, pattrs, px=ppx)
+                    world.upsert_prior_percept(pfid, pattrs, px=ppx)
             except Exception as exc:  # noqa: BLE001 - colour enrichment never kills a flight
                 self.prior_enrich_fails += 1
                 if self.prior_enrich_fails == 1 or self.prior_enrich_fails % 50 == 0:
@@ -262,7 +262,7 @@ class MissionSession:
             state.pose_xy = new_xy
         # The flight is perceived: a boost can now address this stop.
         try:
-            loop.record_flown_stop({"pose_xy": new_xy, "alt_m": new_alt, "stop_id": stop_id,
+            world.record_flown_stop({"pose_xy": new_xy, "alt_m": new_alt, "stop_id": stop_id,
                                     "target_fids": [token] if token else []})
         except Exception:  # noqa: BLE001 - perception direction never kills a flight
             log.exception("flown-stop record failed (non-fatal)")
@@ -283,7 +283,7 @@ class MissionSession:
             "pose_xy": [round(float(new_xy[0]), 1), round(float(new_xy[1]), 1)],
             "alt_m": round(new_alt, 1),
             "new_detections": len(step_detections),
-            **detected_digest(loop.last_flight_detections()),
+            **detected_digest(world.last_flight_detections()),
             # The commit is the last flight's target, verbatim.
             **({} if "end_commit" in h.settings.withhold else {"answer_if_you_reply_now": token}),
             # The operator instruction rides every flight report.

@@ -12,7 +12,7 @@ def _h(segment):
     loop = SimpleNamespace(state=SimpleNamespace(runtime_graph=SimpleNamespace(nodes=nodes)))
     return SimpleNamespace(sensor=None, crop=lambda xy, alt: er.crop_observation(xy, altitude_m=alt),
                            episode=SimpleNamespace(map_name="blk"),
-                           perception=SimpleNamespace(segment=segment), search_loop=loop), nodes
+                           perception=SimpleNamespace(segment=segment), world=loop), nodes
 
 
 def test_a_flown_stop_is_resegmented_at_its_pose_and_the_delta_served(monkeypatch):
@@ -22,7 +22,7 @@ def test_a_flown_stop_is_resegmented_at_its_pose_and_the_delta_served(monkeypatc
 
     def fold(h, obs, dets):
         folded.append(obs)
-        h.search_loop.state.runtime_graph.nodes["detected_9"] = SimpleNamespace(provenance="detected")
+        h.world.state.runtime_graph.nodes["detected_9"] = SimpleNamespace(provenance="detected")
 
     monkeypatch.setattr(er, "perceive", fold)
     h, _ = _h(lambda obs, concepts: [{"label": c} for c in concepts])
