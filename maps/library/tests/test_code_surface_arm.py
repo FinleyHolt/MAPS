@@ -988,7 +988,7 @@ def test_a_second_block_in_the_reply_channel_still_ends_the_mission():
 
 def test_prose_that_narrates_a_call_is_a_real_ending():
     """Both halves of the detector, each killing what the other lets by."""
-    from maps.mission.loop import _code_reply
+    from maps.mission.reply_repair import _code_reply
 
     assert _code_reply('r1 = find("car")\ngo_to(r1[0])')
     assert _code_reply('```python\ngo_to(r1[0])\n```')

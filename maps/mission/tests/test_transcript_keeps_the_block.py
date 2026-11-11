@@ -5,14 +5,16 @@ past the cut, or one before a later line errored, left no trace of the flight.
 """
 from __future__ import annotations
 
-from maps.mission import loop as rl
+from maps.mission.spec import MissionSpec
+
+from maps.mission.loop import _Mission
 from maps.mission.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
 
 def test_a_long_block_that_flies_then_errors_keeps_its_code_and_flight():
     code = "# " + "x" * 600 + '\ngo_to("prior_0")\nundefined_name\n'
     tr: list[dict] = []
-    rl._Mission(
+    _Mission(
         boost_queue=unarmed_boost,
         reasoner=FakeReasoner([[("run", {"code": code})], "over"]),
         ctx=bare_ctx(),
@@ -24,7 +26,7 @@ def test_a_long_block_that_flies_then_errors_keeps_its_code_and_flight():
             "cell_m": 1.0},
         diag={},
         look_renderer=lambda reqs: [],
-        mission_spec=rl.MissionSpec(
+        mission_spec=MissionSpec(
             fly=lambda item: {"stop_id": "stop_000",
                               "target": item["target_fid"],
                               "pose_xy": [0.0, 0.0], "new_detections": 0,

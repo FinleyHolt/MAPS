@@ -9,12 +9,9 @@ import pytest
 from maps.llm.http import CallCanceled
 from maps.mission.reasoner import DegenerateCompletion
 from maps.mission.reasoner import Reasoner
-from maps.mission.loop import (
-    _RETRIABLE_LLM_ERRORS,
-    MissionReply,
-    MissionSpec,
-    _Mission,
-)
+from maps.mission.serve_refusals import _RETRIABLE_LLM_ERRORS
+from maps.mission.spec import MissionReply, MissionSpec
+from maps.mission.loop import _Mission
 from maps.mission.tests.fakes import TEST_SPEC, bare_ctx, unarmed_boost
 
 _REPLY = {"kind": "text", "content": "the goal is the flown object",

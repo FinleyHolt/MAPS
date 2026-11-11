@@ -4,7 +4,9 @@ from __future__ import annotations
 import re
 
 from maps.mission import served_text
-from maps.mission import loop as rl
+from maps.mission.reply_repair import CODE_REPLY_NUDGE, EMPTY_TURN_NUDGE, MALFORMED_ENVELOPE_NUDGE, NO_FLIGHT_REPLY_NUDGE
+from maps.mission.spec import MissionReply, MissionSpec
+from maps.mission.loop import _Mission
 from maps.mission.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
 # Word-boundary matches, case-insensitive except CARRY (lowercase "carry" is ordinary
@@ -62,10 +64,10 @@ def _static_corpus() -> list[str]:
         corpus.append(t["function"]["description"])
         corpus.extend(_schema_descriptions(t["function"]["parameters"]))
     # The shared transport-repair nudges are served too.
-    corpus.append(rl.MALFORMED_ENVELOPE_NUDGE)
-    corpus.append(rl.CODE_REPLY_NUDGE)
-    corpus.append(rl.NO_FLIGHT_REPLY_NUDGE)
-    corpus.append(rl.EMPTY_TURN_NUDGE)
+    corpus.append(MALFORMED_ENVELOPE_NUDGE)
+    corpus.append(CODE_REPLY_NUDGE)
+    corpus.append(NO_FLIGHT_REPLY_NUDGE)
+    corpus.append(EMPTY_TURN_NUDGE)
     return corpus
 
 
@@ -130,7 +132,7 @@ def test_dynamic_mission_output_is_commensurate():
                 "pose_xy": [0.0, 0.0], "new_detections": 0, "cue": "cue"}
 
     fr = FakeReasoner(script)
-    reply = rl._Mission(
+    reply = _Mission(
         boost_queue=unarmed_boost,
         reasoner=fr,
         ctx=bare_ctx(),
@@ -143,12 +145,12 @@ def test_dynamic_mission_output_is_commensurate():
             "cell_m": 1.0},
         diag={},
         look_renderer=lambda reqs: [],
-        mission_spec=rl.MissionSpec(
+        mission_spec=MissionSpec(
             fly=fly,
             declare_concepts=lambda items: None,
             flight_budget=1, turn_cap=48),
     ).converse("instruction")
-    assert isinstance(reply, rl.MissionReply)
+    assert isinstance(reply, MissionReply)
     served = [m["content"] for m in fr.messages
               if m.get("role") in ("tool", "user")
               and isinstance(m.get("content"), str)]
@@ -171,13 +173,13 @@ def test_the_transcript_says_what_json_says():
     # The kind vocabulary the mission loop writes is the run surface's.
     tr: list[dict] = []
     fr = FakeReasoner([[("run", {"code": 'look_for("car")'})], "over"])
-    rl._Mission(
+    _Mission(
         boost_queue=unarmed_boost,
         reasoner=fr, ctx=bare_ctx(),
         rid_tag="m0", transcript=tr,
         compute_namespace={"cands": [], "anchors": [], "cell_m": 1.0},
         diag={},
-        mission_spec=rl.MissionSpec(
+        mission_spec=MissionSpec(
             fly=lambda i: {"error": "unused"},
             declare_concepts=lambda i: None),
     ).converse("i")

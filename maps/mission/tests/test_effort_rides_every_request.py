@@ -8,7 +8,8 @@ import pytest
 
 from maps.mission import reasoner
 from maps.mission.reasoner import Reasoner
-from maps.mission.loop import MissionReply, run_mission
+from maps.mission.spec import MissionReply
+from maps.mission.loop import run_mission
 from maps.mission.tests.fakes import TEST_SPEC, bare_ctx, unarmed_boost
 
 

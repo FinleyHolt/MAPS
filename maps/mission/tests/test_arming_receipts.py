@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from maps.mission.loop import _named_feature_note
+from maps.mission.watch_verbs import _named_feature_note
 from maps.mission.tests.fakes import drive, run, search_loop, tool_results
 
 

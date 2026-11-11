@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from benchmarks.citynav.adapter import parse_episode
 from benchmarks.citynav.run_benchmark import episode_runner as er
-from maps.mission.loop import MissionReply
+from maps.mission.spec import MissionReply
 
 _ROW = {"area": "b", "block": 1, "descriptions": ["the church"], "ann_ids": [0],
         "target_positions": [[5.0, 5.0, 0.0]], "trajectory": [[0.0, 0.0, 100.0]]}

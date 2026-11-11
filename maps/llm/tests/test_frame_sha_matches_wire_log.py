@@ -13,7 +13,7 @@ import hashlib
 
 from maps.llm.http import _image_ref, _map_image_parts
 from maps.llm.vision_content import build_image_part
-from maps.mission.loop import _deliver_frames
+from maps.mission.picture_verbs import _deliver_frames
 
 JPEG = b"\xff\xd8\xff\xe0 not really a jpeg but exactly these bytes"
 

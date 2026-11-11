@@ -139,12 +139,8 @@ def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
     with ``script`` as the next operator turn (its flights and declarations
     keep landing in the first turn's lists); ``loop_kw`` reaches
     ``_Mission``."""
-    from maps.mission.loop import (
-        MissionReply,
-        MissionSpec,
-        _Mission,
-        continue_mission,
-    )
+    from maps.mission.spec import MissionReply, MissionSpec
+    from maps.mission.loop import _Mission, continue_mission
 
     if reasoner is not None:
         reasoner.turns += list(script)
@@ -203,10 +199,8 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
     """The mission with coverage stops; each flight reports its own target
     point as its pose. ``stops`` is one list every fid answers or a dict by
     fid. Returns (reply, tool results, flights, stops asked, rendered)."""
-    from maps.mission.loop import (
-        MissionSpec,
-        _Mission,
-    )
+    from maps.mission.spec import MissionSpec
+    from maps.mission.loop import _Mission
     from maps.xy_token import parse_xy_token
 
     flights: list[dict] = []
@@ -299,10 +293,8 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
     = {flight_index: [fid, ...]} deletes nodes on that flight. Returns (tool
     results, the graph, the fids each flight added)."""
     from maps.query.surface import build_surface_from_graph
-    from maps.mission.loop import (
-        MissionSpec,
-        _Mission,
-    )
+    from maps.mission.spec import MissionSpec
+    from maps.mission.loop import _Mission
 
     graph = SimpleNamespace(nodes={**priors(), **(extra_priors or {})})
     added: list[list[str]] = []
@@ -356,10 +348,8 @@ def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False)
     ``extra_priors``), each flight adding ``finds`` cars at one point, or
     along a row with ``spread``; returns (tool results, vision turns)."""
     from maps.query.surface import build_surface_from_graph
-    from maps.mission.loop import (
-        MissionSpec,
-        _Mission,
-    )
+    from maps.mission.spec import MissionSpec
+    from maps.mission.loop import _Mission
 
     graph = SimpleNamespace(nodes={**priors(), **(extra_priors or {})})
     for n in graph.nodes.values():
@@ -411,10 +401,8 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
     """One mission with the REAL look renderer; returns (tool results, the
     requests the renderer saw, the rendered records, the badge-legend
     vision texts)."""
-    from maps.mission.loop import (
-        MissionSpec,
-        _Mission,
-    )
+    from maps.mission.spec import MissionSpec
+    from maps.mission.loop import _Mission
     from maps.render.look_render import render_candidate_crops
 
     seen_reqs: list[list[dict]] = []

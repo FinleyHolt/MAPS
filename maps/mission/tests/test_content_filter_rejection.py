@@ -6,7 +6,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from maps.mission.loop import _is_content_filter_rejection
+from maps.mission.serve_refusals import _is_content_filter_rejection
 from maps.mission.tests import fakes
 
 

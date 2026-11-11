@@ -414,7 +414,7 @@ def test_full_set_stays_chainable_past_the_head():
 def test_dedup_note_is_a_reference_not_a_payload():
     # The hit serves one line naming the original turn; the rN handles stay live in
     # carry_results, so nothing is locked away — a new program slices them.
-    from maps.mission.loop import _DEDUP_NOTE
+    from maps.mission.program_verbs import _DEDUP_NOTE
     note = _DEDUP_NOTE.format(turn=3, no_look_for=", no look_for",
                               look_for=", look_for")
     assert "no new information since turn 3" in note

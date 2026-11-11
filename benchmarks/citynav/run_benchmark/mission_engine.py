@@ -22,7 +22,8 @@ from maps.llm.endpoint_spec import spec as endpoint_spec
 from maps.perception.geometry.sensor_spec import served_description
 from maps.perception.observation import ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
-from maps.mission.loop import MissionSpec, run_mission
+from maps.mission.spec import MissionSpec
+from maps.mission.loop import run_mission
 from maps.withhold import withheld
 from maps.xy_token import parse_xy_token
 

@@ -13,22 +13,18 @@ import ast
 import difflib
 import re
 import time
-from typing import TYPE_CHECKING
 
 from maps.library.block_ceilings import (
     _block_ceilings, _block_line, _code_objects, _outer_block_line)
 from maps.library.block_scan import (
     BLOCK_FILENAME, _MOVED_TO_METHOD, _SAFE_BUILTINS, _SAFE_MODULES, _instrument,
     _safe_import, _shadows, scan_block, served_calls)
-from maps.library.call_arguments import _Stop, _no_such_fid
+from maps.library.call_arguments import MissionEnv, _Stop, _no_such_fid
 from maps.library.calls import _LibraryCalls
 from maps.library.op_compiler import CodeError, fid_like
 from maps.library.rows import Row, Rows, _said
 from maps.query.row_geometry import SurfaceGeometry
 from maps.withhold import withheld
-
-if TYPE_CHECKING:
-    from maps.library.call_arguments import MissionEnv
 
 
 # Liveness ceiling on one block's own lines (harness frames are untraced).

@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from maps.mission.loop import _is_oversize_rejection
+from maps.mission.serve_refusals import _is_oversize_rejection
 
 
 def _status_error(status: int, body: str) -> httpx.HTTPStatusError:

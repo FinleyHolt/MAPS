@@ -21,7 +21,7 @@ from maps.library.rows import Row, RowList, Rows
 from maps.library.block_scan import looks_like_code, scan_block, served_calls
 from maps.mission import reasoner as ra
 from maps.library.op_compiler import act_needs_a_thing
-from maps.mission.loop import _PICTURE_WITHHELD_OF
+from maps.mission.picture_verbs import _PICTURE_WITHHELD_OF
 from maps.mission.tests.fakes import (
     quiet_env,
     cars,
