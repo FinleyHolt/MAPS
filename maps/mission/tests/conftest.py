@@ -1,4 +1,4 @@
-"""Search-test fixtures: a synthetic ortho per module (MAP, GROUND_Z, ORTHO_N, ORTHO_RAMP
+"""Test fixtures: a synthetic ortho per module (MAP, GROUND_Z, ORTHO_N, ORTHO_RAMP
 module attributes override the fakes defaults)."""
 from __future__ import annotations
 
