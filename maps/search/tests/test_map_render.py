@@ -6,13 +6,13 @@ import pytest
 
 cv2 = pytest.importorskip("cv2")
 
-from maps.perception.viz.osm_palette import (
+from maps.render.osm_palette import (
     osm_kind,
     osm_label,
     paint_color,
     paint_word,
 )
-from maps.search.render.map_render import (
+from maps.render.map_render import (
     features_window_paint,
     render_map_from_spec,
 )
@@ -127,11 +127,11 @@ def test_the_centre_carries_no_competing_numeral(monkeypatch):
          "contour": [[2.0, 2.0], [18.0, 2.0], [18.0, 18.0], [2.0, 18.0]]}
     d = {"fid": "detected_2", "label": "house", "kind": "detection",
          "provenance": "detected", "cells": [[4, 4]]}
-    from maps.perception.viz import mllm_overlay
+    from maps.render import mark_overlay
 
     seen = []
-    real = mllm_overlay.render_look_overlay
-    monkeypatch.setattr(mllm_overlay, "render_look_overlay",
+    real = mark_overlay.render_look_overlay
+    monkeypatch.setattr(mark_overlay, "render_look_overlay",
                         lambda *a, **kw: seen.append(kw) or real(*a, **kw))
     rec = render_map_from_spec(
         {"center_xy": [10.0, 10.0], "context_m": 20.0,
@@ -326,7 +326,7 @@ def test_the_image_axis_convention_is_stated_once_and_correctly():
 def test_a_picture_states_its_own_pixel_grid(ortho_dir):
     import cv2
 
-    from maps.search.render.look_render import render_candidate_crops
+    from maps.render.look_render import render_candidate_crops
     from maps.search.tests.fakes import ORTHO_MAP
 
     (look,) = render_candidate_crops(

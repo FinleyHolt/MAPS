@@ -184,7 +184,7 @@ class SearchLoop:
 
     def render_candidate_crops(self, requests: list[dict]) -> list[dict]:
         """The ``look`` renderer, bound to this episode's map and imagery."""
-        from maps.search.render import look_render  # noqa: PLC0415
+        from maps.render import look_render  # noqa: PLC0415
 
         return look_render.render_candidate_crops(
             requests,

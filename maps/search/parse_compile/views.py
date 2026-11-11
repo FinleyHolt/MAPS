@@ -7,7 +7,7 @@ import math
 
 from maps.query.spatial_math import cell_centre_xy
 from maps.search.parse_compile.code_surface import HANDLE_RE, row_token
-from maps.search.render.look_render import (
+from maps.render.look_render import (
     LOOK_MAX_BADGES,
     look_label,
     look_outline,
@@ -334,7 +334,7 @@ def map_features(ctx) -> list[dict]:
     """The live graph as the map painter's feature dicts: label and paint
     kind, cells, and a road's centerline or a building's contour in world
     metres."""
-    from maps.perception.viz.osm_palette import (  # noqa: PLC0415
+    from maps.render.osm_palette import (  # noqa: PLC0415
         osm_kind,
         osm_label,
     )

@@ -415,7 +415,7 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
         MissionSpec,
         _Mission,
     )
-    from maps.search.render.look_render import render_candidate_crops
+    from maps.render.look_render import render_candidate_crops
 
     seen_reqs: list[list[dict]] = []
     seen_recs: list[list[dict]] = []

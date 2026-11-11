@@ -3,7 +3,7 @@ pixels, through the mission loop."""
 
 from __future__ import annotations
 
-from maps.search.render.look_render import (
+from maps.render.look_render import (
     LOOK_MAX_BADGES,
     look_window_bounds_m,
 )

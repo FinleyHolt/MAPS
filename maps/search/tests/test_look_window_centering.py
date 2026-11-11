@@ -1,7 +1,7 @@
 """The crop window shifts inside the raster but keeps its subject in frame."""
 from __future__ import annotations
 
-from maps.search.render.look_render import (
+from maps.render.look_render import (
     LOOK_CAR_MARGIN_M,
     look_window_bounds_m,
     resolve_window_center,

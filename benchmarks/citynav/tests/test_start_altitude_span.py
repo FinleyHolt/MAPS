@@ -2,7 +2,7 @@
 
 ``obs_span_m = 2 * (start_alt - ground)`` is the view-square side the
 mission hands every crop request (see
-``maps/search/render/look_render.py``, and
+``maps/render/look_render.py``, and
 ``maps/search/tests/test_look_obs_span_ceiling.py`` for what the
 renderer does with it). On the CityNav test split it never binds: the
 pixel-budget ceiling, 100 m on a 0.1 m/px ortho, is what clamps the window.
@@ -22,7 +22,7 @@ from benchmarks.citynav import paths
 from benchmarks.citynav.adapter import map_name_for_row
 from benchmarks.citynav.run_benchmark.config import load_config
 from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
-from maps.search.render.look_render import look_window_bounds_m
+from maps.render.look_render import look_window_bounds_m
 
 # Every CityNav block is a 0.1 m/px ortho.
 _, _BUDGET_M = look_window_bounds_m(0.1)

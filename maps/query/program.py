@@ -18,7 +18,7 @@ from itertools import islice
 from maps.query import spatial_math as G
 from maps.query import text_match as T
 from maps.query.row_geometry import chains_of, geom_of, place_geom
-from maps.search.render.look_render import LOOK_SET_ROWS
+from maps.render.look_render import LOOK_SET_ROWS
 from maps.xy_token import format_xy_token, is_xy
 from maps.search.withhold import withheld
 

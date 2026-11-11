@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.search.render.look_render import (
+from maps.render.look_render import (
     look_window_bounds_m,
     render_candidate_crops,
 )

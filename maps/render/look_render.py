@@ -362,7 +362,7 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     import numpy as np  # noqa: PLC0415
     from maps.perception.ortho.camera_model import raster_source_gsd_m  # noqa: PLC0415
     from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-    from maps.perception.viz.mllm_overlay import render_look_overlay  # noqa: PLC0415
+    from maps.render.mark_overlay import render_look_overlay  # noqa: PLC0415
     from maps.perception.observation import crop_ortho_observation  # noqa: PLC0415
 
     ground = float(GROUND_LEVEL[map_name])

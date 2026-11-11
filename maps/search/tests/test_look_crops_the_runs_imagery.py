@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from maps.perception.ortho.ground_level import GROUND_LEVEL
-from maps.search.render import look_render
+from maps.render import look_render
 
 
 class _Imagery:

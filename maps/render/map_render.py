@@ -5,7 +5,7 @@ Areas paint muted, roads stroke their centerlines, prior buildings fill tan
 colours come from ``osm_palette``. Prior buildings carry their fid digits and
 detections a ``dN`` chip, so every drawn object can be named in text. The
 caller flattens the graph to feature dicts; marks, band and JPEG come from
-``mllm_overlay.render_look_overlay``, without ordinal badges.
+``mark_overlay.render_look_overlay``, without ordinal badges.
 """
 
 from __future__ import annotations
@@ -159,7 +159,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
     ``{"cells", "kind"}``. Road cells are counted, not painted: roads are
     stroked by :func:`render_map_from_spec`."""
     import numpy as np  # noqa: PLC0415
-    from maps.perception.viz.osm_palette import paint_color  # noqa: PLC0415
+    from maps.render.osm_palette import paint_color  # noqa: PLC0415
     from maps.query.row_geometry import cells_of  # noqa: PLC0415
 
     x0, y0, x1, y1 = (float(v) for v in window)
@@ -217,14 +217,14 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     look request's vocabulary): the record with its ``jpeg``, or None."""
     import cv2  # noqa: PLC0415
     import numpy as np  # noqa: PLC0415
-    from maps.perception.viz.mllm_overlay import render_look_overlay  # noqa: PLC0415
-    from maps.perception.viz.osm_palette import (  # noqa: PLC0415
+    from maps.render.mark_overlay import render_look_overlay  # noqa: PLC0415
+    from maps.render.osm_palette import (  # noqa: PLC0415
         paint_color,
         paint_word,
     )
     from maps.query.spatial_math import cell_centre_xy  # noqa: PLC0415
     from maps.query.row_geometry import cells_of  # noqa: PLC0415
-    from maps.search.render.look_render import (  # noqa: PLC0415
+    from maps.render.look_render import (  # noqa: PLC0415
         frame_arcs,
         frame_echo,
         frame_marks,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from maps.search.render.look_render import render_candidate_crops
+from maps.render.look_render import render_candidate_crops
 from maps.search.tests.fakes import ORTHO_MAP as MAP
 
 
@@ -30,7 +30,7 @@ def test_frame_up_angle_sign_lock():
     # screen-up.
     import cv2
 
-    from maps.search.render.look_render import frame_up_angle_deg
+    from maps.render.look_render import frame_up_angle_deg
     assert abs(frame_up_angle_deg(0.0, 1.0)) < 1e-9
     assert abs(abs(frame_up_angle_deg(0.0, -1.0)) - 180.0) < 1e-9
     assert abs(frame_up_angle_deg(1.0, 0.0) - 90.0) < 1e-9

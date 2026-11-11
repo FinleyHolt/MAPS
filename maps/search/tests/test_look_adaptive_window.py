@@ -7,7 +7,7 @@ import io
 import numpy as np
 import pytest
 
-from maps.search.render.look_render import (
+from maps.render.look_render import (
     LOOK_CAR_MARGIN_M,
     LOOK_MAX_BADGES,
     LOOK_TARGET_PX,
@@ -198,11 +198,11 @@ def test_a_coarser_grid_buys_a_wider_window_for_the_same_pixels(
 def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir, monkeypatch):
     """The renderer half of the outline contract (the loop hands every footprint over;
     ``test_mission_loop`` pins that half)."""
-    from maps.perception.viz import mllm_overlay
+    from maps.render import mark_overlay
 
     seen = []
-    real = mllm_overlay.render_look_overlay
-    monkeypatch.setattr(mllm_overlay, "render_look_overlay",
+    real = mark_overlay.render_look_overlay
+    monkeypatch.setattr(mark_overlay, "render_look_overlay",
                         lambda *a, **kw: seen.append(kw) or real(*a, **kw))
     # A target whose footprint runs 80 m past the window on every side.
     req = _req((100.0, 100.0), target_xy=(104.0, 100.0))

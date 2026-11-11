@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from maps.search.render.look_render import subject_window_containment
+from maps.render.look_render import subject_window_containment
 
 # A recorded crop window and a long strip footprint whose centroid lies west
 # of it while its eastern end is in frame.

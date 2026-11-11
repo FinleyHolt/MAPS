@@ -1,5 +1,5 @@
 """OSM label rule and palette for the model-facing map
-(``maps.search.render.map_render``).
+(``maps.render.map_render``).
 
 The map paints by kind first, label second: a digest hue alone can put a
 house, the street it fronts and the landuse behind both on one green, so

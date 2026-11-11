@@ -1,6 +1,5 @@
 """Mark objects on a picture without covering them, for the look and map
-renderers (``maps/search/render``), whose tool text carries the digit -> fid
-legend."""
+renderers, whose tool text carries the digit -> fid legend."""
 
 from __future__ import annotations
 

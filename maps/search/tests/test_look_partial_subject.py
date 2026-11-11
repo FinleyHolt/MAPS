@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from maps.search.render.look_render import render_candidate_crops
+from maps.render.look_render import render_candidate_crops
 
 MAP = "unit_test_partial_block"
 GROUND_Z = 10.0

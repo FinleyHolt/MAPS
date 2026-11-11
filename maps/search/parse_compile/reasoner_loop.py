@@ -63,7 +63,7 @@ from maps.search.parse_compile.views import (
     map_vision_text,
     rounded_xy,
 )
-from maps.search.render.look_render import (
+from maps.render.look_render import (
     LOOK_MAX_BADGES as _MAP_MAX_MARKS,
     look_label,
     look_outline,
@@ -1323,7 +1323,7 @@ class _Mission:
             mp["error"] = f"{around} is not on the live surface"
         else:
             try:
-                from maps.search.render.map_render import (  # noqa: PLC0415
+                from maps.render.map_render import (  # noqa: PLC0415
                     render_map_from_spec,
                 )
                 rendered = render_map_from_spec(
