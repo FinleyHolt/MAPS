@@ -9,7 +9,8 @@ import os
 import pytest
 
 from maps.query import spatial_math as G
-from maps.query.program import ProgramError, run_program
+from maps.query.op_io import ProgramError
+from maps.query.program import run_program
 from maps.world_state.prior_graph import build_object_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -331,7 +332,7 @@ def test_a_road_ends_are_rows_you_can_go_to():
 def test_a_footprint_has_no_ends_and_says_so():
     import pytest
 
-    from maps.query.program import ProgramError
+    from maps.query.op_io import ProgramError
     anchors = [{"fid": "prior_9", "xy": [0.0, 0.0], "name": "A Shed",
                 "mask": [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
                 "centerline": None, "cells": [], "search_text": "a shed"}]
@@ -344,7 +345,7 @@ def test_a_footprint_has_no_ends_and_says_so():
 def test_a_sibling_segment_that_crosses_is_named():
     import pytest
 
-    from maps.query.program import ProgramError
+    from maps.query.op_io import ProgramError
     anchors = [_road("prior_1", [[0, 0], [100, 0]], "Airway Boulevard"),
                _road("prior_2", [[0, 84], [100, 84]], "Lime Avenue"),
                _road("prior_3", [[50, -10], [50, 10]], "Lime Avenue")]

@@ -1,7 +1,8 @@
 """Shape-natural relation columns: ``compare{refs}`` attaches each ref's OWN geometry."""
 from __future__ import annotations
 
-from maps.query.program import ProgramError, run_program
+from maps.query.op_io import ProgramError
+from maps.query.program import run_program
 
 
 def _compare(cands, anchors, refs):

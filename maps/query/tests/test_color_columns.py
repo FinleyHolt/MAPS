@@ -2,7 +2,8 @@
 """The lazy color-column family ``color_<word>``."""
 from __future__ import annotations
 
-from maps.query.program import run_program, ProgramError
+from maps.query.program import run_program
+from maps.query.op_io import ProgramError
 from maps.query import spatial_math as G
 
 _CANDS = [

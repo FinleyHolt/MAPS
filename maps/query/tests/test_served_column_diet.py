@@ -3,16 +3,11 @@ from __future__ import annotations
 
 import pytest
 
-from maps.query.program import (
-    _GRID_COL_DROP,
-    _TAG_RENDER_DROP,
-    ProgramError,
-    _grid_cell,
-    _grid_columns,
-    _model_facing_row,
-    _render_grid_rows,
-    run_program,
-)
+from maps.query.result_tables import (
+    _GRID_COL_DROP, _TAG_RENDER_DROP, _grid_cell, _grid_columns, _model_facing_row,
+    _render_grid_rows)
+from maps.query.op_io import ProgramError
+from maps.query.program import run_program
 
 # One prior row shaped like the live surface: kept tags, dropped tags, a
 # dropped column and several kept ones.
@@ -92,10 +87,8 @@ def test_the_drop_is_a_render_cut_not_a_data_cut():
 
 
 def test_score_by_grid_orders_without_a_score_column():
-    from maps.query.program import (
-        compact_results,
-        run_program,
-    )
+    from maps.query.result_tables import compact_results
+    from maps.query.program import run_program
 
     def _prior(fid, x, y):
         return {"fid": fid, "name": None, "xy": [float(x), float(y)],

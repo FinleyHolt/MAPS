@@ -28,10 +28,7 @@ import httpx
 
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, CallCanceled
 from maps.query.spatial_math import COMPASS_UNIT
-from maps.query.program import (
-    BROAD_DUMP_SOFT_ROWS,
-    MODEL_UNSERVED_COLUMNS,
-)
+from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS, MODEL_UNSERVED_COLUMNS
 from maps.query.surface import build_surface_from_graph
 from maps.query.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,

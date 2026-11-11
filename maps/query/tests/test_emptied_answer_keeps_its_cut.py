@@ -2,9 +2,9 @@
 serves the cut's stats (the nearest row it dropped and the bound that would
 admit it), and no line about a compare step the model never wrote."""
 
-from maps.query import program as GP
+from maps.query.result_tables import compact_results
 
-
+from maps.query.program import run_program
 def _sq(x0, y0, x1, y1):
     return [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]
 
@@ -29,8 +29,8 @@ def test_emptied_nearest_dwithin_serves_the_cut_stats():
     houses = [{"fid": f"prior_{i}", "name": "", "xy": [40.0 * i, 0.0],
                "tags": {"building": "house"}, "search_text": "building house"}
               for i in range(1, 4)]
-    out = GP.run_program([], [school] + houses, {"ops": _OPS})
-    env = GP.compact_results(out["results"], answer_ref="r4")["r4"]
+    out = run_program([], [school] + houses, {"ops": _OPS})
+    env = compact_results(out["results"], answer_ref="r4")["r4"]
     assert list(env)[:3] == ["len", "items", "cut_stats"]
     assert env["cut_stats"] == {
         "cut": "3->0",

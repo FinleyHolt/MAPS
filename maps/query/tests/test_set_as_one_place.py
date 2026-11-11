@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from maps.query import program as gp
-from maps.query.program import compact_results
+from maps.query.op_io import ProgramError
+
+from maps.query.op_compare import _UNION_MAX_MEMBERS
+
+from maps.query.program import run_program
+from maps.query.result_tables import compact_results
 from maps.mission.tests.fakes import drive, ops_of_block, run, tool_results
 
 
@@ -32,7 +36,7 @@ def test_the_house_with_a_pool_in_the_backyard_is_one_line():
     assert [(e["key"], e["w"]) for e in sort["args"]["emphasis"]] == [
         ("distance to pools", -1)], sort
 
-    out = gp.run_program(
+    out = run_program(
         [_pool("pool_1", 100.0, 8.0)],
         [_house("h_a", 0.0, "A"), _house("h_b", 100.0, "B"),
          _house("h_c", 400.0, "C")],
@@ -51,7 +55,7 @@ def test_the_union_is_the_NEAREST_member_not_a_centroid():
     """Two pools far apart: each house measures against its own closest."""
     ops = ops_of_block('pools = find("pool")\n'
                        'houses = find("house", nearest=pools)\n')
-    out = gp.run_program(
+    out = run_program(
         [_pool("pool_1", 0.0, 5.0), _pool("pool_2", 1000.0, 5.0)],
         [_house("h_a", 0.0), _house("h_b", 1000.0), _house("h_c", 500.0)],
         {"ops": ops})
@@ -75,8 +79,8 @@ def test_a_set_cuts_as_well_as_orders():
 def test_an_empty_set_fails_loud_and_names_the_handle_and_the_fix():
     ops = ops_of_block('pools = find("pool")\n'
                        'houses = find("house", nearest=pools)\n')
-    with pytest.raises(gp.ProgramError) as exc:
-        gp.run_program([], [_house("prior_1", 0.0)], {"ops": ops})
+    with pytest.raises(ProgramError) as exc:
+        run_program([], [_house("prior_1", 0.0)], {"ops": ops})
     msg = str(exc.value)
     assert "pools is empty" in msg, msg          # the model's own name
     assert "r0" not in msg, msg
@@ -90,7 +94,7 @@ def test_an_unseen_row_is_not_buried_by_a_colour_ordering():
     seen_wrong = _house("seen_red", 10.0)
     seen_wrong.update(color="red", color_conf=0.9)
     ops = ops_of_block('r1 = find("house", color="white")\n')
-    out = gp.run_program([seen_right, seen_wrong],
+    out = run_program([seen_right, seen_wrong],
                          [_house("unseen", 20.0)], {"ops": ops})
     assert [r["fid"] for r in out["results"][ops[-1]["ref"]]] == [
         "seen_white", "unseen", "seen_red"]
@@ -146,7 +150,7 @@ def test_an_unseen_colour_drops_its_term_instead_of_killing_the_block():
              {"key": "distance to road_1", "w": -1},
              {"key": "color_white", "w": 1}]}},
     ]
-    out = gp.run_program([], [_house("h_far", 60.0), _house("h_near", 1.0),
+    out = run_program([], [_house("h_far", 60.0), _house("h_near", 1.0),
                               road], {"ops": ops})
     ranked = [r["fid"] for r in out["results"]["r2"]
               if str(r["fid"]).startswith("h_")]
@@ -166,7 +170,7 @@ def test_a_dropped_colour_says_the_set_has_none_not_the_surface():
     buildings = [{"fid": f"b{i}", "class": "building", "xy": [10.0 * i, 0.0],
                   "search_text": "building", "footprint_area_m2": 50.0 * i}
                  for i in (1, 2)]
-    notes = gp.run_program([seen], buildings, {"ops": ops})["results"]["r1"].notes
+    notes = run_program([seen], buildings, {"ops": ops})["results"]["r1"].notes
     assert notes == [
         "'color_red' ranked nothing here: no row in this set carries a "
         "perceived colour yet (a row gets one once a flight has passed over "
@@ -175,24 +179,24 @@ def test_a_dropped_colour_says_the_set_has_none_not_the_surface():
 
 def test_a_colour_alone_with_nothing_seen_is_still_a_loud_refusal():
     ops = ops_of_block('r1 = find("house", color="white")\n')
-    with pytest.raises(gp.ProgramError, match="nothing orders by"):
-        gp.run_program([], [_house("h_a", 0.0), _house("h_b", 10.0)],
+    with pytest.raises(ProgramError, match="nothing orders by"):
+        run_program([], [_house("h_a", 0.0), _house("h_b", 10.0)],
                        {"ops": ops})
 
 
 def test_a_union_over_a_whole_class_is_capped_rather_than_slow():
     ops = ops_of_block('everything = find("house")\n'
                        'r1 = find("house", nearest=everything)\n')
-    many = [_house(f"h{i:04d}", float(i)) for i in range(gp._UNION_MAX_MEMBERS + 5)]
-    with pytest.raises(gp.ProgramError,
+    many = [_house(f"h{i:04d}", float(i)) for i in range(_UNION_MAX_MEMBERS + 5)]
+    with pytest.raises(ProgramError,
                        match=r"folds at most.*first \(within=, a cardinal"):
-        gp.run_program([], many, {"ops": ops})
+        run_program([], many, {"ops": ops})
 
 
 def test_a_fid_less_member_is_measured_by_its_own_point():
     """compare over [x, y] items yields rows without a fid; as a union member
     such a row is a place like any other: its point."""
-    out = gp.run_program(
+    out = run_program(
         [], [_house("h_a", 0.0), _house("h_b", 100.0)],
         {"ops": [
             {"ref": "r1", "op": "compare",
@@ -226,7 +230,7 @@ def test_a_python_set_of_rows_is_its_union_like_the_handle():
 
 def test_a_point_union_member_is_measured_by_its_own_point():
     """A fid-less row (a terminus) in a union rides as its [x, y]."""
-    out = gp.run_program(
+    out = run_program(
         [], [_house("h_a", 0.0), _house("h_b", 100.0), _house("h_c", 300.0)],
         {"ops": [{"ref": "r1", "op": "compare",
                   "args": {"items": ["h_a", "h_b"],
@@ -237,8 +241,8 @@ def test_a_point_union_member_is_measured_by_its_own_point():
 
 
 def test_a_huge_user_value_in_a_refusal_stays_short():
-    with pytest.raises(gp.ProgramError) as e:
-        gp.run_program([], [_house("h_a", 0.0)], {"ops": [
+    with pytest.raises(ProgramError) as e:
+        run_program([], [_house("h_a", 0.0)], {"ops": [
             {"ref": "r1", "op": "compare",
              "args": {"items": ["h_a"], "refs": [["x" * 100_000, 1]]}}]})
     assert "x" * 200 not in str(e.value)

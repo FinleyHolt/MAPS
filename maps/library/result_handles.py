@@ -7,13 +7,10 @@ from __future__ import annotations
 import json
 import re
 
-from maps.query.program import (
-    ProgramError,
-    compact_results,
-    is_color_column_key,
-    join_hints,
-    run_program,
-)
+from maps.query.op_io import ProgramError
+from maps.query.result_tables import compact_results, join_hints
+from maps.query.op_cut_and_sort import is_color_column_key
+from maps.query.program import run_program
 from maps.library.op_compiler import (
     HANDLE_RE, HANDLE_WORD_RE, CodeError)
 from maps.withhold import withheld

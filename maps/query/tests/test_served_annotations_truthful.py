@@ -3,10 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from maps.query.program import (
-    compact_results,
-    run_program,
-)
+from maps.query.result_tables import compact_results
+from maps.query.program import run_program
 
 
 def _prior(fid, x, y, name=None, tags=None):

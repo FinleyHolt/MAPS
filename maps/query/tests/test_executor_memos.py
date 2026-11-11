@@ -6,7 +6,11 @@ import json
 
 import numpy as np
 
-from maps.query import program as gp
+from maps.query.op_find import _FIND_MEMO
+
+from maps.query.result_tables import compact_results
+
+from maps.query.program import run_program
 from maps.query.surface import build_surface_from_graph
 from maps.query import row_geometry as RG
 from maps.world_state.graph import MapObject
@@ -33,8 +37,8 @@ def _surface(n=40):
 
 def _served(cands, anchors, program) -> str:
     """The rows every rN holds and their envelopes."""
-    out = gp.run_program(cands, anchors, program)
-    return json.dumps([out["results"], gp.compact_results(out["results"])],
+    out = run_program(cands, anchors, program)
+    return json.dumps([out["results"], compact_results(out["results"])],
                       sort_keys=True, default=str)
 
 
@@ -78,14 +82,14 @@ _FINDS = {"ops": [
 
 def test_the_find_memo_serves_the_same_bytes_cold_and_warm():
     cands, anchors = _surface()
-    gp._FIND_MEMO.reset(None, None)
+    _FIND_MEMO.reset(None, None)
     cold = _served(cands, anchors, _FINDS)
-    assert gp._FIND_MEMO.scored, "the memo was not filled"
+    assert _FIND_MEMO.scored, "the memo was not filled"
     warm = _served(cands, anchors, _FINDS)
     assert warm == cold
     # the rows a result holds are never the memo's own dicts
-    out = gp.run_program(cands, anchors, _FINDS)["results"]
-    memo_ids = {id(r) for rows in gp._FIND_MEMO.scored.values()
+    out = run_program(cands, anchors, _FINDS)["results"]
+    memo_ids = {id(r) for rows in _FIND_MEMO.scored.values()
                 for r in rows}
     for rows in out.values():
         for r in rows:
@@ -93,7 +97,7 @@ def test_the_find_memo_serves_the_same_bytes_cold_and_warm():
     # a new surface -- the lists moved -- empties the memo and re-scores
     cands2, anchors2 = _surface(n=41)
     assert _served(cands2, anchors2, _FINDS) != cold
-    assert gp._FIND_MEMO.lists[0] is cands2
+    assert _FIND_MEMO.lists[0] is cands2
     # vacuity floors: a hit, a miss and a dead-token note all rendered
     assert "b7" in cold and "matched nothing" in cold
     assert "withcolor" in cold

@@ -4,10 +4,8 @@ from __future__ import annotations
 import pytest
 
 from maps.query import text_match as T
-from maps.query.program import (
-    ProgramError,
-    run_program,
-)
+from maps.query.op_io import ProgramError
+from maps.query.program import run_program
 
 
 def _flat(*texts: str) -> dict:

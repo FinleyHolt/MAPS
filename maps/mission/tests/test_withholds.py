@@ -359,7 +359,8 @@ def test_the_served_literals_hold_their_worked_block_and_every_edit_target(monke
 
 
 def test_a_prior_withhold_empty_find_names_no_prior(monkeypatch):
-    from maps.query.program import Result, compact_results
+    from maps.query.op_io import Result
+    from maps.query.result_tables import compact_results
 
     def hint():
         return compact_results({"r0": Result(kind="miss")})["r0"]["hint"]
@@ -385,7 +386,7 @@ def test_a_prior_withhold_map_caption_and_color_note_name_no_survey(monkeypatch)
 
 def test_a_prior_withhold_empty_cut_and_semicolon_refusal_name_no_survey(monkeypatch):
     from maps.query import program as gp
-    from maps.query.program import ProgramError
+    from maps.query.op_io import ProgramError
 
     road = {"fid": "prior_R", "xy": [0.0, 0.0], "name": "Orchid Drive",
             "mask": [[[-5.0, -500.0], [5.0, -500.0], [5.0, 500.0], [-5.0, 500.0]]],

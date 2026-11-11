@@ -16,9 +16,9 @@ from maps.library.block_scan import _LIBRARY_ATTRS, _shadows, served_calls
 from maps.library.op_compiler import (
     CARDINAL_ORDER, CodeError, bind_row, fid_like, refuse_metres_in_within,
     split_diagonal)
-from maps.query.program import (
-    AUTOATTACH_PREFIXES, MODEL_UNSERVED_COLUMNS, STANDING_SIDE_PREFIXES,
-    empty_window_refusal, sanitize_token, window_span)
+from maps.query.result_tables import (
+    AUTOATTACH_PREFIXES, MODEL_UNSERVED_COLUMNS, STANDING_SIDE_PREFIXES)
+from maps.query.op_io import empty_window_refusal, sanitize_token, window_span
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.withhold import withheld
 from maps.xy_token import is_xy

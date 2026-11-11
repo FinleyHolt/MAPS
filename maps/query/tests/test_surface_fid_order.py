@@ -27,11 +27,9 @@ def test_detected_2_serves_before_detected_100():
 
 def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     """A street's initial reply is what it IS, not an arbitrary prefix."""
-    from maps.query.program import (
-        _NAME_SET_SHAPE_ROWS,
-        compact_results,
-        run_program,
-    )
+    from maps.query.op_find import _NAME_SET_SHAPE_ROWS
+    from maps.query.result_tables import compact_results
+    from maps.query.program import run_program
 
     def _way(name, cells):
         cells = np.asarray(cells, dtype=int).reshape(-1, 2)
@@ -111,7 +109,8 @@ def test_look_without_marks_asks_for_none():
 def test_an_unresolvable_list_item_names_only_what_a_list_takes():
     import pytest
 
-    from maps.query.program import ProgramError, run_program
+    from maps.query.op_io import ProgramError
+    from maps.query.program import run_program
 
     with pytest.raises(ProgramError) as e:
         run_program([{"fid": "prior_1", "xy": [0.0, 0.0]}], [], {"ops": [

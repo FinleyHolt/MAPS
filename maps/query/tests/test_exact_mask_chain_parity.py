@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import pytest
 
-from maps.query.program import (
-    ProgramError, _grid_cell, run_program)
+from maps.query.op_io import ProgramError
+from maps.query.result_tables import _grid_cell
+from maps.query.program import run_program
 from maps.query.surface import build_surface_from_graph
 from maps.query.text_match import (
     find_score, fuzzy_prepare_query, token_idf)
@@ -218,7 +219,7 @@ def test_covering_row_as_item_omitted_from_sort_head_with_note():
          "args": {"query": "Cambridge"}},
     ]}
     out = run_program(cands, anchors, prog)["results"]
-    from maps.query.program import compact_results
+    from maps.query.result_tables import compact_results
     env = compact_results(out)
     sort_env = env["r1"]
     # omitted from the rendered head...

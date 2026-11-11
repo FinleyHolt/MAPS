@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from maps.query.spatial_math import CARDINALS as _GEOM_CARDINALS
 from maps.query.spatial_math import COMPASS_UNIT
-from maps.query.program import sanitize_token
+from maps.query.op_io import sanitize_token
 from maps.xy_token import format_xy_token, is_xy, parse_xy_token
 from maps.withhold import withheld
 

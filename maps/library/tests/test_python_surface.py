@@ -418,7 +418,7 @@ def test_row_get_resolves_aliases_instead_of_defaulting():
 def test_a_ref_column_is_spelled_by_its_places_real_name():
     """The model spells a column with the name the CUE gave it; the producer spells it
     with the name it sanitized."""
-    from maps.query.program import sanitize_token
+    from maps.query.op_io import sanitize_token
     from maps.library.rows import Row
 
     lbl = sanitize_token("Poppy Boulevard")

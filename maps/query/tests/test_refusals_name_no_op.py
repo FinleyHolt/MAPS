@@ -4,8 +4,9 @@ filter_items, strata, union) the model never wrote."""
 
 import pytest
 
-from maps.query import program as GP
+from maps.query.op_io import ProgramError
 
+from maps.query.program import run_program
 _ROWS = [
     {"fid": "prior_1", "name": "Main St", "xy": [0.0, 0.0],
      "centerline": [[-50.0, 0.0], [50.0, 0.0]], "tags": {"highway": "primary"},
@@ -17,8 +18,8 @@ _FIND = {"ref": "r0", "op": "find", "args": {}}
 
 
 def _refusal(*ops) -> str:
-    with pytest.raises(GP.ProgramError) as exc:
-        GP.run_program([], _ROWS, {"ops": [_FIND, *ops]})
+    with pytest.raises(ProgramError) as exc:
+        run_program([], _ROWS, {"ops": [_FIND, *ops]})
     return str(exc.value)
 
 

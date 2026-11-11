@@ -1,10 +1,8 @@
 """A truthy cut, the census on an empty find, and the pre-takeoff phase notes."""
 from __future__ import annotations
 
-from maps.query.program import (
-    compact_results,
-    run_program,
-)
+from maps.query.result_tables import compact_results
+from maps.query.program import run_program
 from maps.library.result_handles import (
     _preflight_color_note,
     run_ops,

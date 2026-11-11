@@ -3,7 +3,8 @@ from __future__ import annotations
 
 
 from maps.query import text_match as T
-from maps.query.program import compact_results, run_program
+from maps.query.result_tables import compact_results
+from maps.query.program import run_program
 from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 

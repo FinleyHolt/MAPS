@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from maps.query.program import (
-    compact_results,
-    run_program,
-)
+from maps.query.result_tables import compact_results
+from maps.query.program import run_program
 
 _ANCHORS = [
     {"fid": "road_1", "name": "Elm Street", "xy": [50.0, 0.0],

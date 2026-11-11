@@ -3,12 +3,8 @@ from __future__ import annotations
 import re
 
 from maps.query import text_match as T
-from maps.query.program import (
-    BROAD_DUMP_SOFT_ROWS,
-    BROAD_HEAD_ROWS,
-    compact_results,
-    run_program,
-)
+from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS, BROAD_HEAD_ROWS, compact_results
+from maps.query.program import run_program
 
 
 def _prior(fid, x, y, name=None, tags=None):
@@ -358,7 +354,7 @@ def test_render_budget_elides_column_tail_never_rows():
     # Program-named columns render first; the elided tail is counted in the
     # hint. Render shape only — the raw rows keep every column (the F485
     # bound case: one uncapped compare rendered ~97k chars).
-    from maps.query.program import _RENDER_CHAR_BUDGET
+    from maps.query.result_tables import _RENDER_CHAR_BUDGET
     n_refs = 40
     world = _wide_world(60)
     refs = [f"prior_{i:03d}" for i in range(1, n_refs + 1)]
@@ -382,7 +378,7 @@ def test_render_budget_elides_column_tail_never_rows():
 def test_budget_walk_skips_an_oversized_column_not_the_columns_behind_it():
     # One oversized column must not wall off the cheaper columns after it
     # in priority order: the walk skips it and keeps walking.
-    from maps.query.program import _budget_columns
+    from maps.query.result_tables import _budget_columns
     rows = [{"fid": f"f{i}", "a": 1, "big": "x" * 4000, "b": 2}
             for i in range(9)]
     cols, n_cut = _budget_columns(rows, ["a", "big", "b"], ["a", "big", "b"])
@@ -428,7 +424,8 @@ def test_dedup_note_is_a_reference_not_a_payload():
 
 
 def test_a_calls_own_steps_ride_its_answer_unprefixed_and_once():
-    from maps.query.program import Result, compact_results
+    from maps.query.op_io import Result
+    from maps.query.result_tables import compact_results
 
     hint = compact_results({"r3": Result(kind="miss"), "r4": Result(kind="miss")},
                            answer_ref="r4")["r4"]["hint"]

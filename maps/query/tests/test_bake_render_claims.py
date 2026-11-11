@@ -9,12 +9,8 @@ import re
 import pytest
 
 from maps.query import spatial_math as G
-from maps.query.program import (
-    BROAD_DUMP_SOFT_ROWS,
-    _COMPARE_COL_PREFIXES,
-    compact_results,
-    run_program,
-)
+from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS, _COMPARE_COL_PREFIXES, compact_results
+from maps.query.program import run_program
 from maps.query.surface import build_surface_from_graph
 from maps.world_state.prior_graph import build_object_graph
 

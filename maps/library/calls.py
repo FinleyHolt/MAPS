@@ -12,7 +12,7 @@ from maps.library.op_compiler import (
     VIEWPOINT_RE, CodeError, Ref, act_needs_a_thing, compile_filter, compile_find,
     compile_order, fid_like, refuse_metres_in_within)
 from maps.library.rows import Row, Rows, _index_it, _one_row, _places, _set_as_list
-from maps.query.program import BROAD_HEAD_ROWS
+from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.withhold import withheld
 from maps.xy_token import is_xy
