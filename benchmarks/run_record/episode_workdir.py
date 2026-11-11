@@ -58,36 +58,26 @@ BENCHMARKS = ("citynav", "calcity")
 WORKDIR_PREFIX = "maps"
 
 
-def benchmark() -> str:
-    """Which benchmark this process flies: ``SEARCH_BENCHMARK_NAME``, one of
-    ``BENCHMARKS``, read at call time. There is no default: the bench CLIs and
-    the flight mission declare it, and a process that has not raises.
-    """
-    name = os.environ.get("SEARCH_BENCHMARK_NAME", "").strip()
-    if name not in BENCHMARKS:
-        raise RuntimeError(
-            f"SEARCH_BENCHMARK_NAME is {name or 'unset'!r}: an episode "
-            f"directory is named for its benchmark, one of "
-            f"{', '.join(BENCHMARKS)}. Declare it where the benchmark is "
-            f"known -- the bench CLI's own package, or benchmarks.calcity.use() "
-            f"(the flight mission calls it)."
-        )
-    return name
-
-
 def _slug(s: str) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "_" for c in s)
 
 
-def mint_workdir(root: Path, episode_id: str, run_no: int | None = None) -> Path:
+def mint_workdir(root: Path, episode_id: str, run_no: int | None = None, *, benchmark: str) -> Path:
     """``<root>/maps_<stamp>[_run<NN>]_<benchmark>_<slug>``, this attempt's
-    directory (not created). A flight mission carries its run number in the
-    sortie, the link to its ledger row; a bench attempt carries none.
+    directory (not created). ``benchmark`` is the bench's name
+    (``Bench.name``), one of ``BENCHMARKS``; there is no default. A flight
+    mission carries its run number in the sortie, the link to its ledger row;
+    a bench attempt carries none.
     """
+    if benchmark not in BENCHMARKS:
+        raise RuntimeError(
+            f"{benchmark!r} names no benchmark: an episode directory is named "
+            f"for its benchmark, one of {', '.join(BENCHMARKS)}."
+        )
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run = f"_run{run_no:02d}" if run_no is not None else ""
     return Path(root) / (
-        f"{WORKDIR_PREFIX}_{stamp}{run}_{benchmark()}_{_slug(episode_id)[:40]}"
+        f"{WORKDIR_PREFIX}_{stamp}{run}_{benchmark}_{_slug(episode_id)[:40]}"
     )
 
 
@@ -143,13 +133,14 @@ def open_episode_dir(
     root: Path | str,
     *,
     episode_id: str,
+    benchmark: str,
     run_no: int | None = None,
 ) -> OpenEpisode:
     """Mint the attempt's directory under ``root`` (:func:`mint_workdir`) and
     point this process at it, its log into ``<dir>/run.log``. ``close()``
     detaches the log handler, so a batch's next episode logs elsewhere.
     """
-    d = mint_workdir(Path(root), episode_id, run_no)
+    d = mint_workdir(Path(root), episode_id, run_no, benchmark=benchmark)
     flight = d / "flight"
     flight.mkdir(parents=True, exist_ok=True)
 

@@ -16,7 +16,9 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.citynav import bench_fullset as bf
+from benchmarks.citynav.paths import citynav_bench
 from benchmarks.run_record import episodes
 from benchmarks.run_record import run_manifest as rm
 from benchmarks.run_record.rows import iter_json_rows
@@ -256,18 +258,18 @@ def test_a_second_run_into_a_held_root_is_refused(driver, tmp_path, monkeypatch)
 @pytest.mark.parametrize("dry", [[], ["--dry-run"]])
 def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(dry, tmp_path, monkeypatch,
                                                                             capsys) -> None:
-    from benchmarks.citynav import paths
+    from benchmarks.bench import BAKE_OUTPUT_SUFFIXES
     from maps.llm import endpoint_spec
 
     tiles, rgbd = tmp_path / "tiles", tmp_path / "rgbd"
     tiles.mkdir()
     rgbd.mkdir()
-    for suffix in paths.BAKE_OUTPUT_SUFFIXES:
+    for suffix in BAKE_OUTPUT_SUFFIXES:
         (tiles / f"blk{suffix}").write_text("{}")
     (rgbd / "blk.tif").write_bytes(b"")
-    monkeypatch.setattr(paths, "TILES_DIR", tiles)
-    monkeypatch.setattr(paths, "CITYNAV_NATIVE_RGBD_DIR", rgbd)
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["blk::1#0"])
+    monkeypatch.setenv("SEARCH_CITYNAV_TILES", str(tiles))
+    monkeypatch.setenv("SEARCH_CITYNAV_RGBD_DIR", str(rgbd))
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["blk::1#0"])
     monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: pytest.fail("asked a serve"))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("flew"))
     monkeypatch.setattr(bf.Driver, "dry_run", lambda self: pytest.fail("previewed"))
@@ -276,7 +278,7 @@ def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(dry,
     assert (f"  Missing {rgbd / 'blk_rgb.tif'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
             in capsys.readouterr().err.splitlines())
     (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
-    assert bf._missing_block_assets(["blk::1#0"]) == []
+    assert bf._missing_block_assets(citynav_bench(os.environ), ["blk::1#0"]) == []
 
 
 def test_a_ledger_the_worker_cannot_write_stops_the_run(driver, monkeypatch) -> None:
@@ -298,9 +300,9 @@ def test_a_ledger_the_worker_cannot_write_stops_the_run(driver, monkeypatch) -> 
 
 
 _CHILD = (
-    "import time\n"
+    "import os, time\n"
     "from benchmarks.citynav.run_benchmark.cli import _die_with_parent\n"
-    "_die_with_parent()\n"
+    "_die_with_parent(os.environ)\n"
     "print('armed', flush=True)\n"
     "time.sleep(60)\n"
 )
@@ -350,6 +352,7 @@ _INTERRUPTED = (
     "from pathlib import Path\n"
     "from benchmarks.citynav import bench_fullset as bf\nfrom benchmarks.run_record import run_manifest as rm\n"
     "d = bf.Driver.__new__(bf.Driver)\n"
+    "d.bench = d.config = None\n"
     "root = Path(sys.argv[1])\n"
     "d.out_root, d.episodes_file, d.driver_log = root, root / 'episodes.jsonl', root / 'driver.log'\n"
     "d.summary_file, d.split, d.workers, d.max_wall_s, d._deadline = root / 'summary.txt', 's', 2, 0, None\n"
@@ -386,16 +389,16 @@ def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
 
 
 def test_the_split_defaults_to_the_benchmarks_own() -> None:
-    from benchmarks.citynav import paths
+    assert bf._build_parser(citynav_bench({})).parse_args([]).split == "val_seen"
+    assert bf._build_parser(calcity_bench({})).parse_args([]).split == "calcity"
 
-    assert bf._build_parser().parse_args([]).split == paths.DEFAULT_SPLIT
 
-
-def test_the_out_root_and_the_usage_name_the_benchmark(monkeypatch) -> None:
-    monkeypatch.setattr(bf.paths, "BENCHMARK", "calcity")
-    assert bf._build_parser().parse_args([]).out_root == "output/calcity_fullset"
-    assert bf._build_parser().prog == "python -m benchmarks.calcity.bench_fullset"
-    assert bf._build_parser().description == "Continuous full-split calcity benchmark at fixed concurrency."
+def test_the_out_root_and_the_usage_name_the_benchmark() -> None:
+    parser = bf._build_parser(calcity_bench({}))
+    assert parser.parse_args([]).out_root == "output/calcity_fullset"
+    assert parser.prog == "python -m benchmarks.calcity.bench_fullset"
+    assert parser.description == "Continuous full-split calcity benchmark at fixed concurrency."
+    assert bf._build_parser(citynav_bench({})).parse_args([]).out_root == "output/citynav_fullset"
 
 
 def test_the_summary_names_an_errorless_infra_row_as_the_driver_counts_it(driver) -> None:
@@ -431,7 +434,9 @@ def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_p
 
 def test_relative_paths_resolve_against_the_working_directory(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    d = bf.Driver(bf._build_parser().parse_args(["--out-root", "runs/a", "--episode-allowlist", "ids.txt"]))
+    bench = citynav_bench({})
+    d = bf.Driver(bf._build_parser(bench).parse_args(["--out-root", "runs/a", "--episode-allowlist", "ids.txt"]),
+                  bench, bf._config_path(bench.environ))
     assert d.out_root == tmp_path / "runs" / "a"
     assert d.allowlist_path == tmp_path / "ids.txt"
 
@@ -472,8 +477,8 @@ def test_a_segmenter_that_never_answers_holds_every_launch(driver, monkeypatch) 
 def test_an_offline_run_launches_with_nothing_served(driver, monkeypatch) -> None:
     """``SEARCH_ENDPOINT_OFFLINE=1`` pins a spec and serves nothing (the human arm): the
     gate launches without asking either server."""
-    d = driver(selection=["ep0"])
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")
+    d = driver(selection=["ep0"])
     monkeypatch.setattr(d, "_reasoner_answers", lambda: pytest.fail("probed the reasoner"))
     monkeypatch.setattr(d, "_sam_answers", lambda: pytest.fail("probed SAM"))
     flown: list[str] = []
@@ -520,7 +525,7 @@ def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
 @pytest.mark.parametrize("flag", ["--workers", "--max-infra-attempts", "--episode-timeout-s"])
 def test_the_parser_refuses_a_count_below_one(flag, capsys) -> None:
     with pytest.raises(SystemExit) as done:
-        bf._build_parser().parse_args([flag, "0"])
+        bf._build_parser(citynav_bench({})).parse_args([flag, "0"])
     assert done.value.code == 2 and flag in capsys.readouterr().err
 
 
@@ -528,7 +533,7 @@ def test_a_session_releases_each_report_at_its_arrival(driver, tmp_path, monkeyp
     stream = tmp_path / "stream.json"
     stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "b"},
                                               {"report": 1, "arrival_s": 0.6, "episode_id": "a"}]}))
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b", "c"])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b", "c"])
     d = driver()
     d.arrivals_path = stream
     d._selection = d._select_episodes()
@@ -547,7 +552,7 @@ def test_a_session_releases_each_report_at_its_arrival(driver, tmp_path, monkeyp
 def test_a_session_refuses_a_root_that_already_holds_a_ledger(driver, tmp_path, monkeypatch, no_flight) -> None:
     stream = tmp_path / "stream.json"
     stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     episodes.append_row(tmp_path, {"episode_id": "z", "status": "ok"})
     monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: pytest.fail("a refused session touched the manifest"))
     d = driver()
@@ -559,7 +564,7 @@ def test_a_session_refuses_a_root_that_already_holds_a_ledger(driver, tmp_path, 
 def test_a_session_s_manifest_names_the_stream_it_flies(driver, tmp_path, monkeypatch, no_flight) -> None:
     stream = tmp_path / "stream.json"
     stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     built = {}
     monkeypatch.setattr(rm, "build_manifest", lambda **kw: built.update(kw) or {})
     d = driver()
@@ -581,7 +586,7 @@ def test_arrivals_refuse_the_shuffle_flags(flags, monkeypatch, capsys) -> None:
 def test_a_session_s_preview_names_its_stream_not_a_seed(driver, tmp_path, monkeypatch, capsys) -> None:
     stream = tmp_path / "stream.json"
     stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     d = driver()
     d.arrivals_path = stream
     d._selection = d._select_episodes()
@@ -590,7 +595,7 @@ def test_a_session_s_preview_names_its_stream_not_a_seed(driver, tmp_path, monke
 
 
 def test_a_selection_naming_episodes_off_the_split_is_refused_fatal(driver, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     d = driver()
     d.arrivals_path = tmp_path / "stream.json"
     d.arrivals_path.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "z"}]}))
@@ -610,7 +615,7 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, 
     monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: pytest.fail("a refused selection asked a serve"))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused selection flew"))
     if refusal != "split":
-        monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+        monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     (tmp_path / "stream.json").write_text("{}")
     (tmp_path / "ids.txt").write_text("a\nz\n")
     (tmp_path / "empty.txt").write_text("\n")
@@ -627,7 +632,7 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, 
 def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch, capsys) -> None:
     bad = tmp_path / "arm.yaml"
     bad.write_text(f"base: {REPO / 'configs/citynav.yaml'}\npolicy: nope\n")
-    monkeypatch.setattr(bf, "CONFIG", bad)
+    monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(bad))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused config flew"))
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
     assert not (tmp_path / "r").exists()
@@ -637,14 +642,14 @@ def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch
 def test_a_config_that_is_not_yaml_is_refused_naming_its_file(tmp_path, monkeypatch, capsys) -> None:
     bad = tmp_path / "arm.yaml"
     bad.write_text("max_steps: [1\n")
-    monkeypatch.setattr(bf, "CONFIG", bad)
+    monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(bad))
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run"]) == 2
     assert capsys.readouterr().err.startswith(f"FATAL: {bad}: ")
 
 
 @pytest.mark.parametrize("stream", ["{}", "not json", '{"reports": [{"episode_id": "a"}]}', None])
 def test_an_unreadable_session_stream_is_refused_fatal(stream, driver, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a"])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     d = driver()
     d.arrivals_path = tmp_path / "stream.json"
     if stream is not None:
@@ -657,7 +662,7 @@ def test_an_unreadable_session_stream_is_refused_fatal(stream, driver, tmp_path,
 def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp_path, monkeypatch) -> None:
     """Every allowlisted id must be in the split: one that is not is a wrong
     split or a stale list, and a run over the rest would read as complete."""
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     d = driver()
     d.allowlist_path = tmp_path / "ids.txt"
     d.allowlist_path.write_text("\n".join(ids) + "\n")
@@ -669,7 +674,7 @@ def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp
 def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a dry run flew"))
     if refusal != "split":
-        monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
+        monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     (tmp_path / "stream.json").write_text("{}")
     (tmp_path / "ids.txt").write_text("a\nz\n")
     (tmp_path / "empty.txt").write_text("\n")
@@ -683,8 +688,8 @@ def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypat
 
 
 def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(tmp_path, monkeypatch, capsys) -> None:
-    monkeypatch.setattr(bf, "_enumerate_split", lambda split: ["a", "b"])
-    monkeypatch.setattr(bf, "_missing_block_assets", lambda eps: [])
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda bench, eps: [])
     (tmp_path / "ids.txt").write_text("a\n")
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run",
                     "--episode-allowlist", str(tmp_path / "ids.txt")]) == 0
@@ -697,7 +702,7 @@ def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(tmp_path, mo
     base.write_text("max_steps: [1\n")
     top = tmp_path / "arm.yaml"
     top.write_text("base: base.yaml\n")
-    monkeypatch.setattr(bf, "CONFIG", top)
+    monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(top))
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run"]) == 2
     assert capsys.readouterr().err.startswith(f"FATAL: {base.resolve()}: ")
 

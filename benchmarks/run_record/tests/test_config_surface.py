@@ -125,11 +125,12 @@ def test_a_blocks_cell_size_is_its_bakes(tmp_path, monkeypatch):
     computed against the bake's own."""
     import json
 
+    from benchmarks.citynav.paths import citynav_bench
     from benchmarks.citynav.run_benchmark import assets
 
     (tmp_path / "blk_meta.json").write_text(json.dumps({
         "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 30.0, "y_max": 30.0},
         "grid_shape": [10, 10], "cell_size_m": 3.0}))
     (tmp_path / "blk_features.json").write_text("{}")
-    monkeypatch.setattr(assets, "tile_stem", lambda name: str(tmp_path / name))
-    assert assets.load_episode_assets("blk").cell_size_m == 3.0
+    bench = citynav_bench({"SEARCH_CITYNAV_TILES": str(tmp_path)})
+    assert assets.load_episode_assets(bench, "blk").cell_size_m == 3.0

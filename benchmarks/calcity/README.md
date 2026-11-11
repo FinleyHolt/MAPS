@@ -73,13 +73,19 @@ python -m benchmarks.calcity.run_benchmark --config configs/calcity.yaml --episo
 
 Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
 
+Each launcher builds its bench once, from the process environment, and passes
+it down; nothing selects a bench for the process, so a CityNav bench and a
+Cal City bench can be held side by side. An attempt child of the driver
+learns its bench from the environment the bench carries
+(`SEARCH_BENCHMARK_NAME` and the roots under the runner's `SEARCH_CITYNAV_*`
+names), which every run manifest also records.
+
 ## Modules
 
 | Module | Role |
 |---|---|
-| `__init__.py` | `use()`: selects Cal City for the CityNav engine (`SEARCH_BENCHMARK_NAME` and the `SEARCH_CITYNAV_*` roots). |
-| `paths.py` | The file layout. |
-| `bench_fullset.py`, `run_benchmark.py` | The CityNav driver and runner with Cal City selected. |
+| `paths.py` | `calcity_bench(environ)`: the bench as a value (`benchmarks.bench.Bench`), its roots read from the `SEARCH_CALCITY_*` variables of the mapping it is given. It flies the CityNav engine. |
+| `bench_fullset.py`, `run_benchmark.py` | The CityNav driver and runner on the Cal City bench. |
 | `data_prep/aoi.py` | The area, its local metric frame and the flat ground plane. |
 | `data_prep/bundle.py` | Reads the world bundle. |
 | `data_prep/build_objects_json.py`, `data_prep/build_rgbd_ortho.py`, `data_prep/bake_tiles.py` | The build steps. |

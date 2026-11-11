@@ -28,6 +28,7 @@ import json
 import logging
 import math
 import mimetypes
+import os
 import threading
 import time
 from pathlib import Path
@@ -38,12 +39,19 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from benchmarks.run_record.rows import iter_json_rows
-from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL,
-                                                open_episode_dir)
-from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA
+from benchmarks.bench import Bench
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import map_render
+from benchmarks.flight.live_source import open_live
+from benchmarks.flight.mission import Mission, flight_config, resolve_episode
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local, map_bounds
+from benchmarks.flight.twin import Twin
+from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL,
+                                                   open_episode_dir)
+from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA
+from benchmarks.run_record.rows import iter_json_rows
+from maps.llm import endpoint_spec, model_cards
+from maps.perception.geometry.sensor_spec import resolve_sensor
 
 log = logging.getLogger("station")
 
@@ -137,17 +145,15 @@ def tile_png(ortho, tiles_dir, map_name: str, z: int, x: int, y: int) -> bytes |
 class Station:
     """The seat, the catalog and the finished runs of one map."""
 
-    def __init__(self, *, config: str, out: Path, ortho_dir: Path | None, register: Path | None,
+    def __init__(self, *, bench: Bench, config: str, out: Path, ortho_dir: Path | None, register: Path | None,
                  basemap: Path | None = None) -> None:
-        import benchmarks.calcity  # noqa: PLC0415
-
-        benchmarks.calcity.use()
-        from benchmarks.citynav.adapter import load_split, parse_episode  # noqa: PLC0415
-        from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR, split_path  # noqa: PLC0415
-
+        #: The bench whose catalog the station lists and whose engine its missions fly.
+        self.bench = bench
         self.config, self.out, self.register = config, Path(out), register
-        self.split, self.tiles_dir = DEFAULT_SPLIT, Path(TILES_DIR)
-        self.catalog = [parse_episode(row, row_index=i) for i, row in enumerate(load_split(split_path(self.split)))]
+        self.split, self.tiles_dir = bench.default_split, Path(bench.tiles_dir)
+        engine = bench.engine
+        self.catalog = [engine.parse_episode(row, row_index=i)
+                        for i, row in enumerate(engine.load_split(bench.split_path(self.split)))]
         self.by_id = {e.episode_id: e for e in self.catalog}
         self.map_name = self.catalog[0].map_name
         #: Whether the bake is on disk: without it the map has no georef and the page draws no basemap.
@@ -342,12 +348,6 @@ class Station:
 
     def start(self, episode_id: str | None, instruction: str, effort: str | None) -> dict[str, Any]:
         """Fly a catalog row, or the operator's own words from the map's centre, on a twin of its own."""
-        from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
-        from benchmarks.flight.live_source import open_live  # noqa: PLC0415
-        from benchmarks.flight.mission import Mission, flight_config, resolve_episode  # noqa: PLC0415
-        from benchmarks.flight.twin import Twin  # noqa: PLC0415
-        from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
-
         if self.ortho is None:
             raise HTTPException(409, "this station reviews runs only: start it with --ortho <raster dir> to fly")
         with self._lock:
@@ -364,16 +364,16 @@ class Station:
                 episode_id = f"{self.map_name}{OPERATOR}{time.strftime('%H%M%S', time.gmtime())}"
             cfg = flight_config(self.config)
             sensor = resolve_sensor(cfg.sensor)
-            episode = resolve_episode(episode_id, self.split, start_xy)
-            start_alt, ground = start_altitude_m(cfg, self.map_name, episode.start_z)
+            episode = resolve_episode(self.bench, episode_id, self.split, start_xy)
+            start_alt, ground = self.bench.engine.start_altitude_m(cfg, self.map_name, episode.start_z)
             twin = Twin(tiles_dir=self.tiles_dir, map_name=self.map_name, ortho=self.ortho, sensor=sensor,
                         start_xy=episode.start_xy, agl_m=start_alt - ground)
             live = open_live(vehicle=twin, tiles_dir=self.tiles_dir, map_name=self.map_name, sensor=sensor,
                              register_raster=self.register)
             stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             self._sortie = self.out / stamp
-            ep = open_episode_dir(self._sortie, episode_id=episode_id, run_no=1)
-            mission = Mission(episode_id=episode_id, split=self.split, config=self.config, workdir=ep.dir, live=live,
+            ep = open_episode_dir(self._sortie, episode_id=episode_id, benchmark=self.bench.name, run_no=1)
+            mission = Mission(bench=self.bench, episode_id=episode_id, split=self.split, config=self.config, workdir=ep.dir, live=live,
                               instruction=instruction.strip() or None, recorder=ep.recorder, close_log=ep.close,
                               run_id=stamp, run_no=1, start_xy=start_xy, reasoning_effort=effort,
                               agl_m=start_alt - ground)
@@ -420,8 +420,6 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
     @app.get("/reasoner")
     def reasoner() -> dict[str, Any]:
         """The served model and the reasoning efforts its card takes; ``model`` is None while no reasoner answers."""
-        from maps.llm import endpoint_spec, model_cards  # noqa: PLC0415
-
         try:
             model = (endpoint_spec.spec() if endpoint_spec.spec_installed()
                      else endpoint_spec.discover_from_env()).model_id
@@ -557,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn  # noqa: PLC0415
 
     args.out.mkdir(parents=True, exist_ok=True)
-    station = Station(config=args.config, out=args.out, ortho_dir=args.ortho, register=args.register,
+    station = Station(bench=calcity_bench(os.environ), config=args.config, out=args.out, ortho_dir=args.ortho, register=args.register,
                       basemap=args.basemap)
     if not (WEB_DIST / "index.html").is_file():
         log.warning("no built console at %s: run `npm ci && npm run build` in station/web", WEB_DIST)

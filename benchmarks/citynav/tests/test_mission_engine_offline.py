@@ -100,11 +100,8 @@ def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
     from benchmarks.run_record.episodes import DEADLINE_ENV
     from benchmarks.citynav.run_benchmark.mission_engine import _mission_deadline_epoch
 
-    monkeypatch.delenv(DEADLINE_ENV, raising=False)
-    assert _mission_deadline_epoch() is None
-
-    monkeypatch.setenv(DEADLINE_ENV, "1788050346.5")
-    assert _mission_deadline_epoch() == 1788050346.5
+    assert _mission_deadline_epoch({}) is None
+    assert _mission_deadline_epoch({DEADLINE_ENV: "1788050346.5"}) == 1788050346.5
 
 
 def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
@@ -171,6 +168,6 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
     session.h = SimpleNamespace(sensor=resolve_sensor("oryx_orx32_25mm_nadir"),
                                 cfg=SimpleNamespace(start_altitude_agl_m=914.4),
                                 state=SimpleNamespace(altitude_m=600.0),
-                                ground_z_m=100.0)
+                                ground_z_m=100.0, bench=SimpleNamespace(environ={}))
     session.run("find it")
     assert "at the 1,640 ft AGL this run flies" in served["sensor_description"], served["sensor_description"]

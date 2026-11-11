@@ -30,16 +30,19 @@ derivation that silently stops matching cannot read as agreement.
 
 import collections
 import json
+import os
 import re
 
 import pytest
 
-from benchmarks.calcity import paths
+from benchmarks.calcity.paths import calcity_bench
 from maps.query import spatial_math as G
 
-_PRIOR = paths.TILES_DIR / "calcity_prior_layer.json"
-_META = paths.TILES_DIR / "calcity_meta.json"
-_SPLIT = paths.SPLITS_DIR / paths.SPLIT_FILES["calcity"]
+# The bench as this process's environment places it.
+_BENCH = calcity_bench(os.environ)
+_PRIOR = _BENCH.tiles_dir / "calcity_prior_layer.json"
+_META = _BENCH.tiles_dir / "calcity_meta.json"
+_SPLIT = _BENCH.split_path("calcity")
 
 _ROAD_TYPES = {"residential", "tertiary", "living_street", "service", "track"}
 _COMPASS = "north|south|east|west|northeast|northwest|southeast|southwest"

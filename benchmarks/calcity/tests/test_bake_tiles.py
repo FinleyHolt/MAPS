@@ -151,19 +151,18 @@ def test_ground_truth_keys_can_never_enter_the_prior(tmp_path, monkeypatch):
 def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_path, monkeypatch):
     """Cal City has no CityNav raster: its coverage is the bounds rectangle by
     rule, so a building keeps every cell its footprint covers."""
-    from benchmarks.citynav import paths as citynav_paths
+    from benchmarks.citynav.bake import city
 
     features = [_road(1, {"highway": "residential", "name": "Elm"}, [(100, 100), (400, 120)]),
                 _area(2, {"building": "yes"}, 200, 200, 260, 250)]
     _bundle(monkeypatch, features)
 
-    class Untouchable:
-        def __fspath__(self):
-            raise AssertionError("the Cal City bake reached into CityNav's raster directory")
+    def untouchable(*args, **kwargs):
+        raise AssertionError("the Cal City bake reached for a CityNav raster")
 
-        __str__ = __truediv__ = __fspath__
-
-    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", Untouchable())
+    # The two readers of a block's raster: its extent and its coverage.
+    monkeypatch.setattr(city, "_raster_bounds", untouchable)
+    monkeypatch.setattr(city, "_cell_coverage", untouchable)
     assert bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity") == 2
     prior = json.loads((tmp_path / "tiles" / "calcity_features.json").read_text())["prior"]
     building = next(r for r in prior if r.get("building") == "yes")

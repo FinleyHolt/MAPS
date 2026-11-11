@@ -12,13 +12,13 @@ from benchmarks.flight.tests import world
 
 
 @pytest.fixture
-def make_mission(built, make_twin, make_live, tmp_path):
+def make_mission(built, bench, make_twin, make_live, tmp_path):
     def make(start_xy=(600.0, 100.0)):
         twin = make_twin(start_xy)
         live = make_live(twin)
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
-        m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
+        m = M.Mission(bench=bench, episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
                       live=live, recorder=None, close_log=lambda: None, run_no=1,
                       agl_m=world.AGL_M)
         m.map_name, m._tiles_dir = "calcity", built[0]
@@ -148,19 +148,19 @@ def test_a_start_without_a_fix_takes_its_utc_at_the_first_bank_with_one(make_mis
     assert (m.workdir.parent / TRACK_JSONL).read_text().strip()
 
 
-def test_an_unknown_episode_is_refused_by_name(monkeypatch):
+def test_an_unknown_episode_is_refused_by_name(monkeypatch, bench):
     import pytest
 
-    from benchmarks.citynav import adapter, paths
+    from benchmarks.citynav import adapter
     from benchmarks.flight import mission
 
-    monkeypatch.setattr(paths, "split_path", lambda split: split)
+    # The engine reads its split through the adapter: an empty one holds no episode.
     monkeypatch.setattr(adapter, "load_split", lambda path: [])
     with pytest.raises(ValueError, match="calcity holds no episode calcity::9#9"):
-        mission.resolve_episode("calcity::9#9", "calcity")
+        mission.resolve_episode(bench, "calcity::9#9", "calcity")
 
 
-def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path):
+def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path, bench):
     import pytest
 
     from benchmarks.flight import mission
@@ -169,7 +169,7 @@ def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path):
     arm = tmp_path / "arm.yaml"
     arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
     with pytest.raises(ValueError, match="bench ablation"):
-        mission.hydrate(episode_id="calcity::0#0", split="calcity", config=str(arm), agl_m=914.4)
+        mission.hydrate(bench=bench, episode_id="calcity::0#0", split="calcity", config=str(arm), agl_m=914.4)
 
 
 def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_from_the_new_pass(
@@ -287,9 +287,9 @@ def test_a_lost_leg_after_a_short_pass_says_the_closest_the_leg_came(make_missio
 
 def test_the_mission_stamps_the_arm_s_reasoning_effort_as_its_requests_carry_it(make_mission, monkeypatch):
     m, _twin = make_mission()
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", " high ")
+    m.bench = m.bench.with_environ({"SEARCH_SAMPLING_REASONING_EFFORT": " high "})
     assert m._mission_stamp()["reasoning_effort"] == "high"
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "  ")
+    m.bench = m.bench.with_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "  "})
     assert m._mission_stamp()["reasoning_effort"] is None
 
 

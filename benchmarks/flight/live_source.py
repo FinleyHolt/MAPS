@@ -26,6 +26,7 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image
 
+from benchmarks.bench import missing_bake
 from benchmarks.flight import frame_offset, frame_ties, locator, map_render
 from benchmarks.flight.airframe import C12_LEVER_M
 from benchmarks.flight.footprint import in_frame_xy, off_nadir_lonlat
@@ -34,6 +35,7 @@ from benchmarks.flight.pose_graph import INNOVATION_CAP_M, PoseGraph, innovation
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
 from maps.perception.geometry.sensor_spec import SensorSpec, resolve_sensor
 from maps.perception.observation import Observation
+from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.ortho.sensor_frame import footprint_m, ground_corners_xy
 
 log = logging.getLogger(__name__)
@@ -650,9 +652,6 @@ def check_map(tiles_dir, map_name: str) -> None:
     """Refuse a map a fix cannot be placed on (no georef under ``tiles_dir``),
     an episode cannot load on (a bake file missing) or a floor cannot be read
     for, before any run folder is opened."""
-    from benchmarks.citynav.run_benchmark.assets import missing_bake  # noqa: PLC0415
-    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-
     if lonlat_to_local(Path(tiles_dir), map_name, 0.0, 0.0) is None:
         raise ValueError(f"{map_name} carries no georef under {tiles_dir}: a fix cannot be placed in the tile frame")
     if why := missing_bake(str(Path(tiles_dir) / map_name)):
@@ -668,8 +667,6 @@ def open_live(*, vehicle, tiles_dir, map_name: str, sensor: SensorSpec, boresigh
     """A live source over ``vehicle``, failing on the ramp rather than on the
     first flight. With ``register_raster`` (the raster each frame is
     registered against) the corrector starts."""
-    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-
     check_map(tiles_dir, map_name)
     boresight = Boresight.load(boresight_path) if boresight_path else Boresight(sensor=sensor)
     if boresight_path is None:

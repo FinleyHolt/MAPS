@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 
 
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import measures as Q
+
+#: The bench whose engine parses the tasking set's rows.
+BENCH = calcity_bench({})
 
 T0 = 1_800_000_000.0
 TARGET = [[90.0, 90.0], [110.0, 90.0], [110.0, 110.0], [90.0, 110.0]]
@@ -44,7 +48,7 @@ def test_the_measures_score_the_commit_point_against_the_mask_and_the_track_agai
         "calcity::run2": {"target_mask": TARGET, "intel_quality": ["M"]},
         "calcity::run3": {"target_mask": TARGET, "excluded": "crew stopped it"},
         "calcity::run4": {"target_mask": TARGET}, "calcity::run5": {"target_mask": TARGET}}))
-    got, radius, _turns = Q.collect([root], Q.Truth([truth]))
+    got, radius, _turns = Q.collect([root], Q.Truth([truth], BENCH))
     one, two, three, four, five = got
     assert (one["success"], one["oracle_success"]) == (True, True)
     assert one["ne_ft"] == round(2 ** 0.5 * Q.FT_PER_M, 1) and one["time_to_id_s"] == 600.0
@@ -79,7 +83,7 @@ def _keyframe_run(tmp_path, *keyframe_xy, gnss_agl_m=600.0, fixes=5):
                     "altitude_m": 600.0}) + "\n" for k, xy in enumerate(keyframe_xy)))
     truth.mkdir()
     (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
-    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]))
+    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth], BENCH))
     return got
 
 
@@ -130,7 +134,7 @@ def test_a_run_the_serve_failed_under_is_out_of_every_rate_and_named(tmp_path):
     truth.mkdir()
     (truth / f"{root.name}.json").write_text(json.dumps(
         {f"calcity::run{k}": {"target_mask": TARGET} for k in (1, 2, 3)}))
-    got, _radius, _turns = Q.collect([root], Q.Truth([truth]))
+    got, _radius, _turns = Q.collect([root], Q.Truth([truth], BENCH))
     assert [r["end"] for r in got] == ["reply", "transient_failures", "no run"]
     s = Q.summarize(got)
     assert (s["sr"]["k"], s["sr"]["n"]) == (1, 1)
@@ -142,7 +146,7 @@ def test_the_tasking_set_scores_a_run_only_for_the_description_it_was_flown_on(t
     split.write_text(json.dumps([{"area": "calcity", "descriptions": ["the Rite Aid"], "ann_ids": [0],
                                   "target_positions": [[100.0, 100.0, 0.0]], "trajectory": [[0.0, 0.0, 125.0]],
                                   "target_mask": TARGET}]))
-    truth = Q.Truth([split])
+    truth = Q.Truth([split], BENCH)
     assert truth.ring({}, {"episode_id": "calcity::0#0", "description": "the Rite Aid"})[1] == "tasking set"
     assert truth.ring({}, {"episode_id": "calcity::0#0", "description": "the school"}) == (None, None)
 
@@ -158,7 +162,7 @@ def test_the_tasking_set_finds_a_run_by_its_description_wherever_the_split_lists
     split = tmp_path / "split.json"
     split.write_text(json.dumps([entry("the Rite Aid", 0.0), entry("the school", 500.0),
                                  entry("the courts", 900.0), entry("the courts", 950.0)]))
-    truth = Q.Truth([split])
+    truth = Q.Truth([split], BENCH)
     ring, source = truth.ring({}, {"episode_id": "calcity::0#0", "description": "the school"})
     assert source == "tasking set" and ring[0] == [500.0, 0.0]
     assert truth.ring({}, {"episode_id": "calcity::2#2", "description": "the courts"}) == (None, None)
@@ -179,7 +183,7 @@ def test_a_success_the_recording_holds_one_fix_of_has_its_spl_named_undefined(tm
                                                          "track_deg": 0.0, "ground_speed_mps": 100.0}) + "\n")
     truth.mkdir()
     (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
-    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]))
+    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth], BENCH))
     assert got["success"] is True and got["spl"] is None
     assert got["spl_note"] == "undefined: the recording does not cover the run"
 
@@ -191,7 +195,7 @@ def test_a_torn_last_ledger_line_is_skipped(tmp_path):
     (root / "episodes.jsonl").write_text(json.dumps(row) + "\n" + json.dumps(row)[:40])
     truth.mkdir()
     (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
-    got, _radius, _turns = Q.collect([root], Q.Truth([truth]))
+    got, _radius, _turns = Q.collect([root], Q.Truth([truth], BENCH))
     assert [r["episode_id"] for r in got] == ["calcity::run1"]
 
 
@@ -212,7 +216,7 @@ def test_a_track_ending_under_a_second_before_the_report_owes_no_way_back(tmp_pa
                     "ground_speed_mps": 100.0}) + "\n" for k in range(21)))
     truth.mkdir()
     (truth / f"{root.name}.json").write_text(json.dumps({"calcity::run1": {"target_mask": TARGET}}))
-    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth]))
+    (got,), _radius, _turns = Q.collect([root], Q.Truth([truth], BENCH))
     assert got["final_leg_ft"] == 0.0
 
 

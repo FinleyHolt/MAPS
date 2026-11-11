@@ -9,12 +9,19 @@ every pre-flight floor once.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
+from benchmarks.citynav.analysis import run_report
+from benchmarks.citynav.analysis.run_report import load_run
 from benchmarks.run_record import rows
-from benchmarks.citynav.analysis.run_report import load_run, report
 from benchmarks.run_record.tests.ledger import ledger_row, write_ledger
+
+
+def report(root):
+    """The report over ``root`` as the CLI prints it: the benches placed by this process's environment."""
+    return run_report.report(root, run_report.benches(os.environ))
 
 
 # --------------------------------------------------------------------------
@@ -238,12 +245,10 @@ def test_the_provenance_line_orders_ties_by_name(tmp_path, capsys):
 
 def _calcity_corpus(tmp_path, monkeypatch, *rows: tuple[str, str | None]) -> None:
     """A Cal City split of ``(description, intel_quality)`` rows, ids ``calcity::<i>#<i>``."""
-    from benchmarks.calcity import paths as calcity_paths
-
     corpus = [{"area": "calcity", "descriptions": [d], "ann_ids": [i], "target_positions": [[0.0, 0.0]],
                "trajectory": [[0.0, 0.0, 100.0]], "intel_quality": q} for i, (d, q) in enumerate(rows)]
     (tmp_path / "calcity.json").write_text(json.dumps(corpus))
-    monkeypatch.setattr(calcity_paths, "SPLITS_DIR", tmp_path)
+    monkeypatch.setenv("SEARCH_CALCITY_SPLITS", str(tmp_path))
 
 
 def test_the_by_class_lines_read_a_row_s_own_class_and_the_corpus_for_a_pick_without_one(

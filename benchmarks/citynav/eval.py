@@ -91,7 +91,7 @@ def score_arrival(
 ) -> dict:
     """One episode's metrics under this bench's success mask; every scored row is written here.
 
-    ``criterion`` (``paths.SUCCESS_CRITERION``): ``"ring"`` scores ``SR`` 1
+    ``criterion`` (``Bench.success_criterion``): ``"ring"`` scores ``SR`` 1
     within ``success_dist_m`` of the target point, ``"shape"`` inside the
     target's annotated footprint at ``commit_xy`` (the commit point; the final
     pose when there is none). ``SR`` is the verdict either way, and the

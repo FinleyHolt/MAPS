@@ -7,10 +7,12 @@ that fails to start crashes its episode. A value the shell set wins.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 
 from benchmarks.citynav import bench_fullset as bf
+from benchmarks.citynav.paths import citynav_bench
 
 _COUNT = (
     "import os, cv2, numpy as np\n"
@@ -25,11 +27,11 @@ _POOLS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 def test_a_runner_starts_with_its_native_thread_pools_capped(monkeypatch):
     for name in _POOLS:
         monkeypatch.delenv(name, raising=False)
-    out = subprocess.run([sys.executable, "-c", _COUNT], env=bf._runner_env(),
+    out = subprocess.run([sys.executable, "-c", _COUNT], env=bf._runner_env(citynav_bench(os.environ)),
                          capture_output=True, text=True, check=True).stdout
     assert int(out) <= 4, out
 
 
 def test_a_pool_size_the_shell_set_wins(monkeypatch):
     monkeypatch.setenv("OMP_NUM_THREADS", "8")
-    assert bf._runner_env()["OMP_NUM_THREADS"] == "8"
+    assert bf._runner_env(citynav_bench(os.environ))["OMP_NUM_THREADS"] == "8"

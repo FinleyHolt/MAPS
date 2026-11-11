@@ -5,6 +5,9 @@ run. `serve.py` holds the mission (`benchmarks.flight.mission.Mission` over
 `benchmarks.flight.twin.Twin`), publishes its state and serves the console
 from one port; the console (`web/`) is a browser page and holds no state of
 its own.
+`serve.py` builds the Cal City bench from the environment when it starts
+(`benchmarks.calcity.paths.calcity_bench`) and hands it to the station, whose
+missions fly the bench's engine.
 
 ## Run it
 

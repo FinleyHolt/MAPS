@@ -19,13 +19,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
-from benchmarks.calcity import paths
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.calcity.data_prep.aoi import (
     AOI_BBOX,
     GROUND_LEVEL_M,
@@ -172,10 +173,11 @@ def build(root: Path, bundle: Path) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=paths.CALCITY_ROOT)
+    bench = calcity_bench(os.environ)
+    parser.add_argument("--root", type=Path, default=bench.root)
     parser.add_argument("--bundle", type=Path, default=None)
     args = parser.parse_args(argv)
-    build(args.root, args.bundle or bundle_root())
+    build(args.root, args.bundle or bundle_root(bench.root, os.environ))
     return 0
 
 

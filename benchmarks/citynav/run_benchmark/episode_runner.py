@@ -15,12 +15,13 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
+from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.eval import score_arrival
 from benchmarks.run_record.episode_workdir import LiveRecorder
-from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, SUCCESS_CRITERION, tile_stem
 from benchmarks.citynav.run_benchmark.assets import BlockAssets, load_episode_assets
 from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.mission_engine import (
@@ -33,6 +34,7 @@ from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
+from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.sam.detect_client import SamDetectClient
 from maps.mission.episode_world import SearchLoop
 from maps.withhold import withheld
@@ -98,10 +100,6 @@ def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, 
     """``(start altitude AMSL, block ground datum)`` for one episode: ground
     + ``start_altitude_agl_m`` when set, else the split row's start z, held to
     ``[ground + 1, altitude_cap_m]``."""
-    from maps.perception.ortho.ground_level import (  # noqa: PLC0415
-        GROUND_LEVEL,
-    )
-
     ground = float(GROUND_LEVEL[map_name])
     if cfg.start_altitude_agl_m is not None:
         alt = ground + float(cfg.start_altitude_agl_m)
@@ -149,6 +147,8 @@ class Hydrated:
     ground_z_m: float
     perception: Any
     search_loop: SearchLoop
+    #: The bench the episode is flown on: its rasters, its bake, its criterion.
+    bench: Bench
 
     def crop(self, xy: tuple[float, float], altitude_m: float):
         """The raster's north-up frame through the run's sensor at this pose."""
@@ -156,20 +156,23 @@ class Hydrated:
             (float(xy[0]), float(xy[1])),
             altitude_m=float(altitude_m),
             sensor=self.sensor,
-            rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
+            rgbd_dir=self.bench.rgbd_dir,
             map_name=self.episode.map_name,
         )
 
 
-def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) -> Hydrated:
-    """The engine for one episode: its graph, the start pose, the segmenter
-    wired to the director's watchlist (the declared classes plus the boosts
-    riding a flight), and the started SearchLoop."""
+def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, bench: Bench, *,
+                  perception_factory: Callable[[], Any] | None = None) -> Hydrated:
+    """The engine for one episode on ``bench``: its graph, the start pose, the
+    segmenter wired to the director's watchlist (the declared classes plus the
+    boosts riding a flight), and the started SearchLoop. ``perception_factory``
+    builds the segmenter in place of :func:`make_perception` (the flight's
+    forced replay brings the recorded one)."""
     graph = _episode_graph(assets)
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m)
-    # A module global looked up at call time: the flight's forced replay swaps it.
-    perception = make_perception()
+    # ``make_perception`` is a module global looked up at call time: a test swaps it.
+    perception = (perception_factory or make_perception)()
     grid_h, grid_w = assets.grid_shape
     search_loop = SearchLoop(
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
@@ -177,7 +180,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         map_name=assets.map_name,
         sam_setter=perception.set_concepts,
         # The look tool's crop raster (a live run crops its own imagery).
-        rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
+        rgbd_dir=str(bench.rgbd_dir),
     )
     # Runtime observations accumulate in this same graph; ``provenance``
     # separates them from the prebaked nodes.
@@ -187,7 +190,7 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) 
         sensor=resolve_sensor(cfg.sensor),
         tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
                              cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
-        ground_z_m=ground, perception=perception, search_loop=search_loop,
+        ground_z_m=ground, perception=perception, search_loop=search_loop, bench=bench,
     )
 
 
@@ -242,11 +245,12 @@ def run_episode(
     episode: CityNavEpisode,
     objects_by_map: dict,
     cfg: RunConfig,
+    bench: Bench,
     recorder: LiveRecorder | None = None,
 ) -> dict:
-    """Fly one episode and return its scored record."""
-    assets = load_episode_assets(episode.map_name)
-    log.info("tile_stem=%s map_name=%s", tile_stem(episode.map_name), episode.map_name)
+    """Fly one episode of ``bench`` and return its scored record."""
+    assets = load_episode_assets(bench, episode.map_name)
+    log.info("tile_stem=%s map_name=%s", bench.tile_stem(episode.map_name), episode.map_name)
     if cfg.spawn == "uniform":
         # The FLOWN start replaces the dataset's on the episode itself, so
         # every downstream reader sees it.
@@ -256,7 +260,7 @@ def run_episode(
             cfg.spawn_seed, episode.episode_id))
         log.info("  uniform spawn: (%.1f, %.1f) (spawn_seed=%d, episode=%s)",
                  *episode.start_xy, int(cfg.spawn_seed), episode.episode_id)
-    h = build_episode(cfg, episode, assets)
+    h = build_episode(cfg, episode, assets, bench)
     state = h.state
     ground = h.ground_z_m
     agl = cfg.start_altitude_agl_m
@@ -298,7 +302,7 @@ def run_episode(
     last = flights[-1] if flights else {}
     commit_xy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1])) if flights else None
     scores = score_arrival(
-        criterion=SUCCESS_CRITERION,
+        criterion=bench.success_criterion,
         final_pos_xy=final_xy,
         target_xy=episode.target_xy,
         pos_trajectory=[(float(p[0]), float(p[1])) for p in visited],

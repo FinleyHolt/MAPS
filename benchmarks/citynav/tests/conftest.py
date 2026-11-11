@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 from collections import deque
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav import bench_fullset as bf
+from benchmarks.citynav.paths import citynav_bench
 
 
 @pytest.fixture
@@ -22,6 +24,9 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     def make(root: Path = tmp_path, selection: list[str] | None = None) -> bf.Driver:
         d = bf.Driver.__new__(bf.Driver)
+        # The bench as the test's environment places it, read when the driver is made.
+        d.bench = citynav_bench(os.environ)
+        d.config = bf._config_path(d.bench.environ)
         d.out_root = root
         d.episodes_file = root / "episodes.jsonl"
         d.driver_log = root / "driver.log"
@@ -86,6 +91,8 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
                                    grid_shape=(10, 10)),
             episode=SimpleNamespace(map_name="calcity", description="the largest building"),
             sensor=None, tile_frame=None, ground_z_m=0.0, search_loop=loop,
+            # The bench as the test's environment places it, read when the session is made.
+            bench=citynav_bench(os.environ),
             perception=SimpleNamespace(detect=lambda obs: [], concepts=[]))
         return me.MissionSession(h, observe=lambda: frame)
 

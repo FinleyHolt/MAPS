@@ -44,20 +44,20 @@ def _write_tour_cursor(flights: list[dict]) -> None:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
 
 
-def _seed_base() -> int:
-    """``SEARCH_SEED_BASE`` if set, else a wall-clock nanosecond stamp, as a
-    32-bit seed."""
-    env_seed_base = os.environ.get("SEARCH_SEED_BASE")
+def _seed_base(environ) -> int:
+    """``SEARCH_SEED_BASE`` of the run's environment if set, else a wall-clock
+    nanosecond stamp, as a 32-bit seed."""
+    env_seed_base = environ.get("SEARCH_SEED_BASE")
     if env_seed_base is not None:
         return int(env_seed_base) & 0xFFFFFFFF
     return time.time_ns() & 0xFFFFFFFF
 
 
-def _mission_deadline_epoch() -> float | None:
+def _mission_deadline_epoch(environ) -> float | None:
     """The absolute epoch a pass must stop flying at, the wall-clock backstop
-    the bench driver exports, or ``None`` (the flight mission, a bare smoke:
-    no clock)."""
-    raw = os.environ.get(DEADLINE_ENV, "").strip()
+    the bench driver exports into its attempt's environment, or ``None`` (the
+    flight mission, a bare smoke: no clock)."""
+    raw = environ.get(DEADLINE_ENV, "").strip()
     # The bench driver writes repr(float).
     return float(raw) if raw else None
 
@@ -158,7 +158,7 @@ class MissionSession:
             fly=self.fly,
             declare_concepts=loop.declare_mission_concepts,
             coverage_stops=self._coverage_stops,
-            deadline_epoch=_mission_deadline_epoch(),
+            deadline_epoch=_mission_deadline_epoch(h.bench.environ),
         )
         #: What every turn of the conversation takes, the first and each
         #: operator turn after it alike.
@@ -179,7 +179,7 @@ class MissionSession:
         return run_mission(
             instruction=instruction,
             endpoint_spec=endpoint_spec(),
-            seed=_seed_base() & 0x7FFFFFFF,
+            seed=_seed_base(h.bench.environ) & 0x7FFFFFFF,
             sensor_description=served_description(
                 h.sensor, agl_m=float(h.state.altitude_m) - h.ground_z_m),
             **self.run_kwargs,

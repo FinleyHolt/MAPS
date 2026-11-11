@@ -43,17 +43,19 @@ import argparse
 import datetime as dt
 import json
 import math
+import os
 import statistics
 import sys
 from bisect import bisect_left
 from pathlib import Path
 from typing import Any
 
-from benchmarks.citynav.action_snap import bearing_deg
-from benchmarks.run_record.rows import is_infra_abort, iter_json_rows
+from benchmarks.bench import Bench
+from benchmarks.calcity.paths import calcity_bench
+from benchmarks.flight.airframe import C12_SENSOR
 from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL
 from benchmarks.run_record.episodes import EPISODES_JSONL
-from benchmarks.flight.airframe import C12_SENSOR
+from benchmarks.run_record.rows import is_infra_abort, iter_json_rows
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor
@@ -103,20 +105,19 @@ def centroid(ring: list[list[float]]) -> tuple[float, float]:
 
 class Truth:
     """The analyst's entries by sortie name (a directory of ``<sortie>.json``)
-    and the tasking set's footprints by description (split JSONs). A flown
+    and the tasking set's footprints by description (split JSONs, read as
+    ``bench``'s engine parses a row). A flown
     episode id is the run's place in its sortie's tasking, not in the file, so
     the description is the join; a description two entries give different
     footprints joins nothing."""
 
-    def __init__(self, paths: list[Path]) -> None:
+    def __init__(self, paths: list[Path], bench: Bench) -> None:
         self.dirs = [p for p in paths if p.is_dir()]
         self.masks: dict[str, list[list[float]] | None] = {}
         for p in paths:
             if p.is_file():
-                from benchmarks.citynav.adapter import parse_episode  # noqa: PLC0415
-
                 for i, r in enumerate(json.loads(p.read_text())):
-                    ep = parse_episode(r, row_index=i)
+                    ep = bench.engine.parse_episode(r, row_index=i)
                     if ep.target_mask:
                         ring = [[float(x), float(y)] for x, y in ep.target_mask]
                         seen = self.masks.setdefault(ep.description, ring)
@@ -301,6 +302,11 @@ def _agl(fix, frames: list[dict[str, Any]], events, map_name: str) -> tuple[floa
         return statistics.median(alts), "keyframes (median)"
     asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
     return (statistics.median(asked), "waypoint altitude") if asked else (None, None)
+
+
+def bearing_deg(from_xy, to_xy) -> float:
+    """Compass bearing from ``from_xy`` to ``to_xy`` (0 = north, clockwise), signed."""
+    return math.degrees(math.atan2(to_xy[0] - from_xy[0], to_xy[1] - from_xy[1]))
 
 
 def first_leg_m(p, h: float, q, r: float) -> float | None:
@@ -597,7 +603,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     roots = sorted(r for r in args.root if (r / EPISODES_JSONL).is_file())
-    rows, radius, turns = collect(roots, Truth(args.truth))
+    rows, radius, turns = collect(roots, Truth(args.truth, calcity_bench(os.environ)))
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
            "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"),
            "runs": rows}

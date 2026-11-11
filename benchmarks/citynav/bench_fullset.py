@@ -38,12 +38,19 @@ import urllib.request
 from collections import Counter, deque
 from pathlib import Path
 
-from benchmarks.citynav import paths
+from benchmarks.bench import Bench, missing_bake
+from benchmarks.citynav.adapter import episode_ids, load_split
+from benchmarks.citynav.analysis import run_report
+from benchmarks.citynav.paths import selected_bench
 from benchmarks.run_record import episodes
 from benchmarks.run_record import rows as _rows
+from benchmarks.run_record import run_manifest as _rm
+from benchmarks.run_record.config import resolve_config
+from maps.llm.endpoint_spec import models_url, reasoner_api_key, spec
 
 REPO = Path(__file__).resolve().parents[2]
-CONFIG = REPO / (os.environ.get("CITYNAV_BENCH_CONFIG", "").strip() or "configs/citynav.yaml")
+#: The config a run flies when ``CITYNAV_BENCH_CONFIG`` names none.
+DEFAULT_CONFIG = "configs/citynav.yaml"
 
 # The runner each attempt child runs.
 RUNNER_MODULE = "benchmarks.citynav.run_benchmark"
@@ -76,11 +83,14 @@ _log_lock = threading.Lock()
 def _utc(epoch: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
 
-def _enumerate_split(split: str) -> list[str]:
-    from benchmarks.citynav.adapter import episode_ids, load_split
+def _config_path(environ) -> Path:
+    """The run's config: ``CITYNAV_BENCH_CONFIG`` under the repo, else ``DEFAULT_CONFIG``."""
+    return REPO / (environ.get("CITYNAV_BENCH_CONFIG", "").strip() or DEFAULT_CONFIG)
 
+
+def _enumerate_split(bench: Bench, split: str) -> list[str]:
     try:
-        split_file = paths.split_path(split)
+        split_file = bench.split_path(split)
     except ValueError as exc:
         raise SystemExit(f"FATAL: {exc}") from None
     return episode_ids(enumerate(load_split(split_file)))
@@ -99,9 +109,10 @@ RUNNER_THREAD_ENV = {
 }
 
 
-def _runner_env() -> dict[str, str]:
-    """The environment an attempt child is spawned under."""
-    env = {**RUNNER_THREAD_ENV, **os.environ}
+def _runner_env(bench: Bench) -> dict[str, str]:
+    """The environment an attempt child of ``bench`` is spawned under: this
+    process's, under the run's own (the bench's selection, the settled effort)."""
+    env = {**RUNNER_THREAD_ENV, **os.environ, **bench.environ}
     # Unbuffered, so a child that dies fast still leaves its lines in server.log.
     env["PYTHONUNBUFFERED"] = "1"
     env[episodes.PARENT_PID_ENV] = str(os.getpid())
@@ -118,10 +129,10 @@ def _causes(counts: Counter) -> str:
     return ", ".join(f"{c} ({k})" for c, k in counts.most_common())
 
 
-def _offline() -> bool:
+def _offline(environ) -> bool:
     """``SEARCH_ENDPOINT_OFFLINE=1``: the run serves nothing (a pinned spec,
     ``endpoint_spec.discover``), so the driver probes nothing."""
-    return os.environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1"
+    return environ.get("SEARCH_ENDPOINT_OFFLINE", "").strip() == "1"
 
 
 def _answers(url: str, bearer: str | None = None) -> bool:
@@ -135,19 +146,17 @@ def _answers(url: str, bearer: str | None = None) -> bool:
         return False
 
 
-def _missing_block_assets(episode_ids: list[str]) -> list[str]:
+def _missing_block_assets(bench: Bench, episode_ids: list[str]) -> list[str]:
     """What the selected episodes' blocks need and do not have: the bake
-    (``assets.missing_bake``), and ``<map>.tif`` beside ``<map>_rgb.tif`` or
+    (``bench.missing_bake``), and ``<map>.tif`` beside ``<map>_rgb.tif`` or
     ``<map>.png``, each raster line with the command that builds it."""
-    from benchmarks.citynav.run_benchmark.assets import missing_bake
-
     build = ("python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
-             if paths.BENCHMARK == "calcity" else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh")
+             if bench.name == "calcity" else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh")
     missing: list[str] = []
     for map_name in sorted({e.split("::", 1)[0] for e in episode_ids}):
-        if why := missing_bake(paths.tile_stem(map_name)):
+        if why := missing_bake(bench.tile_stem(map_name)):
             missing.append(why)
-        rgbd = Path(paths.CITYNAV_NATIVE_RGBD_DIR)
+        rgbd = Path(bench.rgbd_dir)
         if not (rgbd / f"{map_name}.tif").exists():
             missing.append(f"Missing {rgbd / f'{map_name}.tif'} (built by {build})")
         if not any((rgbd / f"{map_name}{s}").exists() for s in ("_rgb.tif", ".png")):
@@ -156,7 +165,9 @@ def _missing_block_assets(episode_ids: list[str]) -> list[str]:
 
 
 class Driver:
-    def __init__(self, args: argparse.Namespace) -> None:
+    def __init__(self, args: argparse.Namespace, bench: Bench, config: Path) -> None:
+        self.bench = bench
+        self.config = Path(config)
         self.workers = args.workers
         self.split = args.split
         self.episode_timeout_s = args.episode_timeout_s
@@ -334,15 +345,11 @@ class Driver:
         """True when the installed spec's reasoner answers its model list, at
         the URL discovery read it from (``endpoint_spec.models_url``), asked
         with the chat path's bearer (hosted endpoints auth ``/v1/models``)."""
-        from maps.llm.endpoint_spec import models_url, reasoner_api_key, spec  # noqa: PLC0415
-
         return _answers(models_url(spec().base_url), reasoner_api_key())
 
     @staticmethod
     def _sam_answers() -> bool:
         """True when a SAM replica discovery health-checked answers ``/health``."""
-        from maps.llm.endpoint_spec import spec  # noqa: PLC0415
-
         return any(_answers(f"{url}/health") for url in spec().sam_urls)
 
     def _wait_for_reasoner(self) -> bool:
@@ -354,7 +361,7 @@ class Driver:
     def _wait_for(self, name: str, answers) -> bool:
         """Hold a launch until ``answers()``; False once the wall budget is
         spent or the run aborted while it waited."""
-        if _offline() or answers():
+        if _offline(self.bench.environ) or answers():
             return True
         self.log(f"{name} down; pausing launches until it answers")
         while not answers():
@@ -379,7 +386,7 @@ class Driver:
                 pass
             if time.monotonic() >= deadline:
                 break
-            if _offline():
+            if _offline(self.bench.environ):
                 continue
             for name, answers in (("reasoner", self._reasoner_answers), ("sam", self._sam_answers)):
                 down[name] = 0 if answers() else down[name] + 1
@@ -397,7 +404,7 @@ class Driver:
         started = time.time()
         worker_root = self.out_root / f"w{worker_id}"
         worker_root.mkdir(parents=True, exist_ok=True)
-        env = _runner_env()
+        env = _runner_env(self.bench)
         # A hosted reasoner's prompt cache matches within one key: a worker's
         # episodes, flown one after another, share theirs, so each episode
         # after a worker's first reads the common head (system turn and tools)
@@ -408,7 +415,7 @@ class Driver:
         # start, less the reserve for ending.
         env[episodes.DEADLINE_ENV] = repr(
             time.time() + self.episode_timeout_s * (1.0 - _DEADLINE_RESERVE_FRAC))
-        cmd = [sys.executable, "-m", RUNNER_MODULE, "--config", str(CONFIG),
+        cmd = [sys.executable, "-m", RUNNER_MODULE, "--config", str(self.config),
                "--split", self.split, "--episode-id", episode_id,
                "--attempt-root", str(worker_root)]
         # The child prints its workdir as its first stdout line; an unlinked
@@ -491,8 +498,6 @@ class Driver:
     def _write_summary(self) -> None:
         """``summary.txt``: the driver's infra and abort lines above
         ``analysis.run_report.report`` over the root, once a row has landed."""
-        from benchmarks.citynav.analysis import run_report  # noqa: PLC0415
-
         infra = Counter(_infra_cause(r)
                         for r in _rows.iter_json_rows(self.episodes_file)
                         if _rows.is_infra_abort(r))
@@ -512,7 +517,8 @@ class Driver:
         # the driver's only other stdout writer.
         with _log_lock, contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
             try:
-                run_report.report(self.out_root, allow_partial=True)
+                run_report.report(self.out_root, run_report.benches(self.bench.environ, first=self.bench),
+                                  allow_partial=True)
             except SystemExit as exc:  # no scored row yet
                 print(exc)
         text = "\n".join(x for x in lines if x) + "\n" + buf.getvalue().lstrip("\n")
@@ -554,12 +560,12 @@ class Driver:
                 self._arrival = {r["episode_id"]: float(r["arrival_s"]) for r in reports}
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 raise SystemExit(f"FATAL: --arrivals read failed: {self.arrivals_path}: {exc!r}") from exc
-            unknown = set(self._arrival) - set(_enumerate_split(self.split))
+            unknown = set(self._arrival) - set(_enumerate_split(self.bench, self.split))
             if unknown:
                 raise SystemExit(f"FATAL: --arrivals names {len(unknown)} episodes not in the {self.split} "
                                  f"split, e.g. {sorted(unknown)[0]}")
             return sorted(self._arrival, key=self._arrival.get)
-        episodes = _enumerate_split(self.split)
+        episodes = _enumerate_split(self.bench, self.split)
         if self.allowlist_path is not None:
             try:
                 lines = self.allowlist_path.read_text().splitlines()
@@ -635,12 +641,11 @@ class Driver:
             self.log(self._selection_note)
         # Written before anything flies; a resume under another identity is
         # refused (run_manifest.emit_or_verify).
-        from benchmarks.run_record import run_manifest as _rm
-
         try:
             fresh_manifest = _rm.build_manifest(
+                bench=self.bench,
                 out_root=self.out_root,
-                config_path=CONFIG,
+                config_path=self.config,
                 split=self.split,
                 sample_seed=self.sample_seed,
                 limit=self.limit,
@@ -707,12 +712,12 @@ def _at_least_one(value: str) -> int:
     return n
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog=f"python -m benchmarks.{paths.BENCHMARK}.bench_fullset",
-        description=f"Continuous full-split {paths.BENCHMARK} benchmark at fixed concurrency.",
+        prog=f"python -m benchmarks.{bench.name}.bench_fullset",
+        description=f"Continuous full-split {bench.name} benchmark at fixed concurrency.",
     )
-    p.add_argument("--split", default=paths.DEFAULT_SPLIT, help=f"(default {paths.DEFAULT_SPLIT})")
+    p.add_argument("--split", default=bench.default_split, help=f"(default {bench.default_split})")
     p.add_argument(
         "--workers",
         type=_at_least_one,
@@ -721,7 +726,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--out-root",
-        default=f"output/{paths.BENCHMARK}_fullset",
+        default=f"output/{bench.name}_fullset",
         help="results + per-worker run-roots (default %(default)s)",
     )
     p.add_argument(
@@ -781,46 +786,46 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
+    """The driver's CLI, for ``bench``; unset, for the bench the environment selects."""
     # Discovery logs at INFO (the installed spec); without a config it reaches no console.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
-    parser = _build_parser()
+    if bench is None:
+        bench = selected_bench(os.environ)
+    config = _config_path(bench.environ)
+    parser = _build_parser(bench)
     args = parser.parse_args(argv)
     if args.arrivals and (args.episode_allowlist or args.limit
                           or args.sample_seed is not None):
         parser.error("--arrivals selects the session's episodes; drop --episode-allowlist, --limit "
                      "and --sample-seed")
     # The config is refused here, before an out-root exists or a serve is asked.
-    from benchmarks.run_record.config import resolve_config
-
     try:
-        resolved = resolve_config(CONFIG)[0]
+        resolved = resolve_config(config)[0]
     except (OSError, ValueError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
-    driver = Driver(args)
+    driver = Driver(args, bench, config)
     # The selection and its block assets too, so a refusal makes no out-root and asks no serve.
     try:
         driver._selection = driver._select_episodes()
     except SystemExit as exc:
         print(exc, file=sys.stderr)
         return 2
-    if missing := _missing_block_assets(driver._selection):
+    if missing := _missing_block_assets(bench, driver._selection):
         print("FATAL: block assets missing for the selection (every episode on these blocks would land "
               "infra):\n" + "\n".join(f"  {p}" for p in missing), file=sys.stderr)
         return 2
     if args.dry_run:
         return driver.dry_run()
     # Once, so an unreachable or wrong serve fails here, before any worker spawns.
-    from benchmarks.run_record.run_manifest import EndpointRefused, install_endpoint
-
     try:
-        install_endpoint(resolved.get("policy"))
-    except EndpointRefused as exc:
+        driver.bench = _rm.install_endpoint(bench, resolved.get("policy"))
+    except _rm.EndpointRefused as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     return driver.run()

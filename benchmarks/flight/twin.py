@@ -23,6 +23,7 @@ import argparse
 import datetime as dt
 import logging
 import math
+import os
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -30,12 +31,17 @@ from typing import Any
 
 import numpy as np
 
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import map_render
 from benchmarks.flight.airframe import C12_LEVER_M, C12_SPEED_MPS
+from benchmarks.flight.live_source import open_live
+from benchmarks.flight.mission import STATE_ENDED, Mission, converse, flight_config, resolve_episode, summary_line
 from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag, tag_pose
 from benchmarks.flight.recorded_ring import RING_HZ
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, local_to_lonlat
 from benchmarks.flight.vehicle import Leg
+from benchmarks.run_record.episode_workdir import open_episode_dir
+from maps.perception.geometry.sensor_spec import resolve_sensor
 
 #: A twin frame's JPEG quality, the recorder's own.
 FRAME_JPEG_QUALITY = 90
@@ -187,37 +193,27 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--start-xy flies an operator-authored mission: give its words with --instruction")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
 
-    import benchmarks.calcity  # noqa: PLC0415
-    from benchmarks.flight.mission import (STATE_ENDED, Mission, converse, flight_config,  # noqa: PLC0415
-                                           resolve_episode, summary_line)
-
-    benchmarks.calcity.use()
-    from benchmarks.run_record.episode_workdir import open_episode_dir  # noqa: PLC0415
-    from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
-    from benchmarks.flight.live_source import open_live  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m  # noqa: PLC0415
-    from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
-
-    split = args.split or DEFAULT_SPLIT
+    bench = calcity_bench(os.environ)
+    split = args.split or bench.default_split
     cfg = flight_config(args.config)
     sensor = resolve_sensor(cfg.sensor)
-    episode = resolve_episode(args.episode, split, args.start_xy)
+    episode = resolve_episode(bench, args.episode, split, args.start_xy)
     map_name = episode.map_name
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
         print(f"no {map_name} raster under {args.ortho}: a raster directory holds {map_render.raster_pair(map_name)}",
               file=sys.stderr)
         return 2
-    start_alt, ground_z = start_altitude_m(cfg, map_name, episode.start_z)
-    twin = Twin(tiles_dir=TILES_DIR, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
+    start_alt, ground_z = bench.engine.start_altitude_m(cfg, map_name, episode.start_z)
+    twin = Twin(tiles_dir=bench.tiles_dir, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
                 agl_m=start_alt - ground_z)
-    live = open_live(vehicle=twin, tiles_dir=TILES_DIR, map_name=map_name, sensor=sensor,
+    live = open_live(vehicle=twin, tiles_dir=bench.tiles_dir, map_name=map_name, sensor=sensor,
                      register_raster=args.register)
 
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sortie = args.out / stamp
-    ep = open_episode_dir(sortie, episode_id=args.episode, run_no=1)
-    mission = Mission(episode_id=args.episode, split=split, config=args.config, workdir=ep.dir, live=live,
+    ep = open_episode_dir(sortie, episode_id=args.episode, benchmark=bench.name, run_no=1)
+    mission = Mission(bench=bench, episode_id=args.episode, split=split, config=args.config, workdir=ep.dir, live=live,
                       instruction=args.instruction, recorder=ep.recorder, close_log=ep.close, run_id=stamp,
                       run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort,
                       agl_m=start_alt - ground_z)

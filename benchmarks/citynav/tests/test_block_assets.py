@@ -9,13 +9,17 @@ state records that block's frame without depending on its imagery.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.paths import TILES_DIR, tile_stem
+from benchmarks.citynav.paths import citynav_bench
 
-BLOCK_TILE = TILES_DIR / "birmingham_block_0_features.json"
+# The bench as this process's environment places it.
+BENCH = citynav_bench(os.environ)
+tile_stem = BENCH.tile_stem
+BLOCK_TILE = BENCH.tiles_dir / "birmingham_block_0_features.json"
 
 needs_block_bake = pytest.mark.skipif(
     not BLOCK_TILE.exists(),
@@ -68,8 +72,8 @@ def test_a_missing_bake_names_its_maps_recipe(tmp_path, monkeypatch):
     from benchmarks.citynav.run_benchmark import assets
 
     (tmp_path / "calcity_meta.json").write_text("{}")
-    monkeypatch.setattr(assets, "tile_stem", lambda name: str(tmp_path / name))
+    bench = citynav_bench({"SEARCH_CITYNAV_TILES": str(tmp_path)})
     with pytest.raises(FileNotFoundError, match=r"calcity_features\.json.*benchmarks\.calcity\.data_prep\.bake_tiles"):
-        assets.load_episode_assets("calcity")
+        assets.load_episode_assets(bench, "calcity")
     with pytest.raises(FileNotFoundError, match=r"blk_meta\.json.*benchmarks/citynav/data_prep/bake_tiles\.sh"):
-        assets.load_episode_assets("blk")
+        assets.load_episode_assets(bench, "blk")

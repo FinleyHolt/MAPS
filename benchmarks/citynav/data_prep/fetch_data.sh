@@ -55,7 +55,7 @@ EOF
 
 echo
 echo "== verify =="
-if python3 -c "from benchmarks.citynav.paths import assert_available; assert_available()" 2>/dev/null; then
+if python3 -c "import os; from benchmarks.citynav.paths import citynav_bench; citynav_bench(os.environ).assert_available()" 2>/dev/null; then
 	echo "paths.assert_available(): OK — splits + objects.json present."
 else
 	echo "paths.assert_available(): NOT YET (see messages above; splits/objects missing)."

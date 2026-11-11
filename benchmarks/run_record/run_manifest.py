@@ -12,13 +12,15 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
-import os
 import socket
 import time
 from pathlib import Path
 
 from benchmarks import repo_provenance
+from benchmarks.bench import Bench
+from benchmarks.run_record.config import resolve_config
 from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME, atomic_write_json
+from maps.llm import endpoint_spec
 from maps.llm.model_cards import effort
 
 SCHEMA = "maps.run_manifest/v1"
@@ -77,29 +79,28 @@ class ManifestIdentityError(RuntimeError):
     """A re-entering run's resolution contradicts the stored manifest."""
 
 
-def arm_env_stamp() -> dict:
-    """The set arm flags, plus the tile bake resolved: an unset
-    SEARCH_CITYNAV_TILES records ``paths.TILES_DIR``, so a default-bake row
-    proves its bake instead of reading as unrecorded."""
-    stamp = {k: os.environ[k] for k in ARM_ENV_FLAGS if os.environ.get(k, "") != ""}
-    stamp.update({k: v for k, v in os.environ.items()
+def arm_env_stamp(bench: Bench) -> dict:
+    """The set arm flags of a run of ``bench``, plus the tile bake resolved: an
+    unset SEARCH_CITYNAV_TILES records ``bench.tiles_dir``, so a default-bake
+    row proves its bake instead of reading as unrecorded."""
+    env = bench.environ
+    stamp = {k: env[k] for k in ARM_ENV_FLAGS if env.get(k, "") != ""}
+    stamp.update({k: v for k, v in env.items()
                   if k.startswith(ARM_ENV_PREFIXES) and v != ""})
     if "SEARCH_CITYNAV_TILES" not in stamp:
-        from benchmarks.citynav import paths
-
-        stamp["SEARCH_CITYNAV_TILES"] = str(paths.TILES_DIR)
+        stamp["SEARCH_CITYNAV_TILES"] = str(bench.tiles_dir)
     return stamp
 
 
 _EFFORT = "SEARCH_SAMPLING_REASONING_EFFORT"
 
 
-def arm_stamp(policy: str | None) -> dict:
+def arm_stamp(policy: str | None, bench: Bench) -> dict:
     """The arm flags: :func:`arm_env_stamp`, with a baseline ``policy``'s fixed
     dial (``baselines.seam.REASONING_EFFORT``; ``none`` is the dial off,
     whichever switch the card takes) in place of the environment's effort. The
     manifest and every row stamp this."""
-    stamp = arm_env_stamp()
+    stamp = arm_env_stamp(bench)
     if policy:
         # By name: benchmarks carries no static import of baselines.
         fixed = importlib.import_module("baselines.seam").REASONING_EFFORT.get(policy)
@@ -108,15 +109,12 @@ def arm_stamp(policy: str | None) -> dict:
     return stamp
 
 
-def settle_effort() -> None:
-    """Write the arm's reasoning effort back to ``os.environ`` as the
+def settle_effort(bench: Bench) -> Bench:
+    """``bench`` with the arm's reasoning effort in its environment as the
     requests carry it (stripped; blank is unset). Endpoint discovery has
     checked it against the served card; called once after it, before any
     stamp or spawn."""
-    if chosen := effort():
-        os.environ[_EFFORT] = chosen
-    else:
-        os.environ.pop(_EFFORT, None)
+    return bench.with_environ({_EFFORT: effort(bench.environ.get(_EFFORT, "")) or None})
 
 
 class EndpointRefused(RuntimeError):
@@ -124,19 +122,18 @@ class EndpointRefused(RuntimeError):
     arm's model has no dial-off."""
 
 
-def install_endpoint(policy: str | None = None) -> None:
+def install_endpoint(bench: Bench, policy: str | None = None) -> Bench:
     """Discover the serve, install its spec and settle the effort, once per
     process before any inference or perception call; a baseline ``policy``
     (every arm makes dial-off calls) is refused here when its model has no
-    dial-off. Raises :class:`EndpointRefused`."""
-    from maps.llm import endpoint_spec
-
+    dial-off. Returns ``bench`` with the effort settled
+    (:func:`settle_effort`). Raises :class:`EndpointRefused`."""
     try:
         spec = endpoint_spec.discover_from_env()
     except endpoint_spec.EndpointDiscoveryError as exc:
         raise EndpointRefused(f"endpoint discovery failed: {exc}") from exc
     endpoint_spec.install_spec(spec)
-    settle_effort()
+    bench = settle_effort(bench)
     if policy:
         # By name: benchmarks carries no static import of baselines.
         seam = importlib.import_module("baselines.seam")
@@ -144,18 +141,18 @@ def install_endpoint(policy: str | None = None) -> None:
             seam.dial_off(spec.model_id)
         except seam.NoDialOff as exc:
             raise EndpointRefused(str(exc)) from exc
+    return bench
 
 
-def _audited_env() -> dict:
-    keys = set(AUDITED_ENV) | {k for k in os.environ if k.startswith(AUDITED_ENV_PREFIXES)}
-    return {k: os.environ[k] for k in sorted(keys - set(SECRET_ENV)) if k in os.environ}
+def _audited_env(bench: Bench) -> dict:
+    env = bench.environ
+    keys = set(AUDITED_ENV) | {k for k in env if k.startswith(AUDITED_ENV_PREFIXES)}
+    return {k: env[k] for k in sorted(keys - set(SECRET_ENV)) if k in env}
 
 
 def _endpoint_section() -> dict:
     """The installed endpoint spec's served facts; raises if none is installed."""
-    from maps.llm.endpoint_spec import spec
-
-    s = spec()
+    s = endpoint_spec.spec()
     return {
         "base_url": s.base_url,
         "model_id": s.model_id,
@@ -167,18 +164,17 @@ def _endpoint_section() -> dict:
     }
 
 
-def _perception_section() -> dict:
-    """The tile bake this process resolves, by path and by content (``bake_sha256``)."""
-    from benchmarks.citynav import paths
-
+def _perception_section(bench: Bench) -> dict:
+    """``bench``'s tile bake, by path and by content (``bake_sha256``)."""
     return {
-        "tiles_dir_resolved": str(paths.TILES_DIR),
-        "bake_sha256": paths.bake_sha256(),
+        "tiles_dir_resolved": str(bench.tiles_dir),
+        "bake_sha256": bench.bake_sha256(),
     }
 
 
 def build_manifest(
     *,
+    bench: Bench,
     out_root: Path,
     config_path: Path,
     split: str,
@@ -189,17 +185,15 @@ def build_manifest(
     mission: dict | None = None,
     arrivals: str | None = None,
 ) -> dict:
-    """The resolved record. ``mission`` is the flight mission's per-mission
+    """The resolved record of a run of ``bench``. ``mission`` is the flight mission's per-mission
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
     in ``search_env_flags`` (:func:`arm_stamp`), since the mission's requests
     carried it. ``arrivals`` is a capacity session's stream sha256: the
     stream, not a seed, selects its episodes."""
-    import yaml  # noqa: PLC0415
-
-    from benchmarks.run_record.config import resolve_config  # noqa: PLC0415
+    import yaml  # noqa: PLC0415  (only config runs need it)
 
     resolved = resolve_config(config_path)[0]
-    arm = arm_stamp(resolved.get("policy"))
+    arm = arm_stamp(resolved.get("policy"), bench)
     if mission is not None and mission.get("reasoning_effort") is not None:
         arm[_EFFORT] = str(mission["reasoning_effort"])
     endpoints = _endpoint_section()
@@ -232,8 +226,8 @@ def build_manifest(
             ).hexdigest()[:12],
         },
         "endpoints": endpoints,
-        "perception": _perception_section(),
-        "env": _audited_env(),
+        "perception": _perception_section(bench),
+        "env": _audited_env(bench),
         **({"mission": dict(mission)} if mission is not None else {}),
         "resumes": [],
     }

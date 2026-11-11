@@ -6,8 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from benchmarks.bench import BAKE_OUTPUT_SUFFIXES, Bench, missing_bake
 from benchmarks.citynav.eval import WorldBounds
-from benchmarks.citynav.paths import BAKE_OUTPUT_SUFFIXES, assert_current_tile_schema, tile_stem
 
 
 @dataclass
@@ -21,19 +21,24 @@ class BlockAssets:
     base_features: dict  # Prebaked features dict, loaded once per block.
 
 
-def missing_bake(stem: str) -> str | None:
-    """What the bake at ``stem`` lacks for an episode to load, or None."""
-    recipe = ("python -m benchmarks.calcity.data_prep.bake_tiles" if Path(stem).name == "calcity"
-              else "benchmarks/citynav/data_prep/bake_tiles.sh")
-    for path in (Path(f"{stem}{s}") for s in BAKE_OUTPUT_SUFFIXES):
-        if not path.exists():
-            return f"Missing {path}: bake this block first ({recipe})."
-    return None
+def assert_current_tile_schema(features: dict, source: str) -> None:
+    """Refuse a loaded ``<block>_features.json`` that is not the current bake's
+    one ``prior`` list of row dicts: a run against another bake still
+    completes, with a wrong SR."""
+    rows = features.get("prior", []) if isinstance(features, dict) else None
+    if (not isinstance(rows, list) or set(features) - {"prior"}
+            or not all(isinstance(r, dict) for r in rows)):
+        raise RuntimeError(
+            f"{source} is not the current tile bake (one 'prior' list of tag "
+            "rows); grounding against it silently produces a wrong SR. Point "
+            "SEARCH_CITYNAV_TILES at the current bake (tiles/citynav_2m_osmv3) "
+            "or re-bake with `benchmarks/citynav/data_prep/bake_tiles.sh`."
+        )
 
 
-def load_episode_assets(map_name: str) -> BlockAssets:
-    """Load the episode's per-block bakes."""
-    stem = tile_stem(map_name)
+def load_episode_assets(bench: Bench, map_name: str) -> BlockAssets:
+    """Load the episode's per-block bakes from ``bench``'s tile bake."""
+    stem = bench.tile_stem(map_name)
     if why := missing_bake(stem):
         raise FileNotFoundError(why)
     meta_path, feat_path = (Path(f"{stem}{s}") for s in BAKE_OUTPUT_SUFFIXES)

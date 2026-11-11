@@ -7,6 +7,11 @@ observations are fused from the frames the aircraft recorded. The aircraft is
 reached through one protocol, `Vehicle`. This package also holds a kinematic
 twin of the aircraft, the as-flown replay and the closed-loop measures.
 
+A mission is handed its bench as a value (`benchmarks.bench.Bench`): the
+twin, the replay and the measures build the Cal City bench from the
+environment when they start (`benchmarks.calcity.paths.calcity_bench`), and
+the mission reaches the episode engine through it.
+
 ## The flown chain
 
 One flight, from the model's `go_to` or `explore` stop to the observation it

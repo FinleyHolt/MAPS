@@ -16,6 +16,14 @@ def built(tmp_path_factory):
 
 
 @pytest.fixture
+def bench(built):
+    """The Cal City bench over the synthetic world's bake."""
+    from benchmarks.calcity.paths import calcity_bench
+
+    return calcity_bench({"SEARCH_CALCITY_TILES": str(built[0])})
+
+
+@pytest.fixture
 def make_twin(built):
     def make(start_xy=(600.0, 100.0)):
         from benchmarks.flight.twin import Twin

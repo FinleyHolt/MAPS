@@ -32,6 +32,9 @@ PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh
 | `SEARCH_CITYNAV_RGBD_DIR` | `$CITYNAV_ROOT/data/rgbd_upstream` | The nadir rasters the observation crops. |
 | `SEARCH_CITYNAV_TILES` | `tiles/citynav_2m_osmv3` | The OSM prior bake. |
 
+An entry point reads these once, into a bench value
+(`paths.citynav_bench(os.environ)`), and passes that value down.
+
 ## Run the bench
 
 ```sh
@@ -102,7 +105,9 @@ and every value is checked by type and range at load
 |---|---|
 | `bench_fullset.py` | The full-split driver. |
 | `run_benchmark/` | The runner: episode setup, the mission engine (`mission_engine.py`), scoring rows. |
-| `adapter.py`, `paths.py` | The dataset, the file layout. |
+| `adapter.py` | The dataset: split rows and the CityRefer catalog. |
+| `paths.py` | `citynav_bench(environ)`: the bench as a value (`benchmarks.bench.Bench`), its roots read from the variables above; `selected_bench(environ)` picks the bench an attempt child flies. |
+| `engine.py` | The episode engine a bench value carries, which the Cal City bench, the flight harness and the station fly through their bench. |
 | `eval.py` | Scoring: NE, SR, OSR, SPL, and the shape criterion the Cal City bench uses. |
 | `action_snap.py` | The six-action alphabet a flight is replayed in. |
 | `bake/city.py` | The OSM prior bake. |

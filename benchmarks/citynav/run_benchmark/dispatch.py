@@ -9,6 +9,7 @@ import traceback
 from pathlib import Path
 
 from benchmarks import repo_provenance
+from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.run_record import rows as _rows
 from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
@@ -103,11 +104,12 @@ def dispatch_one(
     total: int,
     objects_by_map: dict,
     cfg: RunConfig,
+    bench: Bench,
     split: str,
     recorder: LiveRecorder | None,
     episode_dir: Path,
 ) -> dict:
-    """Run one episode, write its row to ``<episode_dir>/episode.json`` and
+    """Run one episode of ``bench``, write its row to ``<episode_dir>/episode.json`` and
     return it. ``status`` is ``ok`` for a scored attempt (a method exception
     included) and ``infra`` when an infrastructure fault raised or the
     mission ended ``transient_failures``.
@@ -115,13 +117,13 @@ def dispatch_one(
     t0 = time.monotonic()
 
     # Every row's provenance carries the arm identity, as the manifest stamps it.
-    _prov = _cached_run_provenance(arm_stamp(cfg.policy), config_path=cfg.source_path, split=split)
+    _prov = _cached_run_provenance(arm_stamp(cfg.policy, bench), config_path=cfg.source_path, split=split)
 
     def _stamp(rec: dict) -> dict:
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}
 
     try:
-        rec = run_episode(episode, objects_by_map, cfg, recorder=recorder)
+        rec = run_episode(episode, objects_by_map, cfg, bench, recorder=recorder)
     except Exception as e:
         # exc_info lands the traceback in run.log through the root
         # handler; a bare print_exc reaches only stderr.

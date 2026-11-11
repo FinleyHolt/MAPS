@@ -261,7 +261,7 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
     scored = load_run(root)
     assert sorted(scored) == ["e1", "e2", "e3", "e4"]
     assert scored["e3"]["SR"] == 0 and scored["e3"].get("OSR", 0) == 0
-    assert len(run_report.report(root)) == 4
+    assert len(run_report.report(root, run_report.benches({}))) == 4
     row = arm_table.arm_row(root)
     assert (row["n"], row["SR_n"], row["SR"]) == (4, 1, 0.25)
 

@@ -26,13 +26,13 @@ def _held(tmp_path, name, extent, black_east=False):
 
 
 @pytest.fixture
-def bank_mission(built, tmp_path):
+def bank_mission(built, bench, tmp_path):
     def make(bank):
         live = R.BankSource(bank, tiles_dir=built[0], map_name="calcity", tile_ground_z=0.0)
         world.recording_legs(live.vehicle)
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
-        m = M.Mission(episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
+        m = M.Mission(bench=bench, episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
                       live=live, recorder=None, close_log=lambda: None, run_no=1,
                       agl_m=world.AGL_M)
         m.map_name, m._tiles_dir = "calcity", built[0]
@@ -80,16 +80,10 @@ def test_ground_no_recorded_observation_holds_leaves_the_flight_without_one(buil
 
 
 def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers_and_flies_the_caller_s_effort(
-        built, tmp_path, monkeypatch):
+        built, bench, tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    import benchmarks.calcity
-    from benchmarks.citynav import paths
-    from benchmarks.run_record import episode_workdir
-
-    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
-    monkeypatch.setattr(paths, "TILES_DIR", built[0])
-    monkeypatch.setattr(episode_workdir, "open_episode_dir",
+    monkeypatch.setattr(R, "open_episode_dir",
                         lambda *a, **k: SimpleNamespace(dir=tmp_path, recorder=None, close=lambda: None))
     modes = []
 
@@ -103,24 +97,21 @@ def test_a_replay_names_the_frame_tier_only_when_the_camera_recording_answers_an
                       frames=[{"altitude_m": 1980.0}, {"altitude_m": 2000.0}, {"altitude_m": 1990.0}])
     for live in (None, object()):
         with pytest.raises(StopIteration):
-            R.fly(rec, tmp_path, bank=[], live=live)
+            R.fly(rec, tmp_path, bench, bank=[], live=live)
     assert modes == [("bank", 1990.0, None), ("frames", 1990.0, None)]
 
 
 def test_a_replay_over_a_bake_with_no_georef_is_refused_before_its_sortie_folder_is_opened(tmp_path, monkeypatch):
-    import benchmarks.calcity
-    from benchmarks.citynav import paths
+    from benchmarks.calcity.paths import calcity_bench
 
-    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
-    monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
-    monkeypatch.setattr(paths, "TILES_DIR", tmp_path / "tiles")
+    bench = calcity_bench({"SEARCH_CALCITY_TILES": str(tmp_path / "tiles")})
     monkeypatch.setattr(R, "ReplayMission", lambda **kw: pytest.fail("the mission was built"))
     rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run",
                       row={"episode_id": "calcity::t", "start_xy": [0, 0]}, params={}, requests=[], responses=[],
                       conversation=[], frames=[{"altitude_m": 1990.0}])
     out = tmp_path / "out"
     with pytest.raises(ValueError, match="carries no georef"):
-        R.fly(rec, out, bank=[])
+        R.fly(rec, out, bench, bank=[])
     assert not (out / "s").exists()
 
 
@@ -128,22 +119,19 @@ def test_a_replay_over_a_bake_with_no_features_is_refused_before_its_sortie_fold
                                                                                              monkeypatch):
     import shutil
 
-    import benchmarks.calcity
-    from benchmarks.citynav import paths
+    from benchmarks.calcity.paths import calcity_bench
 
     tiles = tmp_path / "tiles"
     tiles.mkdir()
     shutil.copy(built[0] / "calcity_meta.json", tiles)
-    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
-    monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
-    monkeypatch.setattr(paths, "TILES_DIR", tiles)
+    bench = calcity_bench({"SEARCH_CALCITY_TILES": str(tiles)})
     monkeypatch.setattr(R, "ReplayMission", lambda **kw: pytest.fail("the mission was built"))
     rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run",
                       row={"episode_id": "calcity::t", "start_xy": [0, 0]}, params={}, requests=[], responses=[],
                       conversation=[], frames=[{"altitude_m": 1990.0}])
     out = tmp_path / "out"
     with pytest.raises(ValueError, match=r"calcity_features\.json.*python -m benchmarks\.calcity\.data_prep\.bake_tiles"):
-        R.fly(rec, out, bank=[])
+        R.fly(rec, out, bench, bank=[])
     assert not (out / "s").exists()
 
 
@@ -319,23 +307,23 @@ def test_a_seq_the_camera_repeats_after_a_restart_serves_the_frame_the_clock_has
     assert ring.frame(5)[0] == jpegs[25]
 
 
-def test_the_recorded_reasoner_settings_stand_only_in_a_forced_replay(monkeypatch):
+def test_the_recorded_reasoner_settings_stand_only_in_a_forced_replay():
     from types import SimpleNamespace
+
+    from benchmarks.calcity.paths import calcity_bench
 
     flags = {"SEARCH_COMPACT_TOKENIZER_NAME": "recorded/tok", "SEARCH_SAMPLING_REASONING_EFFORT": "0.9",
              "SEARCH_MAP_MAX_PX": "1024", "SEARCH_CALCITY_TILES": "/aircraft/tiles"}
     rec = SimpleNamespace(row={"search_env_flags": flags})
-    for k in flags:
-        monkeypatch.delenv(k, raising=False)
-    monkeypatch.setenv("SEARCH_COMPACT_TOKENIZER_NAME", "mine/tok")
-    R._arm_env(rec, forced=False)
-    import os
-    assert os.environ["SEARCH_COMPACT_TOKENIZER_NAME"] == "mine/tok"
-    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in os.environ
-    assert os.environ["SEARCH_MAP_MAX_PX"] == "1024" and "SEARCH_CALCITY_TILES" not in os.environ
-    R._arm_env(rec, forced=True)
-    assert os.environ["SEARCH_COMPACT_TOKENIZER_NAME"] == "recorded/tok"
-    assert os.environ["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"
+    # The caller's own environment names its tokenizer and no effort; the replay flies under it plus the flags.
+    mine = calcity_bench({"SEARCH_COMPACT_TOKENIZER_NAME": "mine/tok"})
+    flown = mine.with_environ(R._arm_env(rec, forced=False)).environ
+    assert flown["SEARCH_COMPACT_TOKENIZER_NAME"] == "mine/tok"
+    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in flown
+    assert flown["SEARCH_MAP_MAX_PX"] == "1024" and "SEARCH_CALCITY_TILES" not in flown
+    forced = mine.with_environ(R._arm_env(rec, forced=True)).environ
+    assert forced["SEARCH_COMPACT_TOKENIZER_NAME"] == "recorded/tok"
+    assert forced["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"
 
 
 def test_a_torn_recording_serves_a_frame_from_its_own_chunk_without_reading_from_the_top(tmp_path, monkeypatch):
@@ -373,12 +361,12 @@ def test_the_recorded_segmenter_keeps_a_recorded_object_id_of_zero():
     assert [m[2] for m in seen] == [3, 0]
 
 
-def test_a_replay_records_no_start_time_and_no_track(built, make_twin, make_live, tmp_path):
+def test_a_replay_records_no_start_time_and_no_track(built, bench, make_twin, make_live, tmp_path):
     """A replay's clock is not the flight's: its row carries no UTC start and
     it writes no track, so the measures read it on SR and NE alone."""
     workdir = tmp_path / "sortie" / "run"
     workdir.mkdir(parents=True)
-    m = R.ReplayMission(replay_of={"mode": "frames"}, episode_id="calcity::t", split="calcity",
+    m = R.ReplayMission(replay_of={"mode": "frames"}, bench=bench, episode_id="calcity::t", split="calcity",
                         config="configs/calcity.yaml", workdir=workdir, live=make_live(make_twin()), recorder=None,
                         close_log=lambda: None, agl_m=world.AGL_M)
     m.map_name, m._tiles_dir = "calcity", built[0]
@@ -390,15 +378,15 @@ def test_a_replay_records_no_start_time_and_no_track(built, make_twin, make_live
     assert not (workdir.parent / "flight_track.jsonl").exists()
 
 
-def test_a_forced_replay_parked_with_no_recorded_tasking_ends_instead_of_waiting(built, make_twin, make_live,
-                                                                                 tmp_path):
+def test_a_forced_replay_parked_with_no_recorded_tasking_ends_instead_of_waiting(built, bench, make_twin,
+                                                                                 make_live, tmp_path):
     """A forced replay that diverges into a report the recording holds no
     operator answer to has nothing to wait for: it ends at that report."""
     import threading
 
     workdir = tmp_path / "sortie" / "run"
     workdir.mkdir(parents=True)
-    m = R.ReplayMission(replay_of={"mode": "forced"}, stops=[], episode_id="calcity::t", split="calcity",
+    m = R.ReplayMission(replay_of={"mode": "forced"}, stops=[], bench=bench, episode_id="calcity::t", split="calcity",
                         config="configs/calcity.yaml", workdir=workdir, live=make_live(make_twin()), recorder=None,
                         close_log=lambda: None, agl_m=world.AGL_M)
     got = []
@@ -471,7 +459,7 @@ def test_a_week_bank_serves_every_run_s_observations_past_a_torn_line_in_another
         with (runs[1] / name).open("a") as f:
             f.write('{"torn\n')
     banks = []
-    monkeypatch.setattr(R, "fly", lambda rec, out, *, bank, **kw: banks.append(bank) or (SimpleNamespace(error=None), None))
+    monkeypatch.setattr(R, "fly", lambda rec, out, bench, *, bank, **kw: banks.append(bank) or (SimpleNamespace(error=None), None))
     monkeypatch.setattr(R, "summary_line", lambda mission: "")
     R.main([str(runs[0]), "--bank", "week", "--out", str(tmp_path / "out")])
     assert [h.path.parent.parent for h in banks[0]] == runs
@@ -493,7 +481,7 @@ def test_a_week_bank_reads_past_a_torn_ledger_line_in_another_sortie(tmp_path, m
     with (runs[1].parent / "episodes.jsonl").open("a") as f:
         f.write('{"torn\n')
     banks = []
-    monkeypatch.setattr(R, "fly", lambda rec, out, *, bank, **kw: banks.append(bank) or (SimpleNamespace(error=None), None))
+    monkeypatch.setattr(R, "fly", lambda rec, out, bench, *, bank, **kw: banks.append(bank) or (SimpleNamespace(error=None), None))
     monkeypatch.setattr(R, "summary_line", lambda mission: "")
     R.main([str(runs[0]), "--bank", "week", "--out", str(tmp_path / "out")])
     assert [h.path.parent.parent for h in banks[0]] == runs
@@ -501,12 +489,10 @@ def test_a_week_bank_reads_past_a_torn_ledger_line_in_another_sortie(tmp_path, m
 
 def test_a_replay_of_a_run_that_never_reached_the_reasoner_is_refused_by_name_before_its_frames_are_read(
         tmp_path, monkeypatch, capsys):
-    import benchmarks.flight.recorded_ring as ring
-
     rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run", row={"episode_id": "calcity::t"},
                       params={}, requests=[], responses=[], conversation=[], frames=[])
     monkeypatch.setattr(R, "open_recording", lambda run: rec)
-    monkeypatch.setattr(ring, "RecordedRing", lambda *a, **kw: pytest.fail("the frames were read"))
+    monkeypatch.setattr(R, "RecordedRing", lambda *a, **kw: pytest.fail("the frames were read"))
     with pytest.raises(SystemExit) as refused:
         R.main(["run", "--frames", str(tmp_path / "cam.mcap"), "--out", str(tmp_path / "out")])
     assert refused.value.code == 2 and "records no start: the run never reached the reasoner" in capsys.readouterr().err
@@ -515,13 +501,11 @@ def test_a_replay_of_a_run_that_never_reached_the_reasoner_is_refused_by_name_be
 @pytest.mark.parametrize("missing", ["frames", "boresight", "raster"])
 def test_a_frame_tier_input_that_is_not_there_is_refused_before_the_ring_is_read(
         tmp_path, monkeypatch, capsys, missing):
-    import benchmarks.flight.recorded_ring as ring
-
     rec = R.Recording(sortie=tmp_path / "s", run_dir=tmp_path / "s" / "run",
                       row={"episode_id": "calcity::t", "start_xy": [0.0, 0.0]},
                       params={}, requests=[], responses=[], conversation=[], frames=[])
     monkeypatch.setattr(R, "open_recording", lambda run: rec)
-    monkeypatch.setattr(ring, "RecordedRing", lambda *a, **kw: pytest.fail("the frames were read"))
+    monkeypatch.setattr(R, "RecordedRing", lambda *a, **kw: pytest.fail("the frames were read"))
     given = {"frames": tmp_path / "cam.mcap", "boresight": tmp_path / "chain.json", "raster": tmp_path / "raster"}
     given["raster"].mkdir()
     for name in ("calcity.tif", "calcity_rgb.tif"):

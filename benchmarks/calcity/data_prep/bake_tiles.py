@@ -14,10 +14,11 @@ substrate (episode ``object_ids``); the prior is baked from the bundle alone.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any
 
-from benchmarks.calcity import paths
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.calcity.data_prep.aoi import AOI_BBOX, build_local_frame, bundle_root
 from benchmarks.calcity.data_prep.bundle import load_features_local
 from benchmarks.citynav.bake import city
@@ -77,9 +78,10 @@ def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, default=None)
-    parser.add_argument("--tiles-dir", type=Path, default=paths.TILES_DIR)
+    bench = calcity_bench(os.environ)
+    parser.add_argument("--tiles-dir", type=Path, default=bench.tiles_dir)
     args = parser.parse_args(argv)
-    count = bake_block(args.bundle or bundle_root(), args.tiles_dir, "calcity")
+    count = bake_block(args.bundle or bundle_root(bench.root, os.environ), args.tiles_dir, "calcity")
     print(f"[calcity-bake] calcity: {count} priors")
     return 0
 

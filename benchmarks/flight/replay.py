@@ -36,17 +36,23 @@ from typing import Any
 
 import numpy as np
 
-import benchmarks.calcity
-from benchmarks.run_record.rows import iter_json_rows
-from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, DETECTIONS_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR,
-                                                TRACK_JSONL)
-from benchmarks.run_record.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
+from benchmarks.bench import Bench
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, coverage_record, open_live, ortho_observation
 from benchmarks.flight.measures import frame_agl, run_bases, sortie_of
 from benchmarks.flight.mission import Mission, converse, flight_config, summary_line
+from benchmarks.flight.recorded_ring import RecordedRing, run_window
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
+from benchmarks.run_record.config import load_config
+from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, DETECTIONS_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR,
+                                                   TRACK_JSONL, open_episode_dir)
+from benchmarks.run_record.episodes import EPISODES_JSONL, RUN_LOG, TOUR_CURSOR
+from benchmarks.run_record.rows import iter_json_rows
+from maps.llm import http
 from maps.llm.http import TRANSCRIPT_JSONL, CallCanceled
+from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.perception.ortho.ground_level import GROUND_LEVEL
 
 log = logging.getLogger("flight.replay")
 
@@ -499,12 +505,10 @@ def diff(rec: Recording, replay_dir: Path) -> dict[str, Any]:
 _REASONER_FLAGS = ("SEARCH_COMPACT_TOKENIZER_NAME", "SEARCH_SAMPLING_REASONING_EFFORT")
 
 
-def _arm_env(rec: Recording, *, forced: bool) -> None:
+def _arm_env(rec: Recording, *, forced: bool) -> dict[str, str]:
     """The recorded arm's environment flags, the aircraft's paths excepted."""
-    for k, v in (rec.row.get("search_env_flags") or {}).items():
-        if _PATH_FLAG.search(k) or v is None or (k in _REASONER_FLAGS and not forced):
-            continue
-        os.environ[k] = str(v)
+    return {k: str(v) for k, v in (rec.row.get("search_env_flags") or {}).items()
+            if not (_PATH_FLAG.search(k) or v is None or (k in _REASONER_FLAGS and not forced))}
 
 
 def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
@@ -513,8 +517,6 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
     flown engine was hydrated; else the recorded run's: the median camera
     height of its observations, else of its GNSS track over the run."""
     if forced:
-        from benchmarks.run_record.config import load_config  # noqa: PLC0415
-
         return float(load_config(config).start_altitude_agl_m)
     map_name = rec.map_name
     alts = [frame_agl(f, map_name) for f in rec.frames if f.get("altitude_m") is not None]
@@ -529,56 +531,51 @@ def replay_agl_m(rec: Recording, *, forced: bool, config: str) -> float:
     return float(np.median(alts))
 
 
-def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | None = None, live=None,
+def fly(rec: Recording, out: Path, bench: Bench, *, forced: bool = False, bank: list[Held] | None = None, live=None,
         config: str = "configs/calcity.yaml", taskings: list[str] | None = None,
         reasoning_effort: str | None = None) -> tuple[ReplayMission, Path]:
-    """Fly ``rec`` again under ``out/<sortie>/``; ``live`` is a live source (the
+    """Fly ``rec`` again on ``bench`` under ``out/<sortie>/``; ``live`` is a live source (the
     frame tier), else the bank answers. Returns the mission, ended, and its folder."""
-    _arm_env(rec, forced=forced)
-    benchmarks.calcity.use()
+    flags = _arm_env(rec, forced=forced)
+    if forced:
+        flags.update({"SEARCH_ENDPOINT_OFFLINE": "1",
+                      "SEARCH_ENDPOINT_SPEC_OVERRIDE": f"{rec.params.get('model')}:{rec.window}"})
+        if rec.params.get("seed") is not None:
+            flags["SEARCH_SEED_BASE"] = str(rec.params["seed"])
+    # The replay flies under the recorded arm's flags: its rows stamp them and its engine reads them.
+    bench = bench.with_environ(flags)
+    os.environ.update(flags)
     flight_config(config)
-    from benchmarks.run_record.episode_workdir import open_episode_dir  # noqa: PLC0415
-    from benchmarks.citynav.paths import DEFAULT_SPLIT, TILES_DIR  # noqa: PLC0415
-    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-
     row = rec.row
     episode_id, map_name = str(row["episode_id"]), rec.map_name
     script = None
+    perception_factory = None
     if forced:
-        from benchmarks.citynav.run_benchmark import episode_runner  # noqa: PLC0415
-        from maps.llm import http  # noqa: PLC0415
-
-        from huggingface_hub import constants as hub  # noqa: PLC0415
+        from huggingface_hub import constants as hub  # noqa: PLC0415  (only a forced replay needs the hub's flag)
 
         # The tokenizer comes off the local cache: the hub read its flag at import.
         hub.HF_HUB_OFFLINE = True
-        os.environ.update({"SEARCH_ENDPOINT_OFFLINE": "1",
-                           "SEARCH_ENDPOINT_SPEC_OVERRIDE": f"{rec.params.get('model')}:{rec.window}"})
-        if rec.params.get("seed") is not None:
-            os.environ["SEARCH_SEED_BASE"] = str(rec.params["seed"])
         script = Script(rec)
         http.stream_chat_completions = script
-        make = episode_runner.make_perception
 
-        def recorded():
-            adapter = make()
+        def perception_factory():
+            adapter = bench.engine.make_perception()
             adapter.segment = functools.partial(recorded_segmenter(rec, lambda: mission.hydrated.state), adapter)
             return adapter
 
-        episode_runner.make_perception = recorded
     frames = live is not None
     if not frames:
-        check_map(TILES_DIR, map_name)
+        check_map(bench.tiles_dir, map_name)
         by_flight: dict[int, list[Held]] = {}
         if forced:
             for h in bank_of(rec.run_dir, rec.frames):
                 by_flight.setdefault(int(h.frame.get("flight") or 0), []).append(h)
-        live = BankSource(bank or [], tiles_dir=TILES_DIR, map_name=map_name,
+        live = BankSource(bank or [], tiles_dir=bench.tiles_dir, map_name=map_name,
                           tile_ground_z=float(GROUND_LEVEL[map_name]), by_flight=by_flight,
                           forced=(lambda: len(mission.flights)) if forced else None)
     sortie = Path(out) / rec.sortie.name
     run_no = int(row.get("run_no") or 1)
-    ep = open_episode_dir(sortie, episode_id=episode_id, run_no=run_no)
+    ep = open_episode_dir(sortie, episode_id=episode_id, benchmark=bench.name, run_no=run_no)
     # The recorded effort stands only where the recorded reasoner answers;
     # the bank and frame tiers fly the caller's arm.
     effort = (rec.params.get("reasoning_effort") or row.get("reasoning_effort")) if forced else reasoning_effort
@@ -586,8 +583,8 @@ def fly(rec: Recording, out: Path, *, forced: bool = False, bank: list[Held] | N
         replay_of={"sortie": rec.sortie.name, "run_no": run_no, "run_id": row.get("run_id"),
                    "workdir": rec.run_dir.name,
                    "mode": " ".join(m for m, on in (("forced", forced), ("frames", frames)) if on) or "bank"},
-        stops=tour_stops(rec.run_dir) if forced else None, episode_id=episode_id, split=str(row.get("split") or DEFAULT_SPLIT),
-        config=config, workdir=ep.dir, live=live, instruction=str(row.get("description") or ""),
+        stops=tour_stops(rec.run_dir) if forced else None, episode_id=episode_id, split=str(row.get("split") or bench.default_split),
+        bench=bench, perception_factory=perception_factory, config=config, workdir=ep.dir, live=live, instruction=str(row.get("description") or ""),
         recorder=ep.recorder, close_log=ep.close, run_id=f"replay-{rec.sortie.name}", run_no=run_no,
         start_xy=tuple(row["start_xy"]), reasoning_effort=None if effort is None else str(effort),
         agl_m=replay_agl_m(rec, forced=forced, config=config))
@@ -653,24 +650,19 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     live = None
     bank: list[Held] | None = None
+    bench = calcity_bench(os.environ)
     if args.frames is not None:
-        benchmarks.calcity.use()
-        from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
-        from benchmarks.flight.recorded_ring import RecordedRing, run_window  # noqa: PLC0415
-        from benchmarks.run_record.config import load_config  # noqa: PLC0415
-        from maps.perception.geometry.sensor_spec import resolve_sensor  # noqa: PLC0415
-
         t0 = time.perf_counter()
         start_ns, end_ns = run_window(rec.row, rec.conversation)
         ring = RecordedRing(args.frames, nav=args.nav, start_ns=start_ns, end_ns=end_ns,
                             clock_ns=int(float(rec.row["started_at_utc"]) * 1e9))
         log.info("the ring over %s: %d frames kept, %.1f s to read", args.frames.name, len(ring.rows),
                  time.perf_counter() - t0)
-        live = open_live(vehicle=ring, tiles_dir=TILES_DIR, map_name=rec.map_name,
+        live = open_live(vehicle=ring, tiles_dir=bench.tiles_dir, map_name=rec.map_name,
                          sensor=resolve_sensor(load_config(args.config).sensor), boresight_path=args.boresight,
                          register_raster=args.raster)
     if args.forced:
-        mission, run = fly(rec, out, forced=True, live=live, config=args.config)
+        mission, run = fly(rec, out, bench, forced=True, live=live, config=args.config)
         d = diff(rec, run)
         (run / "replay_diff.json").write_text(json.dumps(d, indent=1) + "\n")
         print(_say(d))
@@ -683,7 +675,7 @@ def main(argv: list[str] | None = None) -> int:
             week = flown_runs(rec.sortie.parent)
             runs, bank = len(week), [h for p in week for h in bank_of(p, iter_json_rows(p / FRAMES_JSONL))]
         log.info("observation bank: %d observations from %d run(s)", len(bank), runs)
-    mission, run = fly(rec, out, bank=bank, live=live, config=args.config, taskings=rec.taskings,
+    mission, run = fly(rec, out, bench, bank=bank, live=live, config=args.config, taskings=rec.taskings,
                        reasoning_effort=args.reasoning_effort)
     print(summary_line(mission))
     return 0 if mission.error is None else 1

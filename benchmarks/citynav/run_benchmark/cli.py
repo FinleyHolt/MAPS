@@ -15,36 +15,38 @@ import signal
 from datetime import datetime
 from pathlib import Path
 
+from benchmarks.bench import Bench
+from benchmarks.citynav.adapter import episode_ids, find_row, load_objects, load_split, parse_episode
+from benchmarks.citynav.paths import selected_bench
+from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
 from benchmarks.run_record import episodes
 from benchmarks.run_record import run_manifest as _rm
-from benchmarks.citynav.adapter import episode_ids, find_row, load_objects, load_split, parse_episode
-from benchmarks.run_record.episode_workdir import benchmark, open_episode_dir
-from benchmarks.citynav.paths import DEFAULT_SPLIT, OBJECTS_JSON, assert_available, split_path
 from benchmarks.run_record.config import export_withhold, load_config
-from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
+from benchmarks.run_record.episode_workdir import open_episode_dir
 
 log = logging.getLogger("run_benchmark")
 
 _PR_SET_PDEATHSIG = 1
 
 
-def _die_with_parent() -> None:
+def _die_with_parent(environ) -> None:
     """Have the kernel SIGKILL this attempt when the driver that spawned it
     dies: the attempt sits in its own session, so nothing else reaps it. A
     driver already gone before the request is armed is caught by the
     parent-pid check."""
     ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
-    parent = os.environ.get(episodes.PARENT_PID_ENV)
+    parent = environ.get(episodes.PARENT_PID_ENV)
     if parent and os.getppid() != int(parent):
         os._exit(1)
 
 
-def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
+def _emit_run_manifest(args, *, bench: Bench, out_root: Path, indexed_rows: list) -> None:
     """Write this run's receipt at the run root: a direct run's root is one
     run (write-once identity)."""
     _rm.emit_or_verify(
         out_root,
         _rm.build_manifest(
+            bench=bench,
             out_root=out_root,
             config_path=Path(args.config),
             split=args.split,
@@ -60,21 +62,25 @@ def _emit_run_manifest(args, *, out_root: Path, indexed_rows: list) -> None:
     )
 
 
-def main() -> int:
-    """The runner's CLI, for the benchmark ``paths.BENCHMARK`` names."""
+def main(bench: Bench | None = None) -> int:
+    """The runner's CLI, for ``bench``; unset, for the bench the environment
+    selects (``paths.selected_bench``), which is how an attempt child of
+    either driver learns its bench."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
-    # benchmarks.calcity.use() declares Cal City before calling in;
-    # episode_workdir.benchmark() refuses an undeclared process.
-    os.environ.setdefault("SEARCH_BENCHMARK_NAME", "citynav")
+    if bench is None:
+        bench = selected_bench(os.environ)
+    # A direct run records the bench it flew by name.
+    if "SEARCH_BENCHMARK_NAME" not in bench.environ:
+        bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})
 
     parser = argparse.ArgumentParser(
-        description=f"Run the {benchmark()} navigation benchmark."
+        description=f"Run the {bench.name} navigation benchmark."
     )
-    parser.add_argument("--split", default=DEFAULT_SPLIT)
+    parser.add_argument("--split", default=bench.default_split)
     parser.add_argument("--config", default=None, help="Path to YAML under configs/")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
@@ -112,16 +118,16 @@ def main() -> int:
     if args.attempt_root:
         if not args.episode_id:
             parser.error("--attempt-root flies one episode: name it with --episode-id")
-        _die_with_parent()
+        _die_with_parent(bench.environ)
     if args.seed_base is not None:
-        os.environ["SEARCH_SEED_BASE"] = str(args.seed_base)
+        bench = bench.with_environ({"SEARCH_SEED_BASE": str(args.seed_base)})
         log.info("Deterministic seed base: SEARCH_SEED_BASE=%d", args.seed_base)
 
-    assert_available()
+    bench.assert_available()
     cfg = load_config(args.config)
     export_withhold(cfg)
     try:
-        _rm.install_endpoint(cfg.policy)
+        bench = _rm.install_endpoint(bench, cfg.policy)
     except _rm.EndpointRefused as exc:
         log.error("%s", exc)
         return 2
@@ -132,7 +138,7 @@ def main() -> int:
         "deterministic discrete 6-action replay over the flown stops "
         "produces the submittable CityNav trajectory (OSR/SPL/NE)."
     )
-    raw_rows = load_split(split_path(args.split))
+    raw_rows = load_split(bench.split_path(args.split))
     # Pair each row with its absolute split index so the row_index is
     # stable across filter / limit and parse_episode produces the same
     # disambiguated episode_id whatever the filter.
@@ -147,17 +153,18 @@ def main() -> int:
         indexed_rows = indexed_rows[: args.limit]
     log.info("Loaded %d episodes from split=%s", len(indexed_rows), args.split)
 
-    objects_by_map = load_objects(OBJECTS_JSON)
+    objects_by_map = load_objects(bench.objects_json)
     log.info("Loaded CityRefer objects for %d maps", len(objects_by_map))
 
     if args.attempt_root:
         ((orig_idx, row),) = indexed_rows
         episode = parse_episode(row, row_index=orig_idx)
-        ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id)
+        ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id, benchmark=bench.name)
         print(ep.dir, flush=True)
         try:
             dispatch_one(episode=episode, idx=0, total=1,
-                          objects_by_map=objects_by_map, cfg=cfg, split=args.split, recorder=ep.recorder,
+                          objects_by_map=objects_by_map, cfg=cfg, bench=bench, split=args.split,
+                          recorder=ep.recorder,
                           episode_dir=ep.dir)
         finally:
             ep.close()
@@ -165,7 +172,7 @@ def main() -> int:
 
     out_root = Path(
         args.out
-        or f"output/{benchmark()}/{benchmark()}_{args.split}_"
+        or f"output/{bench.name}/{bench.name}_{args.split}_"
         f"{datetime.now():%Y-%m-%d_%H-%M-%S}"
     ).resolve()
     out_root.mkdir(parents=True, exist_ok=True)
@@ -176,7 +183,7 @@ def main() -> int:
         return 2
 
     try:
-        _emit_run_manifest(args, out_root=out_root, indexed_rows=indexed_rows)
+        _emit_run_manifest(args, bench=bench, out_root=out_root, indexed_rows=indexed_rows)
     except _rm.ManifestIdentityError as exc:
         log.error("%s", exc)
         return 2
@@ -187,7 +194,7 @@ def main() -> int:
         except (KeyError, ValueError, TypeError) as exc:
             log.error("row %d: unparseable episode: %s", orig_idx, exc)
             continue
-        ep = open_episode_dir(out_root, episode_id=episode.episode_id)
+        ep = open_episode_dir(out_root, episode_id=episode.episode_id, benchmark=bench.name)
         try:
             # The same dispatch bench_fullset's --attempt-root children run.
             result = dispatch_one(
@@ -196,6 +203,7 @@ def main() -> int:
                 total=len(indexed_rows),
                 objects_by_map=objects_by_map,
                 cfg=cfg,
+                bench=bench,
                 split=args.split,
                 recorder=ep.recorder,
                 episode_dir=ep.dir,

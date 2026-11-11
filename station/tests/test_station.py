@@ -21,7 +21,7 @@ def _until(what, timeout_s: float = 120.0):
 
 
 def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # noqa: F811
-    station = serve.Station(config="configs/calcity.yaml", out=tmp_path / "out", ortho_dir=calcity.rgbd, register=None)
+    station = serve.Station(bench=calcity.bench, config="configs/calcity.yaml", out=tmp_path / "out", ortho_dir=calcity.rgbd, register=None)
     client = TestClient(serve.build_app(station, web=None))
 
     (row,) = client.get("/missions", params={"q": "church"}).json()["missions"]
@@ -71,7 +71,7 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
     from PIL import Image
 
     Image.new("RGB", (640, 480), (200, 160, 90)).save(tmp_path / "basemap.jpg")
-    reviewer = serve.Station(config="configs/calcity.yaml", out=tmp_path / "out", ortho_dir=None, register=None,
+    reviewer = serve.Station(bench=calcity.bench, config="configs/calcity.yaml", out=tmp_path / "out", ortho_dir=None, register=None,
                              basemap=tmp_path / "basemap.jpg")
     review = TestClient(serve.build_app(reviewer, web=None))
     b = review.get("/location").json()["bounds"]

@@ -7,9 +7,12 @@ an identity drift refuses.
 from __future__ import annotations
 
 import json
+import os
+
 import pytest
 
-from benchmarks.citynav import paths
+from benchmarks import REPO_ROOT
+from benchmarks.citynav.paths import citynav_bench
 from benchmarks.run_record import run_manifest
 from benchmarks.run_record.episodes import MANIFEST_NAME
 from maps.llm import endpoint_spec as endpoint_spec_module
@@ -26,12 +29,17 @@ STUB_SPEC = EndpointSpec(
 
 @pytest.fixture()
 def bake(monkeypatch, tmp_path):
-    """A tile bake on disk for the manifest to hash."""
+    """A tile bake on disk for the manifest to hash, named by the environment."""
     tiles = tmp_path / "tiles"
     tiles.mkdir()
     (tiles / "block_0_meta.json").write_text("{}")
-    monkeypatch.setattr(paths, "TILES_DIR", tiles)
+    monkeypatch.setenv("SEARCH_CITYNAV_TILES", str(tiles))
     return tiles
+
+
+def _bench():
+    """CityNav as this test's environment describes it, read as an entry point reads it."""
+    return citynav_bench(os.environ)
 
 
 @pytest.fixture()
@@ -39,8 +47,9 @@ def stub_run(monkeypatch, tmp_path, bake):
     monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_REASONER_API_KEY", "sk-SECRET-NEVER-RECORDED")
     return run_manifest.build_manifest(
+        bench=_bench(),
         out_root=tmp_path,
-        config_path=paths.REPO_ROOT / "configs/citynav.yaml",
+        config_path=REPO_ROOT / "configs/citynav.yaml",
         split="train_seen",
         sample_seed=1234,
         limit=3,
@@ -80,7 +89,7 @@ def test_required_fields_nonempty(stub_run):
     assert m["withhold"] == []
 
 
-@pytest.mark.skipif(not (paths.REPO_ROOT / ".git").exists(), reason="a tree with no git checkout has no commit")
+@pytest.mark.skipif(not (REPO_ROOT / ".git").exists(), reason="a tree with no git checkout has no commit")
 def test_a_checkout_records_its_commit(stub_run):
     assert stub_run["git_commit"]
 
@@ -125,14 +134,14 @@ def test_a_direct_run_emits_a_manifest_the_reader_finds(
 
     stamped = (stub_run.get("perception") or {}).get("bake_sha256")
     assert stamped and len(stamped) == 64, stub_run.get("perception")
-    assert stamped == paths.bake_sha256(), "not the bake on disk"
+    assert stamped == _bench().bake_sha256(), "not the bake on disk"
 
     run_dir = tmp_path / "out"
     run_dir.mkdir()
     run_manifest.emit_or_verify(run_dir, stub_run, log=lambda *a: None)
 
     assert run_report.read_manifest(tmp_path / "out") == stub_run
-    line = run_report.bake_line(tmp_path / "out")
+    line = run_report.bake_line(tmp_path / "out", _bench().tiles_dir)
     assert line.startswith("bake: verified"), line
     assert "UNVERIFIED" not in line
 
@@ -145,7 +154,7 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
     leaves no ``mission`` key."""
     monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    common = dict(out_root=tmp_path, config_path=paths.REPO_ROOT / "configs/citynav.yaml", split="calcity_tmp",
+    common = dict(bench=_bench(), out_root=tmp_path, config_path=REPO_ROOT / "configs/citynav.yaml", split="calcity_tmp",
                   sample_seed=None, limit=None, allowlist_path=None,
                   episodes=["calcity::1#1"])
     stamp = {"episode_id": "calcity::1#1", "run_id": "20260917T160207Z", "run_no": 3,
@@ -176,8 +185,8 @@ def test_the_effort_is_stamped_as_it_flies(monkeypatch, raw, flown):
     """The request carries the stripped effort, so the stamp, a resume's
     comparison and every reader carry the same one spelling."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", raw)
-    run_manifest.settle_effort()
-    assert run_manifest.arm_env_stamp().get("SEARCH_SAMPLING_REASONING_EFFORT") == flown
+    settled = run_manifest.settle_effort(_bench())
+    assert run_manifest.arm_env_stamp(settled).get("SEARCH_SAMPLING_REASONING_EFFORT") == flown
 
 
 def test_a_root_with_episodes_and_no_manifest_is_refused(stub_run, tmp_path):
@@ -221,20 +230,20 @@ def test_the_arm_stamp_records_the_resolved_bake(monkeypatch):
     """An unset SEARCH_CITYNAV_TILES stamps the directory it resolves to;
     a set one stamps verbatim."""
     monkeypatch.delenv("SEARCH_CITYNAV_TILES", raising=False)
-    assert run_manifest.arm_env_stamp()["SEARCH_CITYNAV_TILES"] == str(paths.TILES_DIR)
+    assert run_manifest.arm_env_stamp(_bench())["SEARCH_CITYNAV_TILES"] == str(_bench().tiles_dir)
     monkeypatch.setenv("SEARCH_CITYNAV_TILES", "/data/tiles/citynav_2m_osmv3")
-    assert run_manifest.arm_env_stamp()["SEARCH_CITYNAV_TILES"] == "/data/tiles/citynav_2m_osmv3"
+    assert run_manifest.arm_env_stamp(_bench())["SEARCH_CITYNAV_TILES"] == "/data/tiles/citynav_2m_osmv3"
 
 
 def test_an_unset_effort_is_not_stamped(monkeypatch):
     """A run that named no effort flew the serve's default."""
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
-    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in run_manifest.arm_env_stamp()
+    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in run_manifest.arm_env_stamp(_bench())
 
 
 def test_a_capacity_session_s_selection_names_its_stream_and_no_seed(monkeypatch, tmp_path, bake):
     monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
-    m = run_manifest.build_manifest(out_root=tmp_path, config_path=paths.REPO_ROOT / "configs/citynav.yaml",
+    m = run_manifest.build_manifest(bench=_bench(), out_root=tmp_path, config_path=REPO_ROOT / "configs/citynav.yaml",
                                     split="train_seen", sample_seed=1234, limit=0, allowlist_path=None,
                                     episodes=["ep_a"], arrivals="ab" * 32)
     assert m["selection"]["arrivals"] == "ab" * 32 and "sample_seed" not in m["selection"]
@@ -247,4 +256,4 @@ def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
     # The wait bounds a turn, so a run that sets it says so.
     from benchmarks.run_record import run_manifest as RM
     monkeypatch.setenv("SEARCH_REASONER_TIMEOUT_S", "240")
-    assert RM._audited_env()["SEARCH_REASONER_TIMEOUT_S"] == "240"
+    assert RM._audited_env(_bench())["SEARCH_REASONER_TIMEOUT_S"] == "240"

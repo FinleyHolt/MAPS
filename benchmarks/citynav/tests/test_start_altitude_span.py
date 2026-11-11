@@ -13,12 +13,13 @@ that the observation extent clamps instead.
 from __future__ import annotations
 
 import json
+import os
 import statistics
 from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav import paths
+from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.adapter import map_name_for_row
 from benchmarks.run_record.config import load_config
 from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
@@ -28,7 +29,7 @@ from maps.render.look_render import look_window_bounds_m
 _, _BUDGET_M = look_window_bounds_m(0.1)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SPLIT_FILE = Path(paths.SPLITS_DIR) / paths.SPLIT_FILES["test_unseen"]
+SPLIT_FILE = citynav_bench(os.environ).split_path("test_unseen")
 needs_split = pytest.mark.skipif(
     not SPLIT_FILE.exists(), reason=f"no CityNav split at {SPLIT_FILE}"
 )

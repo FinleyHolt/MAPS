@@ -1,7 +1,8 @@
 """``python -m benchmarks.calcity.bench_fullset``: the CityNav full-split driver
-with Cal City selected, ``configs/calcity.yaml`` and ``--split calcity`` by
+on the Cal City bench, ``configs/calcity.yaml`` and ``--split calcity`` by
 default. Every flag is the shared one (``benchmarks/citynav/bench_fullset.py``);
-each attempt's runner inherits the selection through the environment.
+each attempt's runner learns the bench through the environment the bench
+exports.
 """
 
 from __future__ import annotations
@@ -9,18 +10,15 @@ from __future__ import annotations
 import os
 import sys
 
-from benchmarks.calcity import use
+from benchmarks.calcity.paths import calcity_bench
+from benchmarks.citynav.bench_fullset import main as shared_main
 
 
 def main() -> int:
-    use()
-    os.environ.setdefault("CITYNAV_BENCH_CONFIG", "configs/calcity.yaml")
+    environ = {"CITYNAV_BENCH_CONFIG": "configs/calcity.yaml", **os.environ}
     if "--split" not in sys.argv[1:]:
         sys.argv[1:] = ["--split", "calcity", *sys.argv[1:]]
-
-    from benchmarks.citynav.bench_fullset import main as shared_main
-
-    return shared_main()
+    return shared_main(bench=calcity_bench(environ))
 
 
 if __name__ == "__main__":
