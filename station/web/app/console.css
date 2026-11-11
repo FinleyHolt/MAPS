@@ -1,0 +1,1171 @@
+/* ==========================================================================
+   The station console.
+
+   The colours carry these meanings and no others:
+     act    (orange) the agent decided
+     cite   (blue)   the agent queried, or you can navigate
+     cream           frames the agent's tool output
+     warn   (red)    a fault the operator has to read
+
+   The layout is an instrument (the map over the observation band) beside a
+   LEFT SIDEBAR. The sidebar stacks three things, top to bottom: the mission
+   list (pick one, it fills the chat box below), the conversation (the
+   mission in the seat, or a past run under review), and the chat box,
+   pinned to the sidebar's foot. Two-fifths of the body by default, with a
+   drag handle between it and the map: MissionConsole owns the fraction,
+   this file draws the handle. Uncovered ground reads as the paper no-data
+   tone, never black: a black map cannot be told apart from a dead display.
+
+   Tabular figures everywhere and opaque surfaces throughout.
+   ========================================================================== */
+
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --color-paper: #fbfaf5;
+  --color-ink: #141310;
+  --color-soft-ink: #3a372f;
+  --color-faint: #75705f;
+  --color-rule: #d9d4c6;
+  --color-rule-hard: #141310;
+  --color-cream: #f6efdd;
+  --color-cream-border: #d9cba4;
+  --color-act: #c95d1e;
+  --color-cite: #1a4fa0;
+  --color-good: #2e6b34;
+  --color-warn: #9e2f1c;
+  --color-sel: #eef1f7;
+  --font-serif: "Times New Roman", Times, Georgia, serif;
+  /* One page, one typeface: every element that names --font-mono is
+     repointed here. */
+  --font-mono: "Times New Roman", Times, Georgia, serif;
+}
+
+:root {
+  --measure: 76ch;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-cite);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Shell: thin station bar, sidebar and map as two grid columns.
+   -------------------------------------------------------------------------- */
+
+.station {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The review band takes a row of its own above the station bar: the
+   console is a row taller while a past run is up, and every instrument
+   below it is that run's. */
+.station[data-review="true"] {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+/* --------------------------------------------------------------------------
+   Reviewing a past run
+   --------------------------------------------------------------------------
+   A reviewed run must not be mistaken for the live aircraft, so this is a
+   full-width band in the act colour with a hazard hatch across it. Nothing
+   else on this page is a solid colour band, which is the point: it does
+   not read as chrome.
+   -------------------------------------------------------------------------- */
+
+.review-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 7px 14px;
+  background: var(--color-act);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(20, 19, 16, 0.16) 0 9px,
+    rgba(20, 19, 16, 0) 9px 18px
+  );
+  color: var(--color-paper);
+  border-bottom: 1.5px solid var(--color-rule-hard);
+  z-index: 3;
+}
+
+.review-word {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.review-run {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-when {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* Paper on the band: the way back is the one thing here that reads as a
+   control rather than as a warning. */
+.review-exit {
+  border: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.review-exit:hover {
+  background: var(--color-cream);
+}
+
+.station-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 7px 14px;
+  border-bottom: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+  z-index: 2;
+}
+
+.station-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.station-mission {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.station-spacer {
+  flex: 1 1 auto;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  min-width: 52px;
+}
+
+.readout-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.readout-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.status-chip::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-chip[data-status="flying"] { color: var(--color-act); }
+.status-chip[data-status="awaiting_tasking"] { color: var(--color-cite); }
+.status-chip[data-status="ended"] { color: var(--color-good); }
+.status-chip[data-status="failed"] { color: var(--color-warn); }
+.status-chip[data-status="review"] { color: var(--color-act); }
+
+/* The reasoner is not answering under a flying mission. Loud on purpose:
+   the mission is holding its turn for it. */
+.arm-down {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-paper);
+  background: var(--color-warn);
+  padding: 4px 10px;
+  border-radius: 3px;
+  animation: arm-down-blink 1s steps(2, start) infinite;
+}
+
+@keyframes arm-down-blink {
+  to { visibility: hidden; }
+}
+
+.station-body {
+  display: grid;
+  /* Two-fifths sidebar, a 6px handle, the map takes the rest: set inline
+     from MissionConsole's drag state. This default (before React's first
+     paint sets the real value) matches it. */
+  grid-template-columns: 40% 6px 1fr;
+  min-height: 0;
+}
+
+/* The divider: a hairline that is actually a handle. Widens on hover so
+   a 6px hit target does not feel like threading a needle, and the grip
+   marks are the one affordance that says "this drags" without a tooltip. */
+.divider {
+  position: relative;
+  cursor: col-resize;
+  background: var(--color-rule);
+  touch-action: none;
+}
+
+.divider:hover,
+.divider[data-dragging="true"] {
+  background: var(--color-cite);
+}
+
+.divider:focus-visible {
+  outline: 2px solid var(--color-cite);
+  outline-offset: -2px;
+}
+
+.divider-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--color-paper);
+  box-shadow:
+    -4px 0 0 var(--color-faint),
+    4px 0 0 var(--color-faint);
+  pointer-events: none;
+}
+
+.divider[data-dragging="true"] .divider-grip {
+  box-shadow:
+    -4px 0 0 var(--color-paper),
+    4px 0 0 var(--color-paper);
+}
+
+/* The same handle laid on its side, between the mission list and the run
+   view. Same element, same drag, axis swapped. */
+.divider[data-axis="row"] {
+  cursor: row-resize;
+}
+
+.divider[data-axis="row"] .divider-grip {
+  width: 28px;
+  height: 3px;
+  box-shadow:
+    0 -4px 0 var(--color-faint),
+    0 4px 0 var(--color-faint);
+}
+
+.divider[data-axis="row"][data-dragging="true"] .divider-grip {
+  box-shadow:
+    0 -4px 0 var(--color-paper),
+    0 4px 0 var(--color-paper);
+}
+
+/* --------------------------------------------------------------------------
+   The map: the instrument. A plain grid cell, stretched to the row's full
+   height by the grid's own default.
+   -------------------------------------------------------------------------- */
+
+.map-pane {
+  position: relative;
+  min-height: 0;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.map-caption {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 4px 8px;
+  background: var(--instrument-bg, rgba(251, 250, 245, 0.94));
+  border: 1px solid var(--color-rule);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+  max-width: min(70vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Layer chips: the same read live or under review. */
+.layer-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.layer-chip {
+  padding: 3px 8px;
+  background: var(--instrument-bg, rgba(251, 250, 245, 0.94));
+  border: 1px solid var(--color-rule);
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.layer-chip.on {
+  color: var(--color-ink);
+  border-color: var(--color-rule-hard);
+  background: var(--color-cream);
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar: mission list (capped), the run view (fills what's left,
+   scrolls on its own), chat box pinned to the foot.
+   -------------------------------------------------------------------------- */
+
+.sidebar {
+  display: grid;
+  /* List, a 6px handle, run view, chat box, hint: set inline from
+     MissionConsole's drag state. This default matches it. */
+  grid-template-rows: 30% 6px minmax(0, 1fr) auto auto;
+  min-height: 0;
+  background: var(--color-paper);
+  border-right: 1.5px solid var(--color-rule-hard);
+}
+
+/* --------------------------------------------------------------------------
+   The mission list: a head, the search, then a scrollable list. One row
+   per mission, the instruction leading as the headline.
+   -------------------------------------------------------------------------- */
+
+.missions {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  padding: 10px 12px 0;
+}
+
+.missions-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.missions-title {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-style: italic;
+  color: var(--color-ink);
+}
+
+.missions-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-faint);
+}
+
+.missions-search {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--color-rule);
+  background: #fff;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.missions-list {
+  overflow-y: auto;
+  min-height: 0;
+  border-top: 1px solid var(--color-rule);
+  padding-bottom: 6px;
+}
+
+.mission-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  border-left: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mission-row:hover {
+  background: var(--color-sel);
+}
+
+/* The row whose words are in the box and whose target is on the map. */
+.mission-row[aria-selected="true"] {
+  border-left-color: var(--color-act);
+  background: var(--color-cream);
+}
+
+.mission-row[aria-current="true"] {
+  border-left-color: var(--color-act);
+  background: var(--color-sel);
+}
+
+.mission-flown {
+  margin-left: 6px;
+  color: var(--color-faint);
+}
+
+/* The row and its run-count toggle sit side by side, each keeping its own
+   bottom border so the two read as one continuous line. */
+.mission-row-line {
+  display: flex;
+  align-items: stretch;
+}
+
+.mission-row-line .mission-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mission-runs-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-cite);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mission-runs-toggle:hover {
+  background: var(--color-sel);
+}
+
+.mission-runs-caret {
+  font-size: 8px;
+}
+
+/* A mission's own past runs, expanded in place. Cream, like the agent's
+   tool output elsewhere: this is a record, not a live row. */
+.past-row-nested {
+  padding-left: 22px;
+  background: var(--color-cream);
+}
+
+.mission-text {
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--color-soft-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mission-id {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-cite);
+  white-space: nowrap;
+}
+
+.rail-empty {
+  padding: 10px 8px;
+  font-size: 14px;
+  color: var(--color-faint);
+}
+
+/* --------------------------------------------------------------------------
+   Run view: the conversation, the seat's or the run opened from the
+   mission list. Both render through the same .run-scroll container and
+   the same Transcript component.
+   -------------------------------------------------------------------------- */
+
+.run-view {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  border-top: 1px solid var(--color-rule);
+}
+
+/* The conversation, plain: the agent's reasoning and tool calls as they
+   land, the operator's own messages threaded in at the point they were sent. */
+.run-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 12px 16px 16px;
+}
+
+.past-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  border-left: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.past-row:hover {
+  background: var(--color-sel);
+}
+
+.past-row[data-status="ended"] { border-left-color: var(--color-good); }
+.past-row[data-status="failed"] { border-left-color: var(--color-warn); }
+
+.past-row-text {
+  flex: 1 1 auto;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--color-soft-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.past-row-meta {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-faint);
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* SR/OSR/NE/SPL: its own full-width line so it never squeezes the
+   instruction text or the turns/flights readout it sits beside. */
+.past-row-score,
+.past-detail-score {
+  flex: 1 0 100%;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--color-soft-ink);
+}
+
+.past-detail-score {
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.transcript-inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+.entry-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  margin-bottom: 3px;
+}
+
+.entry {
+  border-left: 3px solid var(--color-rule);
+  padding: 2px 0 2px 14px;
+  margin-bottom: 12px;
+}
+
+.entry[data-who="operator"] { border-left-color: var(--color-rule-hard); }
+.entry[data-who="model"] { border-left-color: var(--color-act); }
+.entry[data-who="fault"] { border-left-color: var(--color-warn); }
+
+.entry-turn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-faint);
+}
+
+.entry-prose {
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.entry-code {
+  margin: 4px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--color-cream-border);
+  background: var(--color-cream);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.entry[data-errored="true"] .entry-code {
+  border-color: var(--color-warn);
+}
+
+/* The reasoning-channel text ahead of the code: deliberative, not a
+   result, so it reads as prose rather than framed like a tool plate. */
+.entry-reasoning {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--color-faint);
+  white-space: pre-wrap;
+}
+
+/* What the model saw this turn: each delivered image at reading size, in
+   delivery order; a click opens the bytes themselves in a new tab. */
+.entry-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+
+.entry-frames img {
+  display: block;
+  max-width: 260px;
+  max-height: 260px;
+  border: 1px solid var(--color-rule-hard);
+  background: var(--color-cream);
+}
+
+/* print()'d output: the same cream frame as the code it came from. */
+.entry-output {
+  margin: 4px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--color-rule);
+  background: var(--color-cream);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--color-soft-ink);
+}
+
+.entry-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-warn);
+}
+/* The share of a waypoint's area the passes hold: the gap's red while the
+   leg is short, the pass's teal (the sensor frame's own) once the station
+   would call it arrived. The map's coverage mask reads in the same two inks. */
+.entry-coverage {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-warn);
+}
+.entry-coverage[data-state="held"] {
+  color: #0b7d8e;
+}
+
+.entry-truncated {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.report {
+  border: 1px solid var(--color-rule-hard);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.report-text {
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.flight-line {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-faint);
+  border-top: 1px solid var(--color-rule);
+  padding-top: 6px;
+  margin-top: 8px;
+}
+
+.run-empty {
+  padding: 14px 16px;
+  color: var(--color-faint);
+  font-size: 14px;
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   The chat box. Deliberately NOT the hairline, square-corner furniture of
+   the rest of the page: a rounded, floating input reads as a chat box
+   where a form field does not. Still the same ink-on-paper palette.
+   -------------------------------------------------------------------------- */
+
+.chatbox {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 8px 12px 4px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--color-rule);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 19, 16, 0.08);
+}
+
+.chatbox:focus-within {
+  border-color: var(--color-cite);
+}
+
+.chatbox-input {
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  resize: none;
+  font-size: 14.5px;
+  line-height: 1.45;
+  padding: 4px 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.chatbox-input:disabled {
+  color: var(--color-faint);
+}
+
+.chatbox-input:focus {
+  outline: none;
+}
+
+/* The reasoning-effort select, sat with the buttons so a send reads left
+   to right. */
+.chatbox-effort {
+  flex: 0 0 auto;
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  border: 1px solid var(--color-rule);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-ink);
+}
+
+.chatbox-send {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chatbox-send:disabled {
+  background: var(--color-rule);
+  color: var(--color-faint);
+  cursor: not-allowed;
+}
+
+/* New mission, beside send: the same circle, outlined rather than filled,
+   so the eye reads one primary press and one that clears. */
+.chatbox-send[data-new] {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-ink);
+  font-size: 18px;
+}
+
+.chatbox-send[data-new]:disabled {
+  border-color: var(--color-rule);
+  color: var(--color-faint);
+}
+
+.chatbox-hint {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-faint);
+  margin: 0 12px 10px;
+}
+
+.chatbox-hint[data-fault="true"] {
+  color: var(--color-warn);
+}
+
+.fault {
+  border: 1px solid var(--color-warn);
+  border-left-width: 3px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  color: var(--color-warn);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+/* Which code flew a run: a score is quoted with the build it came from.
+   Faint: it is a fact you go looking for. */
+.past-row-commit {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+}
+
+.past-detail-commit {
+  /* inline-block so the rule and its padding actually open a gap: as a
+     bare inline the two runs of text abut and read as one token
+     ("SPL -1c309ab4+"). */
+  display: inline-block;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--color-rule);
+  color: var(--color-faint);
+}
+
+/* --------------------------------------------------------------------------
+   The instrument column: a wide map over the band
+   --------------------------------------------------------------------------
+   Three rows: the map, the band, the transport (review only). The band
+   holds the observations, in fixed proportion to the map (3:2), so the map
+   is a wide rectangle and the picture under it is always the same size in
+   the same place.
+   -------------------------------------------------------------------------- */
+
+/* The run under review, marked in the list it was opened from. */
+.past-row[aria-current="true"] {
+  background: var(--color-sel);
+}
+
+.instrument {
+  display: grid;
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr) auto;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
+.band {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  border-top: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+}
+
+/* The viewer: the observation picture book. */
+.viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The dark body the image sits in. object-fit keeps the image's own
+   aspect, so it is never quietly cropped. */
+.viewer-body {
+  position: relative;
+  min-height: 0;
+  background: var(--color-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.camera-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* The map's features the page draws on an observation: the
+   image's own box, letterboxed the same way (the SVG's meet is contain). */
+.camera-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.viewer-title {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  margin: 0;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-paper);
+  background: rgba(20, 19, 16, 0.6);
+}
+
+.camera-controls {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.camera-toggle {
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: 0;
+  border-left: 3px solid #888;
+  cursor: pointer;
+}
+
+.camera-toggle[aria-pressed="true"] {
+  border-left-color: #00c8ff;
+  color: #c8f0ff;
+}
+
+.camera-annunciator {
+  position: absolute;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-paper);
+  background: rgba(20, 19, 16, 0.72);
+  padding: 5px 10px;
+  border: 1px solid rgba(251, 250, 245, 0.35);
+  text-align: center;
+  max-width: 90%;
+}
+
+.viewer-caption {
+  margin: 0;
+  padding: 3px 10px;
+  border-top: 1px solid var(--color-rule);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The aircraft. A chevron pointed the way it is going (MapLibre rotates
+   the element to the track), haloed in paper so it reads over imagery. */
+.ownship {
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 20px solid var(--color-act);
+  filter: drop-shadow(0 0 1.5px var(--color-paper))
+          drop-shadow(0 0 1.5px var(--color-paper));
+}
+
+/* The waiting leg's word on its area, stood on the mask's north edge: the
+   same two inks as the transcript's line, on paper so it reads over the
+   wash and over imagery alike. */
+.coverage-pin {
+  padding: 1px 5px;
+  border: 1.5px solid var(--color-warn);
+  border-radius: 3px;
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-warn);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.coverage-pin[data-state="held"] {
+  border-color: #0b7d8e;
+  color: #0b7d8e;
+}
+
+/* --------------------------------------------------------------------------
+   The transport: a reviewed run plays
+   --------------------------------------------------------------------------
+   Scrub to a point, pause on it, read the clock. A row of the instrument
+   grid rather than an overlay on the map: it belongs to the whole view.
+   -------------------------------------------------------------------------- */
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-top: 1.5px solid var(--color-rule-hard);
+  background: var(--color-paper);
+}
+
+.transport-play {
+  width: 26px;
+  padding: 1px 0;
+  border: 1px solid var(--color-rule);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.transport-play:hover {
+  background: var(--color-sel);
+}
+
+.transport-scrub {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--color-act);
+  cursor: pointer;
+}
+
+.transport-clock {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A waypoint: where one of the mission's flights ended, a small numbered
+   disc on its coordinate.
+
+   The root is the marker element MapLibre positions, so it takes no
+   position of its own; the span is the badge. */
+.route-pin {
+  display: block;
+  width: 0;
+  height: 0;
+  cursor: default;
+}
+
+.route-pin span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  border: 1.5px solid var(--color-paper);
+  border-radius: 50%;
+  background: #62d2ff;
+  box-shadow: 0 1px 3px rgba(20, 19, 16, 0.4);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--color-ink);
+}
