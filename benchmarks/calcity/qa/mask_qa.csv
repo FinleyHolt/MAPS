@@ -20,7 +20,7 @@ row,episode_id,shape,prompt,verdict,note
 18,calcity::18#18,target_mask,The largest building at the north end of Hacienda Elementary School's campus.,,
 19,calcity::19#19,target_mask,"The building with the cylindrical storage tanks beside it, in the fenced yard north of Victor Plaza.",,
 20,calcity::20#20,target_mask,The strip mall that houses the Cactus Market and Coyote Cafe.,,
-21,calcity::21#21,target_mask,"The pond on the golf course, surrounded by grass and sand bunkers.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+21,calcity::21#21,target_mask,"The pond on the golf course, surrounded by grass and sand bunkers.",ok,sentence and outline answered right (needs-review queue)
 22,calcity::22#22,target_mask,"The house standing at an angle to the street grid, with two cars parked under its carport, near Sherwood Avenue.",,
 23,calcity::23#23,target_mask,The house with the round pool close to Mason Street.,,
 24,calcity::24#24,target_mask,"The long building with three peaked roof sections, across the street from a house with a round pool.",,
@@ -35,7 +35,7 @@ row,episode_id,shape,prompt,verdict,note
 33,calcity::34#33,target_mask,A blue parked car outside the house on Quezon Avenue. South facing house. east of 85th Street and west of Orchid Drive.,,
 34,calcity::35#34,target_mask,"A red parked car, north facing off of Jimson Avenue, east of 85th Street and west of Orchid Drive.",,
 35,calcity::36#35,target_mask,"A red parked car outside a south-facing home on the corner of Quezon Avenue and 85th Street, just north of Quezon Avenue and East of 85th Street.",,
-36,calcity::37#36,target_mask,A circular swimming pool in the backyard of a house on Quezon Avenue.,,"omitted from the capacity study (reviewer flag of 2026-11-04, PI's masks-to-check sheet): flagged: the sentence names more than one place; the pin sits 262 m from the only drawn pool"
+36,calcity::37#36,target_mask,A circular swimming pool in the backyard of a house on Quezon Avenue.,,"omitted from the capacity study (reviewer flag of 2026-11-04, the masks-to-check sheet): flagged: the sentence names more than one place; the pin sits 262 m from the only drawn pool"
 37,calcity::38#37,target_mask,"A red-roofed house with two roof sections south-facing on Heather Avenue, west of 85th Street, and east of 83rd.",,
 38,calcity::39#38,target_mask,"First house on the corner of Heather Avenue and 90th Street, south-facing.",,
 39,calcity::40#39,target_mask,"Second house from the corner of Heather Avenue and 90th Street, south facing.",,
@@ -47,7 +47,7 @@ row,episode_id,shape,prompt,verdict,note
 45,calcity::46#45,target_mask,"One of two small parking lot at the California City Family Health Center, south of North Loop Boulevard, east of Hacienda Boulevard. This lot is on the east side.",,
 46,calcity::47#46,target_mask,"Small parking lot at the California City Family Health Center. South of North Loop Boulevard, east of Hacienda Boulevard. This is the west parking lot out of the two.",,
 47,calcity::48#47,target_mask,"Big U-shaped building with a circular driveway at the corner of North Loop Boulevard and 95th Street, south facing.",,
-48,calcity::49#48,target_mask,"Small circular and round light blue swimming pool outside the back of a little house, south-facing, on Sally Avenue, west of 95th Street, east of Lyn Street.",mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+48,calcity::49#48,target_mask,"Small circular and round light blue swimming pool outside the back of a little house, south-facing, on Sally Avenue, west of 95th Street, east of Lyn Street.",mask,"mask redrawn by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 49,calcity::50#49,target_mask,"Medium-sized house with a couple of solar panels on top, west-facing, east of 95th Street and west of 96th Street.",,
 50,calcity::51#50,target_mask,"Medium-sized house, north-facing on Irene Avenue, has a terracotta bean-shaped decoration outside the front yard. No trees in the front yard, but one in the backyard. East of Shaw Street and west of 98th Street.",,
 51,calcity::52#51,target_mask,"Red-roofed house with 2 to 3 roof sections on Karen Avenue, north-facing, east of Shaw Street and west of 98th Street.",,
@@ -65,13 +65,13 @@ row,episode_id,shape,prompt,verdict,note
 63,calcity::64#63,target_mask,"Big blue umbrella at the elementary school, just beside the solar panels and just south of the parking lot.",,
 64,calcity::65#64,target_mask,Couple of basketball courts at the Robert P Ulrich elementary school.,,
 65,calcity::66#65,target_mask,Swimming pool in the backyard of a south-facing house on Fir Avenue. This is just south of an empty plot of land on Eucalyptus Avenue. This swimming pool is east of Holly Avenue and west of the elementary school.,,
-66,calcity::67#66,target_mask,A yellow-roofed house on South Loop Boulevard. The house is on a curved road facing southwest. The house has lots of empty space on all sides with nothing filling its backyard.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet capacity_study_first_80: the sentence does not name the pinned place
+66,calcity::67#66,target_mask,A yellow-roofed house on South Loop Boulevard. The house is on a curved road facing southwest. The house has lots of empty space on all sides with nothing filling its backyard.,,omitted from the capacity study (needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet capacity_study_first_80: the sentence does not name the pinned place
 67,calcity::68#67,target_mask,"A lone house facing a curved angle on South Loop Boulevard. The curved angle is mostly southwest. There's a ton of space northwest of this house, just an empty plot until the next house.",,
 68,calcity::69#68,target_mask,House on the corner of South Loop Boulevard and Hacienda Boulevard. There's empty space to the east of the house. On the roof the house has solar panels.,,
-69,calcity::70#69,target_mask,"One of two lone homes, north-facing on South Loop Boulevard. They're surrounded by a lot of dead grass. This one is more western and has a swimming pool in the backyard. Both houses are east of Hacienda Boulevard and west of 97th Street.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
-70,calcity::71#70,target_mask,"One of two lone homes, north-facing on South Loop Boulevard. They're surrounded by a lot of dead grass. This one is more eastern. Both houses are east of Hacienda Boulevard and west of 97th Street.",mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+69,calcity::70#69,target_mask,"One of two lone homes, north-facing on South Loop Boulevard. They're surrounded by a lot of dead grass. This one is more western and has a swimming pool in the backyard. Both houses are east of Hacienda Boulevard and west of 97th Street.",ok,sentence and outline answered right (needs-review queue)
+70,calcity::71#70,target_mask,"One of two lone homes, north-facing on South Loop Boulevard. They're surrounded by a lot of dead grass. This one is more eastern. Both houses are east of Hacienda Boulevard and west of 97th Street.",mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 71,calcity::72#71,target_mask,A large oval green lake just north of South Loop Boulevard.,,
-72,calcity::73#72,target_mask,"South-facing house on Xavier Avenue, east of 91st Street. Has an open lot to the east of it, solar panels on top as well, gray roof.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+72,calcity::73#72,target_mask,"South-facing house on Xavier Avenue, east of 91st Street. Has an open lot to the east of it, solar panels on top as well, gray roof.",ok,sentence and outline answered right (needs-review queue)
 73,calcity::74#73,target_mask,Parking lot off of Hacienda Boulevard for the California City Post Office. There's a parking lot on the north side and south side of the post office. This is the south side parking lot.,,
 74,calcity::75#74,target_mask,Parking lot for the California City Post Office. This is the parking lot on the north side off of Hacienda Boulevard.,,
 75,calcity::76#75,target_mask,Red car in the parking lot for California City Post Office.,,
@@ -80,10 +80,10 @@ row,episode_id,shape,prompt,verdict,note
 78,calcity::79#78,target_mask,"Small solar panel grid off of Village Parkway, North of California City Boulevard, next to the Family Dollar and AutoZone.",,
 79,calcity::80#79,target_mask,Parking lot for building off of California City Boulevard. The parking lot is directly south east of the McDonald's.,,
 80,calcity::81#80,target_mask,Parking off of McDonald's off of California City Boulevard. There are two parking lots for the McDonald's. This is the parking lot for the east side.,,
-81,calcity::82#81,target_mask,Parking lot for the McDonald's off of California City Boulevard. This is the parking lot on the west side.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
-82,calcity::83#82,target_mask,Parking lot for Rite Aid off of California City Boulevard in that little shopping area with McDonald's next to it. Big parking lot.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+81,calcity::82#81,target_mask,Parking lot for the McDonald's off of California City Boulevard. This is the parking lot on the west side.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
+82,calcity::83#82,target_mask,Parking lot for Rite Aid off of California City Boulevard in that little shopping area with McDonald's next to it. Big parking lot.,ok,sentence and outline answered right (needs-review queue)
 83,calcity::84#83,target_mask,Swimming pool of the house at the corner of Village Center Drive and Lakeview Drive.,,
-84,calcity::85#84,target_mask,Swimming pool in the cul de sac. Village Court.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+84,calcity::85#84,target_mask,Swimming pool in the cul de sac. Village Court.,ok,sentence and outline answered right (needs-review queue)
 85,calcity::86#85,target_mask,Mini parking lot right outside the California City Hall.,,
 86,calcity::87#86,target_mask,"Empty plot of land with some trailers on it. Off of Hacienda Boulevard, south of Rite Aid.",,
 87,calcity::88#87,target_mask,The first empty cul-de-sac off of Emily Lynn Avenue called American Way Court.,,
@@ -102,12 +102,12 @@ row,episode_id,shape,prompt,verdict,note
 101,calcity::102#101,target_mask,"House northwest facing off of Adams Avenue, looking towards Paine Court, with a lot of vegetation in the back and front yard. No plot of land directly to the east of it, but there is a house on the west side and one directly behind it on the southeast side of the house on Oleander Avenue.",,
 102,calcity::103#102,target_mask,The only north-west facing house on Oleander Avenue that is east of Julliard Street.,,
 103,calcity::104#103,target_mask,Small rectangular house at the very end of Lehigh Street towards the cul-de-sac after the intersection of Lehigh and Hanover Drive.,,
-104,calcity::105#104,target_mask,"Red-roofed house with two roof sections, almost at the corner of Conklin Boulevard and Viburnum Avenue, facing east.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+104,calcity::105#104,target_mask,"Red-roofed house with two roof sections, almost at the corner of Conklin Boulevard and Viburnum Avenue, facing east.",ok,sentence and outline answered right (needs-review queue)
 105,calcity::106#105,target_mask,"Gray-roofed house with a lot of trees in the backyard surrounding it. Off of Conklin Boulevard, east-facing towards 101st Street. Just north of Owens Drive.",,
-106,calcity::107#106,target_mask,"Gray-roofed house with two roof sections off of 99th Street east facing, just south of Viburnum Avenue, with a round pool in the backyard, and solar panels on top of the roof. No immediate neighbors all around.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+106,calcity::107#106,target_mask,"Gray-roofed house with two roof sections off of 99th Street east facing, just south of Viburnum Avenue, with a round pool in the backyard, and solar panels on top of the roof. No immediate neighbors all around.",ok,sentence and outline answered right (needs-review queue)
 107,calcity::108#107,target_mask,Small circular pool in the backyard of the house on 99th Street.,,
 108,calcity::109#108,target_mask,"Red-roofed house, west-facing, on 99th Street, south of Viburnum Avenue. This is the northernmost house on 99th Street, south of Viburnum Avenue.",,
-109,calcity::110#109,target_mask,"Gray-roofed house with several roof sections on 99th Street, west-facing, south of Viburnum Avenue, at the corner of 99th Street, and Forest Boulevard.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+109,calcity::110#109,target_mask,"Gray-roofed house with several roof sections on 99th Street, west-facing, south of Viburnum Avenue, at the corner of 99th Street, and Forest Boulevard.",ok,sentence and outline answered right (needs-review queue)
 110,calcity::111#110,target_mask,"Red-roofed house with several solar panels, west-facing on Taylor Street. This is one of two houses on Taylor Street south of Viburnum Avenue that is west-facing.",,
 111,calcity::112#111,target_mask,"The southernmost house on Taylor Street, south of Viburnum Avenue that is west facing.",,
 112,calcity::113#112,target_mask,Four adjacent buildings off of 98th Street and across the street from Evergreen Avenue. It's west-facing and north of Sherwood Avenue.,,
@@ -119,7 +119,7 @@ row,episode_id,shape,prompt,verdict,note
 118,calcity::119#118,target_mask,"One of a few houses on Tanbark Avenue, right next to the farmland. This one is west of 97th Street, with the red roof and solar panels.",,
 119,calcity::120#119,target_mask,"A couple of solar panels on the roof of a house on Tanbark Avenue, northwest facing.",,
 120,calcity::121#120,target_mask,One of three houses off of Tanbark Avenue. This one has a gray roof and is west of 97th Street.,,
-121,calcity::122#121,target_mask,House at the corner of Glade Avenue and Lasky Street with solar panels.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+121,calcity::122#121,target_mask,House at the corner of Glade Avenue and Lasky Street with solar panels.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 122,calcity::123#122,target_mask,Solar panels on top of west-facing house on Lasky Street.,,
 123,calcity::124#123,target_mask,Parking lot for a place of worship at the corner of Forest Boulevard and Airway Boulevard.,,
 124,calcity::125#124,target_mask,Brown-roofed house with many solar panels at the corner of 87th Street and Glade Avenue.,,
@@ -132,7 +132,7 @@ row,episode_id,shape,prompt,verdict,note
 131,calcity::132#131,target_mask,Rectangular pool in the backyard of a house on Glade Avenue. A shed next to it as well.,,
 132,calcity::133#132,target_mask,"White-roofed house, north-facing on Glade Avenue, with no immediate neighbors towards the east or west of it.",,
 133,calcity::134#133,target_mask,One of two houses on Moss Avenue. This one has a small round swimming pool in the backyard.,,
-134,calcity::135#134,target_mask,"Small round light blue swimming pool in the backyard of a house on Moss Avenue, south-facing.",mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+134,calcity::135#134,target_mask,"Small round light blue swimming pool in the backyard of a house on Moss Avenue, south-facing.",mask,"mask redrawn by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 135,calcity::136#135,target_mask,"A small white-roofed house with a couple of roof sections south-facing on Moss Avenue, with nothing in the backyard.",,
 136,calcity::137#136,target_mask,Large unorganized parking lot off of Willow Avenue.,,
 137,calcity::138#137,target_mask,Small and organized parking lot off of Willow Avenue.,,
@@ -188,13 +188,13 @@ row,episode_id,shape,prompt,verdict,note
 187,calcity::188#187,target_mask,A baseball diamond playing field at the corner of Mendiburu Road and Rusche Boulevard. Next to another large rectangular grass playing field and a solar panel grid.,,
 188,calcity::189#188,target_mask,Large solar panel grid on Mendiburu Road next to a large rectangular grass playing field and a baseball diamond.,,
 189,calcity::190#189,target_mask,Massive solar panel grid at the corner of Hacienda Boulevard and Mendiburu Road.,,
-190,calcity::191#190,target_mask,A massive solar panel grid on Mendiburu Road.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+190,calcity::191#190,target_mask,A massive solar panel grid on Mendiburu Road.,ok,sentence and outline answered right (needs-review queue)
 191,calcity::192#191,target_mask,A south east facing house at the corner of Lupine Loop Drive and Poppy Boulevard with a small pool in the backyard.,,
 192,calcity::193#192,target_mask,House with a house northwest-facing at the corner of North Loop Boulevard and Poppy Boulevard. The house has solar panels on the roof and an oval-shaped pool in the backyard. The house is red roofed with a few roof sections.,,
 193,calcity::194#193,target_mask,Solar panels on top of a red roof house on North Loop Boulevard.,,
 194,calcity::195#194,target_mask,A south-east facing house at the corner of Poppy Boulevard and North Loop Boulevard with a small round swimming pool in the backyard. The house has a gray roof with several roof sections.,,
 195,calcity::196#195,target_mask,A north facing house on Quezon Avenue between 83rd and 85th Street with a pool in the backyard and a shed in the front.,,
-196,calcity::197#196,target_mask,Shed out front of a house on Quezon Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+196,calcity::197#196,target_mask,Shed out front of a house on Quezon Avenue.,ok,sentence and outline answered right (needs-review queue)
 197,calcity::198#197,target_mask,A red parked car outside a house off of Poppy Boulevard.,,
 198,calcity::199#198,target_mask,A blue parked car outside a house off of Poppy Boulevard.,,
 199,calcity::200#199,target_mask,"A large, grey-roofed house with several roof sections off of Poppy Boulevard, northeast facing, with two multi-colored cars (red and blue) parked in the front yard.",,
@@ -215,7 +215,7 @@ row,episode_id,shape,prompt,verdict,note
 214,calcity::215#214,target_mask,A house with no immediate neighbors on the corner of Glade Avenue and Forest Boulevard.,,
 215,calcity::216#215,target_mask,The only east facing building between Forest Boulevard and Evergreen Avenue that is right across from Sherwood Avenue.,,
 216,calcity::217#216,target_mask,A south facing house off of Forest Boulevard with several roof sections. The house is on a corner touching 83rd Street.,,
-217,calcity::218#217,target_mask,A south facing house on Evergreen Avenue with a rectangular pool in the backyard. This house is one away from 83rd Street.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+217,calcity::218#217,target_mask,A south facing house on Evergreen Avenue with a rectangular pool in the backyard. This house is one away from 83rd Street.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 218,calcity::219#218,target_mask,A south facing house on the corner of Evergreen Avenue and 83rd Street.,,
 219,calcity::220#219,target_mask,"A long north facing house with a red roof and a couple roof sections on Viburnum Avenue. The house is on a corner so another street surrounds its west and south sides curving around this house's backyard. Also, this house has a large rectangular pool in the backyard.",,
 220,calcity::221#220,target_mask,"North facing house with solar panels and a grey roof on Viburnum Avenue, but facing 85th Street at the T intersection.",,
@@ -251,8 +251,8 @@ row,episode_id,shape,prompt,verdict,note
 250,calcity::251#250,target_mask,"A Large house with a white roof on the north side of Forest Boulevard. This house is south of Sherwood Avenue, and between 83rd and 86th Street. The house has no neighbors.",,
 251,calcity::252#251,target_mask,"A lone south facing house between 83rd Street and Moss Avenue laterally, and between Muir Avenue and Grove Avenue longitudinally.",,
 252,calcity::253#252,target_mask,The northernmost house that's west facing on Moss Avenue just south of Viburnum Avenue.,,
-253,calcity::254#253,target_mask,A house on the corner of Redwood Boulevard and 87th Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
-254,calcity::255#254,target_mask,An east facing house on the corner of Redwood Boulevard and Airway Boulevard.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+253,calcity::254#253,target_mask,A house on the corner of Redwood Boulevard and 87th Street.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
+254,calcity::255#254,target_mask,An east facing house on the corner of Redwood Boulevard and Airway Boulevard.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 255,calcity::256#255,target_mask,A west facing house on the corner of Redwood Boulevard and Airway Boulevard.,,
 256,calcity::257#256,target_mask,A south facing house on the corner of Redwood Boulevard and 87th Street.,,
 257,calcity::258#257,target_mask,A house with solar panels and a pool in the backyard on the corner of Nipa Avenue and 87th Street.,,
@@ -263,9 +263,9 @@ row,episode_id,shape,prompt,verdict,note
 262,calcity::263#262,target_mask,A north facing house on the corner of Nipa Avenue and Airway Boulevard.,,
 263,calcity::264#263,target_mask,An east facing house on the corner of Airway Boulevard and Nipa Avenue.,,
 264,calcity::265#264,target_mask,A west facing house on the corner of Nipa Avenue and Airway Boulevard.,,
-265,calcity::266#265,target_mask,A red roofed house that's west facing on Airway Boulevard south of Lime Avenue. This house is in line with Manzanita Avenue which is to the west of it.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+265,calcity::266#265,target_mask,A red roofed house that's west facing on Airway Boulevard south of Lime Avenue. This house is in line with Manzanita Avenue which is to the west of it.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 266,calcity::267#266,target_mask,A small house on the corner of Lime Avenue and Airway Boulevard. This house is just west of 88th Street and south of Lime Ave.,,
-267,calcity::268#267,target_mask,"A north east facing house on Jacaranda Avenue near Jacaranda's intersection with 86th Street. This house is just to the east of that intersection, but still west of Airway Boulevard.",mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+267,calcity::268#267,target_mask,"A north east facing house on Jacaranda Avenue near Jacaranda's intersection with 86th Street. This house is just to the east of that intersection, but still west of Airway Boulevard.",mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 268,calcity::269#268,target_mask,"A red roofed house that's east facing with a small round swimming pool in the backyard. To the east is Corwin Street, to the south is Lime Avenue, and to the west is Steward Court. The street this house is on peels off the north side of Lime Avenue and connects back to 88th Street.",,
 269,calcity::270#269,target_mask,A small round pool in the backyard of an east facing house on an unnamed street. This street peels off the north side of Lime Avenue and connects back to 88th Street.,,
 270,calcity::271#270,target_mask,"A red roofed house that's west facing off of an unnamed street. This street curves around Steward Court and connects 88th Street and Lime Avenue together. Right behind this house, or to its direct east side is an east facing house on Corwin Street.",,
@@ -307,7 +307,7 @@ row,episode_id,shape,prompt,verdict,note
 306,calcity::307#306,target_mask,One of two south-facing houses between 90th and 94th Street on Lime Avenue with a pool in the backyard. This house has an ovular pool and is the one more eastern out of the two.,,
 307,calcity::308#307,target_mask,A rectangular pool in the backyard of a south-facing house on Lime Avenue. This is evenly between 90th and 94th Street.,,
 308,calcity::309#308,target_mask,A rectangular pool in the backyard of a south-facing house on Lime Avenue just west of 94th Street.,,
-309,calcity::310#309,target_mask,South facing house on an unnamed street with a square pool in the backyard. This unnamed street is between 88th Street and 90th Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+309,calcity::310#309,target_mask,South facing house on an unnamed street with a square pool in the backyard. This unnamed street is between 88th Street and 90th Street.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 310,calcity::311#310,target_mask,A square pool in the backyard of a south-facing house between 88th and 90th Street.,,
 311,calcity::312#311,target_mask,A rectangular pool in the backyard of a south-facing house between 88th and 90th Street.,,
 312,calcity::313#312,target_mask,South facing house on an unnamed street with a rectangular pool in the backyard. This unnamed street is between 88th Street and 90th Street.,,
@@ -340,11 +340,11 @@ row,episode_id,shape,prompt,verdict,note
 339,calcity::340#339,target_mask,The eastern end of Underwood Avenue on Airway Boulevard.,,
 340,calcity::341#340,target_mask,The eastern end of Willow Avenue on Airway Boulevard.,,
 341,calcity::342#341,target_mask,The western end of Sherwood Avenue on Airway Boulevard.,,
-342,calcity::343#342,target_mask,The east-facing house on Airway Boulevard at the western end of Grove Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+342,calcity::343#342,target_mask,The east-facing house on Airway Boulevard at the western end of Grove Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 343,calcity::344#343,target_mask,A south facing house on Redwood Boulevard with a round pool in the backyard. This house between 90th Street and Airway Boulevard.,,
-344,calcity::345#344,target_mask,A round swimming pool in the backyard of a south facing house on Redwood Boulevard slightly south of Peach Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+344,calcity::345#344,target_mask,A round swimming pool in the backyard of a south facing house on Redwood Boulevard slightly south of Peach Avenue.,ok,sentence and outline answered right (needs-review queue)
 345,calcity::346#345,target_mask,An east facing house with a grey roof and solar panels on top. This house is on Manzanita Avenue and one plot of land north of Nipa Avenue.,,
-346,calcity::347#346,target_mask,A west facing house on Airway Boulevard one house north from Nipa Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+346,calcity::347#346,target_mask,A west facing house on Airway Boulevard one house north from Nipa Avenue.,ok,sentence and outline answered right (needs-review queue)
 347,calcity::348#347,target_mask,A west facing house on Airway Boulevard two houses north from Nipa Avenue.,,
 348,calcity::349#348,target_mask,A west facing house on Airway Boulevard two houses south of Lime Avenue.,,
 349,calcity::350#349,target_mask,A west facing house on Airway Boulevard one house south of Lime Avenue.,,
@@ -359,7 +359,7 @@ row,episode_id,shape,prompt,verdict,note
 358,calcity::359#358,target_mask,An east facing house on 88th Street one house north from Lime Avenue.,,
 359,calcity::360#359,target_mask,An east facing house on 88th Street two houses north from Lime Avenue.,,
 360,calcity::361#360,target_mask,A west facing house on Airway Boulevard one house north from Lime Avenue.,,
-361,calcity::362#361,target_mask,A west facing house on Airway Boulevard two houses north of Lime Avenue with a small round pool in the backyard.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence names more than one place; answered wrong in review sheet capacity_study_first_80
+361,calcity::362#361,target_mask,A west facing house on Airway Boulevard two houses north of Lime Avenue with a small round pool in the backyard.,,omitted from the capacity study (needs-review queue): flagged: the sentence names more than one place; answered wrong in review sheet capacity_study_first_80
 362,calcity::363#362,target_mask,A small round swimming pool in the backyard of a west facing house on Airway Boulevard a few lots north of Lime Avenue.,,
 363,calcity::364#363,target_mask,A north facing house at the south ending of 88th Street.,,
 364,calcity::365#364,target_mask,A north facing house on Peach Avenue to the east of 90th Street. This house is the closest to 90th Street out of all other north facing homes on the east side of 90th Street.,,
@@ -437,15 +437,15 @@ row,episode_id,shape,prompt,verdict,note
 436,calcity::437#436,target_mask,The building at the corner of Neuralia Road and Poppy Boulevard.,,
 437,calcity::438#437,target_mask,"A white building off of Neuralia Road, longitudinally between Lewis Avenue and Mendiburu Road.",,
 438,calcity::439#438,target_mask,A south facing house on Viburnum Avenue with a small roud swimming pool in the backyard. This is the closest south facing house to Neuralia Road on Viburnum Avenue.,,
-439,calcity::440#439,target_mask,Small round swimming pool in the backyard of a south facing house on Viburnum Avenue close to Neuralia Road.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+439,calcity::440#439,target_mask,Small round swimming pool in the backyard of a south facing house on Viburnum Avenue close to Neuralia Road.,ok,sentence and outline answered right (needs-review queue)
 440,calcity::441#440,target_mask,A north facing house on Underwood Avenue with a small round pool in the backyard. To the east of the house is a dirt road that connects Viburnum Avenue up to Tamarack Avenue. To the west of the house is Neuralia Road.,,
-441,calcity::442#441,target_mask,"A small round swimming pool in the backyard of a north facing house on Underwood Avenue. There is another house four plots west, and one plot south, with a swimming pool in its backyard as well.",mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+441,calcity::442#441,target_mask,"A small round swimming pool in the backyard of a north facing house on Underwood Avenue. There is another house four plots west, and one plot south, with a swimming pool in its backyard as well.",mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 442,calcity::443#442,target_mask,A south facing house on Viburnum Avenue directly at the T-intersection connecting Viburnum Avenue with Evergreen Avenue.,,
 443,calcity::444#443,target_mask,A large north facing grey roofed house right beside Mason Street and north of Evergreen Avenue.,,
 444,calcity::445#444,target_mask,One of a few houses at the western end of Evergreen Avenue. This house is the only one perfectly east facing into the street.,,
 445,calcity::446#445,target_mask,One of a few houses at the western end of Evergreen Avenue. This house is the only one diagonally facing towards south east.,,
 446,calcity::447#446,target_mask,A large white roofed building off of Neuralia Road across the street from Forest Boulevard.,,
-447,calcity::448#447,target_mask,A trailer park off of Neuralia Road just south of Willow Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+447,calcity::448#447,target_mask,A trailer park off of Neuralia Road just south of Willow Avenue.,ok,sentence and outline answered right (needs-review queue)
 448,calcity::449#448,target_mask,A house just north west of the intersection of 85th Street and Viburnum Avenue.,,
 449,calcity::450#449,target_mask,A house just south east of the intersection of 85th Street and Viburnum Avenue.,,
 450,calcity::451#450,target_mask,A house just north east of the intersection of 85th Street and Underwood Avenue.,,
@@ -468,10 +468,10 @@ row,episode_id,shape,prompt,verdict,note
 467,calcity::468#467,target_mask,A large grey roofed north facing house on Satinwood Avenue one lot away from 85th Street.,,
 468,calcity::469#468,target_mask,A rectangular white roofed south facing house on Tamarack Avenue one lot away from 85th Street.,,
 469,calcity::470#469,target_mask,Solar panels on top of a south facing house on Tamarack Avenue one lot away from 85th Street.,,
-470,calcity::471#470,target_mask,"A large south facing house on Tamarack Avenue with solar panels. This house is two plots away from 85th Street, and has green vegetation all over its front and backyard. The house also has solar panels on its roof.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+470,calcity::471#470,target_mask,"A large south facing house on Tamarack Avenue with solar panels. This house is two plots away from 85th Street, and has green vegetation all over its front and backyard. The house also has solar panels on its roof.",ok,sentence and outline answered right (needs-review queue)
 471,calcity::472#471,target_mask,Solar panels on top of a south-facing house with several roof sections on Tamarack Avenue. The house is two plots east of 85th Street.,,
 472,calcity::473#472,target_mask,A rectangular south-facing house on Satinwood Avenue with solar panels on its roof and a lot of green turf in its backyard. The house is east of 85th Street by a couple of lots.,,
-473,calcity::474#473,target_mask,"A large north-facing house with several roof sections on Satinwood Avenue, with a round pool in the backyard east of 85th Street.",mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+473,calcity::474#473,target_mask,"A large north-facing house with several roof sections on Satinwood Avenue, with a round pool in the backyard east of 85th Street.",mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 474,calcity::475#474,target_mask,"A large round swimming pool in the backyard of a north-facing house on Satinwood Avenue, east of 85th Street.",,
 475,calcity::476#475,target_mask,"A red-roofed, north-facing house on Satinwood Avenue, west of 85th Street by a few houses.",,
 476,calcity::477#476,target_mask,A north-facing house on Satinwood Avenue with a large rectangular pool in the backyard. The house is by the western end of the street.,,
@@ -509,7 +509,7 @@ row,episode_id,shape,prompt,verdict,note
 508,calcity::509#508,target_mask,A north-facing house on an unnamed street that connects from Viburnum Avenue and then eventually 86th Street. This house has a small round swimming pool in its backyard.,,
 509,calcity::510#509,target_mask,A small round swimming pool in the backyard of a house on an unnamed street that connects from Viburnum Avenue and then eventually 86th Street.,,
 510,calcity::511#510,target_mask,A north-facing house at the corner of 83rd Street and Viburnum Avenue.,,
-511,calcity::512#511,target_mask,Satellites on top of a north-facing house at the corner of 83rd Street and Viburnum Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+511,calcity::512#511,target_mask,Satellites on top of a north-facing house at the corner of 83rd Street and Viburnum Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 512,calcity::513#512,target_mask,"A west-facing house on 83rd Street, north of Evergreen Avenue but south of Viburnum Avenue. This is the northernmost west-facing house on 83rd Street.",,
 513,calcity::514#513,target_mask,A north-facing house on Viburnum Avenue with a turf field in its front yard. This house is just northeast of the end of Mason Street.,,
 514,calcity::515#514,target_mask,"A south-facing house with several roof sections on Evergreen Avenue, a little east of Mason Street, but on the same block.",,
@@ -543,9 +543,9 @@ row,episode_id,shape,prompt,verdict,note
 542,calcity::543#542,target_mask,A south-facing house longitudinally between Viburnum Avenue and Evergreen Avenue. This house is immediately northwest of 86th Street's end point.,,
 543,calcity::544#543,target_mask,A house at the corner of North Loop Boulevard and 98th street. This house is west of 98th street.,,
 544,calcity::545#544,target_mask,A house at the corner of North Loop Boulevard and 98th street. This house is east of 98th street.,,
-545,calcity::546#545,target_mask,Twin homes at the corner of Sally Avenue and 98th street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+545,calcity::546#545,target_mask,Twin homes at the corner of Sally Avenue and 98th street.,ok,sentence and outline answered right (needs-review queue)
 546,calcity::547#546,target_mask,A south facing house at the corner of Sally Avenue and 98th street.,,
-547,calcity::548#547,target_mask,A house at the corner of Irene Avenue and 98th street. This house has a pool in the backyard.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+547,calcity::548#547,target_mask,A house at the corner of Irene Avenue and 98th street. This house has a pool in the backyard.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 548,calcity::549#548,target_mask,A small round swimming pool in the backyard of a house at the corner of Irene Avenue and 98th street.,,
 549,calcity::550#549,target_mask,A north facing house at the corner of Irene Avenue and 98th street. This house has no immediate neighbor to its east side because its an empty plot of land.,,
 550,calcity::551#550,target_mask,A south facing house with solar panels at the corner of Irene Avenue and 98th street.,,
@@ -584,11 +584,11 @@ row,episode_id,shape,prompt,verdict,note
 583,calcity::584#583,target_mask,A north facing home on Sally Avenue looking directly into 96th street. There is an identical looking house to this home's south side.,,
 584,calcity::585#584,target_mask,A south facing home on Karen Avenue looking directly into 95th street.,,
 585,calcity::586#585,target_mask,A north facing home at the corner of 95th Street and Karen Avenue.,,
-586,calcity::587#586,target_mask,The pond named Central Park Lake.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+586,calcity::587#586,target_mask,The pond named Central Park Lake.,ok,sentence and outline answered right (needs-review queue)
 587,calcity::588#587,target_mask,Central Park.,,
-588,calcity::589#588,target_mask,California City Municipal Par 3 Golf Course.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+588,calcity::589#588,target_mask,California City Municipal Par 3 Golf Course.,ok,sentence and outline answered right (needs-review queue)
 589,calcity::590#589,target_mask,California City Middle School.,,
-590,calcity::591#590,target_mask,Balsitis Park.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+590,calcity::591#590,target_mask,Balsitis Park.,ok,sentence and outline answered right (needs-review queue)
 591,calcity::592#591,target_mask,Robert P Ulrich Elementary School.,,
 592,calcity::593#592,target_mask,Hacienda Elementary School.,,
 593,calcity::594#593,target_mask,The grounds called Aloha Plaza.,,
@@ -607,28 +607,28 @@ row,episode_id,shape,prompt,verdict,note
 606,calcity::607#606,target_mask,The store named Ace Hardware.,,
 607,calcity::608#607,target_mask,The building named Bank of the Sierra.,,
 608,calcity::609#608,target_mask,The store called Cactus Market.,,
-610,calcity::611#610,target_mask,The building named California City Police Department.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+610,calcity::611#610,target_mask,The building named California City Police Department.,ok,sentence and outline answered right (needs-review queue)
 612,calcity::613#612,target_mask,The building named Celsius 30.,,
 613,calcity::614#613,target_mask,The gas station called Fastrip.,,
-614,calcity::615#614,target_mask,The park called J Kerman Cooper Field.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+614,calcity::615#614,target_mask,The park called J Kerman Cooper Field.,ok,sentence and outline answered right (needs-review queue)
 615,calcity::616#615,target_mask,The building called Jesse's Pizza.,,
 616,calcity::617#616,target_mask,The building called La Conquista.,,
 617,calcity::618#617,target_mask,The store named Metro by T-Mobile.,,
 618,calcity::619#618,target_mask,The store called Oasis Laundromat.,,
-619,calcity::620#619,target_mask,The building named Rite Aid.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
-620,calcity::621#620,target_mask,The building named Subway.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-621,calcity::622#621,target_mask,The building named West Best Pizza Co.,mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+619,calcity::620#619,target_mask,The building named Rite Aid.,ok,sentence and outline answered right (needs-review queue)
+620,calcity::621#620,target_mask,The building named Subway.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+621,calcity::622#621,target_mask,The building named West Best Pizza Co.,mask,"mask redrawn by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 622,calcity::623#622,target_mask,The parking lot just northeast of Tierra del Sol Golf Course.,,
 623,calcity::624#623,target_mask,The swimming pool just northeast of Tierra del Sol Golf Course.,,
 625,calcity::626#625,target_mask,The parking lot just north of First Baptist Church.,,
 637,calcity::638#637,target_mask,"The house with the swimming pool in its yard, on the south side of 96th Street.",,
 640,calcity::641#640,target_mask,"The house with the swimming pool in its yard, on the north side of Darrow Drive.",,
-642,calcity::643#642,target_mask,"The house with the swimming pool in its yard, on the west side of Karen Avenue.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+642,calcity::643#642,target_mask,"The house with the swimming pool in its yard, on the west side of Karen Avenue.",ok,sentence and outline answered right (needs-review queue)
 664,calcity::665#664,target_mask,The house on the southwest corner of 71st Street and Landis Drive.,,
 705,calcity::706#705,target_mask,The house on the northwest corner of 79th Street and Quezon Avenue.,,
 744,calcity::745#744,target_mask,The house on the southwest corner of 83rd Street and Poppy Boulevard.,,
 745,calcity::746#745,target_mask,The house on the southeast corner of 83rd Street and Poppy Boulevard.,,
-769,calcity::770#769,target_mask,The house on the southeast corner of 86th Street and Manzanita Avenue.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+769,calcity::770#769,target_mask,The house on the southeast corner of 86th Street and Manzanita Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 777,calcity::778#777,target_mask,The house on the southwest corner of 87th Street and Nipa Avenue.,,
 791,calcity::792#791,target_mask,The house on the southwest corner of 88th Street and Lime Avenue.,,
 792,calcity::793#792,target_mask,The house on the southeast corner of 88th Street and Lime Avenue.,,
@@ -636,24 +636,24 @@ row,episode_id,shape,prompt,verdict,note
 804,calcity::805#804,target_mask,The house on the northeast corner of 89th Street and Columbine Avenue.,,
 809,calcity::810#809,target_mask,The house on the northwest corner of 89th Street and Walpole Avenue.,,
 810,calcity::811#810,target_mask,The house on the northeast corner of 89th Street and Walpole Avenue.,,
-824,calcity::825#824,object 3940,The house on the southeast corner of 91st Street and Fuchsia Avenue.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+824,calcity::825#824,object 3940,The house on the southeast corner of 91st Street and Fuchsia Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 825,calcity::826#825,target_mask,The house on the southeast corner of 91st Street and Walpole Avenue.,,
-826,calcity::827#826,object 3916,The house on the southwest corner of 91st Street and Xavier Avenue.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+826,calcity::827#826,object 3916,The house on the southwest corner of 91st Street and Xavier Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 827,calcity::828#827,target_mask,The house on the southeast corner of 91st Street and Xavier Avenue.,,
 830,calcity::831#830,target_mask,The house on the northwest corner of 93rd Street and Evelyn Avenue.,,
-831,calcity::832#831,target_mask,The house on the northeast corner of 93rd Street and Evelyn Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+831,calcity::832#831,target_mask,The house on the northeast corner of 93rd Street and Evelyn Avenue.,ok,sentence and outline answered right (needs-review queue)
 832,calcity::833#832,target_mask,The house on the southeast corner of 93rd Street and Margery Avenue.,,
 833,calcity::834#833,target_mask,The house on the northeast corner of 93rd Street and Rea Avenue.,,
 835,calcity::836#835,target_mask,The house on the northeast corner of 94th Street and Columbine Avenue.,,
-837,calcity::838#837,object 4127,The house on the southeast corner of 94th Street and Fuchsia Avenue.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+837,calcity::838#837,object 4127,The house on the southeast corner of 94th Street and Fuchsia Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 840,calcity::841#840,target_mask,The house on the southeast corner of 94th Street and Walpole Avenue.,,
 841,calcity::842#841,target_mask,The house on the northeast corner of 95th Street and Sally Avenue.,,
-842,calcity::843#842,target_mask,The house on the northwest corner of 96th Street and Evelyn Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
-843,calcity::844#843,object 4233,The house on the southwest corner of 96th Street and Karen Avenue.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+842,calcity::843#842,target_mask,The house on the northwest corner of 96th Street and Evelyn Avenue.,ok,sentence and outline answered right (needs-review queue)
+843,calcity::844#843,object 4233,The house on the southwest corner of 96th Street and Karen Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 844,calcity::845#844,target_mask,The house on the southeast corner of 96th Street and Karen Avenue.,,
-846,calcity::847#846,object 4222,The house on the northwest corner of 96th Street and Rea Avenue.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-847,calcity::848#847,object 4272,The house on the southeast corner of 96th Street and Rea Avenue.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-848,calcity::849#848,target_mask,The house on the northeast corner of 96th Street and Sally Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+846,calcity::847#846,object 4222,The house on the northwest corner of 96th Street and Rea Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+847,calcity::848#847,object 4272,The house on the southeast corner of 96th Street and Rea Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+848,calcity::849#848,target_mask,The house on the northeast corner of 96th Street and Sally Avenue.,ok,sentence and outline answered right (needs-review queue)
 851,calcity::852#851,target_mask,The house on the southwest corner of 97th Street and Karen Avenue.,,
 852,calcity::853#852,target_mask,The house on the northeast corner of 97th Street and Karen Avenue.,,
 869,calcity::870#869,target_mask,The house on the southwest corner of Achilles Court and Alder Drive.,,
@@ -679,25 +679,25 @@ row,episode_id,shape,prompt,verdict,note
 1006,calcity::1007#1006,target_mask,The house on the southwest corner of Fuchsia Avenue and Lupine Loop Drive.,,
 1007,calcity::1008#1007,target_mask,The house on the southwest corner of Garibaldi Court and Sheridan Street.,,
 1008,calcity::1009#1008,target_mask,The house on the northwest corner of Garibaldi Court and Sheridan Street.,,
-1009,calcity::1010#1009,target_mask,The house on the northeast corner of Garibaldi Place and Jeremy Drive.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1009,calcity::1010#1009,target_mask,The house on the northeast corner of Garibaldi Place and Jeremy Drive.,ok,sentence and outline answered right (needs-review queue)
 1014,calcity::1015#1014,target_mask,The house on the northeast corner of Hacienda Boulevard and Spring Avenue.,,
-1021,calcity::1022#1021,object 5045,The house on the southwest corner of Hooker Drive and Sheridan Street.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-1022,calcity::1023#1022,target_mask,The house on the southeast corner of Hooker Drive and Sheridan Street.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet capacity_study_first_80
+1021,calcity::1022#1021,object 5045,The house on the southwest corner of Hooker Drive and Sheridan Street.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+1022,calcity::1023#1022,target_mask,The house on the southeast corner of Hooker Drive and Sheridan Street.,,omitted from the capacity study (needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet capacity_study_first_80
 1023,calcity::1024#1023,target_mask,The house on the northwest corner of Hugo Way and Landis Drive.,,
 1024,calcity::1025#1024,target_mask,The house on the southeast corner of Hugo Way and Landis Drive.,,
-1031,calcity::1032#1031,object 1625,The house on the northwest corner of Jasmine Avenue and Sauguaro Street.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+1031,calcity::1032#1031,object 1625,The house on the northwest corner of Jasmine Avenue and Sauguaro Street.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 1033,calcity::1034#1033,target_mask,The house on the southeast corner of Jeremy Drive and Reed Place.,,
 1047,calcity::1048#1047,target_mask,The house on the northwest corner of Kenniston Road and Quezon Avenue.,,
 1051,calcity::1052#1051,target_mask,The house on the northwest corner of Lake Shore Drive and Poncho Place.,,
 1053,calcity::1054#1053,target_mask,The house on the southwest corner of Landis Avenue and Landis Drive.,,
-1054,calcity::1055#1054,target_mask,The house on the northwest corner of Landis Avenue and Landis Drive.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1054,calcity::1055#1054,target_mask,The house on the northwest corner of Landis Avenue and Landis Drive.,ok,sentence and outline answered right (needs-review queue)
 1055,calcity::1056#1055,target_mask,The house on the southwest corner of Landis Drive and Short Way.,,
 1056,calcity::1057#1056,target_mask,The house on the northeast corner of Landis Drive and Short Way.,,
 1057,calcity::1058#1057,target_mask,The house on the southeast corner of Landis Drive and Victor Way.,,
 1061,calcity::1062#1061,target_mask,The house on the northwest corner of Lime Avenue and Steward Court.,,
 1062,calcity::1063#1062,target_mask,The house on the southeast corner of Lime Avenue and Steward Court.,,
 1066,calcity::1067#1066,target_mask,The house on the southwest corner of Lupine Loop Drive and Xavier Avenue.,,
-1116,calcity::1117#1116,target_mask,"The first house on the west side of 71st Street, on the block north of Eucalyptus Avenue.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1116,calcity::1117#1116,target_mask,"The first house on the west side of 71st Street, on the block north of Eucalyptus Avenue.",ok,sentence and outline answered right (needs-review queue)
 1169,calcity::1170#1169,target_mask,The cul-de-sac at the end of 101st Street.,,
 1175,calcity::1176#1175,target_mask,The cul-de-sac at the end of Achilles Court.,,
 1178,calcity::1179#1178,target_mask,The cul-de-sac at the end of Bader Court.,,
@@ -710,10 +710,10 @@ row,episode_id,shape,prompt,verdict,note
 1190,calcity::1191#1190,target_mask,The cul-de-sac at the end of Congreve Court.,,
 1193,calcity::1194#1193,target_mask,The cul-de-sac at the end of Crossfield Court.,,
 1195,calcity::1196#1195,target_mask,The cul-de-sac at the end of Dean Court.,,
-1196,calcity::1197#1196,target_mask,The cul-de-sac at the end of Dean Street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1196,calcity::1197#1196,target_mask,The cul-de-sac at the end of Dean Street.,ok,sentence and outline answered right (needs-review queue)
 1197,calcity::1198#1197,target_mask,The cul-de-sac at the end of Dehaviland Court.,,
 1198,calcity::1199#1198,target_mask,The cul-de-sac at the end of Dennis Street.,,
-1199,calcity::1200#1199,target_mask,The cul-de-sac at the end of Diane Court.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1199,calcity::1200#1199,target_mask,The cul-de-sac at the end of Diane Court.,ok,sentence and outline answered right (needs-review queue)
 1201,calcity::1202#1201,target_mask,The cul-de-sac at the end of Doolittle Court.,,
 1203,calcity::1204#1203,target_mask,The cul-de-sac at the end of Earhart Court.,,
 1210,calcity::1211#1210,target_mask,The cul-de-sac at the end of Gallant Court.,,
@@ -733,14 +733,14 @@ row,episode_id,shape,prompt,verdict,note
 1241,calcity::1242#1241,target_mask,The cul-de-sac at the end of Louise Court.,,
 1244,calcity::1245#1244,target_mask,The cul-de-sac at the end of Marlin Street.,,
 1246,calcity::1247#1246,target_mask,The cul-de-sac at the end of Meg Court.,,
-1247,calcity::1248#1247,target_mask,The cul-de-sac at the end of Melinda Court.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1247,calcity::1248#1247,target_mask,The cul-de-sac at the end of Melinda Court.,ok,sentence and outline answered right (needs-review queue)
 1248,calcity::1249#1248,target_mask,The cul-de-sac at the end of Metzger Court.,,
-1251,calcity::1252#1251,target_mask,The cul-de-sac at the end of Moutgolfier Court.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1251,calcity::1252#1251,target_mask,The cul-de-sac at the end of Moutgolfier Court.,ok,sentence and outline answered right (needs-review queue)
 1252,calcity::1253#1252,target_mask,The cul-de-sac at the end of Nickles Court.,,
 1253,calcity::1254#1253,target_mask,The cul-de-sac at the end of Norwich Court.,,
 1254,calcity::1255#1254,target_mask,The cul-de-sac at the end of Olindo Street.,,
 1255,calcity::1256#1255,target_mask,The cul-de-sac at the end of Olive Court.,,
-1258,calcity::1259#1258,target_mask,The cul-de-sac at the end of Orville Wright Court.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1258,calcity::1259#1258,target_mask,The cul-de-sac at the end of Orville Wright Court.,ok,sentence and outline answered right (needs-review queue)
 1259,calcity::1260#1259,target_mask,The cul-de-sac at the end of Paine Court.,,
 1261,calcity::1262#1261,target_mask,The cul-de-sac at the end of Poncho Place.,,
 1262,calcity::1263#1262,target_mask,The cul-de-sac at the end of Post Court.,,
@@ -755,7 +755,7 @@ row,episode_id,shape,prompt,verdict,note
 1275,calcity::1276#1275,target_mask,The cul-de-sac at the end of Steward Court.,,
 1277,calcity::1278#1277,target_mask,The cul-de-sac at the end of Sutherland Court.,,
 1279,calcity::1280#1279,target_mask,The cul-de-sac at the end of Victor Place.,,
-1280,calcity::1281#1280,target_mask,The cul-de-sac at the end of Village Center Drive.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+1280,calcity::1281#1280,target_mask,The cul-de-sac at the end of Village Center Drive.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 1281,calcity::1282#1281,target_mask,The cul-de-sac at the end of Village Court.,,
 1283,calcity::1284#1283,target_mask,The cul-de-sac at the end of Wagers Street.,,
 1284,calcity::1285#1284,target_mask,The cul-de-sac at the end of Walker Court.,,
@@ -766,7 +766,7 @@ row,episode_id,shape,prompt,verdict,note
 1381,calcity::1382#1381,target_mask,The intersection of 67th Street and Louise Court.,,
 1383,calcity::1384#1383,target_mask,The intersection of 67th Street and Mendiburu Frontage.,,
 1396,calcity::1397#1396,target_mask,The intersection of 69th Street and Jasmine Avenue.,,
-1405,calcity::1406#1405,target_mask,The intersection of 71st Street and Eucalyptus Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+1405,calcity::1406#1405,target_mask,The intersection of 71st Street and Eucalyptus Avenue.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 1406,calcity::1407#1406,target_mask,The intersection of 71st Street and Fernwood Avenue.,,
 1408,calcity::1409#1408,target_mask,The intersection of 71st Street and Greenwood Avenue.,,
 1421,calcity::1422#1421,target_mask,The intersection of 72nd Street and Landis Drive.,,
@@ -783,21 +783,21 @@ row,episode_id,shape,prompt,verdict,note
 1510,calcity::1511#1510,target_mask,The intersection of 81st Street and Nickles Avenue.,,
 1522,calcity::1523#1522,target_mask,The intersection of 81st Street and Sloan Drive.,,
 1544,calcity::1545#1544,target_mask,The intersection of 82nd Street and Orchard Avenue.,,
-1577,calcity::1578#1577,target_mask,The intersection of 83rd Street and Poppy Boulevard.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1577,calcity::1578#1577,target_mask,The intersection of 83rd Street and Poppy Boulevard.,ok,sentence and outline answered right (needs-review queue)
 1595,calcity::1596#1595,target_mask,The intersection of 84th Street and Glade Avenue.,,
 1603,calcity::1604#1603,target_mask,The intersection of 84th Street and Orchard Avenue.,,
 1607,calcity::1608#1607,target_mask,The intersection of 84th Street and Sylvan Avenue.,,
 1623,calcity::1624#1623,target_mask,The intersection of 85th Street and Lewis Avenue.,,
-1632,calcity::1633#1632,target_mask,The intersection of 85th Street and Quick Drive.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
-1650,calcity::1651#1650,target_mask,The intersection of 86th Street and Jacaranda Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
-1652,calcity::1653#1652,target_mask,The intersection of 86th Street and Manzanita Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+1632,calcity::1633#1632,target_mask,The intersection of 85th Street and Quick Drive.,ok,sentence and outline answered right (needs-review queue)
+1650,calcity::1651#1650,target_mask,The intersection of 86th Street and Jacaranda Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
+1652,calcity::1653#1652,target_mask,The intersection of 86th Street and Manzanita Avenue.,ok,sentence and outline answered right (needs-review queue)
 1663,calcity::1664#1663,target_mask,The intersection of 87th Street and Manzanita Avenue.,,
 1666,calcity::1667#1666,target_mask,The intersection of 87th Street and Nipa Avenue.,,
 1671,calcity::1672#1671,target_mask,The intersection of 87th Street and Redwood Boulevard.,,
 1684,calcity::1685#1684,target_mask,The intersection of 88th Street and Lime Avenue.,,
 1705,calcity::1706#1705,target_mask,The intersection of 89th Street and Columbine Avenue.,,
 1709,calcity::1710#1709,target_mask,The intersection of 89th Street and Fuchsia Avenue.,,
-1713,calcity::1714#1713,target_mask,The intersection of 89th Street and Lupine Loop Drive.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+1713,calcity::1714#1713,target_mask,The intersection of 89th Street and Lupine Loop Drive.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 1727,calcity::1728#1727,target_mask,The intersection of 89th Street and Walpole Avenue.,,
 1729,calcity::1730#1729,target_mask,The intersection of 89th Street and Xavier Avenue.,,
 1744,calcity::1745#1744,target_mask,The intersection of 90th Street and Lime Avenue.,,
@@ -808,7 +808,7 @@ row,episode_id,shape,prompt,verdict,note
 1780,calcity::1781#1780,target_mask,The intersection of 91st Street and Walpole Avenue.,,
 1782,calcity::1783#1782,target_mask,The intersection of 91st Street and Xavier Avenue.,,
 1816,calcity::1817#1816,target_mask,The intersection of 93rd Street and Evelyn Avenue.,,
-1821,calcity::1822#1821,target_mask,The intersection of 93rd Street and Karen Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+1821,calcity::1822#1821,target_mask,The intersection of 93rd Street and Karen Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 1822,calcity::1823#1822,target_mask,The intersection of 93rd Street and Margery Avenue.,,
 1825,calcity::1826#1825,target_mask,The intersection of 93rd Street and Rea Avenue.,,
 1833,calcity::1834#1833,target_mask,The intersection of 94th Street and Columbine Avenue.,,
@@ -822,7 +822,7 @@ row,episode_id,shape,prompt,verdict,note
 1871,calcity::1872#1871,target_mask,The intersection of 96th Street and Karen Avenue.,,
 1872,calcity::1873#1872,target_mask,The intersection of 96th Street and Margery Avenue.,,
 1880,calcity::1881#1880,target_mask,The intersection of 96th Street and Rea Avenue.,,
-1881,calcity::1882#1881,target_mask,The intersection of 96th Street and Sally Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+1881,calcity::1882#1881,target_mask,The intersection of 96th Street and Sally Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 1889,calcity::1890#1889,target_mask,The intersection of 97th Street and Karen Avenue.,,
 1922,calcity::1923#1922,target_mask,The intersection of Achilles Court and Alder Drive.,,
 1925,calcity::1926#1925,target_mask,The intersection of Adams Avenue and Julliard Street.,,
@@ -845,7 +845,7 @@ row,episode_id,shape,prompt,verdict,note
 2107,calcity::2108#2107,target_mask,The intersection of California City Boulevard and South Loop Boulevard.,,
 2118,calcity::2119#2118,target_mask,The intersection of California City Boulevard and Yale Avenue.,,
 2136,calcity::2137#2136,target_mask,The intersection of Camille Court and Ives Drive.,,
-2153,calcity::2154#2153,target_mask,The intersection of Charles Place and Edward Street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2153,calcity::2154#2153,target_mask,The intersection of Charles Place and Edward Street.,ok,sentence and outline answered right (needs-review queue)
 2156,calcity::2157#2156,target_mask,The intersection of Closterman Court and Doolittle Place.,,
 2162,calcity::2163#2162,target_mask,The intersection of Cochran Court and Seversky Place.,,
 2163,calcity::2164#2163,target_mask,The intersection of Cole Street and Fir Avenue.,,
@@ -856,7 +856,7 @@ row,episode_id,shape,prompt,verdict,note
 2216,calcity::2217#2216,target_mask,The intersection of Crossfield Court and Von Braun Way.,,
 2227,calcity::2228#2227,target_mask,The intersection of Darrow Drive and Trumbull Street.,,
 2231,calcity::2232#2231,target_mask,The intersection of Dehaviland Court and Lufbery Place.,,
-2233,calcity::2234#2233,target_mask,The intersection of Denhart Avenue and Sarah Street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2233,calcity::2234#2233,target_mask,The intersection of Denhart Avenue and Sarah Street.,ok,sentence and outline answered right (needs-review queue)
 2234,calcity::2235#2234,target_mask,The intersection of Dennis Street and Gloria Drive.,,
 2235,calcity::2236#2235,target_mask,The intersection of Dennis Street and Howard Drive.,,
 2236,calcity::2237#2236,target_mask,The intersection of Dennis Street and Quick Drive.,,
@@ -872,16 +872,16 @@ row,episode_id,shape,prompt,verdict,note
 2278,calcity::2279#2278,target_mask,The intersection of Emily Lynn Avenue and Verde Vista Parkway.,,
 2279,calcity::2280#2279,target_mask,The intersection of Ethel Street and Karen Avenue.,,
 2293,calcity::2294#2293,target_mask,The intersection of Evans Street and Wilson Drive.,,
-2307,calcity::2308#2307,target_mask,The intersection of Everett Drive and Sheridan Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2307,calcity::2308#2307,target_mask,The intersection of Everett Drive and Sheridan Street.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2308,calcity::2309#2308,target_mask,The intersection of Everett Drive and Trumbull Street.,,
 2312,calcity::2313#2312,target_mask,The intersection of Evergreen Avenue and Mason Street.,,
 2323,calcity::2324#2323,target_mask,The intersection of Fir Avenue and Grapewood Avenue.,,
 2324,calcity::2325#2324,target_mask,The intersection of Fir Avenue and Holly Avenue.,,
 2338,calcity::2339#2338,target_mask,The intersection of Fuchsia Avenue and Lupine Loop Drive.,,
 2341,calcity::2342#2341,target_mask,The intersection of Gan Court and Kalmia Avenue.,,
-2342,calcity::2343#2342,target_mask,The intersection of Garibaldi Court and Sheridan Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2342,calcity::2343#2342,target_mask,The intersection of Garibaldi Court and Sheridan Street.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2343,calcity::2344#2343,target_mask,The intersection of Garibaldi Place and Jeremy Drive.,,
-2345,calcity::2346#2345,target_mask,The intersection of Georgetown Street and Harvard Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2345,calcity::2346#2345,target_mask,The intersection of Georgetown Street and Harvard Avenue.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2347,calcity::2348#2347,target_mask,The intersection of Georgetown Street and Proctor Boulevard.,,
 2352,calcity::2353#2352,target_mask,The intersection of Georgette Place and North Clover Drive.,,
 2359,calcity::2360#2359,target_mask,The intersection of Gloria Court and Gloria Drive.,,
@@ -892,7 +892,7 @@ row,episode_id,shape,prompt,verdict,note
 2383,calcity::2384#2383,target_mask,The intersection of Green Street and South Loop Boulevard.,,
 2445,calcity::2446#2445,target_mask,The intersection of Hanover Drive and Kenyon Court.,,
 2451,calcity::2452#2451,target_mask,The intersection of Hawks Court and Seversky Place.,,
-2455,calcity::2456#2455,target_mask,The intersection of Heather Avenue and Kenniston Road.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2455,calcity::2456#2455,target_mask,The intersection of Heather Avenue and Kenniston Road.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2465,calcity::2466#2465,target_mask,The intersection of Hemlock Avenue and Medio Street.,,
 2479,calcity::2480#2479,target_mask,The intersection of Hooker Drive and Sheridan Street.,,
 2483,calcity::2484#2483,target_mask,The intersection of Howard Drive and Rusche Boulevard.,,
@@ -902,14 +902,14 @@ row,episode_id,shape,prompt,verdict,note
 2529,calcity::2530#2529,target_mask,The intersection of Jackson Place and Milner Drive.,,
 2534,calcity::2535#2534,target_mask,The intersection of Jasmine Avenue and Locus Street.,,
 2535,calcity::2536#2535,target_mask,The intersection of Jasmine Avenue and Mesquite Street.,,
-2536,calcity::2537#2536,target_mask,The intersection of Jasmine Avenue and Sauguaro Street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2536,calcity::2537#2536,target_mask,The intersection of Jasmine Avenue and Sauguaro Street.,ok,sentence and outline answered right (needs-review queue)
 2537,calcity::2538#2537,target_mask,The intersection of Jasmine Avenue and Wisteria Street.,,
 2544,calcity::2545#2544,target_mask,The intersection of Jeremy Drive and Reed Place.,,
-2545,calcity::2546#2545,target_mask,The intersection of Jeremy Drive and Sheridan Street.,mask,"mask redrawn by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
-2564,calcity::2565#2564,target_mask,The intersection of Karen Avenue and Lyn Street.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2545,calcity::2546#2545,target_mask,The intersection of Jeremy Drive and Sheridan Street.,mask,"mask redrawn by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
+2564,calcity::2565#2564,target_mask,The intersection of Karen Avenue and Lyn Street.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2568,calcity::2569#2568,target_mask,The intersection of Karen Avenue and Shaw Street.,,
 2581,calcity::2582#2581,target_mask,The intersection of Keller Court and North Loop Boulevard.,,
-2583,calcity::2584#2583,target_mask,The intersection of Keller Drive and Reed Place.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2583,calcity::2584#2583,target_mask,The intersection of Keller Drive and Reed Place.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2584,calcity::2585#2584,target_mask,The intersection of Kenniston Road and Quezon Avenue.,,
 2588,calcity::2589#2588,target_mask,The intersection of Keynes Street and Wilson Drive.,,
 2589,calcity::2590#2589,target_mask,The intersection of Lake Shore Drive and North Loop Boulevard.,,
@@ -925,9 +925,9 @@ row,episode_id,shape,prompt,verdict,note
 2609,calcity::2610#2609,target_mask,The intersection of Lee Street and Wilson Drive.,,
 2617,calcity::2618#2617,target_mask,The intersection of Lehigh Street and South Loop Boulevard.,,
 2619,calcity::2620#2619,target_mask,The intersection of Lewis Avenue and Quick Drive.,,
-2622,calcity::2623#2622,target_mask,The intersection of Ley Place and Von Braun Way.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the PI's masks-to-check sheet and copied into calcity.json (WORLDSInternal ryan-visual-ordinals f592d8f7, dashboard ground_truth.json sidecar of 2026-11-04)"
+2622,calcity::2623#2622,target_mask,The intersection of Ley Place and Von Braun Way.,mask,"mask redrawn again by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 2627,calcity::2628#2627,target_mask,The intersection of Lime Avenue and Steward Court.,,
-2646,calcity::2647#2646,target_mask,The intersection of Lufbery Place and Rickenbacker Court.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2646,calcity::2647#2646,target_mask,The intersection of Lufbery Place and Rickenbacker Court.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2647,calcity::2648#2647,target_mask,The intersection of Lufbery Place and Rickthofen Court.,,
 2650,calcity::2651#2650,target_mask,The intersection of Lupine Loop Drive and Walpole Avenue.,,
 2651,calcity::2652#2651,target_mask,The intersection of Lupine Loop Drive and Xavier Avenue.,,
@@ -938,22 +938,22 @@ row,episode_id,shape,prompt,verdict,note
 2700,calcity::2701#2700,target_mask,The intersection of Metzger Court and Sprague Drive.,,
 2702,calcity::2703#2702,target_mask,The intersection of Mike Drive and Stanhill Avenue.,,
 2713,calcity::2714#2713,target_mask,The intersection of Mollison Court and Seversky Place.,,
-2717,calcity::2718#2717,target_mask,The intersection of Morris Street and Sylvan Way.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2717,calcity::2718#2717,target_mask,The intersection of Morris Street and Sylvan Way.,ok,sentence and outline answered right (needs-review queue)
 2732,calcity::2733#2732,target_mask,The intersection of Nemophilia Street and Poppy Boulevard.,,
 2765,calcity::2766#2765,target_mask,The intersection of Nickles Avenue and Nickles Court.,,
 2766,calcity::2767#2766,target_mask,The intersection of Nickles Avenue and Sloan Drive.,,
 2770,calcity::2771#2770,target_mask,The intersection of North Clover Drive and Sherman Place.,,
 2773,calcity::2774#2773,target_mask,The intersection of North Loop Boulevard and Randsburg Mojave Road.,,
-2774,calcity::2775#2774,target_mask,The intersection of North Loop Boulevard and Shaw Street.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2774,calcity::2775#2774,target_mask,The intersection of North Loop Boulevard and Shaw Street.,ok,sentence and outline answered right (needs-review queue)
 2775,calcity::2776#2775,target_mask,The intersection of North Loop Boulevard and Walker Court.,,
-2780,calcity::2781#2780,target_mask,The intersection of Olive Court and Olivo Drive.,mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue); sentence answered right
+2780,calcity::2781#2780,target_mask,The intersection of Olive Court and Olivo Drive.,mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue); sentence answered right
 2785,calcity::2786#2785,target_mask,The intersection of Orville Wright Court and Voisin Place.,,
 2791,calcity::2792#2791,target_mask,The intersection of Owens Drive and Tamarack Drive.,,
 2794,calcity::2795#2794,target_mask,The intersection of Pebble Beach Drive and Windsong Street.,,
 2797,calcity::2798#2797,target_mask,The intersection of Poncho Place and Sprague Drive.,,
 2804,calcity::2805#2804,target_mask,The intersection of Post Court and Seversky Place.,,
 2810,calcity::2811#2810,target_mask,The intersection of Putter Court and Windsong Street.,,
-2817,calcity::2818#2817,target_mask,The intersection of Quick Drive and Rusche Boulevard.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2817,calcity::2818#2817,target_mask,The intersection of Quick Drive and Rusche Boulevard.,ok,sentence and outline answered right (needs-review queue)
 2840,calcity::2841#2840,target_mask,The intersection of Sally Avenue and Shaw Street.,,
 2843,calcity::2844#2843,target_mask,The intersection of Sandtrap Court and Windsong Street.,,
 2846,calcity::2847#2846,target_mask,The intersection of Seversky Place and Yerba Frontage.,,
@@ -962,7 +962,7 @@ row,episode_id,shape,prompt,verdict,note
 2851,calcity::2852#2851,target_mask,The intersection of South Charlene Place and Vivian Place.,,
 2854,calcity::2855#2854,target_mask,The intersection of South Loop Boulevard and Verde Vista Parkway.,,
 2855,calcity::2856#2855,target_mask,The intersection of Sprague Drive and Sutherland Court.,,
-2856,calcity::2857#2856,target_mask,The intersection of Stacy Street and Stanhill Avenue.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2856,calcity::2857#2856,target_mask,The intersection of Stacy Street and Stanhill Avenue.,ok,sentence and outline answered right (needs-review queue)
 2857,calcity::2858#2857,target_mask,The intersection of Stacy Street and Stearns Avenue.,,
 2858,calcity::2859#2858,target_mask,The intersection of Stacy Street and Stewart Avenue.,,
 2859,calcity::2860#2859,target_mask,The intersection of Stanhill Avenue and Stonecrop Street.,,
@@ -970,17 +970,17 @@ row,episode_id,shape,prompt,verdict,note
 2866,calcity::2867#2866,target_mask,The intersection of Victor Place and Victor Way.,,
 2868,calcity::2869#2868,target_mask,The intersection of Village Center Drive and West Lake Drive.,,
 2871,calcity::2872#2871,target_mask,The intersection of Vivian Court and Vivian Place.,,
-2872,calcity::2873#2872,target_mask,The intersection of Voisin Place and Whittle Court.,ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+2872,calcity::2873#2872,target_mask,The intersection of Voisin Place and Whittle Court.,ok,sentence and outline answered right (needs-review queue)
 2878,calcity::2879#2878,target_mask,The intersection of Xavier Avenue and Yerba Boulevard.,,
-3109,calcity::3110#3109,object 2672,"The house on Medio Street, between Great Circle Drive and Ironwood Avenue, with several roof sections.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-3154,calcity::3155#3154,target_mask,"The second house on the north side of Jacaranda Avenue, counting west from 87th Street, with several roof sections.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence names more than one place; answered wrong in review sheet ordinal_side_fix
-3175,calcity::3176#3175,target_mask,"The first house on the south side of Karen Avenue, between Shaw Street and 97th Street, counting east from Shaw Street.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+3109,calcity::3110#3109,object 2672,"The house on Medio Street, between Great Circle Drive and Ironwood Avenue, with several roof sections.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3154,calcity::3155#3154,target_mask,"The second house on the north side of Jacaranda Avenue, counting west from 87th Street, with several roof sections.",,omitted from the capacity study (needs-review queue): flagged: the sentence names more than one place; answered wrong in review sheet ordinal_side_fix
+3175,calcity::3176#3175,target_mask,"The first house on the south side of Karen Avenue, between Shaw Street and 97th Street, counting east from Shaw Street.",ok,sentence and outline answered right (needs-review queue)
 3180,calcity::3181#3180,target_mask,"The first house on the north side of Darrow Drive, between Trumbull Street and Margery Avenue, counting west from Trumbull Street.",,
 3186,calcity::3187#3186,target_mask,"The house on the south side of Landis Drive, on the block west of Short Way.",,
 3190,calcity::3191#3190,target_mask,"The building just east of the patch of scrub on the north side of California City Frontage, on the block west of 71st Street, with a brown roof.",,
-3200,calcity::3201#3200,target_mask,The building just east of Victor Plaza.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet layered_second_batch
+3200,calcity::3201#3200,target_mask,The building just east of Victor Plaza.,,omitted from the capacity study (needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet layered_second_batch
 3203,calcity::3204#3203,target_mask,"The first house on the south side of Karen Avenue, counting east from Shaw Street.",,
-3241,calcity::3242#3241,object 3940,"The house on the east side of 91st Street, between Walpole Avenue and Fuchsia Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3241,calcity::3242#3241,object 3940,"The house on the east side of 91st Street, between Walpole Avenue and Fuchsia Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 3249,calcity::3250#3249,target_mask,The building next to California City Municipal Par 3 Golf Course.,,
 3250,calcity::3251#3250,target_mask,"The building just south of the parking lot on the east side of Lupine Loop Drive, on the block north of Fuchsia Avenue.",,
 3255,calcity::3256#3255,target_mask,"The building just east of the patch of scrub on the north side of California City Boulevard, between Yerba Boulevard and Victor Way.",,
@@ -995,23 +995,23 @@ row,episode_id,shape,prompt,verdict,note
 3303,calcity::3304#3303,target_mask,"The building just south of the parking lot on the east side of Lupine Loop Drive, between Poppy Boulevard and Fuchsia Avenue, facing south.",,
 3309,calcity::3310#3309,target_mask,The building next to California City Branch Kern County Library.,,
 3337,calcity::3338#3337,target_mask,"The house on the west side of 87th Street, between Oleander Avenue and Nipa Avenue.",,
-3345,calcity::3346#3345,object 4248,The building next to Rite Aid.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: duplicate
+3345,calcity::3346#3345,object 4248,The building next to Rite Aid.,,omitted from the capacity study (needs-review queue): flagged: duplicate
 3351,calcity::3352#3351,target_mask,"The building just north of the patch of scrub on the north side of North Loop Boulevard, between Calhoun Drive and Bancroft Drive.",,
 3361,calcity::3362#3361,target_mask,"The house on the west side of Conklin Boulevard, between Sally Avenue and Alder Drive.",,
-3390,calcity::3391#3390,object 3940,"The house on the east side of 91st Street, on the block south of Fuchsia Avenue, with several roof sections.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3390,calcity::3391#3390,object 3940,"The house on the east side of 91st Street, on the block south of Fuchsia Avenue, with several roof sections.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 3416,calcity::3417#3416,target_mask,The building next to First Baptist Church.,,
 3417,calcity::3418#3417,target_mask,"The building just north of the patch of scrub on the north side of North Loop Boulevard, on the block west of Calhoun Drive.",,
 3427,calcity::3428#3427,target_mask,"The building next to Balsitis Park, with a white car parked out front.",,
 3441,calcity::3442#3441,target_mask,"The first house on the east side of 88th Street, between Lime Avenue and Ironwood Avenue.",,
 3462,calcity::3463#3462,target_mask,"The first house on the east side of Conklin Boulevard, counting north from Alder Drive.",,
 3472,calcity::3473#3472,target_mask,"The building just south of the parking lot on the east side of Lupine Loop Drive, on the block south of Poppy Boulevard.",,
-3479,calcity::3480#3479,object 2672,"The house on the west side of Medio Street, on the block south of Great Circle Drive, with a silver car parked out front.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-3528,calcity::3529#3528,object 4222,"The first house on the west side of 96th Street, counting north from Rea Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3479,calcity::3480#3479,object 2672,"The house on the west side of Medio Street, on the block south of Great Circle Drive, with a silver car parked out front.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3528,calcity::3529#3528,object 4222,"The first house on the west side of 96th Street, counting north from Rea Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 3535,calcity::3536#3535,target_mask,"The last store on the north side of California City Frontage, between Victor Way and 71st Street.",,
 3536,calcity::3537#3536,target_mask,"The building just west of Victor Plaza, with a red car parked out front.",,
 3545,calcity::3546#3545,target_mask,"The parking lot on the east side of Lupine Loop Drive, on the block north of Fuchsia Avenue, with a green car parked in it.",,
 3547,calcity::3548#3547,target_mask,The building just east of First Baptist Church.,,
-3550,calcity::3551#3550,target_mask,"The first house on the north side of Jacaranda Avenue, counting east from 86th Street.",mask,mask redrawn by the reviewer and copied into calcity.json (WORLDSInternal ffddef8d needs-review queue)
+3550,calcity::3551#3550,target_mask,"The first house on the north side of Jacaranda Avenue, counting east from 86th Street.",mask,mask redrawn by the reviewer and copied into calcity.json (needs-review queue)
 3557,calcity::3558#3557,target_mask,"The second-to-last house on the west side of Conklin Boulevard, between South Loop Boulevard and California City Boulevard, counting north from South Loop Boulevard.",,
 3558,calcity::3559#3558,target_mask,"The building just southwest of Balsitis Park, facing west.",,
 3569,calcity::3570#3569,target_mask,The building just southeast of Central Park Lake.,,
@@ -1022,19 +1022,19 @@ row,episode_id,shape,prompt,verdict,note
 3619,calcity::3620#3619,target_mask,"The building next to the first house on the north side of Ives Drive, counting east from Sheridan Street.",,
 3620,calcity::3621#3620,target_mask,"The house on the north side of South Loop Boulevard, on the block east of Green Street.",,
 3640,calcity::3641#3640,target_mask,"The second-to-last house on the north side of Trumbull Street, between Darrow Drive and Calhoun Drive, counting west from Darrow Drive.",,
-3659,calcity::3660#3659,object 4248,The building just north of Rite Aid.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence does not name the pinned place. the pin is rite aid not north of rite aid
+3659,calcity::3660#3659,object 4248,The building just north of Rite Aid.,,omitted from the capacity study (needs-review queue): flagged: the sentence does not name the pinned place. the pin is rite aid not north of rite aid
 3670,calcity::3671#3670,target_mask,"The first house on the north side of Trumbull Street, between Calhoun Drive and Darrow Drive, counting east from Calhoun Drive.",,
 3682,calcity::3683#3682,target_mask,"The building just northeast of the cul-de-sac at the end of Achilles Court, with a silver car parked out front.",,
-3729,calcity::3730#3729,object 3940,"The house on the east side of 91st Street, on the block north of Walpole Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3729,calcity::3730#3729,object 3940,"The house on the east side of 91st Street, on the block north of Walpole Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 3744,calcity::3745#3744,target_mask,"The building just northwest of the first house on the east side of Sheridan Street, counting from Ives Drive.",,
 3754,calcity::3755#3754,target_mask,"The building just southwest of the cul-de-sac at the end of Aspen Avenue, facing north.",,
 3758,calcity::3759#3758,target_mask,"The building just west of Gloria's Mexican Restaurant, with several roof sections.",,
-3760,calcity::3761#3760,target_mask,"The second house on the west side of Alder Drive, between Karen Avenue and Achilles Court, counting west from Karen Avenue, with a brown roof.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+3760,calcity::3761#3760,target_mask,"The second house on the west side of Alder Drive, between Karen Avenue and Achilles Court, counting west from Karen Avenue, with a brown roof.",ok,sentence and outline answered right (needs-review queue)
 3761,calcity::3762#3761,target_mask,"The parking lot on the east side of Lupine Loop Drive, between Poppy Boulevard and Fuchsia Avenue.",,
 3779,calcity::3780#3779,target_mask,"The church on the west side of Conklin Boulevard, between California City Boulevard and Pebble Beach Drive.",,
-3797,calcity::3798#3797,object 1625,"The house on the west side of Sauguaro Street, between Jasmine Avenue and Rea Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-3819,calcity::3820#3819,object 4272,"The house on the east side of 96th Street, on the block south of Rea Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-3821,calcity::3822#3821,target_mask,The building just northeast of California City Branch Kern County Library.,,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence does not name the pinned place. this is the Kern County Library; answered wrong in review sheet capacity_study_first_80: the sentence does not name the pinned place. this is the Kern County Library
+3797,calcity::3798#3797,object 1625,"The house on the west side of Sauguaro Street, between Jasmine Avenue and Rea Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3819,calcity::3820#3819,object 4272,"The house on the east side of 96th Street, on the block south of Rea Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3821,calcity::3822#3821,target_mask,The building just northeast of California City Branch Kern County Library.,,omitted from the capacity study (needs-review queue): flagged: the sentence does not name the pinned place. this is the Kern County Library; answered wrong in review sheet capacity_study_first_80: the sentence does not name the pinned place. this is the Kern County Library
 3833,calcity::3834#3833,target_mask,"The store on the north side of Village Parkway, between Lakeview Drive and Village Court.",,
 3837,calcity::3838#3837,target_mask,"The house on the south side of Evergreen Avenue, on the block east of 81st Street, with a white roof.",,
 3862,calcity::3863#3862,target_mask,"The building just southeast of the cul-de-sac at the end of Garibaldi Place, with a silver car parked out front.",,
@@ -1044,12 +1044,12 @@ row,episode_id,shape,prompt,verdict,note
 3896,calcity::3897#3896,target_mask,"The house on the south side of Trumbull Street, between Darrow Drive and Everett Drive.",,
 3905,calcity::3906#3905,target_mask,"The house on the south side of Evergreen Avenue, between 81st Street and Mason Street, with a tan roof.",,
 3909,calcity::3910#3909,target_mask,"The store on the north side of Village Parkway, on the block east of Lakeview Drive.",,
-3934,calcity::3935#3934,object 3224,"The house on the east side of 86th Street, on the block north of Willow Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+3934,calcity::3935#3934,object 3224,"The house on the east side of 86th Street, on the block north of Willow Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 3966,calcity::3967#3966,target_mask,"The house on the south side of Trumbull Street, on the block north of Everett Drive.",,
 3970,calcity::3971#3970,target_mask,"The house on Trumbull Street, between Darrow Drive and Calhoun Drive.",,
 3987,calcity::3988#3987,target_mask,"The building just east of the first house on the north side of Fir Avenue, counting east from 90th Street.",,
 3998,calcity::3999#3998,target_mask,"The house on the west side of 79th Street, on the block south of Jimson Avenue, with a tan roof.",,
-4006,calcity::4007#4006,object 1625,"The house on the west side of Sauguaro Street, on the block south of Rea Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+4006,calcity::4007#4006,object 1625,"The house on the west side of Sauguaro Street, on the block south of Rea Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 4014,calcity::4015#4014,target_mask,"The house on the south side of Trumbull Street, on the block east of Calhoun Drive, with a grey roof.",,
 4043,calcity::4044#4043,target_mask,"The building just northwest of the second house on the east side of Sheridan Street, counting south from Hooker Drive.",,
 4056,calcity::4057#4056,target_mask,"The first house on the north side of Village Parkway, counting from Village Court.",,
@@ -1072,30 +1072,30 @@ row,episode_id,shape,prompt,verdict,note
 4204,calcity::4205#4204,target_mask,The building just north of the cul-de-sac at the end of Karen Place.,,
 4207,calcity::4208#4207,target_mask,"The last house on the east side of Calhoun Drive, between North Loop Boulevard and Karen Place, counting north from North Loop Boulevard.",,
 4208,calcity::4209#4208,target_mask,"The second house on the east side of Sheridan Street, counting from Ives Drive, with several roof sections.",,
-4210,calcity::4211#4210,object 4272,"The house on the east side of 96th Street, between Evelyn Avenue and Rea Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+4210,calcity::4211#4210,object 4272,"The house on the east side of 96th Street, between Evelyn Avenue and Rea Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 4221,calcity::4222#4221,target_mask,"The building next to the first house on the west side of Hugo Way, counting north from Columbine Avenue.",,
 4224,calcity::4225#4224,target_mask,"The second house on the north side of Trumbull Street, counting east from Calhoun Drive.",,
 4228,calcity::4229#4228,target_mask,The building just northwest of the cul-de-sac at the end of Karen Place.,,
-4241,calcity::4242#4241,target_mask,"The first house on the north side of Trumbull Street, between Darrow Drive and Calhoun Drive, counting west from Darrow Drive.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
-4258,calcity::4259#4258,object 2672,"The house on the west side of Medio Street, between Great Circle Drive and Ironwood Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+4241,calcity::4242#4241,target_mask,"The first house on the north side of Trumbull Street, between Darrow Drive and Calhoun Drive, counting west from Darrow Drive.",ok,sentence and outline answered right (needs-review queue)
+4258,calcity::4259#4258,object 2672,"The house on the west side of Medio Street, between Great Circle Drive and Ironwood Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 4260,calcity::4261#4260,target_mask,"The building just northwest of the cul-de-sac at the end of Darrow Drive, with a tan roof.",,
 4273,calcity::4274#4273,target_mask,"The house on the west side of 79th Street, between Quezon Avenue and Jimson Avenue.",,
 4276,calcity::4277#4276,target_mask,"The house on Quezon Avenue, on the block east of Yerba Boulevard.",,
 4278,calcity::4279#4278,target_mask,"The second house on the north side of Trumbull Street, counting west from Darrow Drive, with a tan roof.",,
 4299,calcity::4300#4299,target_mask,"The first house on the east side of Reed Place, counting south from Jeremy Drive.",,
-4320,calcity::4321#4320,target_mask,"The first house on the south side of Landis Drive, counting east from Victor Way.",ok,sentence and outline answered right (WORLDSInternal ffddef8d needs-review queue)
+4320,calcity::4321#4320,target_mask,"The first house on the south side of Landis Drive, counting east from Victor Way.",ok,sentence and outline answered right (needs-review queue)
 4339,calcity::4340#4339,target_mask,"The store on the north side of Village Parkway, on the block west of Village Court, with several roof sections.",,
 4368,calcity::4369#4368,target_mask,"The last house on the south side of Landis Drive, between Hugo Way and Victor Way, counting west from Hugo Way.",,
 4402,calcity::4403#4402,target_mask,"The house on the west side of 79th Street, on the block north of Quezon Avenue.",,
-4416,calcity::4417#4416,object 4222,"The last house on the west side of 96th Street, between Mendiburu Road and Rea Avenue, counting south from Mendiburu Road.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
-4421,calcity::4422#4421,object 4272,"The house on the east side of 96th Street, on the block north of Evelyn Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+4416,calcity::4417#4416,object 4222,"The last house on the west side of 96th Street, between Mendiburu Road and Rea Avenue, counting south from Mendiburu Road.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+4421,calcity::4422#4421,object 4272,"The house on the east side of 96th Street, on the block north of Evelyn Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 4423,calcity::4424#4423,target_mask,"The second house on the west side of 71st Street, counting south from Dogwood Avenue.",,
 4441,calcity::4442#4441,target_mask,"The first house on the north side of Darrow Drive, counting west from Trumbull Street.",,
 4453,calcity::4454#4453,target_mask,"The first house on the west side of 89th Street, counting south from Lime Avenue.",,
-4496,calcity::4497#4496,object 1625,"The house on the west side of Sauguaro Street, on the block north of Jasmine Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+4496,calcity::4497#4496,object 1625,"The house on the west side of Sauguaro Street, on the block north of Jasmine Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 4504,calcity::4505#4504,target_mask,"The house on the south side of Landis Drive, on the block west of 72nd Street.",,
 4505,calcity::4506#4505,target_mask,"The second house on the north side of Darrow Drive, counting east from Margery Avenue.",,
 4512,calcity::4513#4512,target_mask,"The house on the south side of Landis Drive, on the block east of 72nd Street, facing south.",,
 4519,calcity::4520#4519,target_mask,"The building next to the first house on the south side of Landis Drive, counting west from Hugo Way.",,
-4531,calcity::4532#4531,target_mask,"The building just northeast of the first house on the south side of Landis Drive, counting west from Hugo Way.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet layered_second_batch
-4544,calcity::4545#4544,object 2672,"The house on Medio Street, on the block north of Ironwood Avenue.",,omitted from the capacity study (WORLDSInternal ffddef8d needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+4531,calcity::4532#4531,target_mask,"The building just northeast of the first house on the south side of Landis Drive, counting west from Hugo Way.",,omitted from the capacity study (needs-review queue): flagged: the sentence does not name the pinned place; answered wrong in review sheet layered_second_batch
+4544,calcity::4545#4544,object 2672,"The house on Medio Street, on the block north of Ironwood Avenue.",,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link

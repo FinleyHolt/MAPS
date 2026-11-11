@@ -52,7 +52,7 @@ def hold_root(root: Path):
     (the flock lifts when it closes or the process ends). Raises ``RootHeld``
     naming the holder, or the filesystem when it cannot flock.
     """
-    import fcntl  # POSIX only, and the capacity console imports this module on Windows
+    import fcntl  # POSIX only, and this module is imported on Windows
 
     lock = (Path(root) / ROOT_LOCK).open("a+")
     try:

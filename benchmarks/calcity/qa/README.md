@@ -49,11 +49,10 @@ reorder or delete rows (the episode id carries the row index).
   carry several prompts (1,100 prompts over 982 targets), and removing a key
   drops every row on that target.
 
-Before opening the PR:
+Before committing:
 
 ```bash
 python -m pytest benchmarks/calcity/tests
 ```
 
-Commit the filled `mask_qa.csv` with the fixes and open a PR from this branch
-(`ryan-mask-qa`) to `main`.
+Commit the filled `mask_qa.csv` with the fixes.
