@@ -33,6 +33,7 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
     assert state["kind"] == "twin" and state["path"]
     assert client.post("/mission/next", json={"instruction": "another"}).status_code == 409
     parked = _until(lambda: s if (s := station.seat_state())["status"] == "awaiting_tasking" else None)
+    assert parked["reply_text"] == "The church is under the last flight."
     waypoint = next(r for r in parked["transcript"] if r["kind"] == "waypoint")
     assert waypoint["n"] == 1 and math.isfinite(waypoint["lon"]) and waypoint["coverageFloor"] > 0
     leg = next(r for r in parked["transcript"] if r["kind"] == "leg" and r.get("area"))

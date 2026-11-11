@@ -195,6 +195,23 @@ class Station:
                         "world_window": window, "shape": f.get("shape"), "t_s": f.get("t_s") or 0.0})
         return out
 
+    @staticmethod
+    def _reported(workdir: Path, transcript: list[dict[str, Any]]) -> str | None:
+        """The model's reports, read off the wire record (``flight/llm/transcript.jsonl``: each
+        answer with no tool call) onto the transcript: every report but the last rides its
+        ``mission_end`` row as ``said``, and the last is returned as the mission's report."""
+        replies = []
+        for row in iter_json_rows(workdir / "flight" / "llm" / "transcript.jsonl"):
+            message = ((row.get("response") or {}).get("choices") or [{}])[0].get("message") or {}
+            if row.get("kind") == "response" and not message.get("tool_calls") and message.get("content"):
+                replies.append(str(message["content"]))
+        ends = [i for i, r in enumerate(transcript) if r.get("kind") == "mission_end" and r.get("ended_by") == "reply"]
+        if len(ends) != len(replies) or not replies:
+            return None  # a turn in flight, or a record that does not pair: no report is claimed
+        for i, text in zip(ends[:-1], replies[:-1]):
+            transcript[i] = {**transcript[i], "said": text}
+        return replies[-1]
+
     def _flights(self, points, targets: list[str | None]) -> list[dict[str, Any]]:
         return [self._placed({"step_idx": i, "target": targets[i] if i < len(targets) else None,
                               "resolved_xy": [float(xy[0]), float(xy[1])]}, xy) for i, xy in enumerate(points)]
@@ -204,12 +221,13 @@ class Station:
         workdir = sortie / row["workdir"]
         prov = row.get("provenance") or {}
         transcript = list(iter_json_rows(workdir / CONVERSATION_JSONL))
+        report = self._reported(workdir, transcript)
         return {
             "version": 0, "path": f"{sortie.name}/{row['workdir']}", "episode_id": row.get("episode_id"),
             "split": row.get("split"), "kind": "replay", "run_no": row.get("run_no"),
             "status": "failed" if row.get("status") == STATUS_INFRA else "ended",
             "instruction": row.get("description") or "", "ended_by": row.get("ended_by"), "error": row.get("error"),
-            "reply_text": None, "turns_used": row.get("turns_used") or 0,
+            "reply_text": report, "turns_used": row.get("turns_used") or 0,
             "flights_flown": row.get("flights_flown") or 0, "started_at": row.get("ts"),
             "git_commit": prov.get("git_commit"), "git_dirty": prov.get("git_dirty"),
             "map_name": row.get("map_name"), "target_lonlat": self.target_lonlat(row.get("episode_id") or ""),
@@ -227,12 +245,13 @@ class Station:
         targets = [str(f.get("target") or f.get("target_fid") or "") or None for f in flights]
         transcript = list(m.transcript)
         observations = self._observations(m.workdir, targets)
+        report = self._reported(m.workdir, transcript) if m.status in ("awaiting_tasking", "ended") else None
         return {
             "version": hash((m.status, len(transcript), len(flights), len(observations), m.error,
                              json.dumps(m.waiting, default=str))),
             "path": f"{m.workdir.parent.name}/{m.workdir.name}", "episode_id": m.episode_id, "split": m.split,
             "kind": "twin", "run_no": m.run_no, "status": "ready" if m.status == "idle" else m.status,
-            "instruction": m.instruction, "ended_by": m.ended_by, "error": m.error, "reply_text": None,
+            "instruction": m.instruction, "ended_by": m.ended_by, "error": m.error, "reply_text": report,
             "turns_used": m.turns(), "flights_flown": len(flights), "started_at": m.started_at,
             "git_commit": m.git_commit, "git_dirty": m.git_dirty, "map_name": m.map_name or self.map_name,
             "target_lonlat": self.target_lonlat(m.episode_id), "transcript": transcript,

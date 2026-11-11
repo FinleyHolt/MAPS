@@ -227,6 +227,8 @@ function Entry({ entry, mission }: { entry: TranscriptEntry; mission: MissionSta
             ? `The model reported after ${entry.turns} turns.`
             : `Ended by ${entry.ended_by} after ${entry.turns} turns.`}
         </p>
+        {/* A report a later tasking followed: the last one stands below as the mission's report. */}
+        {entry.said ? <p className="report-text">{entry.said}</p> : null}
       </div>
     );
   }
