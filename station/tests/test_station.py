@@ -27,6 +27,7 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
     (row,) = client.get("/missions", params={"q": "church"}).json()["missions"]
     assert len(row["target_lonlat"]) == 4 and client.get("/missions", params={"q": "mosque"}).json()["missions"] == []
     assert client.post("/mission/tasking", json={"text": "hello"}).status_code == 409
+    assert client.get("/reasoner").json()["model"] == "inkling-small" and "max" in client.get("/reasoner").json()["efforts"]
 
     state = client.post("/mission/next", json={"episode_id": row["episode_id"], "instruction": row["instruction"]}).json()
     assert state["kind"] == "twin" and state["path"]

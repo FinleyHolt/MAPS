@@ -56,6 +56,7 @@ The console speaks to `serve.py` through these, all relative to the page:
 | `POST mission/next` `{episode_id?, instruction, reasoning_effort?}` | Flies a catalog row, or your own words. 409 while a mission is live. |
 | `POST mission/tasking` `{text}` | Speaks to the live mission. |
 | `POST mission/clear` | Stops the mission and empties the seat. |
+| `GET reasoner` | The served model and the reasoning efforts its card takes. |
 | `GET missions/runs` | Every finished run under `--out`. |
 | `GET replay?path=` | One run: its state document, `duration_s` and `track`. |
 | `GET mission/ownship[?path=&t=]` | The twin's pose now, or a reviewed run's at mission second `t`. |

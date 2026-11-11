@@ -23,6 +23,7 @@ export default defineConfig({
     proxy: {
       "/missions": STATION,
       "/mission": STATION,
+      "/reasoner": STATION,
       "/replay": STATION,
       "/location": STATION,
       "/tiles": STATION,

@@ -56,9 +56,6 @@ const MISSIONS_MAX = 0.62;
 // whole transcript under an operator reading it.
 const OWNSHIP_POLL_MS = 1000;
 
-// The reasoning efforts the chat box offers; "" sends none and the station's
-// default stands.
-const EFFORT_CHOICES = ["none", "low", "medium", "high", "xhigh"];
 
 const clamp = (v: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, v));
@@ -80,6 +77,16 @@ export function MissionConsole() {
   const [expandedMission, setExpandedMission] = useState<string | null>(null);
   const [ownship, setOwnship] = useState<Ownship | null>(null);
   const [effort, setEffort] = useState("");
+  // The served model and the efforts its card takes, off GET reasoner; "" sends none and the model's default stands.
+  const [reasoner, setReasoner] = useState<{ model: string | null; efforts: string[] }>({ model: null, efforts: [] });
+  useEffect(() => {
+    fetch("reasoner")
+      .then((r) => r.json())
+      .then((body) => setReasoner({ model: body.model ?? null, efforts: body.efforts ?? [] }))
+      .catch(() => {
+        // No reasoner: the menu offers the default alone, and a send says why it cannot fly.
+      });
+  }, []);
   // A row, clicked: its words go into the box and its target onto the map.
   const [picked, setPicked] = useState<CatalogEntry | null>(null);
   const [playing, setPlaying] = useState(true);
@@ -596,13 +603,13 @@ export function MissionConsole() {
             <select
               className="chatbox-effort"
               aria-label="Reasoning effort"
-              title="the reasoning effort the next mission flies at; greyed while a mission is live, whose own pick stands"
+              title={`the reasoning effort the next mission flies at${reasoner.model ? `, as ${reasoner.model} takes it` : ""}; greyed while a mission is live, whose own pick stands`}
               value={effort}
               disabled={busy || live}
               onChange={(event) => setEffort(event.target.value)}
             >
               <option value="">default</option>
-              {EFFORT_CHOICES.map((c) => (
+              {reasoner.efforts.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>

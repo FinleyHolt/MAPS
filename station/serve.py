@@ -374,6 +374,18 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
                 if all(w in e.description.lower() or w in e.episode_id.lower() for w in words)]
         return {"missions": [station.entry(e) for e in hits[:max(0, limit)]], "total": len(station.catalog)}
 
+    @app.get("/reasoner")
+    def reasoner() -> dict[str, Any]:
+        """The served model and the reasoning efforts its card takes; ``model`` is None while no reasoner answers."""
+        from maps.llm import endpoint_spec, model_cards  # noqa: PLC0415
+
+        try:
+            model = (endpoint_spec.spec() if endpoint_spec.spec_installed()
+                     else endpoint_spec.discover_from_env()).model_id
+        except Exception as exc:  # noqa: BLE001 -- a station with no reasoner still reviews
+            return {"model": None, "efforts": [], "error": str(exc)}
+        return {"model": model, "efforts": list(model_cards.card_for(model).get("efforts", ())), "error": None}
+
     @app.get("/missions/runs")
     def missions_runs() -> dict[str, Any]:
         return {"runs": station.runs()}
