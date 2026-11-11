@@ -458,17 +458,20 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
     }
   }, [ownship, legs, styleReady, visible.trail]);
 
-  // What the map frames: the reviewed run's whole track, or the basemap's
-  // bounds when nothing is under review. Keyed on the track, so the
-  // operator's own pan and zoom survive every seek in between.
+  // What the map frames: the basemap's bounds, or the reviewed run's whole
+  // track on a station with no basemap (the twin flies on past its last
+  // waypoint, so a track can run far off the raster). Keyed on the track, so
+  // the operator's own pan and zoom survive every seek in between.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     const points = legs?.flat() ?? [];
-    const box: [number, number, number, number] | null = points.length
-      ? [Math.min(...points.map(([lon]) => lon)), Math.min(...points.map(([, lat]) => lat)),
-         Math.max(...points.map(([lon]) => lon)), Math.max(...points.map(([, lat]) => lat))]
-      : (location?.bounds as [number, number, number, number] | undefined) ?? null;
+    const box: [number, number, number, number] | null =
+      (location?.bounds as [number, number, number, number] | undefined)
+      ?? (points.length
+        ? [Math.min(...points.map(([lon]) => lon)), Math.min(...points.map(([, lat]) => lat)),
+           Math.max(...points.map(([lon]) => lon)), Math.max(...points.map(([, lat]) => lat))]
+        : null);
     if (!box) return;
     map.fitBounds([[box[0], box[1]], [box[2], box[3]]], { padding: 48, animate: false });
   }, [legs, mapReady, location]);

@@ -488,8 +488,10 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
         @app.get("/{path:path}")
         def console(path: str) -> FileResponse:
             target = (root / path).resolve()
-            return FileResponse(target if path and target.is_relative_to(root) and target.is_file()
-                                else root / "index.html")
+            if path and target.is_relative_to(root) and target.is_file():
+                return FileResponse(target)
+            # The page names its hashed assets, so it is asked for again on every load.
+            return FileResponse(root / "index.html", headers={"Cache-Control": "no-cache"})
 
     return app
 
