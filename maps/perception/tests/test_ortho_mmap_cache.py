@@ -1,7 +1,7 @@
 """The ortho is built once and mapped after, and what it maps is what it built.
 
 Building the unified Cal City ortho from its rasters is ~20 s and every worker
-process paid it: on a 48-worker arm, 47 cold builds cost 936 s -- more than the
+process paid it: on a 48-worker run, 47 cold builds cost 936 s -- more than the
 435 warm stops in the same window put together. The result is a pure function
 of the rasters, so the first process to build it publishes it and the rest map
 it.

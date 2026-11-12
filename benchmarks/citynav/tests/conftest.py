@@ -17,11 +17,6 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """A Driver holding only the fields the dispatch, attempt, result and
     summary paths read; ``__init__`` resolves a split, a config and a serve."""
     monkeypatch.setattr(bf, "WORKER_STAGGER_S", 0)
-    # No spec another test installed: its SAM replicas are gone, and the
-    # launch gate would wait on them.
-    from maps.llm import endpoint_spec
-
-    monkeypatch.setattr(endpoint_spec, "_SPEC", None)
 
     def make(root: Path = tmp_path, selection: list[str] | None = None) -> bf.Driver:
         d = bf.Driver.__new__(bf.Driver)

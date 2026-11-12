@@ -78,7 +78,7 @@ def test_missing_bake_is_none_not_a_pass(tmp_path):
 def _run(root, tiles, *, stamped):
     root.mkdir(parents=True, exist_ok=True)
     # Absolute on the machine that flew it, not this one.
-    perception = {"tiles_dir_resolved": f"/scratch/someone/MAPS/{tiles}"}
+    perception = {"tiles_dir_resolved": f"/srv/someone/MAPS/{tiles}"}
     if stamped is not None:
         perception["bake_sha256"] = stamped
     (root / "run_manifest.json").write_text(json.dumps({"perception": perception}))
@@ -143,7 +143,7 @@ def test_the_resolved_tiles_dir_names_the_bake_to_check(tmp_path, monkeypatch):
             {
                 "perception": {
                     # Absolute, on the machine that flew it -- not this one.
-                    "tiles_dir_resolved": "/scratch/someone/MAPS/benchmarks/calcity/tiles",
+                    "tiles_dir_resolved": "/srv/someone/MAPS/benchmarks/calcity/tiles",
                     "bake_sha256": bake_sha256(calcity),
                 }
             }
@@ -157,7 +157,7 @@ def test_the_resolved_tiles_dir_names_the_bake_to_check(tmp_path, monkeypatch):
         json.dumps(
             {
                 "perception": {
-                    "tiles_dir_resolved": "/scratch/someone/elsewhere/no_such_bake",
+                    "tiles_dir_resolved": "/srv/someone/elsewhere/no_such_bake",
                     "bake_sha256": bake_sha256(calcity),
                 }
             }

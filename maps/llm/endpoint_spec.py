@@ -1,12 +1,11 @@
-"""Server-discovered endpoint facts, probed once at process start.
+"""Server-discovered endpoint facts, probed before a run flies.
 
 :func:`discover` reads the served model and its window off
 ``GET models_url(url, endpoint)`` and checks the SAM replicas' ``/health``; any
 divergence raises :class:`EndpointDiscoveryError` naming the URL and what was
-seen. An entry point installs it once (``install_spec(discover_from_settings(settings))``,
-which ``run_manifest.install_endpoint`` wraps for the benches); the reasoner
-gets the spec injected, and other readers call :func:`spec`, which raises when
-nothing was installed.
+seen. The :class:`EndpointSpec` it returns is a value: an entry point
+discovers it (``run_manifest.install_endpoint`` for the benches) and hands it
+on, on the bench (``Bench.endpoint_spec``) and to the reasoner.
 
 Explicit pins, read from the run's settings (``maps.settings``):
 
@@ -97,7 +96,7 @@ def parse_override(raw: str) -> EndpointOverride:
 
 @dataclass(frozen=True)
 class EndpointSpec:
-    """The discovered endpoint facts, frozen for the process. ``base_url`` is
+    """The discovered endpoint facts. ``base_url`` is
     the one OpenAI-style base probed; ``sam_urls`` the SAM replicas."""
 
     base_url: str
@@ -442,43 +441,14 @@ def discover_from_settings(settings: Settings, *, probe_sam: bool = True) -> End
     )
 
 
-_SPEC: EndpointSpec | None = None
-_SPEC_LOCK = threading.Lock()
-
-
-def install_spec(new_spec: EndpointSpec) -> None:
-    """Install the process-wide spec; a second install must be identical."""
-    global _SPEC
-    with _SPEC_LOCK:
-        if _SPEC is None:
-            _SPEC = new_spec
-            log.info(
-                "endpoint spec installed: model_id=%s max_model_len=%d "
-                "input_budget=%d max_output_tokens=%d base_url=%s",
-                new_spec.model_id,
-                new_spec.max_model_len,
-                new_spec.input_budget,
-                new_spec.max_output_tokens,
-                new_spec.base_url,
-            )
-        elif new_spec != _SPEC:
-            raise EndpointDiscoveryError(
-                f"divergent second install_spec: installed={_SPEC} new={new_spec}"
-            )
-
-
-def spec() -> EndpointSpec:
-    """The installed spec; raises when nothing was installed."""
-    if _SPEC is None:
-        raise EndpointDiscoveryError(
-            "no EndpointSpec installed: the process entry point must run "
-            "install_spec(discover_from_settings(...)) before any consumer reads "
-            "spec()"
-        )
-    return _SPEC
-
-
-def spec_installed() -> bool:
-    """Whether a spec was installed: a mission that failed before discovery
-    records no served model."""
-    return _SPEC is not None
+def log_spec(spec: EndpointSpec) -> None:
+    """The line an entry point logs for the spec its runs fly."""
+    log.info(
+        "endpoint spec installed: model_id=%s max_model_len=%d "
+        "input_budget=%d max_output_tokens=%d base_url=%s",
+        spec.model_id,
+        spec.max_model_len,
+        spec.input_budget,
+        spec.max_output_tokens,
+        spec.base_url,
+    )

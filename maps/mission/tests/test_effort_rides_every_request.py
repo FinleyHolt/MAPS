@@ -56,7 +56,7 @@ def test_the_missions_word_rides_every_request_and_the_arms_does_not(monkeypatch
 
 
 def test_a_reasoner_with_no_word_sends_the_arms(monkeypatch):
-    """VACUITY FLOOR: the arm's effort (the run's settings) is still the default for a
+    """VACUITY FLOOR: the run's effort (the run's settings) is still the default for a
     mission that named none."""
     sent = _serve(monkeypatch)
     r = Reasoner(

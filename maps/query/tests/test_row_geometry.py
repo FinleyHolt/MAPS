@@ -6,7 +6,7 @@ import pytest
 
 from maps.library.interpreter import MissionPython
 from maps.library.op_compiler import CodeError
-from maps.library.rows import Row, Rows, _places
+from maps.library.rows import Row, Rows, places_of
 from maps.mission.tests.fakes import quiet_env
 from maps.query import spatial_math as G
 from maps.query.program import run_program
@@ -142,11 +142,11 @@ def test_each_place_geometry_is_built_once(monkeypatch):
 def test_a_bare_name_is_refused_rather_than_grounded():
     mp = _mp({"prior_1": ROAD})
     with pytest.raises(CodeError) as e:
-        _places("Poppy Boulevard", "gap")
+        places_of("Poppy Boulevard", "gap")
     assert "find(" in str(e.value) and "Poppy Boulevard" in str(e.value)
     # a fid-shaped string is a place, not a name
-    assert _places("prior_1", "gap") == (("prior_1", None),)
-    assert _places([10.0, 20.0], "gap") == ((None, (10.0, 20.0)),)
+    assert places_of("prior_1", "gap") == (("prior_1", None),)
+    assert places_of([10.0, 20.0], "gap") == ((None, (10.0, 20.0)),)
     with pytest.raises(CodeError) as e:
         mp.library.distance(3, "prior_1")
     assert "int" in str(e.value)

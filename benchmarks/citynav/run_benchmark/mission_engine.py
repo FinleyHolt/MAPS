@@ -17,7 +17,6 @@ from pathlib import Path
 from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, ConversationLog
 from benchmarks.run_record.episodes import DEADLINE_ENV, TOUR_CURSOR, atomic_write_json
-from maps.llm.endpoint_spec import spec as installed_spec
 from maps.mission.loop import run_mission
 from maps.mission.spec import MissionSpec
 from maps.perception.observation import ground_sides_m
@@ -176,12 +175,12 @@ class MissionSession:
 
     def run(self, instruction: str, **extra):
         """The conversation's first turn: ``run_mission`` over this session,
-        the installed endpoint and the rig's served description. Returns
+        the bench's endpoint and the rig's served description. Returns
         ``(reply, mission)``, the mission for ``continue_mission``."""
         h = self.h
         return run_mission(
             instruction=instruction,
-            endpoint_spec=installed_spec(),
+            endpoint_spec=h.bench.endpoint_spec,
             settings=h.settings,
             workdir=h.workdir,
             routing_key=h.routing_key,

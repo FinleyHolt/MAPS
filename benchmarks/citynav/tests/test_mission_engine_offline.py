@@ -153,7 +153,6 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
     from maps.perception.geometry.sensor_spec import resolve_sensor
 
     served = {}
-    monkeypatch.setattr(me, "installed_spec", lambda: SimpleNamespace(base_url="http://unused"))
     monkeypatch.setattr(me, "run_mission", lambda **kw: served.update(kw))
     session = me.MissionSession.__new__(me.MissionSession)
     session.run_kwargs = {}
@@ -162,7 +161,7 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
         cfg=SimpleNamespace(start_altitude_agl_m=914.4),
         state=SimpleNamespace(altitude_m=600.0),
         ground_z_m=100.0,
-        bench=SimpleNamespace(environ={}),
+        bench=SimpleNamespace(environ={}, endpoint_spec=SimpleNamespace(base_url="http://unused")),
         settings=Settings(),
         workdir=None,
         routing_key=None,

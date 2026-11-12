@@ -1,10 +1,9 @@
-"""The served text: the ``run`` tool's description (``CODE_DOC``), the
-system prompt (``CODE_SYSTEM_PROMPT``)."""
+"""The served text: the ``run`` tool's description (``RUN_TOOL_DOC``), the
+system prompt (``SYSTEM_PROMPT``) and the tool schema (``SERVED_TOOLS``)."""
 
 from __future__ import annotations
 
-# The run tool's description.
-CODE_DOC = (
+RUN_TOOL_DOC = (
     "Write ordinary Python. A name you bind stays bound for the whole"
     " mission. Lines run in order; an error stops the block at its line"
     " and everything before it ran and stands. A bare handle on its own"
@@ -211,7 +210,7 @@ CODE_DOC = (
 
 # The system prompt, in the surface's own notation (another notation would
 # teach forms the parser refuses).
-CODE_SYSTEM_PROMPT = """\
+SYSTEM_PROMPT = """\
 === MISSION MAP ===
 You are the reasoner for a drone search instruction, in ONE persistent
 conversation. You write ordinary Python: one block per call, its lines
@@ -286,7 +285,7 @@ SERVED_TOOLS = [
         "type": "function",
         "function": {
             "name": "run",
-            "description": CODE_DOC,
+            "description": RUN_TOOL_DOC,
             "parameters": {
                 "type": "object",
                 "additionalProperties": False,
@@ -299,13 +298,13 @@ SERVED_TOOLS = [
 
 
 def served_system_prompt(sensor_description: str = "") -> str:
-    """The one system message a run serves, the rig's sensor block fused
-    onto its tail (the chat template takes one system turn), then what the
-    segmenter sees."""
+    """The one system message a run serves: the system prompt, then the
+    rig's sensor block and what the segmenter can see (the chat template
+    takes one system turn)."""
     if not sensor_description.strip():
-        return CODE_SYSTEM_PROMPT
+        return SYSTEM_PROMPT
     return (
-        CODE_SYSTEM_PROMPT
+        SYSTEM_PROMPT
         + "\n\nSensor rig (active for this run):\n"
         + sensor_description.strip()
         + "\n\nA concept this rig cannot see produces an empty SAM response."

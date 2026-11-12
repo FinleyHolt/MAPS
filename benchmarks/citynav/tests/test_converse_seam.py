@@ -88,7 +88,7 @@ def test_a_converse_drives_the_conversation_and_the_bench_scores_what_it_flew(
 
 def test_the_engine_flies_an_attempt_as_the_runner_dispatches_it(monkeypatch, tmp_path) -> None:
     cfg = _stub_engine(monkeypatch, tmp_path)
-    monkeypatch.setattr(dispatch, "arm_env_stamp", lambda bench: {})
+    monkeypatch.setattr(dispatch, "run_env_stamp", lambda bench: {})
     monkeypatch.setattr(
         dispatch, "_cached_run_provenance", lambda flags, **kw: {"split": kw["split"]}
     )
@@ -113,13 +113,17 @@ def test_the_engine_flies_an_attempt_as_the_runner_dispatches_it(monkeypatch, tm
 
 def test_a_process_that_flies_two_run_contexts_stamps_each_with_its_own(monkeypatch) -> None:
     monkeypatch.setattr(dispatch, "_RUN_PROVENANCE", {})
-    monkeypatch.setattr(
-        dispatch.endpoint_spec_module,
-        "spec",
-        lambda: SimpleNamespace(model_id="m", tokenizer_name="t"),
-    )
+    spec = SimpleNamespace(model_id="m", tokenizer_name="t")
     monkeypatch.setattr(dispatch, "repo_provenance", lambda **kw: dict(kw))
-    seen = dispatch._cached_run_provenance({"F": "1"}, config_path=None, split="val_seen")
-    unseen = dispatch._cached_run_provenance({"F": "1"}, config_path=None, split="val_unseen")
+    seen = dispatch._cached_run_provenance(
+        {"F": "1"}, spec=spec, config_path=None, split="val_seen"
+    )
+    unseen = dispatch._cached_run_provenance(
+        {"F": "1"}, spec=spec, config_path=None, split="val_unseen"
+    )
     assert (seen["split"], unseen["split"]) == ("val_seen", "val_unseen")
-    assert dispatch._cached_run_provenance({"F": "1"}, config_path=None, split="val_seen") is seen
+    assert (seen["served_model"], seen["served_build"]) == ("m", "t")
+    assert (
+        dispatch._cached_run_provenance({"F": "1"}, spec=spec, config_path=None, split="val_seen")
+        is seen
+    )

@@ -1041,14 +1041,14 @@ def test_the_legend_documents_every_call_the_surface_serves():
     way to learn it has."""
     import inspect
 
-    from maps.library.block_scan import _LIBRARY_CALLS
+    from maps.library.block_scan import LIBRARY_CALLS
     from maps.library.calls import Library
     from maps.library.rows import Rows
-    from maps.mission.served_text import CODE_DOC
+    from maps.mission.served_text import RUN_TOOL_DOC
 
-    names = _LIBRARY_CALLS
+    names = LIBRARY_CALLS
     assert len(names) >= 9, names  # vacuity floor
-    assert not [n for n in names if f"{n}(" not in CODE_DOC], names
+    assert not [n for n in names if f"{n}(" not in RUN_TOOL_DOC], names
     # ...and every keyword the executing functions take, bar order(reverse=),
     # which is accepted and not advertised.
     fns = [getattr(Library, n) for n in names] + [Rows.order, Rows.filter]
@@ -1059,29 +1059,29 @@ def test_the_legend_documents_every_call_the_surface_serves():
         if p.kind is p.KEYWORD_ONLY
     } - {"reverse"}
     assert len(kws) >= 7, kws
-    assert not [k for k in kws if f"{k}=" not in CODE_DOC], sorted(kws)
-    assert "TOUCHES it -- distance 0" in CODE_DOC
+    assert not [k for k in kws if f"{k}=" not in RUN_TOOL_DOC], sorted(kws)
+    assert "TOUCHES it -- distance 0" in RUN_TOOL_DOC
     # the gap cut, the union rule (a set measures from its NEAREST member),
     # the cardinal cut's order, and a blank cell as unknown
     for phrase in ("dwithin=25", "NEAREST member", "NEAREST first", "blank"):
-        assert phrase in CODE_DOC, phrase
-    assert "one crop PER ROW" in CODE_DOC
+        assert phrase in RUN_TOOL_DOC, phrase
+    assert "one crop PER ROW" in RUN_TOOL_DOC
     # A derived scan cannot notice its disappearance; this can.
-    assert "To reach a PART" in CODE_DOC
+    assert "To reach a PART" in RUN_TOOL_DOC
     # the visual-adjective occasion: a cue word no column carries is read
     # off crops, not off the prior
-    assert "choose by what the crops show" in CODE_DOC
+    assert "choose by what the crops show" in RUN_TOOL_DOC
     # the set form: a SET is one place to cover, and a NAME is the whole
     # street
-    assert "a SET is one place to cover" in CODE_DOC
-    assert "the name is the whole street" in CODE_DOC
+    assert "a SET is one place to cover" in RUN_TOOL_DOC
+    assert "the name is the whole street" in RUN_TOOL_DOC
     # THE DE-ENDORSEMENT PAIR (system prompt): a sort is evidence of its column, never
     # of identity, and "know" has a standard for cue words no column carries.
-    from maps.mission.served_text import CODE_SYSTEM_PROMPT
+    from maps.mission.served_text import SYSTEM_PROMPT
 
-    assert "settled by look(), not by" in CODE_SYSTEM_PROMPT
-    assert "known only from a look, never from rank" in CODE_SYSTEM_PROMPT
-    assert "never that its head is the thing" in CODE_SYSTEM_PROMPT
+    assert "settled by look(), not by" in SYSTEM_PROMPT
+    assert "known only from a look, never from rank" in SYSTEM_PROMPT
+    assert "never that its head is the thing" in SYSTEM_PROMPT
     # the facing word, the cut's compass value and the axis convention
     from maps.mission.served_text import SERVED_TOOLS
 

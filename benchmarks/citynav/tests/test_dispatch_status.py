@@ -23,7 +23,7 @@ from maps.settings import Settings
 @pytest.fixture
 def light(monkeypatch):
     """Keep the dispatch off the split file and the git subprocess."""
-    monkeypatch.setattr(dispatch, "arm_env_stamp", lambda bench: {"SEARCH_X": "1"})
+    monkeypatch.setattr(dispatch, "run_env_stamp", lambda bench: {"SEARCH_X": "1"})
     monkeypatch.setattr(
         dispatch,
         "_cached_run_provenance",

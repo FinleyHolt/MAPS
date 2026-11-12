@@ -1,14 +1,14 @@
-"""One metrics row per run root — the N-arm view a ladder is read with.
+"""One metrics row per run root: the table a set of runs (an effort ladder, several models) is read with.
 
 It defines no metric: ``rows.load_attempts`` picks each episode's result
-and :func:`arm_row` averages it. The criterion must be identical across
+and :func:`run_row` averages it. The criterion must be identical across
 every root that records one (a disc's radius included) and is printed once.
-An arm's label is the root's basename; its effort is the manifest's
+A run's label is the root's basename; its effort is the manifest's
 ``SEARCH_SAMPLING_REASONING_EFFORT``, as written.
 
 Usage:
-    python -m benchmarks.citynav.analysis.arm_table <root> [<root> ...]
-    python -m benchmarks.citynav.analysis.arm_table --json <root> [...]
+    python -m benchmarks.citynav.analysis.run_table <root> [<root> ...]
+    python -m benchmarks.citynav.analysis.run_table --json <root> [...]
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from benchmarks.run_record import rows as _rows
 
 #: (json key, header, format). An absent metric prints ``--``, never 0.
 COLUMNS = (
-    ("label", "arm", "{:<10}"),
+    ("label", "run", "{:<10}"),
     ("effort", "effort", "{:>6}"),
     ("n", "n", "{:>5}"),
     ("SR_pct", "SR%", "{:>6}"),
@@ -64,10 +64,10 @@ def _mean(vals: list) -> float | None:
     return round(float(np.mean(vals)), 4) if vals else None
 
 
-def arm_row(
+def run_row(
     root: Path, *, allow_partial: bool = False, attempts: tuple[dict, _rows.ReadStats] | None = None
 ) -> dict:
-    """One arm's summary; an arm with no scored episode still gets its row.
+    """One run's summary; a run with no scored episode still gets its row.
     ``attempts`` is the root's ``rows.load_attempts`` result when the caller
     already read it.
 
@@ -121,13 +121,13 @@ def _sort_key(row: dict) -> tuple[int, float, str]:
 
 
 def table(roots: list[Path], *, allow_partial: bool = False) -> list[dict]:
-    """Every arm's row, criterion-checked across the whole set."""
-    rows = [arm_row(r, allow_partial=allow_partial) for r in roots]
+    """Every run's row, criterion-checked across the whole set."""
+    rows = [run_row(r, allow_partial=allow_partial) for r in roots]
     seen = {r["criterion"] for r in rows if r["criterion"] is not None}
     if len(seen) > 1:
         raise SystemExit(
-            f"arm_table: these roots mix success criteria {sorted(seen)}. "
-            "Arms scored on different masks (a shape and a disc, or discs of "
+            f"run_table: these roots mix success criteria {sorted(seen)}. "
+            "Runs scored on different masks (a shape and a disc, or discs of "
             "two radii) answer different questions -- table them separately."
         )
     return sorted(rows, key=_sort_key)
@@ -146,7 +146,7 @@ def render(rows: list[dict]) -> None:
     label_w = max([10] + [len(str(r["label"])) for r in rows])
     seen = {r["criterion"] for r in rows if r["criterion"] is not None}
     criterion = seen.pop() if seen else None
-    print(f"criterion: {criterion or 'UNRECORDED'}   arms: {len(rows)}")
+    print(f"criterion: {criterion or 'UNRECORDED'}   runs: {len(rows)}")
     if criterion == criterion_label("shape", Path()):
         print("OSR is ring-basis and absent from every shape-scored row.")
     columns = [(k, h, f"{{:<{label_w}}}" if k == "label" else fmt) for k, h, fmt in COLUMNS]
@@ -157,7 +157,7 @@ def render(rows: list[dict]) -> None:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("roots", nargs="+", type=Path, help="run roots, one per arm")
+    ap.add_argument("roots", nargs="+", type=Path, help="the run roots to table")
     ap.add_argument("--json", action="store_true", help="emit the rows as JSON instead of a table")
     _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)

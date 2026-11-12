@@ -202,7 +202,7 @@ def test_the_disc_label_reads_the_run_s_configured_radius(tmp_path, capsys):
 
 def test_an_unstamped_run_refuses_to_elect_a_headline(tmp_path, capsys):
     """A run with no stamp: both readings print and neither is called the
-    score, since a guess would put the wrong number on an arm's report."""
+    score, since a guess would put the wrong number on a run's report."""
     write_ledger(tmp_path, *_scored([1, 1, 1, 0, 0]))
     report(tmp_path)
     out = capsys.readouterr().out
@@ -371,7 +371,7 @@ def test_a_split_that_is_not_the_run_s_corpus_prints_no_class_split(tmp_path, mo
 
 
 def test_a_root_without_a_manifest_reads_its_split_off_the_rows(tmp_path, monkeypatch, capsys):
-    """A released-baseline root has no run manifest; each row records its split."""
+    """A released root carries no run manifest; each row records its split."""
     _calcity_corpus(tmp_path, monkeypatch, ("the red car", "G"))
     root = tmp_path / "released"
     write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1, split="calcity"))

@@ -11,7 +11,7 @@ import pytest
 
 from maps.query import spatial_math as G
 from maps.query.program import run_program
-from maps.query.result_tables import _COMPARE_COL_PREFIXES, BROAD_DUMP_SOFT_ROWS, compact_results
+from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS, COMPARE_COL_PREFIXES, compact_results
 from maps.query.surface import build_surface_from_graph
 from maps.world_state.prior_graph import build_object_graph
 
@@ -123,7 +123,7 @@ def test_no_rendered_hint_teaches_the_op_json_register():
             seen += 1
             if _OP_REGISTER.search(hint):
                 bad.append((os.path.basename(stem), key, hint[:200]))
-            claims += sum(q.startswith(_COMPARE_COL_PREFIXES) for q in _QUOTED.findall(hint))
+            claims += sum(q.startswith(COMPARE_COL_PREFIXES) for q in _QUOTED.findall(hint))
     assert not bad, "served hints teach a spelling the sentence channel cannot emit: " + "; ".join(
         f"{s}/{k}: {h!r}" for s, k, h in bad[:4]
     )

@@ -93,9 +93,9 @@ def test_static_mission_surface_is_commensurate():
 
 def test_every_quoted_call_names_a_library_call():
     """The inverse of the worked-example guard in ``served_text``."""
-    from maps.library.block_scan import _LIBRARY_CALLS, _MOVE_CALLS, _SAFE_BUILTINS
+    from maps.library.block_scan import _MOVE_CALLS, LIBRARY_CALLS, SAFE_BUILTINS
 
-    known = set(_LIBRARY_CALLS) | set(_MOVE_CALLS) | set(_SAFE_BUILTINS)
+    known = set(LIBRARY_CALLS) | set(_MOVE_CALLS) | set(SAFE_BUILTINS)
     # row/handle methods and the display verb, reached as attributes or by
     # the bare-expression renderer rather than as free names
     known |= {

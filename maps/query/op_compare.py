@@ -5,16 +5,16 @@ from __future__ import annotations
 
 from maps.query import spatial_math as G
 from maps.query.op_io import (
-    _SAY_A_FID,
+    SAY_A_FID,
     ProgramError,
     Result,
-    _as_rows,
-    _attach_standing_columns,
-    _ordered,
-    _quote,
+    as_rows,
+    attach_standing_columns,
+    keeps_order,
+    quote_value,
     sanitize_token,
 )
-from maps.query.result_tables import _MODEL_HIDDEN_ROW_FIELDS
+from maps.query.result_tables import MODEL_HIDDEN_ROW_FIELDS
 from maps.query.row_geometry import geom_of, place_geom
 from maps.xy_token import is_xy
 
@@ -60,7 +60,7 @@ def _union_members(cx, ref_el, as_label) -> list:
             continue
         node = cx.by_fid.get(x)
         if node is None:
-            raise ProgramError(f"{_quote(x)} is not a fid on this surface. " + _SAY_A_FID)
+            raise ProgramError(f"{quote_value(x)} is not a fid on this surface. " + SAY_A_FID)
         members.append(node)
     return members
 
@@ -101,12 +101,12 @@ def _unique_label(label, used: set, fid=None) -> str:
     return lab
 
 
-def _compare(cx, a):
+def run_compare(cx, a):
     """Attach each ref's relation columns (:data:`result_tables._TABLE_LEGEND`) to every
     item row, in input order. A ref is a surface row, an [x, y], a staged
     viewpoint or a union ``{ref: [fid | rN | [x, y], ...]}`` measured as one
     place."""
-    items = _as_rows(cx, a["items"])
+    items = as_rows(cx, a["items"])
     notes: list = []
     used_labels: set = set()
     standing: list = []  # staged viewpoint handles, in ref order
@@ -142,7 +142,7 @@ def _compare(cx, a):
         else:
             if not isinstance(ref_el, str):
                 raise ProgramError(
-                    f"{_quote(ref_el)} is not a place: a place is a fid, a set, a row or an [x, y]."
+                    f"{quote_value(ref_el)} is not a place: a place is a fid, a set, a row or an [x, y]."
                 )
             payload = cx.by_fid.get(ref_el)
             if payload is None and ref_el in cx.staged:
@@ -151,7 +151,9 @@ def _compare(cx, a):
                     standing.append(ref_el)
                 continue
             if payload is None:
-                raise ProgramError(f"{_quote(ref_el)} is not a fid on this surface. " + _SAY_A_FID)
+                raise ProgramError(
+                    f"{quote_value(ref_el)} is not a fid on this surface. " + SAY_A_FID
+                )
             kind = "row"
             lab = _unique_label(
                 as_label or sanitize_token(payload["fid"]), used_labels, payload["fid"]
@@ -188,7 +190,7 @@ def _compare(cx, a):
 
     out_rows: list = []
     for i, it in enumerate(items):
-        row = {k: v for k, v in it.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
+        row = {k: v for k, v in it.items() if k not in MODEL_HIDDEN_ROW_FIELDS}
         # Items resolve like refs, so a ref compared to itself is exactly 0.
         item_geom, it_c = place_geom(cx.by_fid.get(it.get("fid")), it)
         for ref in refs:
@@ -251,10 +253,10 @@ def _compare(cx, a):
                 f"touching neighbors AND containers."
             )
     for h in standing:
-        out_rows = _attach_standing_columns(out_rows, cx.staged[h], with_distance=True)
+        out_rows = attach_standing_columns(out_rows, cx.staged[h], with_distance=True)
         notes.append(
             f"ref {h} is your staged viewpoint: its side columns ('left "
             f"of/right of/ahead of/behind {h}') + 'distance to {h}' "
             f"(meters from where you stand) ride every row."
         )
-    return Result(out_rows, "compare", ordered=_ordered(items), notes=notes)
+    return Result(out_rows, "compare", ordered=keeps_order(items), notes=notes)

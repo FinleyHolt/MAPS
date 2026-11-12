@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 
 import pytest
 
@@ -16,7 +17,6 @@ from benchmarks import REPO_ROOT
 from benchmarks.citynav.paths import citynav_bench
 from benchmarks.run_record import run_manifest
 from benchmarks.run_record.episodes import MANIFEST_NAME
-from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.endpoint_spec import EndpointSpec
 
 STUB_SPEC = EndpointSpec(
@@ -39,13 +39,13 @@ def bake(monkeypatch, tmp_path):
 
 
 def _bench():
-    """CityNav as this test's environment describes it, read as an entry point reads it."""
-    return citynav_bench(os.environ)
+    """CityNav as this test's environment describes it, read as an entry point reads it,
+    flying the stub serve."""
+    return replace(citynav_bench(os.environ), endpoint_spec=STUB_SPEC)
 
 
 @pytest.fixture()
 def stub_run(monkeypatch, tmp_path, bake):
-    monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_REASONER_API_KEY", "sk-SECRET-NEVER-RECORDED")
     return run_manifest.build_manifest(
         bench=_bench(),
@@ -120,11 +120,11 @@ def test_write_once_resume_and_refusal(stub_run, tmp_path):
     drifted["endpoints"]["model_id"] = "other-model"
     with pytest.raises(run_manifest.ManifestIdentityError):
         run_manifest.emit_or_verify(tmp_path, drifted, log=lambda *_: None)
-    # A resume under another arm flag (here the reasoning effort) is another arm.
-    other_arm = json.loads(json.dumps(stub_run))
-    other_arm["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.1"
+    # A resume under another run flag (here the reasoning effort) is another run.
+    other_run = json.loads(json.dumps(stub_run))
+    other_run["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.1"
     with pytest.raises(run_manifest.ManifestIdentityError, match="search_env_flags"):
-        run_manifest.emit_or_verify(tmp_path, other_arm, log=lambda *_: None)
+        run_manifest.emit_or_verify(tmp_path, other_run, log=lambda *_: None)
 
 
 def test_a_direct_run_emits_a_manifest_the_reader_finds(stub_run, tmp_path):
@@ -151,13 +151,12 @@ def test_a_direct_run_emits_a_manifest_the_reader_finds(stub_run, tmp_path):
     assert "UNVERIFIED" not in line
 
 
-def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tmp_path, bake):
+def test_a_missions_own_effort_replaces_the_runs_in_its_manifest(monkeypatch, tmp_path, bake):
     """A flight mission's grain: the mission's stamp rides
     whole under ``mission``, and the effort it names is what
     ``search_env_flags`` records, since that is what its requests carried;
-    a mission naming none leaves the arm's stamp, and no mission at all
+    a mission naming none leaves the run's stamp, and no mission at all
     leaves no ``mission`` key."""
-    monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     common = dict(
         bench=_bench(),
@@ -206,7 +205,7 @@ def test_the_effort_is_stamped_as_it_flies(monkeypatch, raw, flown):
     comparison and every reader carry the same one spelling."""
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", raw)
     settled = run_manifest.settle_effort(_bench())
-    assert run_manifest.arm_env_stamp(settled).get("SEARCH_SAMPLING_REASONING_EFFORT") == flown
+    assert run_manifest.run_env_stamp(settled).get("SEARCH_SAMPLING_REASONING_EFFORT") == flown
 
 
 def test_a_root_with_episodes_and_no_manifest_is_refused(stub_run, tmp_path):
@@ -250,10 +249,10 @@ def test_the_arm_stamp_records_the_resolved_bake(monkeypatch):
     """An unset SEARCH_CITYNAV_TILES stamps the directory it resolves to;
     a set one stamps verbatim."""
     monkeypatch.delenv("SEARCH_CITYNAV_TILES", raising=False)
-    assert run_manifest.arm_env_stamp(_bench())["SEARCH_CITYNAV_TILES"] == str(_bench().tiles_dir)
+    assert run_manifest.run_env_stamp(_bench())["SEARCH_CITYNAV_TILES"] == str(_bench().tiles_dir)
     monkeypatch.setenv("SEARCH_CITYNAV_TILES", "/data/tiles/citynav_2m_osmv3")
     assert (
-        run_manifest.arm_env_stamp(_bench())["SEARCH_CITYNAV_TILES"]
+        run_manifest.run_env_stamp(_bench())["SEARCH_CITYNAV_TILES"]
         == "/data/tiles/citynav_2m_osmv3"
     )
 
@@ -261,7 +260,7 @@ def test_the_arm_stamp_records_the_resolved_bake(monkeypatch):
 def test_an_unset_effort_is_not_stamped(monkeypatch):
     """A run that named no effort flew the serve's default."""
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
-    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in run_manifest.arm_env_stamp(_bench())
+    assert "SEARCH_SAMPLING_REASONING_EFFORT" not in run_manifest.run_env_stamp(_bench())
 
 
 def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
@@ -270,3 +269,19 @@ def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
 
     monkeypatch.setenv("SEARCH_REASONER_TIMEOUT_S", "240")
     assert RM._audited_env(_bench())["SEARCH_REASONER_TIMEOUT_S"] == "240"
+
+
+def test_install_endpoint_puts_the_discovered_spec_on_the_bench(monkeypatch, caplog):
+    """The bench an entry point flies carries the spec discovery found, logged once per discovery."""
+    from maps.llm import endpoint_spec
+    from maps.settings import Settings
+
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: STUB_SPEC)
+    bench = citynav_bench({})
+    with caplog.at_level("INFO", logger="maps.llm.endpoint_spec"):
+        flying = run_manifest.install_endpoint(bench, Settings())
+    assert bench.endpoint_spec is None and flying.endpoint_spec is STUB_SPEC
+    assert [r.getMessage() for r in caplog.records] == [
+        "endpoint spec installed: model_id=stub-model max_model_len=32768 "
+        "input_budget=27648 max_output_tokens=4096 base_url=http://127.0.0.1:9/v1"
+    ]

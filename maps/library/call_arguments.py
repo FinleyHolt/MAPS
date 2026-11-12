@@ -12,11 +12,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from maps.library.op_compiler import Bind, CodeError, Ref, act_needs_a_thing, fid_like
-from maps.library.rows import UNNAMED, Rows, _index_it, _one_row
+from maps.library.rows import UNNAMED, Rows, index_it_remedy, one_row_spelling
 from maps.xy_token import format_xy_token, is_xy, parse_xy_token
 
 # Each act's place slot as the model spells it, by the act's ``why``.
-_SITE_SLOT = {
+SITE_SLOT = {
     "map": "around=",
     "boost": "at=",
     "stage": "at=",
@@ -30,29 +30,33 @@ _SITE_SLOT = {
 
 
 class _Stop(Exception):
-    """A plan-level refusal already folded into the receipt: end the block."""
+    """A plan-level refusal already folded into the receipt: end the block.
+
+    Its name and module stay as they are although ``calls`` and
+    ``interpreter`` import it: a block's ``except Exception`` can catch it and
+    print its type."""
 
 
-def _no_such_fid(fid: str) -> CodeError:
+def no_such_fid(fid: str) -> CodeError:
     """The refusal of a prior_/detected_ fid no surface row carries."""
     return CodeError(f"there is no {fid} on this surface; say a fid off a served row.")
 
 
-class _Name(str):
+class PlaceName(str):
     """A place spelled by NAME: grounded by the loop before the call runs."""
 
 
-def _tok(site, ties: dict) -> str:
+def grounded_token(site, ties: dict) -> str:
     """A site's token once its names are grounded: the best name match."""
-    return ties[site][0] if isinstance(site, _Name) else site
+    return ties[site][0] if isinstance(site, PlaceName) else site
 
 
-def _plain(v):
+def as_spelled(v):
     """An argument as the model spelled it: a result or a row is its label."""
     if isinstance(v, (Ref, Bind)):
         return v.label
     if isinstance(v, (list, tuple)):
-        return type(v)(_plain(x) for x in v)
+        return type(v)(as_spelled(x) for x in v)
     return v
 
 
@@ -89,12 +93,12 @@ class MissionEnv:
 
 
 def place_token(v, why: str):
-    """An act's PLACE -> its token, or a :class:`_Name` to ground. A
+    """An act's PLACE -> its token, or a :class:`PlaceName` to ground. A
     point rides as its ``[x, y]`` token; what a binding holds and a fid
     the model typed are never looked up."""
     if v is None and why != "marks":
         raise CodeError(
-            f"{_SITE_SLOT[why]} got None, which is no place: the name it "
+            f"{SITE_SLOT[why]} got None, which is no place: the name it "
             "came from holds no row. Bind a row first."
         )
     if isinstance(v, Ref):
@@ -105,13 +109,13 @@ def place_token(v, why: str):
             return format_xy_token(float(b[0]), float(b[1]))
         return b if isinstance(b, str) else str(v.label)
     if isinstance(v, (list, tuple)):
-        v = _plain(v)
+        v = as_spelled(v)
         if is_xy(v):
             return format_xy_token(float(v[0]), float(v[1]))
         if not v:
-            raise CodeError(f"{_SITE_SLOT[why]} takes ONE place and that list holds 0 row(s).")
+            raise CodeError(f"{SITE_SLOT[why]} takes ONE place and that list holds 0 row(s).")
         raise CodeError(
-            f"{_SITE_SLOT[why]} takes ONE place and that is a list of "
+            f"{SITE_SLOT[why]} takes ONE place and that is a list of "
             f"{len(v)} -- index the one you mean, or give one [x, y] point."
         )
     # A QUOTED [x, y] IS A POINT: welcome in a relating slot, refused as
@@ -129,8 +133,8 @@ def place_token(v, why: str):
     if isinstance(v, str) and not v.strip() and why == "marks":
         return v  # a blank mark marks nothing, as None does
     if isinstance(v, str) and not fid_like(v):
-        return _Name(v)
-    return str(_plain(v))
+        return PlaceName(v)
+    return str(as_spelled(v))
 
 
 def fold(out: dict, part: dict) -> None:
@@ -258,9 +262,7 @@ class Names:
     def not_one_place(self, kw: str, x: Rows) -> str:
         """The refusal of a set where ``kw=`` takes one place."""
         name = self.spelling(x)
-        one = _one_row(x, name or "s")
+        one = one_row_spelling(x, name or "s")
         if one is None:
             return f"{kw}= takes ONE place and {name or 'that set'} holds 0 row(s) here"
-        return (
-            f"{kw}= takes ONE place and {name or 'that'} is a set. {_index_it(name)} -- {kw}={one}"
-        )
+        return f"{kw}= takes ONE place and {name or 'that'} is a set. {index_it_remedy(name)} -- {kw}={one}"

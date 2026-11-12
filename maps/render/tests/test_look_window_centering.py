@@ -18,18 +18,18 @@ _KEEP = _HALF - LOOK_CAR_MARGIN_M / 2.0
 
 def test_the_edge_shift_trims_the_border_up_to_the_cap():
     mid = (250.0, 1700.0)
-    assert resolve_window_center(mid, mid, _BOUNDS, _HALF, LOOK_CAR_MARGIN_M) == mid
-    assert resolve_window_center((1.0, 2.0), (3.0, 4.0), None, _HALF, LOOK_CAR_MARGIN_M) == (
+    assert resolve_window_center(mid, mid, _BOUNDS, _HALF) == mid
+    assert resolve_window_center((1.0, 2.0), (3.0, 4.0), None, _HALF) == (
         3.0,
         4.0,
     )
     # within the cap of the right edge: shifted fully in-bounds
     near = (396.0, 1700.0)
-    cx, cy = resolve_window_center(near, near, _BOUNDS, _HALF, LOOK_CAR_MARGIN_M)
+    cx, cy = resolve_window_center(near, near, _BOUNDS, _HALF)
     assert (cx, cy) == (_BOUNDS[2] - _HALF, near[1])
     # closer than the cap allows: the shift stops at the cap
     near2 = (398.0, 1700.0)
-    cx2, _ = resolve_window_center(near2, near2, _BOUNDS, _HALF, LOOK_CAR_MARGIN_M)
+    cx2, _ = resolve_window_center(near2, near2, _BOUNDS, _HALF)
     assert cx2 == near2[0] - _KEEP
 
 
@@ -38,10 +38,10 @@ def test_the_cap_is_per_axis_not_a_radius():
     # by radius; a radius cap would pull it back and drop a hull corner.
     sub = (250.0, 1700.0)
     want = (sub[0] + _KEEP, sub[1] + _KEEP)
-    cx, cy = resolve_window_center(sub, want, _BOUNDS, _HALF, LOOK_CAR_MARGIN_M)
+    cx, cy = resolve_window_center(sub, want, _BOUNDS, _HALF)
     assert (round(cx, 6), round(cy, 6)) == (round(want[0], 6), round(want[1], 6))
     # one axis past the cap clamps on that axis alone
     over = (sub[0] + _KEEP + 3.0, sub[1] + _KEEP)
-    cx2, cy2 = resolve_window_center(sub, over, _BOUNDS, _HALF, LOOK_CAR_MARGIN_M)
+    cx2, cy2 = resolve_window_center(sub, over, _BOUNDS, _HALF)
     assert round(cx2, 6) == round(sub[0] + _KEEP, 6)
     assert round(cy2, 6) == round(sub[1] + _KEEP, 6)

@@ -11,7 +11,7 @@ from maps.query import text_match as T
 from maps.xy_token import is_xy
 
 # Row fields the executor resolves by fid and the model never reads.
-_MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask", "mask_centroid", "cells")
+MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask", "mask_centroid", "cells")
 
 # Fields folded into the rendered color cell, never served raw.
 _RENDER_INPUT_ROW_FIELDS = ("color_shade", "color_flag")
@@ -50,12 +50,12 @@ def _render_color_cell(row):
 
 def _model_facing_row(row):
     """A row as the model sees it: hidden fields dropped, color rendered."""
-    if isinstance(row, dict) and any(k in row for k in _MODEL_HIDDEN_ROW_FIELDS):
-        row = {k: val for k, val in row.items() if k not in _MODEL_HIDDEN_ROW_FIELDS}
+    if isinstance(row, dict) and any(k in row for k in MODEL_HIDDEN_ROW_FIELDS):
+        row = {k: val for k, val in row.items() if k not in MODEL_HIDDEN_ROW_FIELDS}
     return _render_color_cell(row)
 
 
-def _num(v):
+def number_or_none(v):
     """``v`` when it is a number (a bool is not), else None."""
     return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
@@ -115,7 +115,7 @@ def _query_matched_census(counts: dict, query: str) -> dict:
     return _top(matched, 8)
 
 
-def _census_note(rows, query: str) -> str:
+def find_census_note(rows, query: str) -> str:
     """The census note a missed or thin find serves: the tags sharing
     tokens with the query, the top tags and a few names."""
     counts = _census_counts(rows)[0]
@@ -149,7 +149,7 @@ def _cut_stands_at(v, body: list, capped: list) -> str | None:
         return None
 
     def score(row):
-        x = _num(row.get("score")) if isinstance(row, dict) else None
+        x = number_or_none(row.get("score")) if isinstance(row, dict) else None
         return None if x is None else float(x)
 
     head = [x for x in map(score, capped) if x is not None]
@@ -213,7 +213,7 @@ _GRID_COL_DROP = frozenset(
 # The column names the model never sees on any channel: the grid, the
 # library's Row, and the key echoes in refusals and notes.
 MODEL_UNSERVED_COLUMNS = (
-    _GRID_COL_DROP | frozenset(_MODEL_HIDDEN_ROW_FIELDS) | frozenset(_RENDER_INPUT_ROW_FIELDS)
+    _GRID_COL_DROP | frozenset(MODEL_HIDDEN_ROW_FIELDS) | frozenset(_RENDER_INPUT_ROW_FIELDS)
 )
 
 
@@ -290,7 +290,7 @@ def _grid_columns(rows) -> list[str]:
     for c in seen:
         if c in _GRID_COL_PRIORITY or c in grouped:
             continue
-        side = _column_ref(c, STANDING_SIDE_PREFIXES)
+        side = column_ref(c, STANDING_SIDE_PREFIXES)
         grouped += (
             [c]
             if side is None
@@ -323,7 +323,7 @@ def _render_grid_rows(rows, cols) -> str:
 # side prefixes may name a staged viewpoint handle; the library's rows read
 # them, and AUTOATTACH_PREFIXES, to name what writes a missing key.
 STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
-_COMPARE_COL_PREFIXES = (
+COMPARE_COL_PREFIXES = (
     "distance to ",
     "center distance to ",
     "bearing from ",
@@ -335,10 +335,10 @@ _COMPARE_COL_PREFIXES = (
     "north of ",
     "south of ",
 )
-AUTOATTACH_PREFIXES = tuple(p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
+AUTOATTACH_PREFIXES = tuple(p for p in COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
 
 
-def _column_ref(key, prefixes) -> tuple[str, str] | None:
+def column_ref(key, prefixes) -> tuple[str, str] | None:
     """``(prefix, ref)`` of a ``<prefix><ref>`` column key, the prefix one
     of ``prefixes``; else None."""
     if isinstance(key, str):

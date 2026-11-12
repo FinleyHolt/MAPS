@@ -25,13 +25,13 @@ _MON_TOOL: list = [None]  # the tool id, once claimed
 _MON_ACTIVE: dict = {}  # id(code object) -> the MissionPython running it
 
 
-def _code_objects(code) -> list:
+def code_objects(code) -> list:
     """A code object and every code object nested in its constants: the
     block's lambdas, comprehensions and defs all count as its own lines."""
     out = [code]
     for c in code.co_consts:
         if isinstance(c, types.CodeType):
-            out.extend(_code_objects(c))
+            out.extend(code_objects(c))
     return out
 
 
@@ -52,7 +52,7 @@ def _monitor_tool() -> int:
 
 
 @contextlib.contextmanager
-def _block_ceilings(mp: MissionPython):
+def charging_lines(mp: MissionPython):
     """Charge ``mp._tick`` for every line of the mission's blocks while one
     runs."""
     tid = _monitor_tool()
@@ -70,7 +70,7 @@ def _block_ceilings(mp: MissionPython):
                 _MON_ACTIVE.pop(id(c), None)
 
 
-def _block_line(codes: set) -> int:
+def block_line(codes: set) -> int:
     """The failing line of the block the model just sent (``codes``, its
     code objects), off the live traceback."""
     _, _, tb = sys.exc_info()
@@ -81,7 +81,7 @@ def _block_line(codes: set) -> int:
     return line
 
 
-def _outer_block_line() -> int:
+def outer_block_line() -> int:
     """The line of the block's top-level statement that was running when it
     raised: the first block frame of the live traceback."""
     _, _, tb = sys.exc_info()

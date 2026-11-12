@@ -125,14 +125,14 @@ def _ground_truth_keys(prov: dict) -> dict:
 
 
 def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[str]]:
-    """``(fatal, arm)`` mismatches between two runs' provenance.
+    """``(fatal, varied)`` mismatches between two runs' provenance.
 
     ``fatal`` is the ground truth SR is scored against (split, tile bake):
-    differing or unrecorded, no A/B exists, and nothing waives it. ``arm`` is
+    differing or unrecorded, no A/B exists, and nothing waives it. ``varied`` is
     code, config, served model and reasoning effort (unset reads as
     blank), which an A/B is meant to vary; compared only where both sides
     recorded them, and waived by ``--allow-provenance-mismatch``. A side whose
-    resumes ran other code is an ``arm`` mismatch on its own."""
+    resumes ran other code is an ``varied`` mismatch on its own."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
     for key, label in (
@@ -150,7 +150,7 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     if ba and bb and ba != bb:
         fatal.append(f"tile bake CONTENT differs at the same name:  A={ba[:12]}  B={bb[:12]}")
 
-    arm: list[str] = []
+    varied: list[str] = []
     for key, label in (
         ("git_commit", "code (git_commit)"),
         ("config_sha256", "config (sha256)"),
@@ -159,20 +159,20 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     ):
         va, vb = prov_a.get(key), prov_b.get(key)
         if va is not None and vb is not None and va != vb:
-            arm.append(f"{label} differs:  A={va}  B={vb}")
+            varied.append(f"{label} differs:  A={va}  B={vb}")
     for side, prov in (("A", prov_a), ("B", prov_b)):
         if prov.get("resume_commits"):
-            arm.append(
+            varied.append(
                 f"code (git_commit) differs across resumes of {side}:  {' '.join(prov['resume_commits'])}"
             )
     fa, fb = prov_a.get("search_env_flags"), prov_b.get("search_env_flags")
     if fa is not None and fb is not None:
         ea, eb = (f.get("SEARCH_SAMPLING_REASONING_EFFORT") or "unset" for f in (fa, fb))
         if ea != eb:
-            arm.append(
+            varied.append(
                 f"reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A={ea}  B={eb}"
             )
-    return fatal, arm
+    return fatal, varied
 
 
 def main() -> None:
@@ -210,17 +210,17 @@ def main() -> None:
         )
 
     prov_a, prov_b = _run_provenance(Path(args.run_a)), _run_provenance(Path(args.run_b))
-    fatal, arm = comparability_issues(prov_a, prov_b)
+    fatal, varied = comparability_issues(prov_a, prov_b)
     if fatal:
         raise SystemExit(
             "INVALID A/B -- the two runs score against different ground truth:\n  - "
             + "\n  - ".join(fatal)
             + "\nThis is not overridable: the numbers answer different questions."
         )
-    if arm and not args.allow_provenance_mismatch:
+    if varied and not args.allow_provenance_mismatch:
         raise SystemExit(
             "INVALID A/B -- runs are not comparable:\n  - "
-            + "\n  - ".join(arm)
+            + "\n  - ".join(varied)
             + "\n(pass --allow-provenance-mismatch to override)"
         )
 
@@ -236,8 +236,10 @@ def main() -> None:
     pairs = [(int(bool(a[e].get("SR"))), int(bool(b[e].get("SR")))) for e in shared]
     print(render(ab_stats(pairs, label=args.label)))
     print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  only_b={len(set(b) - set(a))}")
-    if arm and args.allow_provenance_mismatch:
-        print("WARNING comparing non-comparable runs (override active):\n  - " + "\n  - ".join(arm))
+    if varied and args.allow_provenance_mismatch:
+        print(
+            "WARNING comparing non-comparable runs (override active):\n  - " + "\n  - ".join(varied)
+        )
 
 
 if __name__ == "__main__":

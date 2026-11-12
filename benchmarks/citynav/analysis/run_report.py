@@ -102,7 +102,7 @@ def print_precise(metrics: list[dict], n: int) -> bool:
 def _local_bake_dir(resolved: str | None) -> Path | None:
     """This machine's copy of the recorded ``tiles_dir_resolved``: the path
     itself, else its longest tail that is a directory under this repo
-    (``/scratch/<user>/MAPS/benchmarks/calcity/tiles`` -> ``benchmarks/calcity/tiles``)."""
+    (``/srv/<user>/MAPS/benchmarks/calcity/tiles`` -> ``benchmarks/calcity/tiles``)."""
     if not resolved:
         return None
     if Path(resolved).is_dir():

@@ -18,9 +18,8 @@ from benchmarks.run_record import rows as _rows
 from benchmarks.run_record.config import RunConfig, repo_provenance
 from benchmarks.run_record.episode_workdir import LiveRecorder
 from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
-from benchmarks.run_record.run_manifest import arm_env_stamp
-from maps.llm import endpoint_spec as endpoint_spec_module
-from maps.llm.endpoint_spec import TRANSIENT_CLIENT_STATUS
+from benchmarks.run_record.run_manifest import run_env_stamp
+from maps.llm.endpoint_spec import TRANSIENT_CLIENT_STATUS, EndpointSpec, EndpointUnreachable
 from maps.llm.http import ImageStoreError
 from maps.perception.sam.detect_client import SamServerOutage
 from maps.settings import Settings
@@ -30,11 +29,12 @@ log = logging.getLogger("run_benchmark")
 _RUN_PROVENANCE: dict[str, dict] = {}
 
 
-def _cached_run_provenance(search_flags: dict, *, config_path: str | None, split: str) -> dict:
+def _cached_run_provenance(
+    search_flags: dict, *, spec: EndpointSpec, config_path: str | None, split: str
+) -> dict:
     """The provenance every episode row carries (git commit, config sha256,
-    the discovered served model, the flag set), computed once per process for
+    ``spec``'s served model, the flag set), computed once per process for
     each run context: a bench process has one, a station flies several."""
-    spec = endpoint_spec_module.spec()
     key = json.dumps(
         [search_flags, config_path, split, spec.model_id, spec.tokenizer_name],
         sort_keys=True,
@@ -102,10 +102,7 @@ def is_infra_fault(exc: BaseException) -> bool:
     return (
         _exc_is_sam_infra(exc)
         or _exc_is_transient_infra(exc)
-        or any(
-            isinstance(cur, (ImageStoreError, endpoint_spec_module.EndpointUnreachable))
-            for cur in _chain(exc)
-        )
+        or any(isinstance(cur, (ImageStoreError, EndpointUnreachable)) for cur in _chain(exc))
     )
 
 
@@ -133,8 +130,10 @@ def dispatch_one(
     """
     t0 = time.monotonic()
 
-    # Every row's provenance carries the arm identity, as the manifest stamps it.
-    _prov = _cached_run_provenance(arm_env_stamp(bench), config_path=cfg.source_path, split=split)
+    # Every row's provenance carries the run's flags, as the manifest stamps them.
+    _prov = _cached_run_provenance(
+        run_env_stamp(bench), spec=bench.endpoint_spec, config_path=cfg.source_path, split=split
+    )
 
     def _stamp(rec: dict) -> dict:
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}

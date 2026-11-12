@@ -6,7 +6,7 @@ from maps.perception.geometry.sensor_spec import list_sensors
 
 def test_the_dump_is_the_code_arm_the_flight_path_serves():
     c = contract.assemble()
-    assert c["system"] == served_text.CODE_SYSTEM_PROMPT
+    assert c["system"] == served_text.SYSTEM_PROMPT
     assert c["tools"] == served_text.SERVED_TOOLS
     assert [t["function"]["name"] for t in c["tools"]] == ["run"]
     for t in c["tools"]:
@@ -20,7 +20,7 @@ def test_the_dump_is_the_code_arm_the_flight_path_serves():
     # user turn, and the dump says so instead of rendering one.
     assert "STOP PACKET" not in text
     # No sentence surface anywhere in it: no decoder mask (Python is not
-    # EBNF-able and the arm builds none), no closed-class lexicon.
+    # EBNF-able and the run builds none), no closed-class lexicon.
     assert "=== LANGUAGE" not in text and "=== LEXICON" not in text
     assert "root ::= sentence" not in text
     # Vacuity floor: the whole served surface, not a header skeleton.
@@ -47,16 +47,16 @@ def test_unknown_sensor_dies_loud_naming_the_registry():
 def test_the_dump_surface_section_names_every_call_the_namespace_serves():
     import inspect
 
-    from maps.library.block_scan import _LIBRARY_CALLS
+    from maps.library.block_scan import LIBRARY_CALLS
     from maps.library.calls import Library
 
     text = contract.dump_text()
     assert "=== SURFACE" in text
     section = text.split("=== SURFACE", 1)[1].split("=== USER TURN", 1)[0]
     # Vacuity floor.
-    assert len(_LIBRARY_CALLS) >= 11, _LIBRARY_CALLS
+    assert len(LIBRARY_CALLS) >= 11, LIBRARY_CALLS
     kws = 0
-    for call in _LIBRARY_CALLS:
+    for call in LIBRARY_CALLS:
         line = next((ln for ln in section.splitlines() if ln.strip().startswith(f"{call}(")), None)
         assert line, call
         sig = inspect.signature(getattr(Library, call))

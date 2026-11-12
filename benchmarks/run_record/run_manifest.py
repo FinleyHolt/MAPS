@@ -1,6 +1,6 @@
 """The run's record: ``run_manifest.json`` at the run root, written before the first episode flies.
 
-Identity fields are measured (served model and window off the installed
+Identity fields are measured (served model and window off the bench's
 endpoint spec, the bake off its bytes) and the config is inlined. The flight
 mission writes one at the sortie root and one per mission workdir
 (``mission=``). Write-once: a resume into the same root is refused on
@@ -13,6 +13,7 @@ import hashlib
 import json
 import socket
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -30,23 +31,23 @@ from maps.settings import Settings
 
 SCHEMA = "maps.run_manifest/v1"
 
-# The experiment-arm flags every row carries (``arm_env_stamp``). Set-only,
+# The flags that make a run what it is, which every row carries (``run_env_stamp``). Set-only,
 # except the tile bake, which is resolved.
-ARM_ENV_FLAGS = (
+RUN_ENV_FLAGS = (
     "SEARCH_CITYNAV_TILES",
-    # The imagery raster the ortho crops read: two rasters of one block are two arms.
+    # The imagery raster the ortho crops read: two rasters of one block are two runs.
     "SEARCH_CITYNAV_RGBD_DIR",
     "SEARCH_SEED_BASE",
-    # Unset flies at the serve's default, which is its own arm.
+    # Unset flies at the serve's default, which is its own run.
     "SEARCH_SAMPLING_REASONING_EFFORT",
 )
 # Set keys under these prefixes join the stamp the same way (compaction
 # budgets change reasoning behavior).
-ARM_ENV_PREFIXES = ("SEARCH_COMPACT_",)
+RUN_ENV_PREFIXES = ("SEARCH_COMPACT_",)
 
-# The ambient env the manifest records when set: the arm flags, the vars that
+# The ambient env the manifest records when set: the run flags, the vars that
 # select what runs, and the endpoints.
-AUDITED_ENV = ARM_ENV_FLAGS + (
+AUDITED_ENV = RUN_ENV_FLAGS + (
     "CITYNAV_BENCH_CONFIG",
     "CITYNAV_ROOT",
     "SEARCH_BENCHMARK_NAME",
@@ -59,7 +60,7 @@ AUDITED_ENV = ARM_ENV_FLAGS + (
     "SEARCH_REASONER_TIMEOUT_S",
     "SEARCH_REASONER_URL",
 )
-AUDITED_ENV_PREFIXES = ARM_ENV_PREFIXES + ("SEARCH_CALCITY_",)
+AUDITED_ENV_PREFIXES = RUN_ENV_PREFIXES + ("SEARCH_CALCITY_",)
 # Never recorded, ever. `.env` is the only home for secrets.
 SECRET_ENV = ("SEARCH_REASONER_API_KEY",)
 
@@ -75,23 +76,23 @@ IDENTITY_KEYS = (
     ("perception", "bake_sha256"),
     ("search_env_flags",),
 )
-# Arm flags that name a host path, not the arm: one bake at two paths is one
-# arm, and ``perception.bake_sha256`` is its identity.
-_HOST_ARM_FLAGS = ("SEARCH_CITYNAV_TILES",)
+# Run flags that name a host path, not the run: one bake at two paths is one
+# run, and ``perception.bake_sha256`` is its identity.
+_HOST_PATH_FLAGS = ("SEARCH_CITYNAV_TILES",)
 
 
 class ManifestIdentityError(RuntimeError):
     """A re-entering run's resolution contradicts the stored manifest."""
 
 
-def arm_env_stamp(bench: Bench) -> dict:
-    """The set arm flags of a run of ``bench``, plus the tile bake resolved: an
+def run_env_stamp(bench: Bench) -> dict:
+    """The set run flags of a run of ``bench``, plus the tile bake resolved: an
     unset SEARCH_CITYNAV_TILES records ``bench.tiles_dir``, so a default-bake
     row proves its bake instead of reading as unrecorded. The manifest and
     every row stamp this."""
     env = bench.environ
-    stamp = {k: env[k] for k in ARM_ENV_FLAGS if env.get(k, "") != ""}
-    stamp.update({k: v for k, v in env.items() if k.startswith(ARM_ENV_PREFIXES) and v != ""})
+    stamp = {k: env[k] for k in RUN_ENV_FLAGS if env.get(k, "") != ""}
+    stamp.update({k: v for k, v in env.items() if k.startswith(RUN_ENV_PREFIXES) and v != ""})
     if "SEARCH_CITYNAV_TILES" not in stamp:
         stamp["SEARCH_CITYNAV_TILES"] = str(bench.tiles_dir)
     return stamp
@@ -101,7 +102,7 @@ _EFFORT = "SEARCH_SAMPLING_REASONING_EFFORT"
 
 
 def settle_effort(bench: Bench) -> Bench:
-    """``bench`` with the arm's reasoning effort in its environment as the
+    """``bench`` with the run's reasoning effort in its environment as the
     requests carry it (stripped; blank is unset). Endpoint discovery has
     checked it against the served card; called once after it, before any
     stamp or spawn."""
@@ -114,16 +115,20 @@ class EndpointRefused(RuntimeError):
 
 def install_endpoint(bench: Bench, settings: Settings) -> Bench:
     """Discover the serve ``settings`` names (the engine's, built from
-    ``bench.environ``), install its spec and settle the effort, once per
-    process before any inference or perception call. Returns ``bench`` with
-    the effort settled (:func:`settle_effort`). Raises
-    :class:`EndpointRefused`."""
+    ``bench.environ``) before any inference or perception call: ``bench``
+    flying it (:func:`with_endpoint`). Raises :class:`EndpointRefused`."""
     try:
         spec = endpoint_spec.discover_from_settings(settings)
     except endpoint_spec.EndpointDiscoveryError as exc:
         raise EndpointRefused(f"endpoint discovery failed: {exc}") from exc
-    endpoint_spec.install_spec(spec)
-    return settle_effort(bench)
+    return with_endpoint(bench, spec)
+
+
+def with_endpoint(bench: Bench, spec: endpoint_spec.EndpointSpec) -> Bench:
+    """``bench`` flying the discovered ``spec``, logged, with the effort
+    settled (:func:`settle_effort`)."""
+    endpoint_spec.log_spec(spec)
+    return settle_effort(replace(bench, endpoint_spec=spec))
 
 
 def _audited_env(bench: Bench) -> dict:
@@ -132,9 +137,8 @@ def _audited_env(bench: Bench) -> dict:
     return {k: env[k] for k in sorted(keys - set(SECRET_ENV)) if k in env}
 
 
-def _endpoint_section() -> dict:
-    """The installed endpoint spec's served facts; raises if none is installed."""
-    s = endpoint_spec.spec()
+def _endpoint_section(s: endpoint_spec.EndpointSpec) -> dict:
+    """The served facts of the spec a run flies."""
     return {
         "base_url": s.base_url,
         "model_id": s.model_id,
@@ -167,18 +171,18 @@ def build_manifest(
     mission: dict | None = None,
 ) -> dict:
     """The resolved record of a run of ``bench``. ``mission`` is the flight mission's per-mission
-    stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
-    in ``search_env_flags`` (:func:`arm_env_stamp`), since the mission's requests
+    stamp, recorded whole; a ``reasoning_effort`` it names replaces the run's
+    in ``search_env_flags`` (:func:`run_env_stamp`), since the mission's requests
     carried it."""
     resolved = resolve_config(config_path)[0]
-    arm = arm_env_stamp(bench)
+    flags = run_env_stamp(bench)
     if mission is not None and mission.get("reasoning_effort") is not None:
-        arm[_EFFORT] = str(mission["reasoning_effort"])
-    endpoints = _endpoint_section()
+        flags[_EFFORT] = str(mission["reasoning_effort"])
+    endpoints = _endpoint_section(bench.endpoint_spec)
     prov = repo_provenance(
         config_path=str(config_path),
         split=split,
-        search_flags=arm,
+        search_flags=flags,
         served_model=endpoints["model_id"],
         served_build=endpoints["tokenizer"],
     )
@@ -219,7 +223,7 @@ def _get(d: dict, keypath: tuple) -> object:
 def _identity(d: dict, keypath: tuple) -> object:
     v = _get(d, keypath)
     if keypath == ("search_env_flags",) and isinstance(v, dict):
-        return {k: x for k, x in v.items() if k not in _HOST_ARM_FLAGS}
+        return {k: x for k, x in v.items() if k not in _HOST_PATH_FLAGS}
     return v
 
 

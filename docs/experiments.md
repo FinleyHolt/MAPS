@@ -2,7 +2,7 @@
 
 This page lists the experiments that the main branch reproduces directly: the
 CityNav and Cal City runs of the full method, with the command that flies
-each arm and the reader that derives each number.
+each run and the reader that derives each number.
 
 The ablation arms, the comparison against the baselines, and the as-flown
 replay reproduce from the tag
@@ -14,10 +14,10 @@ start the two services ([`endpoints.md`](endpoints.md)).
 
 ## Experiment list
 
-| Experiment | Split and episodes | Arms | Config and flags | Reader |
+| Experiment | Split and episodes | Runs | Config and flags | Reader |
 |---|---|---|---|---|
-| E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 26B-A4B; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
-| E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table` |
+| E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 26B-A4B; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `run_table`, `run_report` |
+| E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `run_table` |
 
 | Experiment | Requirement |
 |---|---|
@@ -33,14 +33,14 @@ to resume its root.
 
 ### E2
 
-Fly each arm over the whole split:
+Fly each run over the whole split:
 
 ```sh
 SEARCH_SAMPLING_REASONING_EFFORT=xhigh \
   python -m benchmarks.citynav.bench_fullset --split test_unseen --out-root output/e2/qwen38-flash-next-xhigh
 ```
 
-For the other arms, change the effort (`low`, `medium`, or `0.99` with
+For the other runs, change the effort (`low`, `medium`, or `0.99` with
 Inkling Small served), or serve Gemma 4 26B-A4B, E2B, or E4B with no effort
 set.
 
@@ -62,7 +62,7 @@ python -m benchmarks.calcity.bench_fullset \
 ## Read the results
 
 ```sh
-python -m benchmarks.citynav.analysis.arm_table output/e2/*            # SR, OSR, NE per arm
+python -m benchmarks.citynav.analysis.run_table output/e2/*            # SR, OSR, NE per run
 python -m benchmarks.citynav.analysis.run_report output/e2/inkling-small-0.99   # one root in full
 python -m benchmarks.citynav.analysis.ab_report <root a> <root b>      # paired SR of two roots
 python -m benchmarks.citynav.analysis.spend <out-root>                 # a hosted endpoint's tokens and USD

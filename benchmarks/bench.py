@@ -17,7 +17,10 @@ import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from maps.llm.endpoint_spec import EndpointSpec
 
 #: The per-block files a tile bake writes, the content :func:`bake_sha256` hashes.
 BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json")
@@ -151,6 +154,9 @@ class Bench:
     #: settings are built from it, and an attempt child inherits it. Nothing
     #: downstream of an entry point reads ``os.environ``.
     environ: Mapping[str, str] = field(repr=False)  # it can hold the reasoner's key
+    #: The serve this bench's runs fly, as discovery found it
+    #: (``run_manifest.install_endpoint``); None until an entry point discovers it.
+    endpoint_spec: EndpointSpec | None = None
 
     @property
     def engine(self) -> EpisodeEngine:

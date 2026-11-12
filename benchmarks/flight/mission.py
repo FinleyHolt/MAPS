@@ -1,4 +1,4 @@
-"""One flying mission, held open across operator turns: the method half of the station that flew the C-12.
+"""One mission flown on a ``Vehicle`` (the twin, or an aircraft's own), held open across operator turns.
 
 The search stack is hydrated as the bench hydrates it and the conversation
 flies on a worker thread. Two things differ from the bench. The reply is a
@@ -48,10 +48,10 @@ from benchmarks.run_record.episodes import (
     write_episode_json,
 )
 from benchmarks.run_record.run_manifest import (
-    arm_env_stamp,
     build_manifest,
     emit_or_verify,
-    settle_effort,
+    run_env_stamp,
+    with_endpoint,
 )
 from maps.llm import endpoint_spec
 from maps.llm.http import CallCanceled
@@ -156,7 +156,7 @@ class Mission:
         self.split = split
         self.config = config
         self.workdir = Path(workdir)
-        #: A string the serve accepts; None (or blank) flies the arm's.
+        #: A string the serve accepts; None (or blank) flies the run's.
         self.reasoning_effort = (reasoning_effort or "").strip() or None
         #: The height above ground the crew is commanded to fly.
         self.agl_m = float(agl_m)
@@ -345,12 +345,11 @@ class Mission:
         engine = self.bench.engine
         try:
             self._set(STATE_FLYING)
-            endpoint_spec.install_spec(
-                endpoint_spec.discover_from_settings(from_environ(self.bench.environ))
+            self.bench = with_endpoint(
+                self.bench, endpoint_spec.discover_from_settings(from_environ(self.bench.environ))
             )
-            self.bench = settle_effort(self.bench)
             if self.reasoning_effort:
-                check_effort(endpoint_spec.spec().model_id, self.reasoning_effort)
+                check_effort(self.bench.endpoint_spec.model_id, self.reasoning_effort)
             self._write_manifests()
 
             h = hydrate(
@@ -564,11 +563,11 @@ class Mission:
                 "git_commit": self.git_commit,
                 "git_dirty": self.git_dirty,
                 "served_model": (
-                    endpoint_spec.spec().model_id if endpoint_spec.spec_installed() else None
+                    self.bench.endpoint_spec.model_id if self.bench.endpoint_spec else None
                 ),
                 "bake_sha256": self.bench.bake_sha256(),
             },
-            "search_env_flags": arm_env_stamp(self.bench),
+            "search_env_flags": run_env_stamp(self.bench),
             "ts": self.started_at,
             "started_at_utc": self.started_at_utc,
             "elapsed_s": self.ended_s if self.ended_s is not None else self.elapsed_s(),

@@ -122,7 +122,6 @@ def serves(monkeypatch):
         tokenizer_name="qwen",
         max_output_tokens=40000,
     )
-    monkeypatch.setattr(endpoint_spec, "_SPEC", None)
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")  # no tokenizer to measure the prompt with
     monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: spec)
     sent: list[dict] = []
@@ -250,11 +249,9 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(
     engine state alone."""
     from benchmarks.citynav.run_benchmark import episode_runner
     from benchmarks.flight import mission as M
-    from maps.llm import endpoint_spec
     from maps.perception.sam.detect_client import SamDetectClient
 
     monkeypatch.setattr(episode_runner, "make_perception", lambda settings: SamDetectClient())
-    endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
     h = M.hydrate(
         bench=calcity.bench,
         episode_id="calcity::0#0",
@@ -270,9 +267,7 @@ def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(
     calcity, serves, monkeypatch
 ):
     from benchmarks.flight import mission as M
-    from maps.llm import endpoint_spec
 
-    endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
     h = M.hydrate(
         bench=calcity.bench,
         episode_id="calcity::0#0",
@@ -341,14 +336,14 @@ def test_a_config_the_loader_refuses_leaves_no_sortie(calcity, serves, tmp_path)
     from benchmarks.flight import twin
 
     repo = __import__("pathlib").Path(__file__).resolve().parents[3]
-    arm = tmp_path / "arm.yaml"
-    arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nbogus: 1\n")
+    config = tmp_path / "run.yaml"
+    config.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nbogus: 1\n")
     out = tmp_path / "out"
     with pytest.raises(ValueError, match="unknown config key"):
         twin.main(
             [
                 "--config",
-                str(arm),
+                str(config),
                 "--episode",
                 "calcity::0#0",
                 "--ortho",
@@ -449,6 +444,7 @@ def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path,
     assert row["status"] == "infra" and row["error"].startswith(
         "EndpointUnreachable: endpoint unreachable"
     )
+    assert row["provenance"]["served_model"] is None  # no serve answered this mission
 
 
 def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(
@@ -617,7 +613,7 @@ def test_an_authored_start_without_the_operators_words_is_refused(calcity, serve
 
 
 def test_the_mission_stamps_the_effort_its_requests_carry(calcity, serves, tmp_path, monkeypatch):
-    """The arm's effort rides the requests stripped; the mission's manifest
+    """The run's effort rides the requests stripped; the mission's manifest
     and its row's flags carry the same spelling."""
     from benchmarks.flight import twin
 
@@ -644,11 +640,12 @@ def test_the_mission_stamps_the_effort_its_requests_carry(calcity, serves, tmp_p
     assert serves[0]["reasoning_effort"] == "0.9"
     assert manifest["mission"]["reasoning_effort"] == "0.9"
     assert row["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.9"
+    assert row["provenance"]["served_model"] == "inkling-small"
 
 
-def test_a_blank_mission_effort_flies_the_arm_s(calcity, serves, tmp_path, monkeypatch):
+def test_a_blank_mission_effort_flies_the_run_s(calcity, serves, tmp_path, monkeypatch):
     """--reasoning-effort "" is no word of the mission's own: the requests
-    carry the arm's effort, as the manifest and row stamp it."""
+    carry the run's effort, as the manifest and row stamp it."""
     from benchmarks.flight import twin
 
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")

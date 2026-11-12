@@ -10,20 +10,20 @@ union)."""
 
 from __future__ import annotations
 
-from maps.query.op_compare import _compare
-from maps.query.op_cut_and_sort import _filter_items, _score_by
-from maps.query.op_find import _find, _stratum
-from maps.query.op_io import ProgramError, _Args, _Run
-from maps.query.op_roads import _crossings, _ends
+from maps.query.op_compare import run_compare
+from maps.query.op_cut_and_sort import run_filter_items, run_score_by
+from maps.query.op_find import run_find, run_stratum
+from maps.query.op_io import OpArgs, ProgramError, ProgramRun
+from maps.query.op_roads import run_crossings, run_ends
 
 OPS = {
-    "find": _find,
-    "crossings": _crossings,
-    "ends": _ends,
-    "compare": _compare,
-    "filter_items": _filter_items,
-    "score_by": _score_by,
-    "stratum": _stratum,
+    "find": run_find,
+    "crossings": run_crossings,
+    "ends": run_ends,
+    "compare": run_compare,
+    "filter_items": run_filter_items,
+    "score_by": run_score_by,
+    "stratum": run_stratum,
 }
 
 
@@ -33,7 +33,7 @@ def run_program(cands, anchors, program, seed_results=None, staged=None, standin
     shadows its ``seed_results`` entry; ``staged`` maps stand() handles to
     ``{"handle", "from_xy", "up_unit"}`` and ``standing`` names the one whose
     side columns ride every find."""
-    cx = _Run(cands, anchors, seed_results, staged, standing)
+    cx = ProgramRun(cands, anchors, seed_results, staged, standing)
     ops = program["ops"]
     for op in ops:
         cx.op = op["op"]
@@ -41,7 +41,7 @@ def run_program(cands, anchors, program, seed_results=None, staged=None, standin
         # compiles to items=None.
         try:
             cx.results[op["ref"]] = OPS[op["op"]](
-                cx, _Args({k: v for k, v in op["args"].items() if v is not None}, cx)
+                cx, OpArgs({k: v for k, v in op["args"].items() if v is not None}, cx)
             )
         except ProgramError as exc:
             exc.op = cx.op  # the caller's repeated-error class

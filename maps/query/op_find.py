@@ -11,12 +11,12 @@ from maps.query import text_match as T
 from maps.query.op_io import (
     ProgramError,
     Result,
-    _as_rows,
-    _attach_standing_columns,
-    _ordered,
-    _quote,
+    as_rows,
+    attach_standing_columns,
+    keeps_order,
+    quote_value,
 )
-from maps.query.result_tables import STANDING_SIDE_PREFIXES, _census_note
+from maps.query.result_tables import STANDING_SIDE_PREFIXES, find_census_note
 
 
 class _FindMemo(threading.local):
@@ -71,7 +71,7 @@ class _FindMemo(threading.local):
 
     def census_note(self, query, rows) -> str:
         if query not in self.census:
-            self.census[query] = _census_note(rows, query)
+            self.census[query] = find_census_note(rows, query)
         return self.census[query]
 
 
@@ -115,7 +115,7 @@ def _miss_notes(query, q_data) -> tuple[str, list]:
     tokens = sorted({t for cl in q_data for t in cl[1]})
     cond = (
         f"find matched nothing: no row scored >= {T.FUZZY_THRESHOLD} "
-        f"against query {_quote(query)} (query tokens: {tokens})."
+        f"against query {quote_value(query)} (query tokens: {tokens})."
     )
     for cl in q_data:
         w = str(cl[0] or "").strip()
@@ -124,7 +124,7 @@ def _miss_notes(query, q_data) -> tuple[str, list]:
         canon = color_words.normalize_color(w)
         if canon in color_words.COLOR_ENUM:
             return cond, [
-                f"{_quote(w)} is a color word on the closed palette: color "
+                f"{quote_value(w)} is a color word on the closed palette: color "
                 f"is not row text -- it rides the color_{canon} column, which "
                 f"attaches when the color word is named."
             ]
@@ -227,19 +227,19 @@ def _name_cut(rows, want, query, idf) -> tuple[list, str | None]:
     ]
     if not named:
         raise ProgramError(
-            f"nothing found is NAMED {_quote(want)} and matches {_quote(query)}"
+            f"nothing found is NAMED {quote_value(want)} and matches {quote_value(query)}"
             ". A name is matched as a NAME, never fuzzily -- check the "
-            f"spelling, or drop the class word and say find({_quote(want)})."
+            f"spelling, or drop the class word and say find({quote_value(want)})."
         )
     if len(named) == len(rows):
         return named, None
     return named, (
-        f"name={_quote(want)} kept {len(named)} of {len(rows)} by "
+        f"name={quote_value(want)} kept {len(named)} of {len(rows)} by "
         "NAME; the fuzz band does not apply to a name"
     )
 
 
-def _find(cx, a):
+def run_find(cx, a):
     """Search the surface: a query returns its match set best-first; no
     query browses every row."""
     notes: list = []
@@ -258,7 +258,7 @@ def _find(cx, a):
         q_raw = str(query)
         if ";" in q_raw:
             raise ProgramError(
-                f"find query {_quote(q_raw)} contains ';', which is not a "
+                f"find query {quote_value(q_raw)} contains ';', which is not a "
                 f"query operator (the whole string would fuzz-score "
                 f"as one text blob). ALTERNATIVES are the literal "
                 f"UPPERCASE token OR ('a=b OR c=d', scored as the "
@@ -302,7 +302,7 @@ def _find(cx, a):
             matched = True
     op_cols = []
     if cx.standing is not None and rows:
-        rows = _attach_standing_columns(rows, cx.standing)
+        rows = attach_standing_columns(rows, cx.standing)
         h = str(cx.standing["handle"])
         op_cols = [f"{p}{h}" for p in STANDING_SIDE_PREFIXES]
     if not rows and query:
@@ -312,10 +312,10 @@ def _find(cx, a):
     )
 
 
-def _stratum(cx, a):
+def run_stratum(cx, a):
     """A find's match tier (exact / tagged / fuzzy) as a set, in input
     order."""
-    items = _as_rows(cx, a["items"])
+    items = as_rows(cx, a["items"])
     tier = a["tier"]
     if not any(isinstance(it.get("name_match"), (int, float)) for it in items):
         raise ProgramError(
@@ -331,5 +331,5 @@ def _stratum(cx, a):
             if isinstance(v := it.get("name_match"), (int, float)) and _tier(v) == tier
         ),
         "cut",
-        ordered=_ordered(items),
+        ordered=keeps_order(items),
     )
