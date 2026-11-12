@@ -12,7 +12,7 @@ import re
 import sys
 from typing import TYPE_CHECKING
 
-from maps.library.block_scan import _LIBRARY_ATTRS, _shadows, served_calls
+from maps.library.block_scan import _LIBRARY_CALLS, _shadows
 from maps.library.op_compiler import (
     CARDINAL_ORDER, CodeError, bind_row, fid_like, refuse_metres_in_within,
     split_diagonal)
@@ -20,7 +20,6 @@ from maps.query.result_tables import (
     AUTOATTACH_PREFIXES, MODEL_UNSERVED_COLUMNS, STANDING_SIDE_PREFIXES)
 from maps.query.op_io import empty_window_refusal, sanitize_token, window_span
 from maps.query.spatial_math import COMPASS_UNIT
-from maps.withhold import withheld
 from maps.xy_token import is_xy
 
 if TYPE_CHECKING:
@@ -131,19 +130,13 @@ class _Cuts:
 
     __slots__ = ()
 
-    def __getattribute__(self, k):
-        if k in _LIBRARY_ATTRS and withheld("library"):
-            raise AttributeError    # __getattr__ answers as for a name no row has
-        return object.__getattribute__(self, k)
-
     def __getattr__(self, k: str):
         # Reached only when no method or slot has the name: a SET read as a
         # row (``r1.xy``) or a keyword spelled as a method (``r1.nearest``).
-        lib = withheld("library")
-        if k.startswith("_") or (lib and k in _LIBRARY_ATTRS):
+        if k.startswith("_"):
             raise AttributeError(
                 f"{type(self).__name__!r} object has no attribute {k!r}")
-        if k in served_calls():
+        if k in _LIBRARY_CALLS:
             raise AttributeError(
                 f"{k}() is a call, not a method: call it on its own, {k}(...)")
         if isinstance(self, Rows):
@@ -153,9 +146,8 @@ class _Cuts:
             name = mp and mp.name_of(self)
         # A remedy names the set as the model does, else binds it first.
         said, then = (name, "") if name else ("s", "bind it first (s = ...); ")
-        kw = None if lib else (
-            "order" if k in ("nearest", "color", "direction")
-            else "filter" if k in _FILTER_KWARGS else None)
+        kw = ("order" if k in ("nearest", "color", "direction")
+              else "filter" if k in _FILTER_KWARGS else None)
         if kw:
             raise AttributeError(
                 f"{k} is a keyword, not a method: {then}{said}.{kw}({k}=...)")
@@ -195,7 +187,7 @@ class _Cuts:
                  else mp and mp.name_of(self)) or UNNAMED)
         what = "a row" if isinstance(self, Row) else f"a set of {len(self)} row(s)"
         raise TypeError(f"{name} is {what}, not a call"
-                        + (f": {_shadows(name)}" if name in served_calls() else "."))
+                        + (f": {_shadows(name)}" if name in _LIBRARY_CALLS else "."))
 
     def _mission(self):
         """The mission the rows came from; rows that carry none (an empty
@@ -366,10 +358,9 @@ class Row(_Cuts):
                     if isinstance(k, str) and k.startswith(p)), None)
         generic = (f"row {row.get('fid')} carries no {k!r}; its columns "
                    f"are {sorted(self.keys())[:12]}")
-        if pre is None or pre == "color_" or withheld("library"):
+        if pre is None or pre == "color_":
             # a colour column is a PALETTE word, not a relate; the
-            # off-palette word has its own loud error at the op layer; and
-            # under the ``library`` withhold nothing relates
+            # off-palette word has its own loud error at the op layer
             return generic
         place = k[len(pre):]
         if pre in STANDING_SIDE_PREFIXES:

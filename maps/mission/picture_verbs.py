@@ -14,7 +14,6 @@ from maps.mission.picture_requests import (
     crop_requests, look_vision_text, map_spec, map_vision_text)
 from maps.render.look_render import (
     LOOK_MAX_BADGES as _MAP_MAX_MARKS, look_label, look_outline, look_xy)
-from maps.withhold import withheld
 
 
 log = logging.getLogger(__name__)
@@ -44,11 +43,6 @@ def _deliver_frames(jpegs: list[bytes], sink: list[str], workdir: Path | None = 
         except OSError:
             log.warning("frame %s not written under %s", sha[:12], workdir,
                         exc_info=True)
-
-
-# What a look and a pass's catch say under the ``images`` withhold.
-_PICTURE_WITHHELD_OF = ("the {}'s caption follows in the next message; "
-                        "its picture is not served on this run")
 
 
 class _PictureVerbs:
@@ -81,24 +75,14 @@ class _PictureVerbs:
         if not fj:
             return
         fv_text = look_vision_text(fv)
-        shown = not withheld("images")
-        fv_note = ("the view follows." if shown else
-                    _PICTURE_WITHHELD_OF.format("view"))
-        if shown:
-            _deliver_frames(fj, self._block_frames, self.workdir)
-        self.pending_vision.append((fv_text, fj if shown else []))
-        _add_note(report, fv_note)
+        _deliver_frames(fj, self._block_frames, self.workdir)
+        self.pending_vision.append((fv_text, fj))
+        _add_note(report, "the view follows.")
 
     def _ship(self, ack: dict, kind: str, jpegs: list, vis_text: str) -> bool:
-        """Queue one look's or map's pictures (or, under the images
-        withhold, its caption alone) for the next message; ``ack`` states
-        what follows. True when pictures shipped."""
+        """Queue one look's or map's pictures for the next message;
+        ``ack`` states what follows. True when pictures shipped."""
         ack["delivered"] = len(jpegs)
-        if jpegs and withheld("images"):
-            ack["delivered"] = 0
-            ack["note"] = _PICTURE_WITHHELD_OF.format(kind)
-            self.pending_vision.append((vis_text, []))
-            return False
         if jpegs:
             ack["note"] = f"the {kind} follows in the next message"
             _deliver_frames(jpegs, self._block_frames, self.workdir)
@@ -153,8 +137,7 @@ class _PictureVerbs:
             mp = self._mission_py
             name = mp.ref_name(handle) or mp.call_arg("look")
             return {"error": (f"{name or handle} holds no rows to look at; "
-                              "name a handle that has some"
-                              + ("" if withheld("library") else ", or find() one first"))}
+                              "name a handle that has some, or find() one first")}
         fids = [row_token(r) for r in rows]
         return self._crops_of(
             fids, marks=marks,

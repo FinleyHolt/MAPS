@@ -5,7 +5,7 @@
 The twin is a :class:`benchmarks.flight.vehicle.Vehicle`: it flies each posted
 leg straight on through the rest of the pass at the C-12's speed, wings level,
 and records a pose-tagged frame at the recorder ring's rate
-(``recorded_ring.RING_HZ``), its pixels rendered on
+(``RING_HZ``), its pixels rendered on
 request off the ortho (``<map>_rgb.tif`` beside ``<map>.tif``) at the camera
 pose the live source places it by. The endpoints come from the environment as
 the bench's do; the run lands under ``--out/<UTC stamp>/`` with the run
@@ -35,14 +35,16 @@ from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import map_render
 from benchmarks.flight.airframe import C12_LEVER_M, C12_SPEED_MPS
 from benchmarks.flight.live_source import open_live
-from benchmarks.flight.mission import STATE_ENDED, Mission, converse, flight_config, resolve_episode, summary_line
+from benchmarks.flight.mission import STATE_ENDED, Mission, converse, resolve_episode, summary_line
 from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag, tag_pose
-from benchmarks.flight.recorded_ring import RING_HZ
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, local_to_lonlat
 from benchmarks.flight.vehicle import Leg
+from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import open_episode_dir
 from maps.perception.geometry.sensor_spec import resolve_sensor
 
+#: The rate the recorder kept its ring at, frames a second.
+RING_HZ = 2.0
 #: A twin frame's JPEG quality, the recorder's own.
 FRAME_JPEG_QUALITY = 90
 #: The receiver's clock at the twin's time zero.
@@ -195,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
 
     bench = calcity_bench(os.environ)
     split = args.split or bench.default_split
-    cfg = flight_config(args.config, bench.environ)
+    cfg = load_config(args.config)
     sensor = resolve_sensor(cfg.sensor)
     episode = resolve_episode(bench, args.episode, split, args.start_xy)
     map_name = episode.map_name

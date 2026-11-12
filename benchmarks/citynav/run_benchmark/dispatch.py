@@ -19,7 +19,7 @@ from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episod
 from benchmarks.run_record.episode_workdir import LiveRecorder
 from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
-from benchmarks.run_record.run_manifest import arm_stamp
+from benchmarks.run_record.run_manifest import arm_env_stamp
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, ImageStoreError
 from maps.perception.sam.detect_client import SamServerOutage
@@ -127,7 +127,7 @@ def dispatch_one(
     t0 = time.monotonic()
 
     # Every row's provenance carries the arm identity, as the manifest stamps it.
-    _prov = _cached_run_provenance(arm_stamp(cfg.policy, bench), config_path=cfg.source_path, split=split)
+    _prov = _cached_run_provenance(arm_env_stamp(bench), config_path=cfg.source_path, split=split)
 
     def _stamp(rec: dict) -> dict:
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}

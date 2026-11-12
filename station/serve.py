@@ -51,10 +51,11 @@ from pydantic import BaseModel
 from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import open_live
-from benchmarks.flight.mission import Mission, flight_config, resolve_episode
+from benchmarks.flight.mission import Mission, resolve_episode
 from benchmarks.flight.tile_georef import map_bounds
 from benchmarks.flight.twin import Twin
 from benchmarks.run_record import rows
+from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL,
                                                    open_episode_dir)
 from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA, TOUR_CURSOR
@@ -582,7 +583,7 @@ class Station:
             b = map_bounds(self.tiles_dir, self.map_name)
             start_xy = ((b.x_min + b.x_max) / 2, (b.y_min + b.y_max) / 2)
             episode_id = f"{self.map_name}{OPERATOR}{time.strftime('%H%M%S', time.gmtime())}"
-        cfg = flight_config(self.config, self.bench.environ)
+        cfg = load_config(self.config)
         sensor = resolve_sensor(cfg.sensor)
         episode = resolve_episode(self.bench, episode_id, self.split, start_xy)
         start_alt, ground = self.bench.engine.start_altitude_m(cfg, self.map_name, episode.start_z)

@@ -5,25 +5,19 @@ every key) or an override: ``base: <file>`` names the file it changes,
 relative to itself, and the file holds only the keys it changes. Chains
 resolve and deep-merge; ``_SCHEMA`` is the one statement of every key, its
 type and its range, and the loader refuses an unknown key, a missing key or
-a bad value at load, naming the key and the file. ``_OPTIONAL`` keys may be
-left out; an absent one takes its ``RunConfig`` default.
+a bad value at load, naming the key and the file.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
-import importlib.util
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 from benchmarks import REPO_ROOT
 from maps.perception.geometry.sensor_spec import resolve_sensor
-from maps.settings import WITHHOLD_ENV, Settings, from_environ
-from maps.withhold import WITHHOLDS
 
 
 _NUM = (int, float)
@@ -36,14 +30,6 @@ def _one_of(*allowed: object) -> tuple[Callable[[Any], bool], str]:
 
 def _sensor_ok(v: Any) -> bool:
     return resolve_sensor(v) is not None  # a bad name or override raises, naming the problem
-
-
-def _policy_ok(v: Any) -> bool:
-    # By name: benchmarks carries no static import of baselines.
-    try:
-        return importlib.util.find_spec(f"baselines.{v}.policy") is not None
-    except ModuleNotFoundError:
-        return False
 
 
 _POS = (lambda v: v > 0), "> 0"
@@ -59,13 +45,7 @@ _SCHEMA: dict[str, Any] = {
     "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
     "altitude_cap_m": (_NUM, _POS),
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
-    "withhold": (list, (
-        lambda v: all(isinstance(n, str) and n in WITHHOLDS for n in v) and len(set(v)) == len(v),
-        f"a list of distinct names from {sorted(WITHHOLDS)}")),
-    "policy": (str, (_policy_ok, "the name of a baselines/<policy>/policy.py")),
 }
-# Keys a config may leave out.
-_OPTIONAL = {"policy"}
 
 
 @dataclass
@@ -85,36 +65,8 @@ class RunConfig:
     altitude_cap_m: float
     # A registered sensor name or an inline override (sensor_spec).
     sensor: str | dict
-    # Bench-only ablation withholds (maps.withhold); empty serves the
-    # flown text exactly.
-    withhold: list
-    # A published method that chooses the stops in place of the mission
-    # conversation (baselines/<policy>/policy.py); None flies the mission.
-    policy: str | None = None
     # The resolved top-level YAML path, written by ``load_config``.
     source_path: str | None = None
-
-
-def engine_settings(cfg: RunConfig, environ: Mapping[str, str]) -> Settings:
-    """The engine's settings (``maps.settings``) for a run of ``cfg`` under
-    ``environ``, the run's environment (``Bench.environ``): what the
-    environment states, with the config's ``withhold`` in place of
-    ``SEARCH_WITHHOLD``. The config owns it: a value left in the shell never
-    stands."""
-    return dataclasses.replace(from_environ(environ), withhold=frozenset(cfg.withhold))
-
-
-def assert_flight_config(cfg: RunConfig, environ: Mapping[str, str]) -> None:
-    """The flight mission flies the flown engine: refuse a config, or an
-    environment (``environ``, the run's), that withholds any part of it or
-    names a baseline policy."""
-    if cfg.policy is not None:
-        raise ValueError(f"{cfg.source_path}: the flight mission flies MAPS; policy={cfg.policy!r} is a bench arm")
-    if cfg.withhold or environ.get(WITHHOLD_ENV, "").strip():
-        raise ValueError(
-            f"{cfg.source_path}: the flight mission serves the flown engine; "
-            f"withhold={cfg.withhold} {WITHHOLD_ENV}="
-            f"{environ.get(WITHHOLD_ENV, '')!r} is a bench ablation")
 
 
 def _locate(path: str | Path | None) -> Path:
@@ -158,14 +110,12 @@ def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
 
 def _check(data: dict, src: Path) -> None:
     unknown = sorted(set(data) - set(_SCHEMA))
-    missing = sorted(set(_SCHEMA) - set(data) - _OPTIONAL)
+    missing = sorted(set(_SCHEMA) - set(data))
     if unknown:
         raise ValueError(f"{src}: unknown config key(s) {unknown}")
     if missing:
         raise ValueError(f"{src}: missing config key(s) {missing}")
     for key, rule in _SCHEMA.items():
-        if key not in data:
-            continue
         v = data[key]
         types, (ok, says) = rule
         types = types if isinstance(types, tuple) else (types,)

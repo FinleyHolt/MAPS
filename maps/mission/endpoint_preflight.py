@@ -41,7 +41,6 @@ from maps.llm import endpoint_spec
 from maps.llm.flight_summary import summarize
 from maps.llm.model_cards import check_effort, effort, speaks_openai
 from maps.settings import Settings, from_process
-from maps.withhold import withholding
 
 
 def _picture() -> bytes:
@@ -126,18 +125,17 @@ def main(argv: list[str] | None = None) -> int:
 
     efforts = args.effort or [effort(None, settings.sampling)]
     failed = 0
-    with withholding(settings.withhold):
-        for asked in efforts:
-            with tempfile.TemporaryDirectory(prefix="maps-preflight-") as tmp:
-                try:
-                    if asked is not None:
-                        check_effort(spec.model_id, asked)
-                    result = _conversation(spec, asked, Path(tmp), settings)
-                except Exception as exc:  # noqa: BLE001 — a refusal is the finding
-                    failed += 1
-                    print(f"effort {asked!r}: REFUSED {type(exc).__name__}: {exc}", file=sys.stderr)
-                    continue
-            print(f"effort {asked!r}: " + json.dumps(result, default=str))
+    for asked in efforts:
+        with tempfile.TemporaryDirectory(prefix="maps-preflight-") as tmp:
+            try:
+                if asked is not None:
+                    check_effort(spec.model_id, asked)
+                result = _conversation(spec, asked, Path(tmp), settings)
+            except Exception as exc:  # noqa: BLE001 — a refusal is the finding
+                failed += 1
+                print(f"effort {asked!r}: REFUSED {type(exc).__name__}: {exc}", file=sys.stderr)
+                continue
+        print(f"effort {asked!r}: " + json.dumps(result, default=str))
     return 1 if failed else 0
 
 

@@ -1,3 +1,0 @@
-# CityNav with the images part withheld (maps/withhold.py).
-base: ../citynav.yaml
-withhold: [images]

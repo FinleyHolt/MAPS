@@ -13,16 +13,14 @@ from maps.query.op_cut_and_sort import is_color_column_key
 from maps.query.program import run_program
 from maps.library.op_compiler import (
     HANDLE_RE, HANDLE_WORD_RE, CodeError)
-from maps.withhold import withheld
 
 
 def _preflight_color_note() -> str:
     """Served on a refused preflight program that names a color column:
     before landing no row carries perceived color."""
-    return (("nothing is detected before landing" if withheld("prior")
-             else "priors carry no perceived color before landing")
-            + ", so no color column attaches yet; color enriches per-stop "
-              "after arrival.")
+    return ("priors carry no perceived color before landing"
+            ", so no color column attaches yet; color enriches per-stop "
+            "after arrival.")
 
 
 def _requests_color(op: dict) -> bool:

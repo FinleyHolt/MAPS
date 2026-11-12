@@ -220,8 +220,7 @@ def test_a_track_ending_under_a_second_before_the_report_owes_no_way_back(tmp_pa
     assert got["final_leg_ft"] == 0.0
 
 
-def test_either_copy_of_a_run_folder_belongs_to_its_sortie(tmp_path):
+def test_a_run_folder_has_a_sortie_copy_and_a_ground_station_copy(tmp_path):
     root = tmp_path / "20260101T000000Z"
     bases = Q.run_bases(root, {"workdir": "run01"})
-    assert bases[1] == tmp_path / "20260101T000000Z_grnd" / "20260101T000000Z" / "run01"
-    assert [Q.sortie_of(b) for b in bases] == [root, root]
+    assert bases == [root / "run01", tmp_path / "20260101T000000Z_grnd" / "20260101T000000Z" / "run01"]

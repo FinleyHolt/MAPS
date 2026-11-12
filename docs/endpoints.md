@@ -37,9 +37,8 @@ the repository root, in the activated environment
 
 | Extra | Contents |
 |---|---|
-| `recording` | Reader of a camera recording for the as-flown frame replay (`mcap`). |
 | `station` | Station's server (`fastapi`, `uvicorn`). |
-| `dev` | Test suite and linter, plus both extras above. |
+| `dev` | Test suite and linter, plus the extra above. |
 
 Every run records the commit it ran from. A tree without git, such as a
 `git archive` export, reads that commit from a `.commit` file at its root:
@@ -86,7 +85,7 @@ keys exactly:
 
 | Served model name | Model |
 |---|---|
-| `inkling-small`, `qwen38-flash-next-nvfp4`, `gemma4-26b-a4b-nvfp4` | Inkling Small, Qwen 3.8 Flash Next, and Gemma 4 26B-A4B, the models of E2 to E4. |
+| `inkling-small`, `qwen38-flash-next-nvfp4`, `gemma4-26b-a4b-nvfp4` | Inkling Small, Qwen 3.8 Flash Next, and Gemma 4 26B-A4B, the models of E2 and E3. |
 | `gemma4-e4b`, `gemma4-e2b` | Gemma 4 E4B and E2B (E2). |
 | `gemma4-26b-a4b-gguf` | Gemma 4 26B-A4B on the llama.cpp serve flown aboard. |
 | `kimi-k3.1-pro` | Kimi K3.1 Pro. |
@@ -128,7 +127,6 @@ variables that locate each bench's data, see
 | `SEARCH_REASONER_MODELS_URL` | Client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | Client | Arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`). Discovery refuses a value the served model's card doesn't take. Unset sends none. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | Client | HF tokenizer repo, or a local checkpoint directory on an offline machine, replacing the model card's. |
-| `SEARCH_WITHHOLD` | Client | Comma list of withheld parts (`maps/withhold.py`). A bench config's `withhold` replaces it. |
 | `SAM_SERVER_URL` | Client | SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset. A set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
 | `SAM_PORT`, `SAM_DEVICE` | Serve | Port (8772), device. |
 | `SAM3_CHECKPOINT` | Serve | Local checkpoint file. |

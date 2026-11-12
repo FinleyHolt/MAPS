@@ -5,7 +5,6 @@ The children are ``fake_runner``, whose behaviour is the episode id's map.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import signal
@@ -357,7 +356,7 @@ _INTERRUPTED = (
     "d.out_root, d.episodes_file, d.driver_log = root, root / 'episodes.jsonl', root / 'driver.log'\n"
     "d.summary_file, d.split, d.workers, d.max_wall_s, d._deadline = root / 'summary.txt', 's', 2, 0, None\n"
     "d._done_cache, d._infra_errors, d.max_infra_attempts, d._abort = set(), {}, 3, None\n"
-    "d.sample_seed, d.limit, d.allowlist_path, d.arrivals_path = 1, 0, None, None\n"
+    "d.sample_seed, d.limit, d.allowlist_path = 1, 0, None\n"
     "d._selection, d._selection_note = ['ep0'], None\n"
     "bf.WORKER_STAGGER_S = 0\n"
     "rm.build_manifest = lambda **kw: None\n"
@@ -529,84 +528,15 @@ def test_the_parser_refuses_a_count_below_one(flag, capsys) -> None:
     assert done.value.code == 2 and flag in capsys.readouterr().err
 
 
-def test_a_session_releases_each_report_at_its_arrival(driver, tmp_path, monkeypatch) -> None:
-    stream = tmp_path / "stream.json"
-    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "b"},
-                                              {"report": 1, "arrival_s": 0.6, "episode_id": "a"}]}))
-    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b", "c"])
-    d = driver()
-    d.arrivals_path = stream
-    d._selection = d._select_episodes()
-    assert d._selection == ["b", "a"], "the session flies its stream in arrival order"
-    d._t0 = time.monotonic()
-    assert d._next_claimed_episode() == "b"
-    assert d._next_claimed_episode() == "a" and d._session_s() >= 0.6, "a report was released early"
-    assert d._next_claimed_episode() is None
-
-    monkeypatch.setattr(d, "_run_attempt", lambda w, eid: {"episode_id": eid, "status": "ok", "elapsed_s": 1.0})
-    d.run_one(0, "a")
-    row = next(iter_json_rows(d.episodes_file))
-    assert row["arrival_s"] == 0.6 and row["claimed_s"] >= 0.6
-
-
-def test_a_session_refuses_a_root_that_already_holds_a_ledger(driver, tmp_path, monkeypatch, no_flight) -> None:
-    stream = tmp_path / "stream.json"
-    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
-    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
-    episodes.append_row(tmp_path, {"episode_id": "z", "status": "ok"})
-    monkeypatch.setattr(rm, "emit_or_verify", lambda *a, **k: pytest.fail("a refused session touched the manifest"))
-    d = driver()
-    d.arrivals_path = stream
-    monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("a resumed session flew"))
-    assert d.run() == 2 and "fresh --out-root" in d.driver_log.read_text()
-
-
-def test_a_session_s_manifest_names_the_stream_it_flies(driver, tmp_path, monkeypatch, no_flight) -> None:
-    stream = tmp_path / "stream.json"
-    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
-    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
-    built = {}
-    monkeypatch.setattr(rm, "build_manifest", lambda **kw: built.update(kw) or {})
-    d = driver()
-    d.arrivals_path = stream
-    d._selection = d._select_episodes()
-    monkeypatch.setattr(d, "worker_loop", lambda w: None)
-    d.run()
-    assert built["arrivals"] == hashlib.sha256(stream.read_bytes()).hexdigest()
-
-
-@pytest.mark.parametrize("flags", [["--limit", "5"], ["--sample-seed", str(bf.SAMPLE_SEED)]])
-def test_arrivals_refuse_the_shuffle_flags(flags, monkeypatch, capsys) -> None:
-    monkeypatch.setattr(bf, "Driver", lambda args: pytest.fail("a session took a shuffle flag"))
-    with pytest.raises(SystemExit):
-        bf.main(["--arrivals", "s.json", *flags])
-    assert "--arrivals selects" in capsys.readouterr().err
-
-
-def test_a_session_s_preview_names_its_stream_not_a_seed(driver, tmp_path, monkeypatch, capsys) -> None:
-    stream = tmp_path / "stream.json"
-    stream.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "a"}]}))
+def test_an_allowlist_that_cannot_be_read_is_refused_fatal(driver, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     d = driver()
-    d.arrivals_path = stream
-    d._selection = d._select_episodes()
-    assert d.dry_run() == 0
-    assert capsys.readouterr().out.startswith(f"arrivals: {stream}   split:")
-
-
-def test_a_selection_naming_episodes_off_the_split_is_refused_fatal(driver, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
-    d = driver()
-    d.arrivals_path = tmp_path / "stream.json"
-    d.arrivals_path.write_text(json.dumps({"reports": [{"report": 0, "arrival_s": 0.0, "episode_id": "z"}]}))
-    with pytest.raises(SystemExit, match="^FATAL: --arrivals names 1 episodes"):
-        d._select_episodes()
-    d.arrivals_path, d.allowlist_path = None, tmp_path / "absent.txt"
+    d.allowlist_path = tmp_path / "absent.txt"
     with pytest.raises(SystemExit, match="^FATAL: --episode-allowlist read failed"):
         d._select_episodes()
 
 
-@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial", "empty"])
+@pytest.mark.parametrize("refusal", ["split", "allowlist", "partial", "empty"])
 def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, tmp_path, monkeypatch,
                                                                       capsys) -> None:
     """A bad selection is refused as the dry run refuses it: no serve asked, no root made, no lock taken."""
@@ -617,10 +547,9 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, 
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused selection flew"))
     if refusal != "split":
         monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
-    (tmp_path / "stream.json").write_text("{}")
     (tmp_path / "ids.txt").write_text("a\nz\n")
     (tmp_path / "empty.txt").write_text("\n")
-    flags = {"split": ["--split", "nope"], "stream": ["--arrivals", str(tmp_path / "stream.json")],
+    flags = {"split": ["--split", "nope"],
              "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
              "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
              "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")]}[refusal]
@@ -632,7 +561,7 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, 
 @pytest.mark.parametrize("dry", [[], ["--dry-run"]])
 def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch, capsys) -> None:
     bad = tmp_path / "arm.yaml"
-    bad.write_text(f"base: {REPO / 'configs/citynav.yaml'}\npolicy: nope\n")
+    bad.write_text(f"base: {REPO / 'configs/citynav.yaml'}\nbogus: 1\n")
     monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(bad))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused config flew"))
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
@@ -648,17 +577,6 @@ def test_a_config_that_is_not_yaml_is_refused_naming_its_file(tmp_path, monkeypa
     assert capsys.readouterr().err.startswith(f"FATAL: {bad}: ")
 
 
-@pytest.mark.parametrize("stream", ["{}", "not json", '{"reports": [{"episode_id": "a"}]}', None])
-def test_an_unreadable_session_stream_is_refused_fatal(stream, driver, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
-    d = driver()
-    d.arrivals_path = tmp_path / "stream.json"
-    if stream is not None:
-        d.arrivals_path.write_text(stream)
-    with pytest.raises(SystemExit, match="^FATAL: --arrivals read failed"):
-        d._select_episodes()
-
-
 @pytest.mark.parametrize("ids", [["z"], ["a", "z"]])
 def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp_path, monkeypatch) -> None:
     """Every allowlisted id must be in the split: one that is not is a wrong
@@ -671,15 +589,14 @@ def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp
         d._select_episodes()
 
 
-@pytest.mark.parametrize("refusal", ["split", "stream", "allowlist", "partial", "empty"])
+@pytest.mark.parametrize("refusal", ["split", "allowlist", "partial", "empty"])
 def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a dry run flew"))
     if refusal != "split":
         monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
-    (tmp_path / "stream.json").write_text("{}")
     (tmp_path / "ids.txt").write_text("a\nz\n")
     (tmp_path / "empty.txt").write_text("\n")
-    flags = {"split": ["--split", "nope"], "stream": ["--arrivals", str(tmp_path / "stream.json")],
+    flags = {"split": ["--split", "nope"],
              "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
              "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
              "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")]}[refusal]

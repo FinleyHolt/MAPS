@@ -14,7 +14,6 @@ from maps.library.op_compiler import (
 from maps.library.rows import Row, Rows, _index_it, _one_row, _places, _set_as_list
 from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.spatial_math import COMPASS_UNIT
-from maps.withhold import withheld
 from maps.xy_token import is_xy
 
 
@@ -82,9 +81,8 @@ class _LibraryCalls(_CallArguments):
         self._fold({"note": (
             f"nothing found for {str(query)!r} lies near {anchor} -- the "
             f"nearest match is {min(vals):,.0f} m away."
-            + ("" if withheld("look_for") else
-               f" Rows of a watched class appear near {anchor} only when a "
-               "flight covers it."))})
+            f" Rows of a watched class appear near {anchor} only when a "
+            "flight covers it.")})
 
     def _rows_order(self, items, *, nearest=None, color=None):
         """A distance or a colour, never both: combining the two can rank a
@@ -255,10 +253,10 @@ class _LibraryCalls(_CallArguments):
         if isinstance(around, Rows):
             raise CodeError(
                 self._not_one_place("around", around) + (" -- or use a "
-                "name." + ("" if withheld("library") else " (A set IS one "
+                "name. (A set IS one "
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
-                "point to centre on.)") if len(around) else "."))
+                "point to centre on.)" if len(around) else "."))
         around = self._slot(around)
         self._act(self.env.map, [(self._site(around, "map"), "map")])
         return None
@@ -319,10 +317,7 @@ class _LibraryCalls(_CallArguments):
                 raise CodeError(
                     f"go_to() takes ONE thing and {name or 'that'} is a set "
                     f"of {len(x)} row(s). {_index_it(name)} -- go_to({_one_row(x, s)})"
-                    + ("." if withheld("library") else
-                       f" -- or explore({s}) to cover the whole set."))
-        elif is_xy(x) and withheld("prior"):
-            pass  # no map to name a thing on: a point is the place to fly
+                    f" -- or explore({s}) to cover the whole set.")
         elif isinstance(x, (list, tuple, set, frozenset)):
             if isinstance(x, (set, frozenset)):
                 x = _set_as_list(x)
@@ -345,8 +340,7 @@ class _LibraryCalls(_CallArguments):
                 raise CodeError(
                     f"{call}() takes ONE thing and that is a set of "
                     f"{len(x)}. Index the one you mean -- {call}(<set>[0])"
-                    + ("." if withheld("library") else
-                       " -- or explore(<set>) to cover all of it."))
+                    " -- or explore(<set>) to cover all of it.")
             if not ok_set:
                 raise CodeError(act_needs_a_thing(
                     name="go_to/explore",
@@ -357,8 +351,7 @@ class _LibraryCalls(_CallArguments):
                 raise CodeError(
                     f"{self.spelling(e) or 'that set'} holds 0 row(s) here; "
                     f"there is nothing to {_MOVE_SAYS[call]}.")
-        if (isinstance(x, str) and VIEWPOINT_RE.fullmatch(x)
-                and not withheld("library")):
+        if isinstance(x, str) and VIEWPOINT_RE.fullmatch(x):
             # A staged viewpoint is a pose, not a thing on the map: the
             # move wire would resolve it to its stand point, a coordinate.
             raise CodeError(

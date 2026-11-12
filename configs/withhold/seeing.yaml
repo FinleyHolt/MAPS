@@ -1,4 +1,0 @@
-# CityNav with the research seeing family withheld: look_for, look, images and map
-# (maps/withhold.py).
-base: ../citynav.yaml
-withhold: [look_for, look, images, map]

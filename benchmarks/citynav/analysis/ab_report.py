@@ -13,13 +13,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import math
 import random
 from pathlib import Path
 
-import yaml
 
 from benchmarks.citynav.analysis.run_report import criterion_label, load_run, run_criterion
 from benchmarks.run_record import rows as _rows
@@ -102,13 +99,13 @@ def render(st: dict) -> str:
 
 def _run_provenance(run_root: Path) -> dict:
     """The first row's provenance (else {}) with the manifest's bake hash,
-    withholds, policy, config body hash and resume commits."""
+    and resume commits."""
     prov = next((r["provenance"] for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL)
                  if r.get("provenance")), None)
     if not prov:
         return {}
     manifest = _rows.read_manifest(run_root)
-    prov = dict(prov, withhold=manifest.get("withhold"))
+    prov = dict(prov)
     commits = {prov.get("git_commit"), manifest.get("git_commit"),
                *(r.get("git_commit") for r in manifest.get("resumes") or [])} - {None}
     if len(commits) > 1:
@@ -116,11 +113,6 @@ def _run_provenance(run_root: Path) -> dict:
     bake = (manifest.get("perception") or {}).get("bake_sha256")
     if bake:
         prov["bake_sha256"] = bake
-    if manifest.get("config_yaml"):
-        config = yaml.safe_load(manifest["config_yaml"])
-        prov["policy"] = config.get("policy")
-        body = {k: v for k, v in config.items() if k not in ("withhold", "policy")}
-        prov["config_body"] = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     return prov
 
 
@@ -141,8 +133,7 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
 
     ``fatal`` is the ground truth SR is scored against (split, tile bake):
     differing or unrecorded, no A/B exists, and nothing waives it. ``arm`` is
-    code, config (apart from its withholds and baseline policy where both
-    manifests record it), served model and reasoning effort (unset reads as
+    code, config, served model and reasoning effort (unset reads as
     blank), which an A/B is meant to vary; compared only where both sides
     recorded them, and waived by ``--allow-provenance-mismatch``. A side whose
     resumes ran other code is an ``arm`` mismatch on its own."""
@@ -167,11 +158,9 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
         )
 
     arm: list[str] = []
-    config = (("config_body", "config apart from its withholds and policy (sha256)")
-              if prov_a.get("config_body") and prov_b.get("config_body") else ("config_sha256", "config (sha256)"))
     for key, label in (
         ("git_commit", "code (git_commit)"),
-        config,
+        ("config_sha256", "config (sha256)"),
         ("served_model", "served model"),
         ("served_build", "served model BUILD (tokenizer/quant)"),
     ):
@@ -241,10 +230,6 @@ def main() -> None:
     print(render(ab_stats(pairs, label=args.label)))
     print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  "
           f"only_b={len(set(b) - set(a))}")
-    treatment = [f"{k} A={prov_a.get(k)} B={prov_b.get(k)}" for k in ("withhold", "policy")
-                 if prov_a.get(k) != prov_b.get(k)]
-    if treatment:
-        print("treatment: " + "; ".join(treatment))
     if arm and args.allow_provenance_mismatch:
         print("WARNING comparing non-comparable runs (override active):\n  - "
               + "\n  - ".join(arm))

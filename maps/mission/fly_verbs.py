@@ -11,7 +11,6 @@ from maps.mission.acks import _add_note, _summarise_exc
 from maps.mission.explore_stops import cover_items
 from maps.mission.picture_requests import LOOK_MAX_CROPS
 from maps.render.look_render import look_xy
-from maps.withhold import withheld
 from maps.xy_token import format_xy_token, parse_xy_token
 
 
@@ -48,10 +47,8 @@ class _FlyVerbs:
         self.carry.mint(h, [self._ns_rows[f] for f in new_fids])
         self._those = h
         return (f"{h} — the {len(new_fids)} rows this {what} added; "
-                + (f"the handle is bound, so {h} and {h}[0] reach them"
-                   if withheld("library") else
-                   f"the handle is bound, so {h}, {h}[0] and "
-                   f"{h}.order(...) all reach them"))
+                f"the handle is bound, so {h}, {h}[0] and "
+                f"{h}.order(...) all reach them")
 
     def _pick_next(self, queue: list, cover: str | None) -> int:
         """The queue index to fly next: in a pass, a stop the recording
@@ -154,7 +151,7 @@ class _FlyVerbs:
                 item_errors.append({"target_fid": item["target_fid"],
                                      "error": "not flown."})
                 continue
-            snap_from = None if withheld("loop") else self._snap_to_row(item)
+            snap_from = self._snap_to_row(item)
             fids_before = set(self._ns_rows)
             report = self.mission_spec.fly(dict(item))
             if snap_from:
@@ -241,9 +238,9 @@ class _FlyVerbs:
         self._covered_fids = covered
         mv: dict = {
             "explored": subject, "stops": len(ok),
-            **({} if withheld("end_commit") else {"answer_if_you_reply_now": (
+            "answer_if_you_reply_now": (
                 f"the last stop of the pass over {subject}; go_to() the row "
-                f"you mean before you reply")}),
+                f"you mean before you reply"),
             "new_detections": sum(int(r.get("new_detections") or 0)
                                   for r in ok)}
         m = self._mint_rows([f for f in self._ns_rows if f not in before], "pass")
@@ -277,9 +274,6 @@ class _FlyVerbs:
                 if len(catch) < len(self.carry.rows.get(h) or []):
                     mv["catch"]["shown"] = (
                         f"first {len(catch)} of "
-                        f"{len(self.carry.rows[h])}" + (
-                            "" if withheld("look") else
-                            f" -- look({h}[a:b]) pages the rest"))
-                if withheld("images"):
-                    mv["catch"]["note"] = cack["note"]
+                        f"{len(self.carry.rows[h])}"
+                        f" -- look({h}[a:b]) pages the rest")
         return {"explored": mv}

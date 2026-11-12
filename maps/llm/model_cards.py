@@ -63,7 +63,6 @@ CARDS: dict[str, dict[str, Any]] = {
     # serving encoder's (sglang: low/high/xhigh/max = 25/50/75/100), and they
     # are NOT DeepSeek's: the release's encoding.py maps low/high/max to
     # 50/75/100 and defaults to high (75). So xhigh here is DeepSeek's default.
-    # It lists no `none`, so a baseline's dial-off is refused on it.
     "deepseek-v4.1-flash-1017": {"tokenizer": "deepseek-ai/DeepSeek-V4.1-Flash-1017", "top_p": 1.0, "top_k": -1,
                                  "efforts": ("low", "high", "xhigh", "max")},
     # GPT-5.6 Sol on an Azure (Microsoft Foundry) deployment, keyed by the

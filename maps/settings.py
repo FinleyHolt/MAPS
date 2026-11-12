@@ -19,8 +19,6 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-#: The comma list of withheld parts (``maps.withhold``); a bench config's ``withhold`` replaces it.
-WITHHOLD_ENV = "SEARCH_WITHHOLD"
 #: The image store a slow link sends each image to once (``maps.llm.http``).
 IMAGE_STORE_ENV = "MAPS_IMAGE_STORE_URL"
 
@@ -67,8 +65,6 @@ class Settings:
 
     endpoint: Endpoint = Endpoint()
     sampling: Sampling = Sampling()
-    #: The parts a bench arm withholds (``maps.withhold``), fixed for a mission.
-    withhold: frozenset[str] = frozenset()
 
 
 def from_process() -> Settings:
@@ -95,5 +91,4 @@ def from_environ(environ: Mapping[str, str]) -> Settings:
             cache_key=get("SEARCH_LLM_CACHE_KEY") or None,
         ),
         sampling=Sampling(reasoning_effort=get("SEARCH_SAMPLING_REASONING_EFFORT", "")),
-        withhold=frozenset(n.strip() for n in get(WITHHOLD_ENV, "").split(",") if n.strip()),
     )

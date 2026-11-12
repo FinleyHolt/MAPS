@@ -139,7 +139,7 @@ def test_the_centre_carries_no_competing_numeral(monkeypatch):
     assert seen and all(kw.get("draw_digits") is False for kw in seen), seen
     assert rec["priors_chipped"], "no chips drawn — the guard would pass vacuously"
     # The centre legend entry exists (callers read it) but must contribute
-    # NO glyph: its digit is withheld at draw time.
+    # NO glyph: its digit is left out at draw time.
     centre = [e for e in rec["legend"] if e.get("role") == "center"]
     assert len(centre) == 1
 

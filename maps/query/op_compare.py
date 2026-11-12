@@ -9,7 +9,6 @@ from maps.query.op_io import (
     _quote, sanitize_token)
 from maps.query.result_tables import _MODEL_HIDDEN_ROW_FIELDS
 from maps.query.row_geometry import geom_of, place_geom
-from maps.withhold import withheld
 from maps.xy_token import is_xy
 
 
@@ -35,12 +34,11 @@ def _union_members(cx, ref_el, as_label) -> list:
                 raise ProgramError(
                     f"{lbl} is empty, so 'distance to {lbl}' is undefined on "
                     f"every row and nothing can be cut or ordered by it."
-                    + ("" if withheld("look_for") else
-                       " If these are things the map does not carry (a "
-                       "pool, solar panels, a shed, a car), nothing is "
-                       "segmented until look_for names the class and a "
-                       "flight goes over the place -- arm it, fly, then "
-                       "find them again."))
+                    " If these are things the map does not carry (a "
+                    "pool, solar panels, a shed, a car), nothing is "
+                    "segmented until look_for names the class and a "
+                    "flight goes over the place -- arm it, fly, then "
+                    "find them again.")
             if len(got) > _UNION_MAX_MEMBERS:
                 raise ProgramError(
                     f"{lbl} holds {len(got)} rows and a union folds at most "

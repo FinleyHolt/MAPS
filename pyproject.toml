@@ -25,11 +25,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Reading a camera recording (benchmarks.flight.recorded_ring).
-recording = ["mcap"]
 # The station (station.serve): the web console over a twin mission or a finished run.
 station = ["fastapi", "uvicorn"]
-dev = ["pytest==9.1.1", "ruff==0.17.0", "mcap", "fastapi", "uvicorn"]
+dev = ["pytest==9.1.1", "ruff==0.17.0", "fastapi", "uvicorn"]
 
 [tool.setuptools.packages.find]
 include = ["maps*", "benchmarks*", "station*"]

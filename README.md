@@ -148,15 +148,14 @@ For the code behind each part, see [`maps/README.md`](maps/README.md) and
 
 ## Reproduce the paper
 
-[`docs/experiments.md`](docs/experiments.md) lists each experiment, the command
-that flies each arm, and the reader that derives each number.
-
-- CityNav experiments use the setup above.
-- Cal City needs a map raster and an OSM bundle that this repository doesn't
-  ship. See [`docs/data.md`](docs/data.md#cal-city).
+- The main branch reproduces the CityNav and Cal City runs of the full
+  method. For the commands and readers, see
+  [`docs/experiments.md`](docs/experiments.md).
+- The ablation arms, the comparison against the baselines, and the as-flown
+  replay reproduce from the tag
+  [`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1)
+  (`git checkout paper-v1`).
 - The closed-loop flight recordings aren't distributed.
-  [`docs/differences-from-flight.md`](docs/differences-from-flight.md) lists
-  every place this engine differs from the engine as flown.
 
 ## Use your own aircraft
 

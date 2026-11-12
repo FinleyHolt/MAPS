@@ -1,7 +1,7 @@
-"""What a block may contain: the calls a run binds (less those a withhold
-unbinds), the builtins and modules its namespace serves, and the pre-scan
-that vets one block before it runs: plain Python, minus non-whitelisted
-imports, underscores and moves a loop or a function could repeat."""
+"""What a block may contain: the calls a run binds, the builtins and
+modules its namespace serves, and the pre-scan that vets one block before
+it runs: plain Python, minus non-whitelisted imports, underscores and moves
+a loop or a function could repeat."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ import operator
 import re
 
 from maps.library.op_compiler import CodeError
-from maps.withhold import withheld
 
 
 BLOCK_FILENAME = "<mission-block>"
@@ -30,21 +29,6 @@ _MOVE_SAYS = {"go_to": "go to", "explore": "cover"}
 _LIBRARY_CALLS = ("find", "look_for", "go_to", "explore", "look",
                   "show_map", "stand", "more_of",
                   "intersection", "ends_of", "distance")
-
-# A call a bench withhold (maps.withhold) unbinds -> that withhold.
-_WITHHELD_BY = {"look_for": "look_for", "look": "look", "show_map": "map",
-                **dict.fromkeys(("find", "explore", "stand", "more_of",
-                                 "intersection", "ends_of", "distance"), "library")}
-# The rows' methods and tiers the ``library`` withhold hides: an access reads
-# as an attribute the rows never had.
-_LIBRARY_ATTRS = frozenset({"filter", "order", "distance", "exact", "tagged", "fuzzy"})
-
-
-def served_calls() -> tuple[str, ...]:
-    """The mission calls this run binds: every call less those a withhold
-    unbinds."""
-    return tuple(c for c in _LIBRARY_CALLS
-                 if c not in _WITHHELD_BY or not withheld(_WITHHELD_BY[c]))
 
 
 # Free-call spellings the surface refuses, mapped to the method that performs
@@ -103,8 +87,8 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
 
 _LOOP_MOVE_MSG = (
     "{name}() cannot go inside a loop or a def/lambda: it MOVES, and a loop moves to "
-    "every row of the set{last}{explore}. "
-    "{then}, then move once to the place you chose.")
+    "every row of the set -- go_to commits to whichever came last, and explore "
+    "flies a covering pass over each. Loop to LOOK, then move once to the place you chose.")
 
 
 def _shadows(name: str) -> str:
@@ -200,8 +184,7 @@ def scan_block(code: str, bound=()) -> ast.Module:
             raise CodeError(f"no underscore attributes (.{node.attr})")
         if isinstance(node, ast.Name):
             if node.id in _MOVE_CALLS and isinstance(node.ctx, ast.Load) \
-                    and id(node) not in called and not _stored_before(node) \
-                    and not withheld("loop"):
+                    and id(node) not in called and not _stored_before(node):
                 raise CodeError(
                     f"{node.id} is a move; call it once, {node.id}(<place>), "
                     "outside any loop or function.")
@@ -223,16 +206,10 @@ def scan_block(code: str, bound=()) -> ast.Module:
                                     ast.Lambda))
         if in_loop:
             loop_depth += 1
-        if (loop_depth and not withheld("loop") and isinstance(node, ast.Call)
+        if (loop_depth and isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
                 and node.func.id in _MOVE_CALLS):
-            raise CodeError(_LOOP_MOVE_MSG.format(
-                name=node.func.id,
-                last="" if withheld("end_commit") else " -- go_to commits to whichever came last",
-                then="Loop to read the rows"
-                if withheld("look") else "Loop to LOOK",
-                explore="" if withheld("library") else
-                ", and explore flies a covering pass over each"))
+            raise CodeError(_LOOP_MOVE_MSG.format(name=node.func.id))
         for child in ast.iter_child_nodes(node):
             _walk(child)
         if in_loop:
@@ -269,6 +246,5 @@ def looks_like_code(text: str) -> bool:
         tree = ast.parse(text)
     except SyntaxError:
         return False
-    calls = served_calls()
     return any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-               and n.func.id in calls for n in ast.walk(tree))
+               and n.func.id in _LIBRARY_CALLS for n in ast.walk(tree))

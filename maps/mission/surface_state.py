@@ -9,7 +9,6 @@ from maps.mission.picture_requests import map_features, rounded_xy
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.query.surface import build_surface_from_graph
 from maps.render.look_render import look_xy, up_bearing_deg
-from maps.withhold import withheld
 
 
 def _surface_from_ctx(ctx) -> dict:
@@ -107,8 +106,7 @@ class _SurfaceState:
             "note": (f"standing viewpoint = {h}: 'left of {h}'/'right of "
                      f"{h}'/'ahead of {h}'/'behind {h}' ride every find "
                      f"row; {h} is a point ref ('distance to {h}'); "
-                     + ("crops" if withheld("map") else "crops and maps")
-                     + " render its facing up."),
+                     "crops and maps render its facing up."),
         }}
 
     def _standing_frame(self) -> tuple[list | None, str]:

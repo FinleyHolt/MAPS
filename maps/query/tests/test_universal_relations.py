@@ -131,7 +131,7 @@ def test_centerline_row_renders_its_termini():
 def test_dc_brg_derive_from_the_mask_centroid_not_from_an_xy():
     # A row ref carrying a mask but NO usable xy still serves dc_/brg_ --
     # the center is the mask's TRUE area centroid (10, 10), derived from the
-    # mask itself. The ONE thing that withholds them is geometry that is
+    # mask itself. The ONE thing that keeps them back is geometry that is
     # several disjoint places (spatial_math.one_place), which this
     # single ring is not.
     bare = {"fid": "lot_3", "name": "Bare", "xy": None, "class": "parking",

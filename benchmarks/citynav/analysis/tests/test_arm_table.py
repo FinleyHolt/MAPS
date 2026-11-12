@@ -144,18 +144,8 @@ def test_label_falls_back_to_the_root_name(tmp_path):
     assert row["n"] == 1
 
 
-def test_an_ablation_arm_is_labelled_by_its_withholds(tmp_path):
-    root = _arm(tmp_path, "ablate", _ledger("c::1#0", "20260827_100000", 1), effort=1.0)
-    (root / "run_manifest.json").write_text(json.dumps({"withhold": ["look", "images"]}))
-    (row,) = arm_table.table([root])
-    assert row["label"] == "withhold=look,images"
-    (root / "run_manifest.json").write_text(json.dumps({"withhold": []}))
-    (row,) = arm_table.table([root])
-    assert row["label"] == "ablate"
-
-
-def test_a_long_withhold_label_keeps_the_columns_aligned(capsys):
-    label = "withhold=look_for,mission_map"
+def test_a_long_label_keeps_the_columns_aligned(capsys):
+    label = "calcity_full_method_effort_09"
     arm_table.render([{"label": label, "criterion": "the target's own shape", "n": 1},
                       {"label": "e1", "criterion": "the target's own shape", "n": 1}])
     lines = capsys.readouterr().out.splitlines()[-3:]

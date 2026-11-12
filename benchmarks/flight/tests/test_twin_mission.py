@@ -217,14 +217,14 @@ def test_a_segmenter_outage_that_ends_the_mission_is_infra(calcity, serves, tmp_
     assert row["status"] == "infra" and row["error"] == "SamServerOutage: no tile answered"
 
 
-def test_a_config_that_withholds_a_part_leaves_no_sortie(calcity, serves, tmp_path):
+def test_a_config_the_loader_refuses_leaves_no_sortie(calcity, serves, tmp_path):
     from benchmarks.flight import twin
 
     repo = __import__("pathlib").Path(__file__).resolve().parents[3]
     arm = tmp_path / "arm.yaml"
-    arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
+    arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nbogus: 1\n")
     out = tmp_path / "out"
-    with pytest.raises(ValueError, match="bench ablation"):
+    with pytest.raises(ValueError, match="unknown config key"):
         twin.main(["--config", str(arm), "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                    "--out", str(out)])
     assert not out.exists()
@@ -419,14 +419,11 @@ def test_a_mission_s_own_effort_the_served_card_refuses_never_reaches_the_reason
     assert not serves
 
 
-def test_a_pass_flies_first_the_stop_the_recording_holds_and_its_replays_fly_it_so(calcity, serves, tmp_path,
-                                                                                 monkeypatch):
+def test_a_pass_flies_first_the_stop_the_recording_holds(calcity, serves, tmp_path, monkeypatch):
     """Over the shed, then the barn north of the church, then one pass over
     the church and the shed: the chain from the barn leads with the church,
-    the recording holds the shed, so the shed is taken first. The forced
-    replay takes its recorded stops in order; the bank, holding the whole
-    run with no clock, holds both and flies the chain's head first."""
-    from benchmarks.flight import replay, twin
+    the recording holds the shed, so the shed is taken first."""
+    from benchmarks.flight import twin
     from maps.llm import http
 
     script = ["go_to(prior_2)\n", "go_to(prior_1)\n", "explore([prior_0, prior_2])\n"]
@@ -446,16 +443,8 @@ def test_a_pass_flies_first_the_stop_the_recording_holds_and_its_replays_fly_it_
     monkeypatch.setattr(http, "stream_chat_completions", reply)
     shed, church = [565.0, 995.0], [999.0, 1019.0]
 
-    def visited(out):
-        sortie = next(out.iterdir())
-        (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
-        return sortie / row["workdir"], row["visited_xy"][-2:]
-
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--out", str(tmp_path / "flown")]) == 0
-    run, order = visited(tmp_path / "flown")
-    assert order == [shed, church]
-    for tier, flags, flies in (("bank", [], [church, shed]), ("forced", ["--forced"], [shed, church])):
-        out = tmp_path / tier
-        assert replay.main([str(run), *flags, "--out", str(out)]) == 0
-        assert visited(next(out.iterdir()))[1] == flies, tier
+    sortie = next((tmp_path / "flown").iterdir())
+    (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
+    assert row["visited_xy"][-2:] == [shed, church]

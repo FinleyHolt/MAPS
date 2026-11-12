@@ -32,7 +32,7 @@ from maps.mission.program_verbs import _ProgramVerbs
 from maps.mission.reasoner import Reasoner
 from maps.mission.reply_repair import (
     MALFORMED_ENVELOPE_NUDGE, NO_FLIGHT_ABSTAIN_STREAK, NO_FLIGHT_REPLY_NUDGE,
-    TRUNCATED_TURN_NUDGE, TRUNCATED_TURN_STREAK, _GO_TO_FIRST, _envelope_residue,
+    TRUNCATED_TURN_NUDGE, TRUNCATED_TURN_STREAK, _envelope_residue,
     _not_a_reply)
 from maps.mission.serve_refusals import _REFUSAL_ENDINGS, _RETRIABLE_LLM_ERRORS
 from maps.mission.served_text import served_tools
@@ -40,7 +40,6 @@ from maps.mission.spec import MissionReply, MissionSpec
 from maps.mission.surface_state import _SurfaceState, _surface_from_ctx
 from maps.mission.watch_verbs import _WatchVerbs
 from maps.settings import Settings
-from maps.withhold import active, withheld, withholding
 from maps.world_state.context import QueryContext
 
 
@@ -72,20 +71,18 @@ def run_mission(
     the mission's own directory (its wire log and shown frames; None records
     nothing) and ``routing_key`` its router-affinity key. Returns the reply
     and the mission, for :func:`continue_mission`."""
-    # The mission is built under the set it withholds, which it keeps for every turn.
-    with withholding(settings.withhold):
-        reasoner = Reasoner(
-            endpoint_spec=endpoint_spec,
-            settings=settings,
-            workdir=workdir,
-            routing_key=routing_key,
-            seed=seed,
-            sensor_description=sensor_description,
-            cancel_event=cancel_event,
-            reasoning_effort=reasoning_effort,
-        )
-        mission = _Mission(reasoner=reasoner, workdir=workdir, rid_tag=rid_tag, preflight=True,
-                           compute_namespace=_surface_from_ctx(turn["ctx"]), **turn)
+    reasoner = Reasoner(
+        endpoint_spec=endpoint_spec,
+        settings=settings,
+        workdir=workdir,
+        routing_key=routing_key,
+        seed=seed,
+        sensor_description=sensor_description,
+        cancel_event=cancel_event,
+        reasoning_effort=reasoning_effort,
+    )
+    mission = _Mission(reasoner=reasoner, workdir=workdir, rid_tag=rid_tag, preflight=True,
+                       compute_namespace=_surface_from_ctx(turn["ctx"]), **turn)
     return mission.converse(instruction.strip()), mission
 
 
@@ -95,10 +92,9 @@ def continue_mission(mission: "_Mission", instruction: str, *,
     field path: the reply is a report), reads the surface the mission's
     ``ctx`` holds now, and keeps every name, handle, flown stop, staged view
     and watched class of the turns before it."""
-    with withholding(mission.withhold):
-        mission.rid_tag = rid_tag
-        mission._world_moved()
-        return mission.converse(instruction.strip())
+    mission.rid_tag = rid_tag
+    mission._world_moved()
+    return mission.converse(instruction.strip())
 
 
 class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
@@ -127,9 +123,6 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
         self.reasoner = reasoner
         #: The mission's directory, where the frames it is shown are kept; None keeps none.
         self.workdir = workdir
-        #: What the mission withholds, fixed when it is built: the set bound
-        #: then (``maps.withhold``), which every turn runs under.
-        self.withhold = active()
         self.ctx = ctx
         self.rid_tag = rid_tag
         self.transcript = transcript
@@ -250,15 +243,10 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
         return MissionReply(ended_by=ended_by, turns_used=int(turns))
 
     def converse(self, user_message: str) -> MissionReply:
-        """The mission's turn loop, under the set the mission withholds:
-        append ``user_message``, then serve ``run`` until the model's plain
-        reply or a harness ending; an empty turn, a block of code and a reply
-        with no flight behind it are repaired before a repeat is accepted as
-        the ending."""
-        with withholding(self.withhold):
-            return self._converse(user_message)
-
-    def _converse(self, user_message: str) -> MissionReply:
+        """The mission's turn loop: append ``user_message``, then serve
+        ``run`` until the model's plain reply or a harness ending; an empty
+        turn, a block of code and a reply with no flight behind it are
+        repaired before a repeat is accepted as the ending."""
         self._new_turn()
         if self.reasoner.compaction_infeasible:
             return self._mission_end("compaction_infeasible")
@@ -324,11 +312,6 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
                 continue
             transient_failures = 0
 
-            if r["kind"] == "text" and withheld("loop"):
-                # No repair under the ``loop`` withhold: any text turn ends.
-                log.info("%s mission ended by reply at turn %d (%d flights)",
-                         self.rid_tag, turn_idx, self.turn_flights)
-                return self._mission_end("reply", turns=turn_idx + 1)
             if r["kind"] == "text":
                 content = str(r.get("content") or "")
                 if _envelope_residue(content) or _envelope_residue(
@@ -373,9 +356,7 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
                         log.info("%s reply with ZERO flights at turn %d "
                                  "(streak %d) -> repair", self.rid_tag, turn_idx,
                                  no_flight_streak)
-                        self.reasoner.append_repair(
-                            "You have flown nowhere. " + _GO_TO_FIRST
-                            if withheld("end_commit") else NO_FLIGHT_REPLY_NUDGE)
+                        self.reasoner.append_repair(NO_FLIGHT_REPLY_NUDGE)
                         continue
                     log.info("%s reply with ZERO flights at turn %d, streak "
                              "%d -- abstain", self.rid_tag, turn_idx,
@@ -394,11 +375,10 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
                 if name == "run":
                     flights_before = self.flights
                     out = self._dispatch_run(args)
-                    if not withheld("look_for"):
-                        out.setdefault("watching", (
-                            self._watching_trailer()
-                            or "nothing -- no class is segmented on any flight "
-                               'until one is looked for; call look_for("<class>").'))
+                    out.setdefault("watching", (
+                        self._watching_trailer()
+                        or "nothing -- no class is segmented on any flight "
+                           'until one is looked for; call look_for("<class>").'))
                     self.reasoner.append_tool_result(cid, "run", out)
                     self._log(
                         "run",

@@ -10,7 +10,6 @@ mission writes one at the sortie root and one per mission workdir
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import socket
 import time
@@ -26,7 +25,7 @@ from maps.settings import Settings
 
 SCHEMA = "maps.run_manifest/v1"
 
-# The experiment-arm flags every row carries (``arm_stamp``). Set-only,
+# The experiment-arm flags every row carries (``arm_env_stamp``). Set-only,
 # except the tile bake, which is resolved.
 ARM_ENV_FLAGS = (
     "SEARCH_CITYNAV_TILES",
@@ -65,7 +64,6 @@ IDENTITY_KEYS = (
     ("config_sha256",),
     ("split",),
     ("selection", "sample_seed"),
-    ("selection", "arrivals"),
     ("selection", "selection_sha"),
     ("endpoints", "model_id"),
     ("endpoints", "max_model_len"),
@@ -83,7 +81,8 @@ class ManifestIdentityError(RuntimeError):
 def arm_env_stamp(bench: Bench) -> dict:
     """The set arm flags of a run of ``bench``, plus the tile bake resolved: an
     unset SEARCH_CITYNAV_TILES records ``bench.tiles_dir``, so a default-bake
-    row proves its bake instead of reading as unrecorded."""
+    row proves its bake instead of reading as unrecorded. The manifest and
+    every row stamp this."""
     env = bench.environ
     stamp = {k: env[k] for k in ARM_ENV_FLAGS if env.get(k, "") != ""}
     stamp.update({k: v for k, v in env.items()
@@ -96,20 +95,6 @@ def arm_env_stamp(bench: Bench) -> dict:
 _EFFORT = "SEARCH_SAMPLING_REASONING_EFFORT"
 
 
-def arm_stamp(policy: str | None, bench: Bench) -> dict:
-    """The arm flags: :func:`arm_env_stamp`, with a baseline ``policy``'s fixed
-    dial (``baselines.seam.REASONING_EFFORT``; ``none`` is the dial off,
-    whichever switch the card takes) in place of the environment's effort. The
-    manifest and every row stamp this."""
-    stamp = arm_env_stamp(bench)
-    if policy:
-        # By name: benchmarks carries no static import of baselines.
-        fixed = importlib.import_module("baselines.seam").REASONING_EFFORT.get(policy)
-        if fixed is not None:
-            stamp[_EFFORT] = fixed
-    return stamp
-
-
 def settle_effort(bench: Bench) -> Bench:
     """``bench`` with the arm's reasoning effort in its environment as the
     requests carry it (stripped; blank is unset). Endpoint discovery has
@@ -119,31 +104,21 @@ def settle_effort(bench: Bench) -> Bench:
 
 
 class EndpointRefused(RuntimeError):
-    """The serve cannot fly this process: discovery failed, or a baseline
-    arm's model has no dial-off."""
+    """The serve cannot fly this process: discovery failed."""
 
 
-def install_endpoint(bench: Bench, settings: Settings, policy: str | None = None) -> Bench:
+def install_endpoint(bench: Bench, settings: Settings) -> Bench:
     """Discover the serve ``settings`` names (the engine's, built from
     ``bench.environ``), install its spec and settle the effort, once per
-    process before any inference or perception call; a baseline ``policy``
-    (every arm makes dial-off calls) is refused here when its model has no
-    dial-off. Returns ``bench`` with the effort settled
-    (:func:`settle_effort`). Raises :class:`EndpointRefused`."""
+    process before any inference or perception call. Returns ``bench`` with
+    the effort settled (:func:`settle_effort`). Raises
+    :class:`EndpointRefused`."""
     try:
         spec = endpoint_spec.discover_from_settings(settings)
     except endpoint_spec.EndpointDiscoveryError as exc:
         raise EndpointRefused(f"endpoint discovery failed: {exc}") from exc
     endpoint_spec.install_spec(spec)
-    bench = settle_effort(bench)
-    if policy:
-        # By name: benchmarks carries no static import of baselines.
-        seam = importlib.import_module("baselines.seam")
-        try:
-            seam.dial_off(spec.model_id)
-        except seam.NoDialOff as exc:
-            raise EndpointRefused(str(exc)) from exc
-    return bench
+    return settle_effort(bench)
 
 
 def _audited_env(bench: Bench) -> dict:
@@ -185,17 +160,15 @@ def build_manifest(
     allowlist_path: Path | None,
     episodes: list[str],
     mission: dict | None = None,
-    arrivals: str | None = None,
 ) -> dict:
     """The resolved record of a run of ``bench``. ``mission`` is the flight mission's per-mission
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
-    in ``search_env_flags`` (:func:`arm_stamp`), since the mission's requests
-    carried it. ``arrivals`` is a capacity session's stream sha256: the
-    stream, not a seed, selects its episodes."""
+    in ``search_env_flags`` (:func:`arm_env_stamp`), since the mission's requests
+    carried it."""
     import yaml  # noqa: PLC0415  (only config runs need it)
 
     resolved = resolve_config(config_path)[0]
-    arm = arm_stamp(resolved.get("policy"), bench)
+    arm = arm_env_stamp(bench)
     if mission is not None and mission.get("reasoning_effort") is not None:
         arm[_EFFORT] = str(mission["reasoning_effort"])
     endpoints = _endpoint_section()
@@ -216,10 +189,8 @@ def build_manifest(
         "out_root": str(out_root),
         **prov,
         "config_yaml": config_yaml,
-        # The arm's withholds (maps.withhold); readers group by it.
-        "withhold": list(resolved["withhold"]),
         "selection": {
-            **({"arrivals": arrivals} if arrivals is not None else {"sample_seed": sample_seed}),
+            "sample_seed": sample_seed,
             "limit": limit,
             "allowlist": str(allowlist_path) if allowlist_path else None,
             "episodes_n": len(episodes),

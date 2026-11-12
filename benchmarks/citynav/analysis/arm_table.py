@@ -2,8 +2,8 @@
 
 It defines no metric: ``rows.load_attempts`` picks each episode's result
 and :func:`arm_row` averages it. The criterion must be identical across
-every root that records one (a disc's radius included) and is printed once. An arm's label is the withholds its run
-manifest records, else the root's basename; its effort is the manifest's
+every root that records one (a disc's radius included) and is printed once.
+An arm's label is the root's basename; its effort is the manifest's
 ``SEARCH_SAMPLING_REASONING_EFFORT``, as written.
 
 Usage:
@@ -65,10 +65,9 @@ def arm_row(root: Path, *, allow_partial: bool = False,
     scored = list(_rows.scored_metrics(picked).values())
     recorded = [a.metrics for a in picked.values() if a.metrics]
     manifest = _rows.read_manifest(root)
-    withhold = list(manifest.get("withhold") or [])
     row: dict = {
         "root": str(root),
-        "label": f"withhold={','.join(withhold)}" if withhold else root.name,
+        "label": root.name,
         "effort": (manifest.get("search_env_flags") or {}).get(
             "SEARCH_SAMPLING_REASONING_EFFORT"),
         "criterion": criterion_label(run_criterion(recorded), root) if recorded else None,

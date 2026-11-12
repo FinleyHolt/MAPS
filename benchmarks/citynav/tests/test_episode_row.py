@@ -17,7 +17,7 @@ _ROW = {"area": "b", "block": 1, "descriptions": ["the church"], "ann_ids": [0],
 
 
 def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: float = 0.0,
-         policy: str | None = None, bench=None) -> dict:
+         bench=None) -> dict:
     h = SimpleNamespace(
         episode=None,
         state=SimpleNamespace(altitude_m=100.0, pose_xy=(0.0, 0.0)),
@@ -44,8 +44,7 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
     # The attempt's directory is the value the runner is handed: the summary reads its flight log.
     monkeypatch.setattr(er.flight_summary, "summarize",
                         lambda d, tokenizer_name="": {"calls": 2} if d == tmp_path / "flight" else {})
-    cfg = SimpleNamespace(spawn="dataset", start_altitude_agl_m=None, altitude_cap_m=1000.0, success_radius_m=20.0,
-                          policy=policy)
+    cfg = SimpleNamespace(spawn="dataset", start_altitude_agl_m=None, altitude_cap_m=1000.0, success_radius_m=20.0)
     return er.run_episode(parse_episode(row), {"b_block_1": [object()]}, cfg, bench or citynav_bench({}),
                           settings=Settings(), workdir=tmp_path)
 
@@ -70,30 +69,6 @@ def test_a_zero_flight_episode_records_its_llm_spend(monkeypatch, tmp_path) -> N
     assert m["steps_taken"] == 0 and m["SR"] == 0
 
 
-def test_a_policy_config_flies_the_policy_through_the_same_replay_and_row(monkeypatch, tmp_path) -> None:
-    """``policy:`` hands the built episode to ``baselines.seam.fly`` by name in
-    place of the mission; its flights are replayed and scored, its fields ride
-    the row, and no mission block is written."""
-    import sys
-
-    flights = [{"target": "stub_stop_0", "resolved_xy": [2.0, 2.0], "provenance": "point"},
-               {"target": "mark_3", "resolved_xy": [5.0, 6.0], "provenance": "point"}]
-    seen = {}
-
-    def fly(h, policy):
-        seen["policy"] = policy
-        return SimpleNamespace(flights=flights, metrics={"policy": policy, "commit_path": "stub:tier", "stub_stops": 1})
-
-    monkeypatch.setitem(sys.modules, "baselines.seam", SimpleNamespace(fly=fly))
-    row = _run(monkeypatch, tmp_path, [], policy="stub")
-    m = row["metrics"]
-    assert seen["policy"] == "stub"
-    assert row["commit_xy"] == [5.0, 6.0] and row["visited_xy"][-1] == [5.0, 6.0]
-    assert (m["policy"], m["commit_path"], m["stub_stops"]) == ("stub", "stub:tier", 1)
-    assert m["SR"] == 1 and m["steps_taken"] == 7
-    assert "mission" not in m
-
-
 def test_a_shape_row_scores_the_commit_not_the_snapped_final_pose(monkeypatch, tmp_path) -> None:
     """A commit inside a 2 m strip whose replay ends 3 m east of it, outside the strip, scores SR 1."""
     strip = [[4.0, 5.0], [6.0, 5.0], [6.0, 7.0], [4.0, 7.0]]
@@ -109,7 +84,7 @@ def test_the_bench_resolves_its_sensor_as_the_flight_does(monkeypatch) -> None:
     from maps.perception.geometry.sensor_spec import resolve_sensor
 
     loop = SimpleNamespace(start=lambda g: None)
-    monkeypatch.setattr(er, "_episode_graph", lambda assets, settings: None)
+    monkeypatch.setattr(er, "_episode_graph", lambda assets: None)
     monkeypatch.setattr(er, "start_altitude_m", lambda cfg, m, z: (100.0, 0.0))
     monkeypatch.setattr(er, "make_perception", lambda settings: SimpleNamespace(set_concepts=None))
     monkeypatch.setattr(er, "EpisodeWorld", lambda *a, **kw: loop)

@@ -120,7 +120,7 @@ A flight happens in one of two ways.
 
 | Aspect | Bench | Flight |
 |---|---|---|
-| Entry | `benchmarks/citynav/bench_fullset.py`, `benchmarks/calcity/bench_fullset.py` | `benchmarks/flight/mission.py` (`Mission`), driven by the twin, the replay, or the station |
+| Entry | `benchmarks/citynav/bench_fullset.py`, `benchmarks/calcity/bench_fullset.py` | `benchmarks/flight/mission.py` (`Mission`), driven by the twin or the station |
 | Move | The pose is set to the stop. | A `Leg` is posted to the `Vehicle`; the leg has arrived when the recording holds the area it was flown for. |
 | Observation | A north-up crop of the block's raster under the pose (`maps/perception/observation.py`). | Camera frames fused into one north-up orthophoto (`benchmarks/flight/live_source.py`). |
 | After the observation | The same path: segment, fold, report. | The same path: segment, fold, report. |

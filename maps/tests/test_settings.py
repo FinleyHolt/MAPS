@@ -11,7 +11,7 @@ MAPS = Path(__file__).resolve().parents[1]
 
 
 def test_an_empty_environment_states_the_defaults():
-    assert from_environ({}) == Settings() == Settings(endpoint=Endpoint(), sampling=Sampling(), withhold=frozenset())
+    assert from_environ({}) == Settings() == Settings(endpoint=Endpoint(), sampling=Sampling())
     e = Settings().endpoint
     assert (e.reasoner_url, e.reasoner_api_key, e.sam_server_url, e.sam_video_server_url, e.cache_key) == (None,) * 5
     assert (e.reasoner_timeout_s, e.reasoner_models_url, e.spec_override, e.tokenizer_name, e.image_store_url) == ("",) * 5
@@ -25,15 +25,14 @@ def test_each_variable_reaches_its_field_as_the_engine_reads_it():
         "SEARCH_ENDPOINT_SPEC_OVERRIDE": " m:262144 ", "SEARCH_ENDPOINT_OFFLINE": " 1 ",
         "SEARCH_COMPACT_TOKENIZER_NAME": " org/tok ", "MAPS_IMAGE_STORE_URL": " http://store/ ",
         "SAM_SERVER_URL": "http://a:1, http://b:2", "SAM_VIDEO_SERVER_URL": "http://v:3",
-        "SEARCH_LLM_CACHE_KEY": "run/w3", "SEARCH_SAMPLING_REASONING_EFFORT": " 0.9 ",
-        "SEARCH_WITHHOLD": "prior, look ,,"})
+        "SEARCH_LLM_CACHE_KEY": "run/w3", "SEARCH_SAMPLING_REASONING_EFFORT": " 0.9 "})
     assert s.endpoint == Endpoint(
         reasoner_url="http://r:8001/v1", reasoner_api_key="sk-1", reasoner_timeout_s="900",
         reasoner_models_url="http://r/models", spec_override="m:262144", offline=True, tokenizer_name="org/tok",
         image_store_url="http://store", sam_server_url="http://a:1, http://b:2", sam_video_server_url="http://v:3",
         cache_key="run/w3")
-    # The effort is kept as set (the request strips it); the withheld names are split and stripped.
-    assert s.sampling == Sampling(reasoning_effort=" 0.9 ") and s.withhold == {"prior", "look"}
+    # The effort is kept as set (the request strips it).
+    assert s.sampling == Sampling(reasoning_effort=" 0.9 ")
 
 
 def test_a_blank_key_is_no_key_and_only_1_is_offline():
@@ -51,9 +50,8 @@ def test_the_key_is_not_in_a_settings_repr():
 
 def test_from_process_reads_this_process_s_environment(monkeypatch):
     monkeypatch.setenv("SEARCH_REASONER_URL", "http://here:1/v1")
-    monkeypatch.setenv("SEARCH_WITHHOLD", "map")
     here = from_process()
-    assert here.endpoint.reasoner_url == "http://here:1/v1" and here.withhold == {"map"}
+    assert here.endpoint.reasoner_url == "http://here:1/v1"
 
 
 def test_only_the_settings_module_reads_an_environment():

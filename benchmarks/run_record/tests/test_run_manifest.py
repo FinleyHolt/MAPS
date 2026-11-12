@@ -86,7 +86,6 @@ def test_required_fields_nonempty(stub_run):
     for keypath in (("config_sha256",), ("endpoints", "model_id"), ("perception", "bake_sha256")):
         assert run_manifest._get(m, keypath), f"measured field vanished: {keypath}"
     assert m["selection"]["episodes_n"] == 3
-    assert m["withhold"] == []
 
 
 @pytest.mark.skipif(not (REPO_ROOT / ".git").exists(), reason="a tree with no git checkout has no commit")
@@ -239,17 +238,6 @@ def test_an_unset_effort_is_not_stamped(monkeypatch):
     """A run that named no effort flew the serve's default."""
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
     assert "SEARCH_SAMPLING_REASONING_EFFORT" not in run_manifest.arm_env_stamp(_bench())
-
-
-def test_a_capacity_session_s_selection_names_its_stream_and_no_seed(monkeypatch, tmp_path, bake):
-    monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
-    m = run_manifest.build_manifest(bench=_bench(), out_root=tmp_path, config_path=REPO_ROOT / "configs/citynav.yaml",
-                                    split="train_seen", sample_seed=1234, limit=0, allowlist_path=None,
-                                    episodes=["ep_a"], arrivals="ab" * 32)
-    assert m["selection"]["arrivals"] == "ab" * 32 and "sample_seed" not in m["selection"]
-    other = json.loads(json.dumps(m))
-    other["selection"]["arrivals"] = "cd" * 32
-    assert run_manifest.identity_drift(m, other)
 
 
 def test_a_set_reasoner_timeout_is_recorded(monkeypatch):

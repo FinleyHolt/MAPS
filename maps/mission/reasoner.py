@@ -19,7 +19,6 @@ from maps.llm.vision_content import build_vision_user_content
 from maps.mission.compactor import bound_image_count, compact_transcript
 from maps.mission.served_text import served_system_prompt
 from maps.settings import Settings
-from maps.withhold import withheld
 
 log = logging.getLogger(__name__)
 
@@ -276,15 +275,13 @@ class Reasoner:
                 f"(finish_reason={finish_reason!r}, "
                 f"reasoning_chars={len(reasoning_text)})"
             )
-        # Under the ``loop`` withhold the next request carries none of the
-        # model's own thinking; the return value still hands it to the log. A
-        # Responses card's reasoning comes back encrypted: the turn carries it
+        # A Responses card's reasoning comes back encrypted: the turn carries it
         # to the next request, and its size, for the compactor to price.
-        carried = [] if withheld("loop") else (msg.get("reasoning_items") or [])
+        carried = msg.get("reasoning_items") or []
         reasoning_tokens = ((resp.get("usage") or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")
         self.messages.append({
             "role": "assistant", "content": text,
-            "reasoning_content": "" if withheld("loop") else reasoning_text,
+            "reasoning_content": reasoning_text,
             **({"tool_calls": calls} if calls else {}),
             **({"reasoning_items": carried, "reasoning_tokens": int(reasoning_tokens or 0)} if carried else {})})
         return {"kind": "tool_call" if calls else "text",

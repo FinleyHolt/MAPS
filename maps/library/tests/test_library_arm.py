@@ -922,9 +922,9 @@ def test_the_legend_documents_every_call_the_surface_serves():
     from maps.mission.served_text import CODE_DOC
     from maps.library.interpreter import MissionPython
     from maps.library.rows import Rows
-    from maps.library.block_scan import served_calls
+    from maps.library.block_scan import _LIBRARY_CALLS
 
-    names = served_calls()
+    names = _LIBRARY_CALLS
     assert len(names) >= 9, names                    # vacuity floor
     assert not [n for n in names if f"{n}(" not in CODE_DOC], names
     # ...and every keyword the executing functions take, bar order(reverse=),

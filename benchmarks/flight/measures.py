@@ -5,9 +5,7 @@
 
 The flight README says what each measure is; this is how each is read off
 the records. A root is a flown or twin sortie (``episodes.jsonl`` beside
-``flight_track.jsonl``) or a replay's (its sortie folder named for the
-recorded one, so the same truth scores both; it records no start time and
-no track, so it reads SR and NE only).
+``flight_track.jsonl``).
 
 * **The commit**: the last of the row's ``visited_xy``.
 * **The truth**: the analyst's entry (``<sortie>.json`` in a truth
@@ -404,12 +402,6 @@ def run_bases(root: Path, row: dict[str, Any]) -> list[Path]:
     return [root / wd, root.parent / f"{root.name}_grnd" / root.name / wd] if wd else []
 
 
-def sortie_of(run_dir: Path) -> Path:
-    """The sortie a run folder belongs to, either copy :func:`run_bases` names."""
-    sortie = run_dir.parent
-    return sortie.parent.parent / sortie.name if sortie.parent.name.endswith("_grnd") else sortie
-
-
 def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
     return next((list(iter_json_rows(b / CONVERSATION_JSONL)) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
 
@@ -470,7 +462,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     quality = list(entry.get("intel_quality") or [None])
     out: dict[str, Any] = {
         "sortie": root.name, "run_no": row.get("run_no"), "episode_id": row.get("episode_id"),
-        "replay_of": row.get("replay_of"), "model": params.get("model"),
+        "model": params.get("model"),
         "reasoning_effort": params.get("reasoning_effort"), "intel_quality": quality[0],
         "end": end, "excluded": " ".join(str(reason or "").split()) or None,
         "infra": is_infra_abort(row),
@@ -602,7 +594,7 @@ def by(rows, *keys: str) -> dict[str, dict[str, Any]]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--root", type=Path, nargs="+", required=True, help="flown or replay sortie roots")
+    ap.add_argument("--root", type=Path, nargs="+", required=True, help="flown or twin sortie roots")
     ap.add_argument("--truth", type=Path, nargs="+", required=True,
                     help="a directory of <sortie>.json analyst entries, and/or the tasking set's split JSON")
     ap.add_argument("--json", action="store_true")

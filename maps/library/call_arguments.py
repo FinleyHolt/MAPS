@@ -15,7 +15,6 @@ from maps.library.op_compiler import (
     CARDINAL_ORDER, HANDLE_RE, VIEWPOINT_RE, Bind, CodeError, Program, Ref,
     act_needs_a_thing, fid_like, rn_spelled)
 from maps.library.rows import Row, Rows, UNNAMED, _index_it, _one_row, _set_as_list
-from maps.withhold import withheld
 from maps.xy_token import format_xy_token, is_xy, parse_xy_token
 
 
@@ -269,13 +268,12 @@ class _CallArguments:
         # a COORDINATE in a moving one.
         pt = parse_xy_token(v) if isinstance(v, str) else None
         if pt:
-            if why in ("move", "cover") and not withheld("prior"):
+            if why in ("move", "cover"):
                 raise CodeError(act_needs_a_thing(
                     name="go_to/explore", got=f"{pt[0]:g}, {pt[1]:g}")
-                    + ("" if withheld("library") else
-                       " A crossing you computed is a ROW: index it "
-                       "-- r2 = intersection(\"A Road\", \"B St\") then "
-                       "go_to(r2[0])."))
+                    + " A crossing you computed is a ROW: index it "
+                      "-- r2 = intersection(\"A Road\", \"B St\") then "
+                      "go_to(r2[0]).")
             return format_xy_token(float(pt[0]), float(pt[1]))
         if isinstance(v, str) and not v.strip() and why == "marks":
             return v                # a blank mark marks nothing, as None does

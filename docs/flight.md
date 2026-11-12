@@ -1,4 +1,4 @@
-# Flight: harness, twin, replay, and your own aircraft
+# Flight: harness, twin, and your own aircraft
 
 This page is the short guide to the flight harness. MAPS flew 87 closed-loop
 runs on a C-12 over California City, CA, from 11 to 18 September 2026, at
@@ -13,8 +13,7 @@ measures.
 |---|---|---|
 | Fly a mission without an aircraft | Twin. See [Fly the twin](#fly-the-twin). | The Cal City bake and raster pair ([`data.md`](data.md#cal-city)), a reasoner, and the SAM serve ([`endpoints.md`](endpoints.md)). |
 | Watch or re-task a twin mission in a browser, or review finished runs | Station. See [`station/README.md`](../station/README.md). | To fly: what the twin needs. To review: the run folders. |
-| Fly a recorded run again | Replay. See [Replay a flown run](#replay-a-flown-run). | A flown run's folder. The flight recordings aren't distributed. |
-| Score runs | [`benchmarks/flight/measures.py`](../benchmarks/flight/measures.py). See [`experiments.md`](experiments.md#closed-loop-measures-e6). | Sortie folders and truth for their targets. |
+| Score runs | [`benchmarks/flight/measures.py`](../benchmarks/flight/measures.py). See [`experiments.md`](experiments.md#closed-loop-measures). | Sortie folders and truth for their targets. |
 | Fly your own aircraft | A `Vehicle`. See [Bring your own aircraft](#bring-your-own-aircraft). | Your aircraft, its camera recording, and a bake of your area. |
 
 ## Harness
@@ -49,21 +48,6 @@ re-task it while it flies. Every finished run under the output root opens as
 a review with a scrubber. For the command and flags, see the station's
 README.
 
-## Replay a flown run
-
-`python -m benchmarks.flight.replay` flies a recorded run again on this
-repository's harness, at three tiers:
-
-| Tier | Command |
-|---|---|
-| Observation bank | `replay <run>` |
-| Forced | `replay <run> --forced` |
-| Frames | `replay <run> --frames <sensors.mcap> --boresight <chain.json> --raster <raster dir>` |
-
-For what answers a flight at each tier and what each proves, see
-[Replay a flown run](../benchmarks/flight/README.md#replay-a-flown-run) in
-the reference.
-
 ## Bring your own aircraft
 
 The harness reaches an aircraft through one protocol and assumes nothing else
@@ -72,8 +56,7 @@ autopilot can take the same hand-off.
 
 1. Implement `Vehicle` (`benchmarks/flight/vehicle.py`). For its members,
    see [Vehicle protocol](../benchmarks/flight/README.md#vehicle-protocol).
-   `benchmarks/flight/twin.py` and `benchmarks/flight/recorded_ring.py` are
-   the two implementations in the tree.
+   `benchmarks/flight/twin.py` is the implementation in the tree.
 
 2. Describe the camera. A config's `sensor` names a rig in
    `maps/perception/geometry/sensor_spec.py`. The calibration (boresight,
@@ -94,6 +77,3 @@ autopilot can take the same hand-off.
 A planner or autonomy stack that executes moves itself, without the leg and
 recording chain, connects one layer down, at `MissionSpec.fly`. See
 [`architecture.md`](architecture.md#where-another-system-connects).
-
-For the places where this engine differs from the engine as flown, see
-[`differences-from-flight.md`](differences-from-flight.md).

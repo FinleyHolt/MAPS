@@ -11,7 +11,6 @@ time, so the engine follows a module global a test swaps.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -50,15 +49,10 @@ class Engine:
     def start_altitude_m(self, cfg: Any, map_name: str, start_z: float | None) -> tuple[float, float]:
         return _episode_runner().start_altitude_m(cfg, map_name, start_z)
 
-    def make_perception(self, settings: Settings) -> Any:
-        return _episode_runner().make_perception(settings)
-
     def build_episode(self, cfg: Any, episode: Any, block_assets: Any, bench: Bench, *,
-                      settings: Settings, workdir: Path | None = None, routing_key: str | None = None,
-                      perception_factory: Callable[[], Any] | None = None) -> Any:
+                      settings: Settings, workdir: Path | None = None, routing_key: str | None = None) -> Any:
         return _episode_runner().build_episode(cfg, episode, block_assets, bench, settings=settings,
-                                               workdir=workdir, routing_key=routing_key,
-                                               perception_factory=perception_factory)
+                                               workdir=workdir, routing_key=routing_key)
 
     def open_session(self, h: Any, *, recorder: Any = None, observe: Any = None) -> Any:
         from benchmarks.citynav.run_benchmark import mission_engine  # noqa: PLC0415  (the mission stack)

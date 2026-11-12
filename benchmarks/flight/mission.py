@@ -22,7 +22,6 @@ import queue
 import threading
 import time
 from io import BytesIO
-from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +33,7 @@ from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
-from benchmarks.run_record.config import assert_flight_config, engine_settings, load_config
+from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
                                                    ConversationLog)
 from benchmarks.run_record.episodes import MANIFEST_NAME, STATUS_INFRA, STATUS_OK, upsert_row, write_episode_json
@@ -122,31 +121,19 @@ def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[f
     return engine.parse_episode(found[1], row_index=found[0])
 
 
-def flight_config(config: str, environ: Mapping[str, str]):
-    """The config a flight flies under ``environ`` (the run's,
-    ``Bench.environ``), refused (before any sortie is written) when either
-    withholds a part of the flown engine; the loader refuses a missing or
-    unresolved sensor."""
-    cfg = load_config(str(config))
-    assert_flight_config(cfg, environ)
-    return cfg
-
-
 def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: float,
-            start_xy: tuple[float, float] | None = None, workdir: Path | None = None,
-            perception_factory: Callable[[], Any] | None = None) -> Hydrated:
+            start_xy: tuple[float, float] | None = None, workdir: Path | None = None) -> Hydrated:
     """The engine for one mission, built by the bench's engine
     (``EpisodeEngine.build_episode``), at the operator's start and at
     ``agl_m``, the crew's commanded height above ground: the one height the
     served sensor block and every leg read. The mission records under
-    ``workdir`` and its requests ride its episode id as their routing key.
-    ``perception_factory`` builds the segmenter in place of the engine's own."""
+    ``workdir`` and its requests ride its episode id as their routing key."""
     engine = bench.engine
-    cfg = flight_config(config, bench.environ)
+    cfg = load_config(config)
     episode = resolve_episode(bench, episode_id, split, start_xy)
     h = engine.build_episode(cfg, episode, engine.load_assets(bench, episode.map_name), bench,
-                             settings=engine_settings(cfg, bench.environ), workdir=workdir,
-                             routing_key=episode_id, perception_factory=perception_factory)
+                             settings=from_environ(bench.environ), workdir=workdir,
+                             routing_key=episode_id)
     h.state.altitude_m = h.ground_z_m + float(agl_m)
     return h
 
@@ -193,12 +180,9 @@ class Mission:
     def __init__(self, *, bench: Bench, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
                  recorder: Any, close_log, agl_m: float, instruction: str | None = None,
                  run_id: str | None = None, run_no: int | None = None,
-                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None,
-                 perception_factory: Callable[[], Any] | None = None) -> None:
+                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None) -> None:
         #: The bench the mission flies: its split, its bake, its engine.
         self.bench = bench
-        #: Builds the segmenter in place of the engine's own (a forced replay's recorded one).
-        self._perception_factory = perception_factory
         self.episode_id = episode_id
         self.split = split
         self.config = config
@@ -241,7 +225,7 @@ class Mission:
         #: The vehicle's clock at the start: every time the mission records
         #: (``t_s``, ``elapsed_s``, the track) is vehicle seconds from here.
         self._t0: float | None = None
-        #: The same instant on the receiver's clock (UTC, unix seconds), what a replay anchors on.
+        #: The same instant on the receiver's clock (UTC, unix seconds).
         self.started_at_utc: float | None = None
         #: How many track fixes have been written.
         self._tracked = 0
@@ -636,15 +620,14 @@ class Mission:
             self._write_manifests()
 
             h = hydrate(bench=self.bench, episode_id=self.episode_id, split=self.split, config=self.config,
-                        start_xy=self._start_xy, agl_m=self.agl_m, workdir=self.workdir,
-                        perception_factory=self._perception_factory)
+                        start_xy=self._start_xy, agl_m=self.agl_m, workdir=self.workdir)
             self.hydrated = h
             instruction = self.instruction or h.episode.description
             # The override IS the operator's instruction, so the episode
             # carries no second copy: a flight echoes the description back as
             # the flight report's cue and hints the detector with it, and the
             # split's own sentence would serve an attribute the operator
-            # withheld. ponytail: stamp the episode rather than thread the
+            # left out. ponytail: stamp the episode rather than thread the
             # instruction through the flight.
             h.episode.description = instruction
             with self._lock:
@@ -846,20 +829,15 @@ class Mission:
                 f.write("\n".join(lines) + "\n")
 
 
-def converse(mission: Mission, taskings: list[str], *, ended=None) -> None:
+def converse(mission: Mission, taskings: list[str]) -> None:
     """Fly ``mission`` to its end, speaking the next of ``taskings`` at each
-    report and stopping when none is left (or, with ``ended``, at the first
-    report after ``ended()``), then close the live source."""
+    report and stopping when none is left, then close the live source."""
     mission.start()
     pending, heard = list(taskings), 0
     while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
         if mission.status == STATE_AWAITING and mission.replies > heard:
             heard = mission.replies
-            if ended is not None:
-                if ended():
-                    mission.stop()
-                    break
-            elif pending:
+            if pending:
                 mission.tasking(pending.pop(0))
             else:
                 mission.stop()
