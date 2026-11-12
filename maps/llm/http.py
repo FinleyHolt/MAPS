@@ -236,7 +236,7 @@ class ImageStoreError(ValueError):
     """The image store refused or dropped a PUT. Never an LLM status: a PUT
     that could not connect takes the call's transport retries, and no other
     store fault meets its retries or status handling. A ``ValueError``, so
-    the mission loop retries the turn (``maps.mission.serve_refusals._RETRIABLE_LLM_ERRORS``)."""
+    the mission loop retries the turn (``maps.mission.serve_refusals.RETRIABLE_LLM_ERRORS``)."""
 
 
 def _put_image(url: str, raw: bytes, media_type: str, cancel_event: threading.Event | None) -> None:

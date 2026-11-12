@@ -8,7 +8,7 @@ import pytest
 from maps.llm.http import CallCanceled
 from maps.mission.loop import _Mission
 from maps.mission.reasoner import DegenerateCompletion, Reasoner
-from maps.mission.serve_refusals import _RETRIABLE_LLM_ERRORS
+from maps.mission.serve_refusals import RETRIABLE_LLM_ERRORS
 from maps.mission.spec import MissionReply, MissionSpec
 from maps.mission.tests.fakes import TEST_SPEC, bare_ctx, unarmed_boost
 
@@ -134,5 +134,5 @@ def test_a_refused_request_is_sent_once_on_the_bench_and_live(monkeypatch):
 
 
 def test_a_dead_relay_port_is_a_link_fault():
-    assert issubclass(httpx.ConnectTimeout, _RETRIABLE_LLM_ERRORS)
-    assert issubclass(httpx.PoolTimeout, _RETRIABLE_LLM_ERRORS)
+    assert issubclass(httpx.ConnectTimeout, RETRIABLE_LLM_ERRORS)
+    assert issubclass(httpx.PoolTimeout, RETRIABLE_LLM_ERRORS)

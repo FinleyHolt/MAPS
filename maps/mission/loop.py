@@ -39,10 +39,10 @@ from maps.mission.reply_repair import (
     NO_FLIGHT_REPLY_NUDGE,
     TRUNCATED_TURN_NUDGE,
     TRUNCATED_TURN_STREAK,
-    _envelope_residue,
-    _not_a_reply,
+    envelope_residue,
+    not_a_reply,
 )
-from maps.mission.serve_refusals import _REFUSAL_ENDINGS, _RETRIABLE_LLM_ERRORS
+from maps.mission.serve_refusals import REFUSAL_ENDINGS, RETRIABLE_LLM_ERRORS
 from maps.mission.served_text import SERVED_TOOLS
 from maps.mission.spec import MissionReply, MissionSpec
 from maps.mission.surface_state import Progress, Stance, Surface, surface_from_ctx
@@ -256,7 +256,7 @@ class _Mission:
                 r = self.reasoner.step_tool_call(self.tools)
             except (CompactionInfeasible, CompactionInvariantError) as exc:
                 return self._compaction_infeasible(exc, turn_idx, user_message)
-            except _RETRIABLE_LLM_ERRORS as exc:
+            except RETRIABLE_LLM_ERRORS as exc:
                 ending = self._request_failed(exc, streaks, turn_idx)
                 if ending is not None:
                     return ending
@@ -320,7 +320,7 @@ class _Mission:
         would only repeat or of a spent transient budget; None after the
         wait before a retry."""
         rid_tag = self.progress.rid_tag
-        for refused, ended_by, why in _REFUSAL_ENDINGS:
+        for refused, ended_by, why in REFUSAL_ENDINGS:
             if refused(exc):
                 log.warning("%s %s: %s", rid_tag, why, summarise_exc(exc))
                 self._log(ended_by, error=summarise_exc(exc))
@@ -347,11 +347,11 @@ class _Mission:
         """The nudge a text turn draws, or None when it stands as the reply
         that ends the mission."""
         content = str(r.get("content") or "")
-        if _envelope_residue(content) or _envelope_residue(str(r.get("reasoning") or "")):
+        if envelope_residue(content) or envelope_residue(str(r.get("reasoning") or "")):
             log.info("%s MALFORMED_ENVELOPE at turn %d -> repair", self.progress.rid_tag, turn_idx)
             self._log("malformed_envelope", turn_idx=turn_idx)
             return MALFORMED_ENVELOPE_NUDGE
-        dropped = _not_a_reply(content)
+        dropped = not_a_reply(content)
         cut_off = (
             dropped is not None
             and dropped[0] == "empty_turn"
