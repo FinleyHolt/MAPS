@@ -15,7 +15,14 @@ from pathlib import Path
 import numpy as np
 
 from maps.perception.geometry.sensor_spec import SensorSpec
-from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m, frame_corners_px, ortho_px
+from maps.perception.ortho import camera_model
+from maps.perception.ortho.ground_level import GROUND_LEVEL
+from maps.perception.ortho.sensor_frame import (
+    footprint_corners_xy,
+    footprint_m,
+    frame_corners_px,
+    ortho_px,
+)
 
 #: The sensorless view square's output side cap, in pixels.
 _MAX_PX = 2048
@@ -65,10 +72,9 @@ def crop_ortho_observation(
     """
     import cv2  # noqa: PLC0415
 
-    from maps.perception.ortho.camera_model import load_ortho_or_rasters  # noqa: PLC0415
 
     if ortho is None:
-        ortho = load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir)
+        ortho = camera_model.load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir)
     if ortho is None:
         raise FileNotFoundError(f"No ortho for {map_name!r}: pass rgbd_dir (the block's rasters).")
     rgb_map, height_map, alpha_map = ortho["rgb"], ortho["height"], ortho["alpha"]
@@ -166,8 +172,6 @@ def crop_observation(
 ) -> Observation:
     """The observation at a pose: :func:`crop_ortho_observation` over the
     block's ortho with ``ground_z = GROUND_LEVEL[map_name]``."""
-    from maps.perception.ortho.ground_level import GROUND_LEVEL
-
     if map_name not in GROUND_LEVEL:
         raise KeyError(
             f"citynav ortho: map {map_name!r} not in GROUND_LEVEL "

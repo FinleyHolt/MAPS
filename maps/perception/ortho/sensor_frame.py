@@ -12,6 +12,8 @@ import math
 
 import numpy as np
 
+from maps.perception.geometry.sensor_spec import SensorSpec
+
 #: The taps ``INTER_LANCZOS4`` reads either side of a sample, so the margin
 #: a rendered window needs around its footprint.
 TAP_MARGIN_PX = 4
@@ -67,7 +69,7 @@ def ground_corners_xy(
     airframe tilt included); :func:`footprint_corners_xy` is the level,
     mount-aligned case to within half a pixel.
     """
-    from maps.perception.geometry.geolocate import project_pixels_to_world  # noqa: PLC0415
+    from maps.perception.geometry.geolocate import project_pixels_to_world  # noqa: PLC0415  (cv2)
 
     intr = sensor.intrinsics
     w, h = intr.image_width, intr.image_height
@@ -186,3 +188,19 @@ def frame_corners_px(width: int, height: int) -> np.ndarray:
         [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]],
         dtype=np.float32,
     )
+
+
+def served_description(spec: SensorSpec, *, agl_m: float | None) -> str:
+    """The rig's description as served. A description that states a footprint
+    states the sensor's own (:func:`footprint_m`) at ``agl_m``, the
+    height above ground the mission flies; one that states none is served as
+    written."""
+    if "{" not in spec.description:
+        return spec.description
+    if agl_m is None:
+        raise ValueError(f"{spec.name} states its footprint at the height the mission flies: "
+                         "no height above ground was given")
+    w, h = footprint_m(spec, agl_m)
+    gsd = w / spec.intrinsics.image_width
+    return spec.description.format(agl_ft=agl_m / 0.3048, w=w, h=h, gsd=gsd, px_5m=5.0 / gsd,
+                                   px_half_m=0.5 / gsd)

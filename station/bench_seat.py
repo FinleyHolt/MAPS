@@ -31,9 +31,19 @@ from benchmarks import git_provenance
 from benchmarks.bench import Bench
 from benchmarks.run_record import rows
 from benchmarks.run_record.config import load_config
-from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, ConversationLog, OpenEpisode
+from benchmarks.run_record.episode_workdir import (
+    CONVERSATION_JSONL,
+    ConversationLog,
+    OpenEpisode,
+)
 from benchmarks.run_record.episodes import STATUS_INFRA, append_row
-from benchmarks.run_record.run_manifest import build_manifest, emit_or_verify, install_endpoint
+from benchmarks.run_record.run_manifest import (
+    build_manifest,
+    emit_or_verify,
+    install_endpoint,
+)
+from maps.llm.http import CallCanceled
+from maps.mission.spec import MissionReply
 from maps.settings import from_environ
 
 log = logging.getLogger("station.bench")
@@ -129,9 +139,7 @@ class BenchMission:
         """The conversation over the bench's session (``run_episode``'s
         ``converse``): each reply parks the mission until the operator speaks
         or ends it. Returns how the last conversation ended."""
-        from maps.llm.http import CallCanceled  # noqa: PLC0415
         from maps.mission.loop import continue_mission  # noqa: PLC0415  (the mission stack, with its tokenizer)
-        from maps.mission.spec import MissionReply  # noqa: PLC0415
 
         self._session = session
         try:

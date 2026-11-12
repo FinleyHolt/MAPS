@@ -1,7 +1,5 @@
-"""The ``benchmarks`` package root: the run provenance every bench entry point records.
-
-``repo_provenance`` says which code ran (git commit and dirty flag) and under
-what run context.
+"""The ``benchmarks`` package root: the checkout every bench path defaults
+under, and which code ran (``git_provenance``: the git commit and dirty flag).
 """
 
 from __future__ import annotations
@@ -41,30 +39,3 @@ def git_provenance() -> dict:
     if out["git_commit"] is None and COMMIT_STAMP.is_file():
         out["git_commit"] = COMMIT_STAMP.read_text().strip() or None
     return out
-
-
-def repo_provenance(
-    *,
-    config_path: str | pathlib.Path | None = None,
-    split: str | None = None,
-    search_flags: dict | None = None,
-    served_model: str | None = None,
-    served_build: str | None = None,
-) -> dict:
-    """The provenance record: git, and each run fact given."""
-    prov: dict = git_provenance()
-    if config_path is not None:
-        prov["config"] = str(config_path)
-        from benchmarks.run_record.config import config_sha256  # noqa: PLC0415
-
-        prov["config_sha256"] = config_sha256(config_path)
-    # One served alias can name two quantizations; the tokenizer (served_build) tells them apart.
-    for key, value in (
-        ("split", split),
-        ("search_env_flags", None if search_flags is None else dict(search_flags)),
-        ("served_model", served_model),
-        ("served_build", served_build),
-    ):
-        if value is not None:
-            prov[key] = value
-    return prov

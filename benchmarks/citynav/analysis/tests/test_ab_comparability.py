@@ -67,7 +67,7 @@ def test_waiving_the_arm_keys_cannot_waive_the_tile_bake():
 
 def test_provenance_records_no_constant():
     """Every run has the look tool, so provenance does not record it."""
-    from benchmarks import repo_provenance
+    from benchmarks.run_record.config import repo_provenance
 
     assert "look_tool" not in repo_provenance()
 

@@ -12,11 +12,15 @@ from typing import Callable
 from maps.library.op_compiler import CodeError, row_token
 from maps.mission.acks import Rejections, add_note, summarise_exc
 from maps.mission.picture_requests import (
-    crop_requests, look_vision_text, map_spec, map_vision_text)
+    crop_requests,
+    look_vision_text,
+    map_spec,
+    map_vision_text,
+)
 from maps.mission.surface_state import Progress, Surface
-from maps.render.look_render import (
-    LOOK_MAX_BADGES as _MAP_MAX_MARKS, look_label, look_outline, look_xy)
-
+from maps.render.look_render import LOOK_MAX_BADGES as _MAP_MAX_MARKS
+from maps.render.look_render import look_label, look_outline, look_xy
+from maps.render.map_render import render_map_from_spec
 
 log = logging.getLogger(__name__)
 
@@ -200,9 +204,6 @@ class Pictures:
             mp["error"] = f"{around} is not on the live surface"
         else:
             try:
-                from maps.render.map_render import (  # noqa: PLC0415
-                    render_map_from_spec,
-                )
                 rendered = render_map_from_spec(
                     spec, self.surface.map_features(),
                     tile_origin_xy=self.surface.ctx.tile_origin_xy,

@@ -13,6 +13,22 @@ from __future__ import annotations
 import logging
 import re
 
+import cv2
+import numpy as np
+
+from maps.query.row_geometry import cells_of
+from maps.query.spatial_math import cell_centre_xy
+from maps.render.look_render import (
+    frame_arcs,
+    frame_echo,
+    frame_marks,
+    pixel_mapper,
+    view_rotation,
+    xy_list,
+)
+from maps.render import mark_overlay
+from maps.render.osm_palette import paint_color, paint_word
+
 log = logging.getLogger(__name__)
 
 # Delivered side: ink has no ground sampling distance, so a map is always the
@@ -34,7 +50,6 @@ def _n_cells(f) -> int:
 
 def _pill(txt, thick=_CHIP_TH):
     """``(pw, ph, th)``: a chip's pill size and its text height."""
-    import cv2  # noqa: PLC0415
     (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX,
                                   _CHIP_FS, thick)
     return tw + 8, th + 8, th
@@ -46,14 +61,12 @@ def _fit(v, size, lim):
 
 
 def _leader(rgb, a, b, color, halo):
-    import cv2  # noqa: PLC0415
     cv2.line(rgb, a, b, (0, 0, 0), halo, cv2.LINE_AA)
     cv2.line(rgb, a, b, color, 1, cv2.LINE_AA)
 
 
 def _label(rgb, txt, bx, by, pw, ph, th, fill, thick):
     """Text on its pill; ``fill`` None draws no pill."""
-    import cv2  # noqa: PLC0415
     if fill is not None:
         cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), fill, -1)
         cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), (0, 0, 0), 1,
@@ -158,10 +171,6 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
     first so the smallest claim wins a cell, detections last; and label ->
     ``{"cells", "kind"}``. Road cells are counted, not painted: roads are
     stroked by :func:`render_map_from_spec`."""
-    import numpy as np  # noqa: PLC0415
-    from maps.render.osm_palette import paint_color  # noqa: PLC0415
-    from maps.query.row_geometry import cells_of  # noqa: PLC0415
-
     x0, y0, x1, y1 = (float(v) for v in window)
     cs = float(cell_size_m)
     gh, gw = int(grid_shape[0]), int(grid_shape[1])
@@ -215,24 +224,6 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     """Render one map from its spec (``center_xy, context_m, center_fid?,
     center_label, center_boundary?, marks, frame_up?, frame_note?``, the
     look request's vocabulary): the record with its ``jpeg``, or None."""
-    import cv2  # noqa: PLC0415
-    import numpy as np  # noqa: PLC0415
-    from maps.render.mark_overlay import render_look_overlay  # noqa: PLC0415
-    from maps.render.osm_palette import (  # noqa: PLC0415
-        paint_color,
-        paint_word,
-    )
-    from maps.query.spatial_math import cell_centre_xy  # noqa: PLC0415
-    from maps.query.row_geometry import cells_of  # noqa: PLC0415
-    from maps.render.look_render import (  # noqa: PLC0415
-        frame_arcs,
-        frame_echo,
-        frame_marks,
-        pixel_mapper,
-        view_rotation,
-        xy_list,
-    )
-
     cxy = spec.get("center_xy")
     try:
         span = float(spec.get("context_m") or 0.0)
@@ -425,7 +416,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         _label(rgb, _txt, _x0, _y0, _pw, _ph, _th, (250, 250, 250), 1)
 
     try:
-        jp = render_look_overlay(
+        jp = mark_overlay.render_look_overlay(
             rgb,
             center_px=_w2p(cx, cy),
             center_poly_px=frame_arcs(spec.get("center_boundary"), _w2p, W, H),

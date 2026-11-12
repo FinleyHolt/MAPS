@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import math
 
-from maps.query.spatial_math import cell_centre_xy
 from maps.library.op_compiler import HANDLE_RE, row_token
+from maps.query.spatial_math import cell_centre_xy
 from maps.render.look_render import (
     LOOK_MAX_BADGES,
     look_label,
@@ -14,6 +14,7 @@ from maps.render.look_render import (
     look_xy,
     up_bearing_deg,
 )
+from maps.render.osm_palette import osm_kind, osm_label
 from maps.xy_token import parse_xy_token
 
 # The server's per-request image cap.
@@ -332,10 +333,6 @@ def map_features(ctx) -> list[dict]:
     """The live graph as the map painter's feature dicts: label and paint
     kind, cells, and a road's centerline or a building's contour in world
     metres."""
-    from maps.render.osm_palette import (  # noqa: PLC0415
-        osm_kind,
-        osm_label,
-    )
     nodes = ctx.graph.nodes
 
     feats: list[dict] = []

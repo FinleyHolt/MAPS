@@ -8,7 +8,6 @@ from collections import Counter
 
 from maps.query import color_words
 from maps.query import text_match as T
-from maps.render.look_render import LOOK_SET_ROWS
 
 
 # Row fields the executor resolves by fid and the model never reads.
@@ -64,9 +63,11 @@ def join_hints(*parts) -> str:
 
 
 # A row list longer than BROAD_DUMP_SOFT_ROWS renders its first
-# BROAD_HEAD_ROWS rows (a set crop badges the same rows); the set keeps all.
+# BROAD_HEAD_ROWS rows; the set keeps all. A set crop badges the same rows
+# (``look_render.LOOK_SET_ROWS`` is this number), so the rows the model reads
+# are the rows it is shown.
 BROAD_DUMP_SOFT_ROWS = 48
-BROAD_HEAD_ROWS = LOOK_SET_ROWS
+BROAD_HEAD_ROWS = 24
 
 
 def _census_counts(rows) -> tuple[Counter, int]:

@@ -14,17 +14,16 @@ from dataclasses import dataclass, field
 from typing import Iterable
 
 import numpy as np
+import requests
 
 from maps.perception.detection import DetectedObject
-from maps.settings import Endpoint
 from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
 )
-from maps.perception.observation import Observation
 from maps.perception.mask_codec import decode_mask_crop
 from maps.perception.mask_region import MaskRegion
-
-DEFAULT_SAM_SERVER_URL = "http://127.0.0.1:8772"
+from maps.perception.observation import Observation
+from maps.settings import Endpoint, sam_endpoints
 
 # SAM 3.1's encoder input (the serve's ``sam_engine.RESOLUTION``): every tile
 # is this square, fed 1:1.
@@ -68,25 +67,10 @@ class SamRequestRefused(RuntimeError):
 
 #: 4xx statuses that are the serve's weather, not a request built wrong: a
 #: request timeout and a rate limit. They move the call to another replica
-#: like a 5xx. Kept apart from ``maps.llm.http.TRANSIENT_CLIENT_STATUS``,
+#: like a 5xx. Kept apart from ``maps.llm.endpoint_spec.TRANSIENT_CLIENT_STATUS``,
 #: whose 402 is a hosted reasoner's quota check: the self-hosted segmenter's
 #: 402 is a refusal.
 _SAM_TRANSIENT_CLIENT_STATUSES = (408, 429)
-
-
-def sam_endpoints(endpoint: Endpoint = Endpoint()) -> list[str]:
-    """The segmenter's replica base URLs from the run's ``SAM_SERVER_URL``
-    (``endpoint.sam_server_url``; a comma list spreads calls across
-    replicas), the one resolver the client and endpoint discovery read. Unset
-    is the default replica; set but blank, or unset beside the flown
-    station's ``SAM_VIDEO_SERVER_URL``, raises ``ValueError``."""
-    if endpoint.sam_server_url is None and endpoint.sam_video_server_url:
-        raise ValueError("SAM_VIDEO_SERVER_URL is not read; set SAM_SERVER_URL")
-    raw = DEFAULT_SAM_SERVER_URL if endpoint.sam_server_url is None else endpoint.sam_server_url
-    eps = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
-    if not eps:
-        raise ValueError("SAM_SERVER_URL is empty")
-    return eps
 
 
 _rr = itertools.count()
@@ -108,8 +92,6 @@ def _post_segment(json_body: dict, endpoint: Endpoint = Endpoint()) -> dict | No
     attempt opens a fresh connection: a pooled socket the tunnel reaped during
     a long compile reads as half-open (urllib3#944, #2751).
     """
-    import requests
-
     deadline = time.monotonic() + SEGMENT_DEADLINE_S
     eps = sam_endpoints(endpoint)
     failed: set[str] = set()

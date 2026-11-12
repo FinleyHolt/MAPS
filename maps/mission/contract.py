@@ -18,8 +18,15 @@ from pathlib import Path
 
 import yaml
 
-from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
+from maps.library.block_scan import _LIBRARY_CALLS
+from maps.library.calls import Library
+from maps.library.rows import Rows
 from maps.mission import served_text
+from maps.perception.geometry.sensor_spec import (
+    list_sensors,
+    resolve_sensor,
+)
+from maps.perception.ortho.sensor_frame import served_description
 from maps.settings import from_process
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
@@ -50,10 +57,6 @@ def surface_lines() -> list[str]:
     """Every call the namespace serves, with its real signature, read off
     the executing functions themselves (the ``Library`` method of each
     served call, then the ``Rows`` methods)."""
-    from maps.library.calls import Library
-    from maps.library.rows import Rows
-    from maps.library.block_scan import _LIBRARY_CALLS
-
     def _params(fn) -> str:
         # A parameter that exists only to refuse (find's extra queries, a
         # cut's unknown keywords, show_map's missing centre) is not served.

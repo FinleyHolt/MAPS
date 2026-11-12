@@ -36,6 +36,7 @@ import numpy as np
 from benchmarks.bench import BAKE_OUTPUT_SUFFIXES
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import citynav_bench
+from maps.perception.ortho import camera_model
 from maps.query.spatial_math import is_closed_chain
 
 log = logging.getLogger("bake_city")
@@ -104,10 +105,8 @@ def _cell_coverage(
     bounds rectangle is the coverage) when the ortho's geometry disagrees
     with the block grid; an unreadable ortho is a ``BakeError``.
     """
-    from maps.perception.ortho.camera_model import load_ortho_or_rasters
-
     try:
-        ortho = load_ortho_or_rasters(block, rgbd_dir=str(rgbd_dir))
+        ortho = camera_model.load_ortho_or_rasters(block, rgbd_dir=str(rgbd_dir))
     except Exception as exc:  # noqa: BLE001 - every failure is the same refusal
         raise BakeError(f"{block}: cannot read the block imagery under {rgbd_dir} ({exc})") from exc
     ppm = float(ortho["px_per_m"])
