@@ -9,7 +9,7 @@ environment once), the mission in the seat, and the runs under ``--out``;
 it publishes the seat's state as an event stream and serves the built console
 (``station/web/dist``) from the same port, so the page is a browser tab and
 nothing else. A mission's reasoner and segmenter come from the environment as
-the bench's do (``SEARCH_REASONER_URL``, ``SEARCH_SAM3_1_URL``).
+the bench's do (``SEARCH_REASONER_URL``, ``SAM_SERVER_URL``).
 
 On CityNav the seat flies a row of the split through the bench's own runner
 (``station.bench_seat``); on Cal City it flies the kinematic twin

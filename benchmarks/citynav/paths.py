@@ -66,9 +66,7 @@ def _assert_available(bench: Bench) -> None:
         recipe = (
             f"CityNav data not found under {bench.root}.\n"
             "Fetch it, from the repo root:\n"
-            f"  CITYNAV_ROOT={bench.root} benchmarks/citynav/data_prep/fetch_data.sh\n"
-            f"  CITYNAV_ROOT={bench.root} benchmarks/citynav/data_prep/rasterize_citynav_native.sh\n"
-            "  PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh\n"
+            f"  CITYNAV_ROOT={bench.root} benchmarks/citynav/data_prep/setup.sh --sensaturban <data_release.zip>\n"
             "Override the root via CITYNAV_ROOT=<path>, or the episode\n"
             "splits alone via SEARCH_CITYNAV_SPLITS=<dir>.\n\n"
             f"Missing: {', '.join(str(p) for p in missing)}"
