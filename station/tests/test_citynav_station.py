@@ -329,7 +329,10 @@ def test_a_citynav_episode_is_flown_from_the_console_and_lands_a_scored_row(
     citynav,
     serves,  # noqa: F811
     tmp_path,
+    monkeypatch,
 ):
+    from maps.llm import endpoint_spec
+
     out = tmp_path / "out"
     station = _station(citynav, out)
     client = TestClient(serve.build_app(station, web=None))
@@ -365,6 +368,14 @@ def test_a_citynav_episode_is_flown_from_the_console_and_lands_a_scored_row(
     own = client.get("/mission/ownship").json()
     assert own["live"] and [own["x"], own["y"]] == parked["flights"][0]["resolved_xy"]
     assert serves[0]["messages"][-1] == {"role": "user", "content": "The church by the green."}
+
+    def refused(settings, **kw):
+        raise RuntimeError("asked a serve")
+
+    # A seat answers the reasoner menu from the serve it flies, asking no discovery.
+    with monkeypatch.context() as m:
+        m.setattr(endpoint_spec, "discover_from_settings", refused)
+        assert client.get("/reasoner").json()["model"] == "inkling-small"
 
     # A tasking after the report is one more turn of the same conversation.
     client.post("/mission/tasking", json={"text": "Look again."})
