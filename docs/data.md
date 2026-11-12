@@ -105,7 +105,7 @@ DEM where it is present.
 holds recorded Cal City missions (each with its conversation, the pictures
 the model saw and its score), the bake they were flown on and a basemap
 picture. It needs none of the data above: the station opens it as it is. The
-top-level README's [See it](../README.md#see-it) section gives the steps.
+top-level README's [Quickstart](../README.md#quickstart-review-recorded-searches) section gives the steps.
 
 ## The flight recordings
 
