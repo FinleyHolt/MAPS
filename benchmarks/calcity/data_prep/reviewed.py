@@ -13,6 +13,7 @@ shuffle::
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -49,7 +50,10 @@ def reviewed_episode_ids(split_file: Path) -> list[str]:
     return out
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    ).parse_args(argv)
     sys.stdout.write(
         "".join(
             f"{eid}\n"
