@@ -669,9 +669,6 @@ def _tuple_xy(xy):
 
 # type() of a row or a set names the class, not the module serving it
 Row.__module__ = RowList.__module__ = Rows.__module__ = "builtins"
-# Their shared base shows in type(rows).mro(), so the module it reports is served text. It
-# is pinned to the string every recorded run was served.
-_Cuts.__module__ = "maps.search.parse_compile.python_surface"
 
 
 def _index_it(name: str | None) -> str:

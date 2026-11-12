@@ -30,10 +30,6 @@ class _Stop(Exception):
     """A plan-level refusal already folded into the receipt: end the block."""
 
 
-# A block can print type(e) or type(rows).mro(), so the module this class reports is
-# served text. It is pinned to the string every recorded run was served.
-_Stop.__module__ = "maps.search.parse_compile.python_surface"
-
 
 def _no_such_fid(fid: str) -> CodeError:
     """The refusal of a prior_/detected_ fid no surface row carries."""

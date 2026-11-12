@@ -67,10 +67,6 @@ class CodeError(ValueError):
     """A refusal the model can act on: what was said, and what is allowed."""
 
 
-# A block can print type(e) or type(rows).mro(), so the module this class reports is
-# served text. It is pinned to the string every recorded run was served.
-CodeError.__module__ = "maps.search.parse_compile.code_surface"
-
 
 def refuse_metres_in_within(v):
     """``within=`` takes a PLACE; a bare number is ``dwithin=`` (Shapely's

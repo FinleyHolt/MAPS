@@ -344,8 +344,3 @@ class MissionPython(_LibraryCalls):
         if names:
             out["handles"] = names
         return out
-
-
-# print(print) shows the bound method's instance, so the module this class reports is
-# served text. It is pinned to the string every recorded run was served.
-MissionPython.__module__ = "maps.search.parse_compile.python_surface"
