@@ -166,9 +166,7 @@ def test_a_message_between_folded_turns_keeps_its_place():
     follow_up = {"role": "user", "content": "now find the truck"}
     later = [m for k in (2, 3, 4) for m in (_call([f"c{k}"]), _dump(f"c{k}", ["x"], 2000))]
     msgs = _head() + _units(2) + [follow_up] + later
-    out, n, _ = C._drop_spent_turns(
-        msgs, before=_est(msgs), shed_tokens=_est(msgs), model="m", tools=None
-    )
+    out, n, _ = C._fold_spent_turns(msgs, before=_est(msgs), shed_tokens=_est(msgs), measure=_est)
     assert n == 3  # every spent turn
     assert out[2]["content"].startswith("[script so far] (2 earlier turns folded")
     assert out[3] == follow_up
