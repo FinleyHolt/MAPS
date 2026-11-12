@@ -1,9 +1,9 @@
 """A CityNav block is its raster: bounds and grid come from the imagery.
 
 The bake needs no seed meta: every ``<city>_block_<n>.tif`` is a block, its
-extent the bounds, on 2 m cells. A sidecar an older bake left behind (whose
-box ran ~50 m past the imagery) is overwritten, never read; a block without a
-readable raster is a named failure.
+extent the bounds, on 2 m cells. A meta sidecar already in the output
+directory is overwritten, never read; a block without a readable raster is
+a named failure.
 """
 
 from __future__ import annotations

@@ -62,7 +62,7 @@ def test_two_bakes_of_one_prior_hash_equal(tmp_path):
     )
     (b / "block_0_meta.json").write_text(json.dumps({"provenance": {"prior": "osm"}, "crs": "utm"}))
     (b / "notes.txt").write_text("scratch")
-    (b / "block_0_graph.npz").write_bytes(b"a graph file an older bake wrote")
+    (b / "block_0_graph.npz").write_bytes(b"a file outside the bake's outputs")
     assert bake_sha256(a) == bake_sha256(b)
 
     (b / "block_0_meta.json").write_text(
@@ -98,11 +98,11 @@ def test_reader_reports_all_three_states(tmp_path, monkeypatch):
     assert "MISMATCH" in wrong, "a different bake must be called out loudly"
     assert "not comparable" in wrong, "must say what the mismatch costs"
 
-    # A run flown before the stamp existed: unverified, never a pass.
+    # A run that stamps no bake hash: unverified, never a pass.
     absent = _bake_line(_run(tmp_path / "r3", rel, stamped=None))
     assert "UNVERIFIED" in absent and "verified " not in absent
 
-    # Nothing here refuses -- an audit of an old run must still read.
+    # Nothing here refuses: an audit of an unstamped run still reads.
     for line in (verified, wrong, absent):
         assert isinstance(line, str) and line
 
