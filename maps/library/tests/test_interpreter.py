@@ -1,0 +1,1077 @@
+"""The real-Python run surface: what Python buys, and the guards that stay."""
+from __future__ import annotations
+
+import pytest
+
+from maps.library.op_compiler import CodeError
+from maps.library.rows import Row
+from maps.library.block_scan import scan_block
+from maps.mission.tests.fakes import (
+    quiet_env,
+    drive,
+    explore_drive,
+    grow_drive,
+    run,
+    tool_results,
+)
+
+# --------------------------------------------------------------------------
+# An error costs its line, never the look_for before it
+# --------------------------------------------------------------------------
+
+
+def test_the_147_145_block_arms_the_watch_despite_the_map_refusal():
+    reply, fr, _flights, declared = drive([
+        [run('look_for("house", "pool")\n'
+              'street = find("car")\n'
+              'show_map(around=street)\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "around= takes ONE place" in (out.get("error") or ""), out
+    # The two lines before the refusal RAN: the watch is armed (with its
+    # runtime detection count riding the trailer) and the handle is bound.
+    assert declared and declared[-1] == ["house", "pool"], declared
+    assert out["watching"] == {"now": ["house (target)", "pool (target)"]}, \
+        out["watching"]
+    assert "street" in (out.get("handles") or []), out
+
+
+def test_a_list_where_one_place_goes_is_refused_by_its_slot():
+    _, fr, _, _ = drive([[run('show_map(around=["prior_7", "prior_1"])')],
+                         [run('stand(at="prior_7", facing=["a", "b", "c"])')],
+                         [run("show_map(around=[3, 4])")], "done"])
+    two, three, point = tool_results(fr)
+    assert ("around= takes ONE place and that is a list of 2 -- index the one "
+            "you mean, or give one [x, y] point.") in two["error"], two
+    assert "facing= takes ONE place and that is a list of 3" in three["error"], three
+    assert "error" not in point, point
+
+
+def test_a_stance_that_cannot_bind_says_why_in_words():
+    _, fr, _, _ = drive([[run("stand(at=[1, 2], facing=[1, 2])")], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err.endswith(
+        "the stance did not bind: at and facing coincide -- no look direction"), err
+
+
+def test_a_block_flies_and_then_queries_what_the_pass_found():
+    reply, out, flights, _asked, _rend = explore_drive([
+        [run('look_for("pool")\n'
+              'explore("prior_160")\n'
+              'r2 = find("pool")\n'
+              'r2\n')],
+        "done",
+    ])
+    assert flights, "the pass flew"
+    assert "explored" in out[0], out[0]
+    assert "error" not in out[0], out[0]
+
+
+# --------------------------------------------------------------------------
+# Ordinary Python
+# --------------------------------------------------------------------------
+
+
+def test_print_len_and_fstrings_come_back_in_the_receipt():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
+              'print(f"got {len(r1)} cars")\n'
+              'n = len(r1) + 1\n'
+              'n\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert "got 2 cars" in (out.get("printed") or ""), out
+    assert "n = 3" in (out.get("printed") or ""), out
+
+
+def test_a_row_is_data_the_python_way():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
+              'r = r1[0]\n'
+              'print(r.xy, r["class"], r.get("nope", "-"))\n'
+              'print(hasattr(r, "xy"), sorted(r.keys())[:2])\n'
+              'both = r1 + find("car")\n'
+              'print(len(both))\n'
+              'print(r)\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    printed = out.get("printed") or ""
+    assert "[20.0, 20.0] car -" in printed, printed
+    assert "True" in printed and "4" in printed, printed
+    assert "fid='car_1'" in printed, printed
+
+
+def test_a_conditional_runs_and_a_loop_may_look():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
+              'if len(r1) > 1:\n'
+              '    fids = [r.fid for r in r1]\n'
+              'print(fids)\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert "car_1" in (out.get("printed") or ""), out
+
+
+def test_a_python_error_keeps_what_already_ran():
+    """NameError at line 2; the find at line 1 stands, envelope included."""
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nnope + 1\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "line 2: NameError" in (out.get("error") or ""), out
+    assert "r1" in (out.get("handles") or []), out
+    assert out.get("result"), out
+
+
+
+def test_an_earlier_blocks_def_fails_at_the_current_blocks_line():
+    """The served line is in the block the model just sent: a def from an
+    earlier block that raises names the line that called it."""
+    _reply, fr, _f, _d = drive([
+        [run("def f(x):\n    return x + 'a'\n")],
+        [run("y = 1\nz = 2\nw = f(3)\n")],
+        "done",
+    ])
+    out = tool_results(fr)[1]
+    assert (out.get("error") or "").startswith("line 3: TypeError"), out
+
+# --------------------------------------------------------------------------
+# The pre-scan: what is refused, with the reasons served
+# --------------------------------------------------------------------------
+
+
+def test_the_prescan_refusals():
+    with pytest.raises(CodeError, match="cannot import os"):
+        scan_block("import os\n")
+    with pytest.raises(CodeError, match="cannot import random"):
+        scan_block("from random import choice\n")
+    # statistics is OUT: NormalDist.samples draws ambient random.gauss,
+    # and two identical blocks must never produce two different results.
+    with pytest.raises(CodeError, match="cannot import statistics"):
+        scan_block("import statistics\n")
+    with pytest.raises(CodeError, match="math is a loaded module"):
+        scan_block("math = 5\n")
+    with pytest.raises(CodeError, match="no underscore names"):
+        scan_block("_x = 1\n")
+    with pytest.raises(CodeError, match="there is no eval"):
+        scan_block("eval('1')\n")
+    with pytest.raises(CodeError, match="cannot go inside a loop"):
+        scan_block("for c in r1:\n    go_to(c)\n")
+    with pytest.raises(CodeError, match="cannot go inside a loop"):
+        scan_block("while x:\n    explore(x)\n")
+    for comp in ("[go_to(r) for r in r1]", "{explore(r) for r in r1}",
+                 "{r: go_to(r) for r in r1}", "list(go_to(r) for r in r1)"):
+        with pytest.raises(CodeError, match="cannot go inside a loop"):
+            scan_block(f"{comp}\n")
+    with pytest.raises(CodeError, match=r"go_to is a move;.* or function\.$"):
+        scan_block("f = go_to\n")
+    with pytest.raises(CodeError, match="syntax error"):
+        scan_block("r1 = find(\n")
+    # ...and ordinary Python is not refused.
+    scan_block("xs = sorted([3, 1, 2])\n"
+               "if xs:\n"
+               "    n = len(xs)\n"
+               "for x in xs:\n"
+               "    print(x)\n")
+
+
+def test_a_scan_refusal_says_nothing_ran_and_names_its_line():
+    _r, fr, _f, declared = drive([[run('look_for("car")\nimport os\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err.startswith("nothing in this block ran -- line 2: cannot import os"), err
+    assert not declared
+
+
+def test_a_runaway_loop_dies_on_the_line_ceiling():
+    reply, fr, _f, _d = drive([
+        [run("n = 0\nwhile True:\n    n = n + 1\n")],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "unbounded loop" in (out.get("error") or ""), out
+
+
+def test_printing_a_whole_city_is_capped_like_a_notebook():
+    reply, fr, _f, _d = drive([
+        [run('for i in range(500):\n    print(f"row {i}")\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    printed = out.get("printed") or ""
+    assert "row 0" in printed and "row 499" in printed, printed[:200]
+    assert "printed lines suppressed" in printed, printed[:200]
+    assert printed.count("\n") < 70, printed.count("\n")
+
+
+
+def test_print_takes_prints_own_keywords():
+    from maps.library.interpreter import MissionPython
+
+    out = MissionPython(quiet_env()).run_block(
+        'print("a", end="")\nprint("b", flush=True)\nprint("c", "d", sep="-")\n')
+    assert "error" not in out, out
+    assert out["printed"] == "ab\nc-d", out["printed"]
+
+
+def test_a_move_returns_the_rows_it_arrived_over():
+    results, _g, added = grow_drive([
+        [run('look_for("car")\n')],
+        [run('arrivals = go_to("prior_7")\n'
+              'print(len(arrivals) if arrivals else "none")\n')],
+        "done",
+    ])
+    assert "error" not in results[1], results[1]
+    assert (results[1].get("printed") or "").strip() != "none", results[1]
+
+
+def test_a_mission_call_name_binds_like_a_builtin_name():
+    # A binding shadows the call for the rest of the mission, as `len = 3`
+    # shadows len; `del` gives the call back.
+    _r, fr, flights, _d = drive([
+        [run('intersection = find("gate")\nintersection\n')],
+        [run('go_to(intersection[0])\n')],
+        [run('del intersection\nprint(type(intersection) is type(lambda: 0))\n')],
+        "done"])
+    out = tool_results(fr)
+    assert "error" not in out[0] and "intersection" in out[0]["result"]["results"], out[0]
+    assert "error" not in out[1] and flights[0]["target_fid"] == "prior_1", out[1]
+    assert out[2].get("printed") == "True", out[2]
+
+
+def test_a_tool_result_does_not_echo_the_block():
+    _r, fr, _f, _d = drive([[run('x = 1\nprint(x)\n')], [run('r1 = find(\n')],
+                            [run('go_to(prior_99)\n')], "done"])
+    for out in tool_results(fr):
+        assert "said" not in out, out
+
+
+def test_calling_a_name_bound_over_a_mission_call_says_how_to_get_it_back():
+    _r, fr, _f, _d = drive([
+        [run('intersection = find("gate")\nintersection("A Road", "B Street")\n')],
+        "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err == ("line 2: TypeError: intersection is a set of 1 row(s), not a "
+                   "call: binding intersection shadows the intersection() call; "
+                   "del intersection gives the call back."), err
+
+
+@pytest.mark.parametrize("code, kind", [
+    ('intersection = "A x B"\nintersection("A Road", "B St")\n', "str"),
+    ('go_to = 3\ngo_to("prior_7")\n', "int")])
+def test_calling_any_value_bound_over_a_mission_call_says_how_to_get_it_back(code, kind):
+    err, flights = _refusal(code)
+    name = code.split(" =")[0]
+    assert err == (f"line 2: TypeError: '{kind}' object is not callable: binding {name} "
+                   f"shadows the {name}() call; del {name} gives the call back."), err
+    assert not flights
+
+
+def test_del_of_a_mission_call_nothing_is_bound_over_says_the_call_stays():
+    err, _ = _refusal('del find\n')
+    assert err == ("line 1: nothing is bound over find to del; find() is the "
+                   "mission call itself and stays."), err
+
+
+def test_a_move_name_an_earlier_block_bound_reads_as_its_variable():
+    _r, fr, _f, _d = drive([[run('go_to = find("car")\n')], [run('go_to[0]\n')], "done"])
+    assert "error" not in tool_results(fr)[1], tool_results(fr)[1]
+
+
+def test_math_is_loaded_and_import_math_works():
+    reply, fr, _f, _d = drive([
+        [run('import math\n'
+              'print(math.dist([0, 0], [3, 4]))\n'
+              'print(math.sqrt(16))\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    printed = out.get("printed") or ""
+    assert "5.0" in printed and "4.0" in printed, printed
+
+
+def test_a_syntax_error_echoes_the_offending_line():
+    with pytest.raises(CodeError) as e:
+        scan_block("d = (a - b)**2 + **(c - f)2\n")
+    msg = str(e.value)
+    assert "syntax error" in msg
+    assert "**(c - f)2" in msg and "^" in msg, msg
+
+
+def test_a_compile_stage_syntax_error_reaches_the_model():
+    with pytest.raises(CodeError) as e:
+        scan_block('r = find("car", near="a", near="b")\n')
+    assert "keyword argument repeated" in str(e.value)
+    reply, fr, _f, _d = drive([
+        [run('r = find("car", near="a", near="b")\n')],
+        "done",
+    ])
+    err = tool_results(fr)[0].get("error") or ""
+    assert "keyword argument repeated" in err, err
+
+
+def test_an_unknown_call_gets_a_did_you_mean():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nnarow(r1, within="the depot")\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    err = out.get("error") or ""
+    assert "did you mean" in err and "narrow" in err, out
+    assert "r1" in (out.get("handles") or []), out
+
+
+def test_try_except_is_ordinary_python():
+    reply, fr, _f, _d = drive([
+        [run('try:\n'
+              '    x = [1][9]\n'
+              'except IndexError:\n'
+              '    x = "caught"\n'
+              'try:\n'
+              '    y = 1 / 0\n'
+              'except Exception:\n'
+              '    y = "caught too"\n'
+              'print(x, y)\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert "caught caught too" in (out.get("printed") or ""), out
+
+
+def test_an_unbound_name_says_why_it_is_gone():
+    reply, fr, _f, _d = drive([
+        [run('r3 = find("car")[99]\n')],
+        [run('go_to(r3)\n')],
+        "done",
+    ])
+    out = tool_results(fr)
+    assert "did not bind" in (out[0].get("error") or ""), out[0]
+    err = out[1].get("error") or ""
+    assert "r3 is unbound" in err and "re-derive" in err, out[1]
+
+
+_STOP_CANDS = [
+    {"fid": "prior_7", "xy": [30.0, 30.0], "name": "Depot", "search_text": "depot"},
+    {"fid": "car_1", "xy": [5.0, 7.0], "class": "car", "search_text": "car"},
+    {"fid": "car_2", "xy": [50.0, 7.0], "class": "car", "search_text": "car"}]
+
+
+def test_a_rebind_the_plan_refused_unbinds_the_name():
+    blocks = ['h = find("car")\nh\n', 'h = find("car", nearest="prior_99")\n',
+              'go_to(h[0])\n']
+    _r, fr, flights, _d = drive([[run(b)] for b in blocks] + ["done"], cands=_STOP_CANDS)
+    out = tool_results(fr)
+    assert "error" in out[1] and not flights, out
+    assert "h is unbound" in out[2]["error"], out[2]
+
+
+def test_a_first_bind_the_plan_refused_says_so_not_a_did_you_mean():
+    blocks = ['cars = find("car")\n', 'car2 = find("car", nearest="prior_99")\n',
+              'car2\n']
+    _r, fr, _f, _d = drive([[run(b)] for b in blocks] + ["done"], cands=_STOP_CANDS)
+    err = tool_results(fr)[2]["error"]
+    assert "did you mean" not in err and "car2 is unbound" in err, err
+
+
+def test_kwarg_typeerrors_name_the_call_not_the_internals():
+    reply, fr, _f, _d = drive([
+        [run('find("car", fid="car_1")\n')],
+        "done",
+    ])
+    err = (tool_results(fr)[0].get("error") or "")
+    assert "find()" in err and "'fid'" in err, err
+    assert "find keywords:" in err and "near=" in err, err
+    assert "_call_" not in err, err
+
+
+def test_a_bare_fid_reads_as_its_row_and_still_flies():
+    reply, fr, flights, _d = drive([
+        [run('print(prior_7.xy)\ngo_to(prior_7)\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert "[" in (out.get("printed") or ""), out
+    assert flights and flights[0]["target_fid"] == "prior_7", flights
+
+
+def test_row_get_resolves_aliases_instead_of_defaulting():
+    from maps.library.rows import Row
+
+    r = Row({"fid": "f1", "xy": [1.5, 2.5], "distance to p0": 5.0})
+    assert r.get("distance_to_p0", 9999) == 5.0
+    assert r["distance_to_p0"] == 5.0
+    assert r.x == 1.5 and r.y == 2.5
+    assert r["x"] == 1.5 and r.get("y") == 2.5   # all three access forms
+    assert r.get("truly_absent", "-") == "-"
+
+
+def test_a_ref_column_is_spelled_by_its_places_real_name():
+    """The model spells a column with the name the CUE gave it; the producer spells it
+    with the name it sanitized."""
+    from maps.query.op_io import sanitize_token
+    from maps.library.rows import Row
+
+    lbl = sanitize_token("Poppy Boulevard")
+    assert lbl == "poppy_boulevard", lbl        # the producer's own rule
+    r = Row({"fid": "prior_1", "xy": [10.0, 20.0],
+             f"facing {lbl}": "south",
+             f"distance to {lbl}": 7.0,
+             f"north of {lbl}": 42.5})
+
+    # the cue's spelling, the served spelling and the shouty one all land
+    for k, want in ((f"facing {lbl}", "south"),
+                    ("facing Poppy Boulevard", "south"),
+                    ("FACING POPPY BOULEVARD", "south"),
+                    ("distance to Poppy Boulevard", 7.0),
+                    ("north of Poppy Boulevard", 42.5)):
+        assert r[k] == want, k
+        assert r.get(k) == want, k              # .get may not differ
+
+    # ...and a genuinely absent column is still absent, so the normalisation
+    # widened the SPELLING and not the surface.
+    assert r.get("facing Some Other Road") is None
+    assert r.get("facing Poppy Boulevard", 9999) == "south"
+
+
+def test_an_ambiguous_column_spelling_resolves_to_nothing():
+    """Two served columns that normalise alike is a silent bind waiting to happen, so
+    this refuses rather than picking one."""
+    from maps.library.rows import Row
+
+    r = Row({"fid": "prior_1", "facing a_b": "north", "facing a b": "south"})
+    assert r.get("facing A B") is None
+    assert r["facing a b"] == "south"           # an EXACT spelling still wins
+
+
+def test_builtins_survive_the_did_you_mean():
+    reply, fr, _f, _d = drive([
+        [run('print(list((1, 2)), dict(a=1)["a"], sorted({3, 1}), '
+              'repr(set()))\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert "[1, 2] 1 [1, 3] set()" in (out.get("printed") or ""), out
+
+
+def test_bare_fid_rows_compare_by_value():
+    """Two references to the same bare fid mint two Row views; model dedup (`if cand not
+    in seen`) must compare the PLACE, not the object identity -- and a Row equals its
+    own fid string."""
+    reply, fr, _f, _d = drive([
+        [run('print(prior_7 == prior_7)\n'
+              'print(prior_7 in [prior_7])\n'
+              'print(prior_7 == "prior_7")\n'
+              'seen = {prior_7, prior_7}\n'
+              'print(len(seen))\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    printed = out.get("printed") or ""
+    assert printed.splitlines() == ["True", "True", "True", "1"], printed
+
+
+def test_the_caret_lands_right_under_tabs():
+    with pytest.raises(CodeError) as e:
+        scan_block("if True:\n\td = (a - b)**2 + **(c - f)2\n")
+    msg = str(e.value)
+    body, caret_line = msg.splitlines()[-2:]
+    assert "\t" not in body, repr(body)     # rendered, not raw tab
+    assert caret_line.rstrip().endswith("^")
+    assert body[len(caret_line.rstrip()) - 1] == "*", (body, caret_line)
+
+
+def test_a_failed_unpack_unbinds_every_target():
+    reply, fr, _f, _d = drive([
+        [run('a, b = 1, 2\n')],
+        [run('a, b = [1, 2, 3][99], 5\n')],
+        [run('print(a)\n')],
+        "done",
+    ])
+    out = tool_results(fr)
+    assert "IndexError" in (out[1].get("error") or ""), out[1]
+    assert "a is unbound" in (out[2].get("error") or ""), out[2]
+
+
+def test_a_rebind_that_fails_inside_a_def_or_a_later_line_unbinds():
+    for block in ('def f():\n    return [1][9]\n\npick = f()\n',
+                  'pick = (5 if len([]) else\n        [1][9])\n'):
+        reply, fr, _f, _d = drive([
+            [run('pick = 1\n')],
+            [run(block)],
+            [run('print(pick)\n')],
+            "done",
+        ])
+        out = tool_results(fr)
+        assert "IndexError" in (out[1].get("error") or ""), out[1]
+        assert "pick is unbound" in (out[2].get("error") or ""), out[2]
+
+
+def test_a_row_token_is_what_the_row_binds():
+    from maps.library.op_compiler import row_token
+
+    assert row_token({"fid": "detected_9", "xy": [10.0, 20.0]}) == "detected_9"
+    assert row_token({"fid": "end_0", "xy": [3.0, 4.5]}) == "[3, 4.5]"
+    assert row_token({"fid": "end_1"}) == "end_1"
+    assert row_token({"fid": "[7, 8]", "xy": [7.0, 8.0]}) == "[7, 8]"
+    # An EVICTED detection keeps its fid and the skip path reports it gone,
+    # never a crop of its stale xy.
+    assert row_token({"fid": "detected_3", "xy": [9.0, 9.0]}) == "detected_3"
+
+
+def test_a_far_anchored_find_says_nothing_is_near():
+    far = [
+        {"fid": "prior_9", "xy": [5000.0, 5000.0], "class": "pool",
+         "search_text": "pool"},
+        {"fid": "road_1", "name": "Mill Lane", "xy": [0.0, 0.0],
+         "class": "road", "centerline": [[0.0, -50.0], [0.0, 50.0]],
+         "search_text": "mill lane"},
+    ]
+    reply, fr, _f, _d = drive([
+        [run('pools = find("pool", nearest="Mill Lane")\n')],
+        "done",
+    ], cands=far)
+    out = tool_results(fr)[0]
+    assert "lies near" in (out.get("note") or ""), out
+    assert "only when a flight covers it" in out["note"], out["note"]
+
+
+def test_order_by_fuses_two_anchors_like_find_near():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
+              'r2 = r1.order(nearest=["the depot", "the gate"])\n'
+              'r2\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    rows = out["result"]["results"]["r2"]["rows"]
+    assert "distance to the_depot" in rows and \
+        "distance to the_gate" in rows, rows
+
+
+def test_a_slice_rides_slots_and_slices_again():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\n'
+              'head = r1[0:2]\n'
+              'sub = head[0:1]\n'
+              'print(len(sub), sub[0].fid)\n'
+              'near_head = find("gate", nearest=r1[0:2])\n'
+              'near_head\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert "1 car_1" in (out.get("printed") or ""), out
+
+
+def test_a_chained_index_refusal_names_what_it_indexed():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nr1[0:2][999]["fid"]\n')],
+        "done",
+    ])
+    err = tool_results(fr)[0].get("error") or ""
+    assert "r1[0:2][999] did not bind: r1[0:2] served 2 row(s)" in err, err
+
+
+def test_an_explore_names_the_uncovered_sibling_segments():
+    """A named street is many fragments; a pass covers one."""
+    cands = [
+        {"fid": "prior_1", "name": "85th Street", "xy": [0.0, 0.0],
+         "class": "road", "centerline": [[0.0, -50.0], [0.0, 50.0]],
+         "search_text": "85th street"},
+        {"fid": "prior_2", "name": "85th Street", "xy": [0.0, 200.0],
+         "class": "road", "centerline": [[0.0, 150.0], [0.0, 250.0]],
+         "search_text": "85th street"},
+        {"fid": "prior_3", "name": "85th Street", "xy": [0.0, 400.0],
+         "class": "road", "centerline": [[0.0, 350.0], [0.0, 450.0]],
+         "search_text": "85th street"},
+    ]
+    _reply, out, _flights, _asked, _rend = explore_drive(
+        [[run('look_for("pool")\nexplore(prior_1)\n')], "done"],
+        cands=cands, stops=[[0.0, -50.0], [0.0, 50.0]])
+    note = (out[0].get("explored") or {}).get("note") or out[0].get("note") or ""
+    assert "2 more segment(s) no pass has covered" in note, out[0]
+    assert "prior_2" in note and "prior_3" in note, note
+
+
+def test_a_near_miss_fid_names_the_correction():
+    reply, fr, _f, _d = drive([
+        [run('go_to(prio_7)\n')],
+        "done",
+    ])
+    err = (tool_results(fr)[0].get("error") or "")
+    assert "no prio_7 on this surface" in err and "prior_7" in err, err
+
+
+def test_a_get_near_miss_notes_the_real_column():
+    """.get keeps returning the default on a miss, and the receipt names the near column."""
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car", nearest="the depot")\n'
+              'v = r1[0].get("distance_to_depot", 9999)\n'
+              'print(v)\n')],
+        "done",
+    ])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert "9999" in (out.get("printed") or ""), out
+    note = out.get("note") or ""
+    assert "distance_to_depot" in note and "distance to the_depot" in note, out
+
+
+def test_rows_repr_names_its_rows():
+    reply, fr, _f, _d = drive([
+        [run('r1 = find("car")\nprint(r1)\n')],
+        "done",
+    ])
+    printed = (tool_results(fr)[0].get("printed") or "")
+    assert "car_1 [" in printed and "row(s):" in printed, printed
+
+
+def test_a_bound_handle_beats_a_coincidental_fid_suggestion():
+    """corner_5 typo'd from a bound corner_4 must suggest the model's own handle, never
+    a coincidental prior_5 -- the fid correction fires only when the PREFIX
+    near-misses a fid family (detect_59 -> detected_59)."""
+    reply, fr, _f, _d = drive([
+        [run('corner_4 = [10, 20]\nprint(corner_5)\n')],
+        "done",
+    ])
+    err = (tool_results(fr)[0].get("error") or "")
+    assert "corner_4" in err, err
+    assert "prior_5" not in err, err
+
+
+def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
+    """The ways of ONE name tie, so no row is its first."""
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+
+    rows = [{"fid": f"prior_{i}", "name": "Neuralia Road"} for i in range(12)]
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: True)
+    mp = MissionPython(env)
+    view = Rows("r1", mp)
+
+    assert len(view) == 12
+    assert len(list(view)) == 12, "a tied view still iterates"
+
+    for bad in (0, -1, 5):
+        with pytest.raises(CodeError, match="not subscriptable"):
+            view[bad]
+    with pytest.raises(CodeError, match="not subscriptable"):
+        view[20:40]
+
+    mp.ns["roads"] = view
+    out = mp.run_block("more_of(roads)\n")
+    assert out["error"].endswith(
+        "roads is a tied view of 12 rows and has no next block: they all "
+        "match equally, so no row is its first and no span is its middle. "
+        "roads.order(nearest=<place>) ranks them so [0] is the nearest way, "
+        "a slot like near=roads relates to it as one place, and "
+        "explore(roads) covers the whole set."), out
+
+
+def test_an_ordered_result_stays_subscriptable():
+    """The refusal is about TIES, not about find results."""
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+
+    rows = [{"fid": f"detected_{i}", "class": "car"} for i in range(6)]
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
+    view = Rows("r2", MissionPython(env))
+    assert view[0].get("fid") == "detected_0"
+    assert len(view[0:3]) == 3
+
+
+def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
+    """print(road) must not hand back what the head withholds."""
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+
+    rows = [{"fid": f"prior_{5775 + i}", "name": "Neuralia Road",
+             "xy": [2242.27 + i, 3048.07 + i]} for i in range(64)]
+
+    def _env(tied):
+        return quiet_env(rows_of_ref=lambda ref: rows,
+                         tied_of_ref=lambda ref: tied)
+
+    tied = repr(Rows("r1", MissionPython(_env(True))))
+    assert "Neuralia Road" in tied and "64" in tied, tied
+    assert "prior_5775" not in tied, tied
+    assert "2242" not in tied, tied
+
+    # VACUITY FLOOR: an UNTIED result still names its rows and points, or
+    # this would pass on a repr that had stopped saying anything at all.
+    untied = repr(Rows("r1", MissionPython(_env(False))))
+    assert "prior_5775" in untied, untied
+    assert "2242" in untied, untied
+
+
+def test_a_relation_key_names_the_relate_instead_of_a_column_list():
+    """A relation column is not MISSING, it is UNASKED-FOR."""
+    r = Row({"fid": "prior_3213", "xy": [1.0, 2.0], "class": "house",
+             "distance to poppy_boulevard": 12.0}, None)
+
+    # a relate column names the relate, and names the PLACE it was asked
+    # about rather than the ones it already carries
+    for k in ("distance to redwood", "east of quezon", "facing nipa",
+              "bearing from great_circle"):
+        with pytest.raises(KeyError) as e:
+            r[k]
+        msg = str(e.value)
+        assert "never related to" in msg, msg
+        assert "order(nearest=" in msg, msg
+        assert k[k.index(" ") + 1:].split(" ")[-1] in msg, msg
+    # no relate writes an "along" column, so none is offered for one
+    with pytest.raises(KeyError) as e:
+        r["along airway"]
+    assert "never related to" not in str(e.value), str(e.value)
+    # attribute access answers the same way; one resolver, one message
+    with pytest.raises(AttributeError, match="never related to"):
+        r.__getattr__("distance to redwood")
+
+    # a VIEWPOINT side is not a relate, and must not claim to be
+    with pytest.raises(KeyError) as e:
+        r["left of v1"]
+    assert "VIEWPOINT" in str(e.value) and "stand(" in str(e.value)
+    assert "never related to" not in str(e.value)
+
+    # a colour is a palette word, and an ordinary miss is still a column
+    # list -- the message is only special where a remedy exists
+    for k in ("color_red", "tags"):
+        with pytest.raises(KeyError) as e:
+            r[k]
+        assert "its columns are" in str(e.value), k
+
+    # and a column the rows DO carry still just reads
+    assert r["distance to poppy_boulevard"] == 12.0
+    # .get keeps its contract: a miss returns the default, silently
+    assert r.get("distance to redwood", 99) == 99
+
+
+def test_a_non_callable_predicate_teaches_the_method_the_surface_serves():
+    for call in ("r1.filter(5)", "r1.order(5)"):
+        _reply, fr, _f, _d = drive([[run(f'r1 = find("car")\n{call}\n')], "done"])
+        err = tool_results(fr)[0].get("error") or ""
+        assert "r.distance(x)" in err and "gap(" not in err, err
+
+
+def test_every_filter_refuses_an_unknown_kwarg_in_one_text():
+    errs = []
+    for rows in ("r1", "r1[0]", "r1.filter(lambda r: True)"):
+        _reply, fr, _f, _d = drive([[run(f'r1 = find("car")\n{rows}.filter(toward=1)\n')],
+                                     "done"])
+        errs.append(tool_results(fr)[0].get("error") or "")
+    assert errs[0] == errs[1] == errs[2] and "toward=" in errs[0], errs
+
+
+def test_a_list_plus_rows_is_a_rowlist_either_way_round():
+    _reply, fr, _f, _d = drive([[run('r1 = find("car")\n'
+                                       'print(hasattr(r1 + [], "filter"),'
+                                       ' hasattr([] + r1, "filter"))\n')], "done"])
+    out = tool_results(fr)[0]
+    assert (out.get("printed") or "").strip() == "True True", out
+
+
+def test_a_slice_of_one_row_chains_like_every_other_slice():
+    r = Row({"fid": "f1", "xy": [1.0, 2.0]})
+    assert r[0:1].order(lambda x: x.x) == [r]
+
+
+@pytest.mark.parametrize("code", [
+    'r1 = find("car")\nlist(map(go_to, r1))\n',
+    'r1 = find("car")\ng = go_to\nfor c in r1:\n    g(c)\n',
+    'r1 = find("car")\ndef hop(c):\n    go_to(c)\nfor c in r1:\n    hop(c)\n',
+    'r1 = find("car")\nhop = lambda c: go_to(c)\nfor c in r1:\n    hop(c)\n',
+])
+def test_a_move_reaching_a_loop_by_another_spelling_is_refused(code):
+    """A move passed as a value, or wrapped in a def or lambda, would fly
+    every leg the loop refusal stops."""
+    _reply, fr, flights, _d = drive([[run(code)], "done"])
+    assert not flights, (flights, tool_results(fr)[0])
+
+
+def test_a_window_of_a_window_composes_the_python_way():
+    """A window never grows past its parent, and a negative end counts from
+    the parent's end."""
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+
+    rows = [{"fid": f"detected_{i}"} for i in range(20)]
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
+    r = Rows("r1", MissionPython(env))
+    assert [x.get("fid") for x in r[2:5][0:10]] == \
+        [x["fid"] for x in rows[2:5][0:10]]
+    assert [x.get("fid") for x in r[2:6][0:-1]] == \
+        [x["fid"] for x in rows[2:6][0:-1]]
+
+
+def test_an_empty_window_of_a_window_names_its_own_span_and_parent():
+    """The refusal reads the window the model wrote and the rows its parent
+    holds, not the composed absolute span over the whole set."""
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+
+    rows = [{"fid": f"detected_{i}"} for i in range(20)]
+    env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
+    r = Rows("r1", MissionPython(env))
+    with pytest.raises(CodeError) as e:
+        r[2:5][5:8]
+    assert str(e.value) == (
+        "window [5:8] selected 0 of 3 rows: the set holds 3 row(s) and the "
+        "window begins at or past the end of them (or begins at or after "
+        "where it stops).")
+
+
+def test_a_distance_after_a_flight_in_the_same_block_measures_the_new_surface():
+    from maps.library.interpreter import MissionPython
+
+    rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
+                        "mask": [[[0.0, 0.0]]]},
+            "detected_2": {"fid": "detected_2", "xy": [10.0, 0.0],
+                           "mask": [[[10.0, 0.0]]]}}
+
+    def move(_tok):
+        # the flight folds a detection into detected_2: its mask moves
+        rows["detected_2"] = {"fid": "detected_2", "xy": [30.0, 0.0],
+                              "mask": [[[30.0, 0.0]]]}
+        return {}
+
+    mp = MissionPython(quiet_env(move=move, row_of_fid=rows.get))
+    out = mp.run_block('a = distance("prior_1", "detected_2")\n'
+                       'go_to("prior_1")\n'
+                       'print(a, distance("prior_1", "detected_2"))\n')
+    assert "error" not in out, out
+    assert out["printed"] == "10.0 30.0", out
+
+
+@pytest.mark.parametrize("arg, says", [
+    ("prior_99", "there is no prior_99 on this surface; say a fid off a "
+                 "served row."),
+    ('"detected_7"', "distance() got 'detected_7', which names no row on "
+                     "this surface"),
+    ("r1", "distance() got an empty list -- there is nothing there to "
+           "measure."),
+])
+def test_distance_refuses_a_place_with_nothing_to_measure(arg, says):
+    """A fid the surface does not hold and an empty set are refused, not
+    measured as an infinite gap."""
+    from maps.library.interpreter import MissionPython
+    from maps.library.rows import Rows
+
+    rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
+                        "mask": [[[0.0, 0.0]]]}}
+    mp = MissionPython(quiet_env(row_of_fid=rows.get))
+    mp.ns["r1"] = Rows("r1", mp)
+    out = mp.run_block(f"print(distance(prior_1, {arg}))\n")
+    assert says in out.get("error", ""), out
+
+
+def test_distance_refuses_a_stop_name_without_asking_to_find_it():
+    """A fid-shaped token that no find() can produce (a stop name) is
+    refused without telling the model to find it."""
+    from maps.library.interpreter import MissionPython
+
+    rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
+                        "mask": [[[0.0, 0.0]]]}}
+    mp = MissionPython(quiet_env(row_of_fid=rows.get))
+    out = mp.run_block("print(distance(v1, prior_1))\n")
+    err = out.get("error", "")
+    assert "distance() got 'v1', which names no row" in err, out
+    assert "find" not in err, out
+
+
+def test_a_tier_view_is_served_once_under_the_models_name():
+    """cars.exact is one table, served as cars.exact, not also under the
+    executor's ref."""
+    _, fr, _, _ = drive([[run('cars = find("car")\ncars.exact\n')], "done"])
+    out = tool_results(fr)[0]
+    assert list(out["result"]["results"]) == ["cars.exact"], out
+
+
+def test_an_unnamed_set_in_a_look_list_is_refused_without_an_executor_ref():
+    """A computed set no name reaches is refused by asking for a name, never
+    under an rN the model cannot type."""
+    import re
+
+    _, fr, _, _ = drive([[run(
+        'cars = find("car")\n'
+        'look([cars.filter(near=cars[0], dwithin=50), cars[0]])\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert ("look() got an unnamed set inside a list; bind it first "
+            "(s = ...) and name its rows: look([s[0], ...])") in err, err
+    assert not re.search(r"\br\d", err), err
+
+
+@pytest.mark.parametrize("arg", ["[]", "set()", "find('car')[0:0] + []"])
+def test_an_empty_list_to_cover_is_said_empty_not_a_coordinate(arg):
+    _, fr, _, _ = drive([[run(f"explore({arg})\n")], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert "explore() got an empty list; there is nothing to cover." in err, err
+    assert "coordinate" not in err, err
+
+
+# --------------------------------------------------------------------------
+# A slot handed nothing, or the wrong kind of thing, is refused by name
+# --------------------------------------------------------------------------
+
+
+def _refusal(code: str) -> tuple[str, list]:
+    _reply, fr, flights, _ = drive([[run(code)], "done"])
+    return tool_results(fr)[0].get("error") or "", flights
+
+
+@pytest.mark.parametrize("code,slot", [
+    ("look(None)\n", "each look() place"),
+    ("go_to(None)\n", "go_to()"),
+    ("explore(None)\n", "each explore() place"),
+    ("v = stand(at=None)\n", "at="),
+    ('v = stand(at="prior_7", facing=None)\n', "facing="),
+])
+def test_none_in_a_place_slot_is_no_place(code, slot):
+    err, flights = _refusal(code)
+    assert err.endswith(f"{slot} got None, which is no place: the name it "
+                        "came from holds no row. Bind a row first."), err
+    assert not flights
+
+
+def test_a_none_mark_is_skipped_and_the_look_still_runs():
+    # A mark only decorates the crop: a conditional mark that came out None
+    # is skipped by the renderer, as flown, and the subject is still cropped.
+    from maps.mission.tests.fakes import calls_of_block
+    assert calls_of_block('look("prior_7", marks=[None])\n') == [
+        ("crops", None, "prior_7", ["None"])]
+
+
+@pytest.mark.parametrize("code", ["look([])\n", "look(set())\n"])
+def test_look_at_an_empty_list_says_so(code):
+    err, _ = _refusal(code)
+    assert err.endswith(
+        "look() got an empty list; there is nothing to look at."), err
+
+
+def test_indexing_an_empty_set_says_it_holds_no_rows():
+    err, _ = _refusal('x = find("qqqzzz")\nx[0]\n')
+    assert err.endswith("x[0] did not bind: x served 0 row(s) here. There "
+                        "is no row to index."), err
+    err, _ = _refusal('cars = find("car")\ncars[99]\n')
+    assert err.endswith("cars[99] did not bind: cars served 2 row(s) here. "
+                        "Show it first, then index it."), err
+
+
+@pytest.mark.parametrize("code", ['look(prior_9999[0])\n', 'find("prior_9999")\n'])
+def test_a_fid_name_with_no_row_on_the_surface_is_refused(code):
+    err, _ = _refusal(code)
+    assert err.endswith("there is no prior_9999 on this surface; say a fid "
+                        "off a served row."), err
+
+
+@pytest.mark.parametrize("code, slot", [
+    ('go_to("")\n', "go_to()"), ('explore(" ")\n', "each explore() place"),
+    ('look("")\n', "each look() place"),
+    ('find("car").order(nearest="")\n', "each place a relation names"),
+    ('find("car", within=" ")\n', "each place a relation names"),
+    ('find("car", north_of="")\n', "each place a relation names")])
+def test_an_empty_name_is_no_place(code, slot):
+    err, _ = _refusal(code)
+    assert err.endswith(f"{slot} got an empty name, which is no place."), err
+
+
+@pytest.mark.parametrize("mark", ['""', '" "'])
+def test_a_blank_mark_is_skipped_as_a_none_mark_is(mark):
+    from maps.mission.tests.fakes import calls_of_block
+    assert calls_of_block(f'look("prior_7", marks=[{mark}, "prior_1"])\n') == [
+        ("crops", None, "prior_7", [eval(mark), "prior_1"])]
+
+
+def test_none_inside_a_move_list_is_no_place():
+    err, _ = _refusal('explore(["prior_1", None])\n')
+    assert err.endswith("each explore() place got None, which is no place: "
+                        "the name it came from holds no row. Bind a row "
+                        "first."), err
+
+
+@pytest.mark.parametrize("attr, says", [
+    ("cars.ref", "cars is a set of 2 row(s) and carries no 'ref'"),
+    ("cars.mp", "cars is a set of 2 row(s) and carries no 'mp'"),
+    ("cars[0].bind", "row car_1 carries no 'bind'"),
+    ("cars[0].src", "row car_1 carries no 'src'")])
+def test_model_code_cannot_read_a_sets_executor_slots(attr, says):
+    err, _ = _refusal(f'cars = find("car")\n{attr}\n')
+    assert says in err, err
+
+
+@pytest.mark.parametrize("code, says", [
+    ('m = find("car")\nm.intersection("x")\n',
+     "intersection() is a call, not a method: call it on its own, intersection(...)"),
+    ('m = find("car")\nm.keys()\n', "a row's own: m[0].keys()"),
+    ('m = find("car")\nm.get("class")\n', "a row's own: m[0].get(<column>)"),
+    ('both = find("car") + find("car")\nboth.xy\n',
+     "both is a set of 4 row(s) and carries no 'xy'; a column is read off one "
+     "row: both[0].xy"),
+    ('(find("car") + find("car")).xy\n',
+     "that is a set of 4 row(s) and carries no 'xy'; bind it first (s = ...); "
+     "a column is read off one row: s[0].xy"),
+    ('(find("car") + find("car")).nearest\n',
+     "nearest is a keyword, not a method: bind it first (s = ...); "
+     "s.order(nearest=...)")])
+def test_a_set_read_as_a_row_gets_a_remedy_that_runs(code, says):
+    err, _ = _refusal(code)
+    assert err.endswith(says), err
+
+
+def test_indexing_a_set_by_a_non_int_names_the_int_position():
+    err, _ = _refusal('cars = find("car")\ncars["class"]\n')
+    assert err.endswith("cars['class'] did not bind: cars is a set of rows, "
+                        "indexed by an int position; a column is read off "
+                        "one row: cars[0]['class']."), err
+    err, _ = _refusal('cars = find("car")\ncars[1.0]\n')
+    assert err.endswith("cars[1.0] did not bind: cars is a set of rows, "
+                        "indexed by an int position."), err
+
+
+@pytest.mark.parametrize("code", [
+    'look({"ref": "prior_7"})\n',
+    'go_to({"a": 1})\n',
+    'find("car", nearest={"a": 1})\n',
+])
+def test_a_dict_is_no_place(code):
+    err, flights = _refusal(code)
+    assert "a place is a row, a set, a fid or an [x, y]; got a dict" in err, err
+    assert not flights
+
+
+def test_stand_facing_a_set_is_refused_under_its_spelling():
+    err, _ = _refusal('cars = find("car")\n'
+                      'v = stand(at="prior_7", facing=cars)\n')
+    assert err.endswith("facing= takes ONE place and cars is a set. "
+                        "Index it -- facing=cars[0]."), err
+
+
+@pytest.mark.parametrize("kw", ['nearest="prior_7"', 'color="red"'])
+def test_reverse_on_a_served_order_is_refused(kw):
+    err, _ = _refusal(f'cars = find("car")\ncars.order({kw}, reverse=True)\n')
+    assert "reverse= flips a key sort" in err, err
+
+
+@pytest.mark.parametrize("code,said", [
+    ('x = find("qqqzzz")\ngo_to(x)\n', "x holds 0 row(s) here; there is "
+                                        "nothing to go to."),
+    ('x = find("qqqzzz")\nexplore(x)\n', "x holds 0 row(s) here; there is "
+                                          "nothing to cover."),
+    ("go_to([])\n", "go_to() got an empty list; there is nothing to go to."),
+])
+def test_a_move_to_an_empty_set_says_there_is_nothing_there(code, said):
+    err, flights = _refusal(code)
+    assert err.endswith(said), err
+    assert not flights

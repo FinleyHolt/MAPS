@@ -18,11 +18,10 @@ import logging
 import numpy as np
 import pytest
 
-import benchmarks.citynav.paths as citynav_paths
 import maps.perception.ortho.camera_model as camera_model
 from benchmarks.citynav.bake.city import BakeError, _cell_coverage, bake_block
 from benchmarks.citynav.eval import WorldBounds
-from maps.search.tests.ortho_fixture import write_rasters
+from maps.mission.tests.ortho_fixture import write_rasters
 
 BLOCK = "toy_block_0"
 
@@ -51,8 +50,7 @@ def _bake(tmp_path, monkeypatch, *, imagery: bool) -> dict:
         rgb = np.zeros((80, 80, 3), dtype=np.uint8)
         rgb[:40, :] = 90  # raster row 0 is y_max: the NORTH half has imagery
         write_rasters(tmp_path / "rasters", BLOCK, rgb, np.zeros((80, 80), dtype=np.float32))
-    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path / "rasters")
-    bake_block(BLOCK, RECORDS, tiles,
+    bake_block(BLOCK, RECORDS, tiles, rgbd_dir=tmp_path / "rasters",
                bounds=None if imagery else WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0))
     rows = json.loads((tiles / f"{BLOCK}_features.json").read_text())["prior"]
     return {r["osm_id"]: r for r in rows}
@@ -77,11 +75,11 @@ def test_no_imagery_keeps_every_rasterized_cell(tmp_path, monkeypatch) -> None:
     assert len(rows["w_all"]["cells"]) == 16
 
 
-def test_an_unreadable_ortho_refuses_the_bake(monkeypatch) -> None:
+def test_an_unreadable_ortho_refuses_the_bake(monkeypatch, tmp_path) -> None:
     """A block whose imagery cannot be read has no coverage to clip to."""
     def unreadable(*_a, **_k):
         raise OSError("truncated raster")
 
     monkeypatch.setattr(camera_model, "load_ortho_or_rasters", unreadable)
     with pytest.raises(BakeError, match="truncated raster"):
-        _cell_coverage(BLOCK, WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0), (4, 4), 2.0)
+        _cell_coverage(BLOCK, WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0), (4, 4), 2.0, tmp_path)

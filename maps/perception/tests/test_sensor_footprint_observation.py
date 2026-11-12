@@ -20,7 +20,7 @@ from maps.perception.observation import (
     ground_sides_m,
 )
 from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m
-from maps.search.tests.ortho_fixture import write_rasters
+from maps.mission.tests.ortho_fixture import write_rasters
 
 MAP = "unit_test_sensor_block"
 GROUND_Z = 0.0

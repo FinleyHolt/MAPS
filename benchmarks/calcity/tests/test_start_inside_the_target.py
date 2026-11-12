@@ -14,15 +14,19 @@ case says so instead of leaving a test that passes on nothing.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
-from benchmarks.calcity import paths as calcity_paths
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.citynav import eval as cn_eval
+
+# The corpus as this process's environment places it.
+_SPLIT = calcity_bench(os.environ).split_path("calcity")
 
 
 def _episodes_that_start_on_their_target() -> list[int]:
-    rows = json.loads(calcity_paths.split_path("calcity").read_text())
+    rows = json.loads(_SPLIT.read_text())
     out = []
     for i, row in enumerate(rows):
         mask = row.get("target_mask") or []
@@ -57,7 +61,7 @@ def start_on_target() -> list[int]:
 def test_those_episodes_score_zero_when_nothing_flew(start_on_target):
     """What the zero-flight branch produces for them, through the one
     scorer it calls."""
-    rows = json.loads(calcity_paths.split_path("calcity").read_text())
+    rows = json.loads(_SPLIT.read_text())
     for idx in start_on_target:
         row = rows[idx]
         start = (float(row["trajectory"][0][0]), float(row["trajectory"][0][1]))

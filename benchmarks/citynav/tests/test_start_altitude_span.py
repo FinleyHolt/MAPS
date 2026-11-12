@@ -2,8 +2,8 @@
 
 ``obs_span_m = 2 * (start_alt - ground)`` is the view-square side the
 mission hands every crop request (see
-``maps/search/render/look_render.py``, and
-``maps/search/tests/test_look_obs_span_ceiling.py`` for what the
+``maps/render/look_render.py``, and
+``maps/render/tests/test_look_obs_span_ceiling.py`` for what the
 renderer does with it). On the CityNav test split it never binds: the
 pixel-budget ceiling, 100 m on a 0.1 m/px ortho, is what clamps the window.
 Upstream's start z puts 4 val_seen and 60 train_seen episodes low enough
@@ -13,22 +13,23 @@ that the observation extent clamps instead.
 from __future__ import annotations
 
 import json
+import os
 import statistics
 from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav import paths
+from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.adapter import map_name_for_row
-from benchmarks.citynav.run_benchmark.config import load_config
+from benchmarks.run_record.config import load_config
 from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
-from maps.search.render.look_render import look_window_bounds_m
+from maps.render.look_render import look_window_bounds_m
 
 # Every CityNav block is a 0.1 m/px ortho.
 _, _BUDGET_M = look_window_bounds_m(0.1)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SPLIT_FILE = Path(paths.SPLITS_DIR) / paths.SPLIT_FILES["test_unseen"]
+SPLIT_FILE = citynav_bench(os.environ).split_path("test_unseen")
 needs_split = pytest.mark.skipif(
     not SPLIT_FILE.exists(), reason=f"no CityNav split at {SPLIT_FILE}"
 )
@@ -48,7 +49,7 @@ def test_the_observation_ceiling_never_binds_on_the_citynav_test_split():
     # Every episode of the test split: the ceiling sits ABOVE the window
     # budget, so the budget is what clamps and the observation extent
     # never does. If this fails, the crop window narrowed and the
-    # look_render / reasoner_loop notes that say otherwise are stale.
+    # look_render / mission loop notes that say otherwise are stale.
     cfg = _cfg()
     rows = json.loads(SPLIT_FILE.read_text())
     spans = []

@@ -43,22 +43,25 @@ import argparse
 import datetime as dt
 import json
 import math
+import os
 import statistics
 import sys
 from bisect import bisect_left
 from pathlib import Path
 from typing import Any
 
-from benchmarks.citynav.action_snap import bearing_deg
-from benchmarks.citynav.analysis.rows import is_infra_abort, iter_json_rows
-from benchmarks.citynav.episode_workdir import CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL
-from benchmarks.citynav.episodes import EPISODES_JSONL
+from benchmarks.bench import Bench
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight.airframe import C12_SENSOR
+from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL
+from benchmarks.run_record.episodes import EPISODES_JSONL
+from benchmarks.run_record.rows import is_infra_abort, iter_json_rows
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.ortho.sensor_frame import footprint_m
-from maps.search.analyze_scene.geom_compute import point_in_polygon
+from maps.query.spatial_math import point_in_polygon
+from maps.settings import from_environ
 
 FT_PER_M = 1.0 / 0.3048
 #: A gap between fixes longer than this is a hole in the recording.
@@ -103,20 +106,19 @@ def centroid(ring: list[list[float]]) -> tuple[float, float]:
 
 class Truth:
     """The analyst's entries by sortie name (a directory of ``<sortie>.json``)
-    and the tasking set's footprints by description (split JSONs). A flown
+    and the tasking set's footprints by description (split JSONs, read as
+    ``bench``'s engine parses a row). A flown
     episode id is the run's place in its sortie's tasking, not in the file, so
     the description is the join; a description two entries give different
     footprints joins nothing."""
 
-    def __init__(self, paths: list[Path]) -> None:
+    def __init__(self, paths: list[Path], bench: Bench) -> None:
         self.dirs = [p for p in paths if p.is_dir()]
         self.masks: dict[str, list[list[float]] | None] = {}
         for p in paths:
             if p.is_file():
-                from benchmarks.citynav.adapter import parse_episode  # noqa: PLC0415
-
                 for i, r in enumerate(json.loads(p.read_text())):
-                    ep = parse_episode(r, row_index=i)
+                    ep = bench.engine.parse_episode(r, row_index=i)
                     if ep.target_mask:
                         ring = [[float(x), float(y)] for x, y in ep.target_mask]
                         seen = self.masks.setdefault(ep.description, ring)
@@ -303,6 +305,11 @@ def _agl(fix, frames: list[dict[str, Any]], events, map_name: str) -> tuple[floa
     return (statistics.median(asked), "waypoint altitude") if asked else (None, None)
 
 
+def bearing_deg(from_xy, to_xy) -> float:
+    """Compass bearing from ``from_xy`` to ``to_xy`` (0 = north, clockwise), signed."""
+    return math.degrees(math.atan2(to_xy[0] - from_xy[0], to_xy[1] - from_xy[1]))
+
+
 def first_leg_m(p, h: float, q, r: float) -> float | None:
     """The length of one turn at ``r`` and the straight to ``q`` from pose ``(p, h)``, the shorter side; None inside both circles."""
     best = None
@@ -426,12 +433,13 @@ def ended(row: dict[str, Any]) -> str:
     return str(row.get("ended_by") or "no run")
 
 
-def tokens(bases: list[Path]) -> dict[str, Any]:
-    """The run's reasoner use off its transcript (``maps.llm.flight_summary``)."""
-    from maps.llm.flight_summary import summarize  # noqa: PLC0415
+def tokens(bases: list[Path], tokenizer_name: str = "") -> dict[str, Any]:
+    """The run's reasoner use off its transcript (``maps.llm.flight_summary``);
+    ``tokenizer_name`` is the reader's tokenizer override."""
+    from maps.llm.flight_summary import summarize  # noqa: PLC0415  (the tokenizer's transformers)
 
     flight = next((b / "flight" for b in bases if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None)
-    llm = summarize(flight) if flight else {}
+    llm = summarize(flight, tokenizer_name) if flight else {}
     keys = ("prompt_tokens", "completion_tokens", "reasoning_tokens", "total_tokens")
     if not llm.get("requests"):
         return {k: None for k in (*keys, "reasoner_calls")}
@@ -440,7 +448,7 @@ def tokens(bases: list[Path]) -> dict[str, Any]:
 
 
 def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
-                 turn_radius_m: float) -> dict[str, Any]:
+                 turn_radius_m: float, tokenizer_name: str = "") -> dict[str, Any]:
     bases = run_bases(root, row)
     events = _conversation(bases)
     end = ended(row)
@@ -475,7 +483,7 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         "track_source": None,
         "track_coverage": None, "time_to_id_s": round(t_end, 1) if determined and t_stop is not None else None,
         "spl": None, "spl_note": None, "path_ft": None, "final_leg_ft": None, "shortest_ft": None,
-        "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases),
+        "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases, tokenizer_name),
     }
     if target is None:
         return out
@@ -539,8 +547,10 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     return out
 
 
-def collect(roots: list[Path], truth: Truth) -> tuple[list[dict[str, Any]], float, int]:
-    """Every run under ``roots``, with the crews' turn radius over them all."""
+def collect(roots: list[Path], truth: Truth, tokenizer_name: str = "") -> tuple[list[dict[str, Any]], float, int]:
+    """Every run under ``roots``, with the crews' turn radius over them all;
+    ``tokenizer_name`` is the reader's tokenizer override
+    (``SEARCH_COMPACT_TOKENIZER_NAME``), for a reasoning span no serve counted."""
     tracks = [sorted(iter_json_rows(r / TRACK_JSONL), key=lambda f: f["t_unix"]) for r in roots]
     radius, turns = flown_turn_radius_m(tracks, [routed_windows(r) for r in roots])
     radius = radius or TURN_RADIUS_FALLBACK_M
@@ -549,7 +559,8 @@ def collect(roots: list[Path], truth: Truth) -> tuple[list[dict[str, Any]], floa
         entries = truth.entries(root.name)
         for row in iter_json_rows(root / EPISODES_JSONL):
             out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
-                                    truth=truth, track=track, turn_radius_m=radius))
+                                    truth=truth, track=track, turn_radius_m=radius,
+                                    tokenizer_name=tokenizer_name))
     out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))
     return out, radius, turns
 
@@ -597,7 +608,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     roots = sorted(r for r in args.root if (r / EPISODES_JSONL).is_file())
-    rows, radius, turns = collect(roots, Truth(args.truth))
+    bench = calcity_bench(os.environ)
+    rows, radius, turns = collect(roots, Truth(args.truth, bench), from_environ(bench.environ).endpoint.tokenizer_name)
     doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
            "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"),
            "runs": rows}

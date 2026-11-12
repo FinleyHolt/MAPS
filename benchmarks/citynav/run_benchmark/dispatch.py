@@ -3,42 +3,48 @@ and the episode wrapper."""
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from benchmarks import repo_provenance
+from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import CityNavEpisode
-from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
-from benchmarks.citynav.episode_workdir import LiveRecorder
-from benchmarks.citynav.run_benchmark.config import RunConfig
+from benchmarks.run_record import rows as _rows
+from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
+from benchmarks.run_record.episode_workdir import LiveRecorder
+from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
-from benchmarks.citynav.run_manifest import arm_stamp
+from benchmarks.run_record.run_manifest import arm_stamp
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.http import TRANSIENT_CLIENT_STATUS, ImageStoreError
 from maps.perception.sam.detect_client import SamServerOutage
+from maps.settings import Settings
 
 log = logging.getLogger("run_benchmark")
 
-_RUN_PROVENANCE: dict | None = None
+_RUN_PROVENANCE: dict[str, dict] = {}
 
 
 def _cached_run_provenance(search_flags: dict, *, config_path: str | None, split: str) -> dict:
     """The provenance every episode row carries (git commit, config sha256,
-    the discovered served model, the flag set), computed once per process."""
-    global _RUN_PROVENANCE
-    if _RUN_PROVENANCE is None:
-        spec = endpoint_spec_module.spec()
-        _RUN_PROVENANCE = repo_provenance(
+    the discovered served model, the flag set), computed once per process for
+    each run context: a bench process has one, a station flies several."""
+    spec = endpoint_spec_module.spec()
+    key = json.dumps([search_flags, config_path, split, spec.model_id, spec.tokenizer_name], sort_keys=True, default=str)
+    if key not in _RUN_PROVENANCE:
+        _RUN_PROVENANCE[key] = repo_provenance(
             config_path=config_path,
             split=split,
             search_flags=search_flags,
             served_model=spec.model_id,
             served_build=spec.tokenizer_name,
         )
-    return _RUN_PROVENANCE
+    return _RUN_PROVENANCE[key]
 
 
 # Exception classifiers: an infrastructure casualty (excluded from the SR
@@ -103,25 +109,32 @@ def dispatch_one(
     total: int,
     objects_by_map: dict,
     cfg: RunConfig,
+    bench: Bench,
+    settings: Settings,
     split: str,
     recorder: LiveRecorder | None,
     episode_dir: Path,
+    routing_key: str | None = None,
+    converse: Callable[[Any], Any] | None = None,
 ) -> dict:
-    """Run one episode, write its row to ``<episode_dir>/episode.json`` and
+    """Run one episode of ``bench`` under ``settings`` (its wire log and frames
+    under ``episode_dir``, its requests under ``routing_key``), write its row to ``<episode_dir>/episode.json`` and
     return it. ``status`` is ``ok`` for a scored attempt (a method exception
     included) and ``infra`` when an infrastructure fault raised or the
-    mission ended ``transient_failures``.
+    mission ended ``transient_failures``. ``converse`` is ``run_episode``'s:
+    what drives the mission conversation in place of the bench's one turn.
     """
     t0 = time.monotonic()
 
     # Every row's provenance carries the arm identity, as the manifest stamps it.
-    _prov = _cached_run_provenance(arm_stamp(cfg.policy), config_path=cfg.source_path, split=split)
+    _prov = _cached_run_provenance(arm_stamp(cfg.policy, bench), config_path=cfg.source_path, split=split)
 
     def _stamp(rec: dict) -> dict:
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}
 
     try:
-        rec = run_episode(episode, objects_by_map, cfg, recorder=recorder)
+        rec = run_episode(episode, objects_by_map, cfg, bench, recorder=recorder, settings=settings,
+                          workdir=episode_dir, routing_key=routing_key, converse=converse)
     except Exception as e:
         # exc_info lands the traceback in run.log through the root
         # handler; a bare print_exc reaches only stderr.

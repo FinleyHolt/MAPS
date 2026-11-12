@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.adapter import parse_episode
-from benchmarks.citynav.run_benchmark.config import load_config
+from benchmarks.run_record.config import load_config
 from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 

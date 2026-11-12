@@ -86,14 +86,23 @@ function Frames({ entry, mission }: { entry: TranscriptEntry; mission: MissionSt
     <div className="entry-frames">
       {shas.map((sha) => {
         const url = missionFile(mission, `frames/${sha}.jpg`);
-        if (!url) return null;
-        return (
-          <a key={sha} href={url} target="_blank" rel="noreferrer" title={`what the model saw · ${sha.slice(0, 12)}`}>
-            <img src={url} alt={`what the model saw, ${sha.slice(0, 8)}`} loading="lazy" />
-          </a>
-        );
+        return url ? <Frame key={sha} url={url} sha={sha} /> : null;
       })}
     </div>
+  );
+}
+
+/** One picture the model was sent. A run folder copied without its
+ *  `frames/` still reviews as text: a picture that is not there says so. */
+function Frame({ url, sha }: { url: string; sha: string }) {
+  const [missing, setMissing] = useState(false);
+  if (missing) {
+    return <span className="entry-note">picture {sha.slice(0, 8)} is not in the run folder</span>;
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" title={`what the model saw · ${sha.slice(0, 12)}`}>
+      <img src={url} alt={`what the model saw, ${sha.slice(0, 8)}`} loading="lazy" onError={() => setMissing(true)} />
+    </a>
   );
 }
 

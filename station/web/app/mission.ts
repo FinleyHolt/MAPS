@@ -139,13 +139,54 @@ export function commitLasso(mission: MissionState): { url: string; target: strin
   return url && shot ? { url, target: shot.target } : null;
 }
 
+/** `GET station`: the bench this station serves and what its seat can do. */
+export interface StationAbout {
+  bench: string;
+  /** The split the catalog shows when none is asked for, and every split on offer. */
+  split: string;
+  splits: string[];
+  /** The map a request that names none is answered for; null on a station with no catalog. */
+  map: string | null;
+  flies: boolean;
+  /** Why the seat flies nothing, when it does not. */
+  why: string | null;
+  /** Whether words with no row picked fly as a mission of their own (the twin's), or a mission is always a row. */
+  own_words: boolean;
+}
+
+/** The map the console is looking at: the reviewed run's, else the row about
+ * to fly, else the seat's, else the row last clicked, else the station's
+ * default. The basemap, the working area and every placement follow it. */
+export function viewedMap(view: {
+  replay?: { map_name?: string | null } | null;
+  /** The clicked row, when sending would start it. */
+  starting?: { map: string } | null;
+  mission?: { map_name?: string | null } | null;
+  picked?: { map: string } | null;
+  about?: { map: string | null } | null;
+}): string | null {
+  if (view.replay) return view.replay.map_name ?? null;
+  return view.starting?.map ?? view.mission?.map_name ?? view.picked?.map ?? view.about?.map ?? null;
+}
+
+/** What the picture book says while it holds no observation. A mission on
+ * the twin lands one per waypoint; a bench run records none, and its
+ * pictures are the ones the model was sent, in the transcript. */
+export function emptyBook(mission: Pick<MissionState, "kind" | "status"> | null): string {
+  if (mission && (mission.kind !== "twin" || mission.status === "ended" || mission.status === "failed")) {
+    return "THIS RUN RECORDED NO OBSERVATIONS · THE PICTURES THE MODEL WAS SENT ARE IN THE TRANSCRIPT";
+  }
+  return "NO OBSERVATIONS YET · EACH WAYPOINT FLOWN OVER LANDS HERE AS ONE IMAGE";
+}
+
 export interface MissionState {
   version: number;
   /** The run folder, relative to the station's output root; null before it exists. */
   path: string | null;
   episode_id: string;
   split: string;
-  /** "twin" for a mission flown on the simulated aircraft, "replay" for a recorded run. */
+  /** "twin" for a mission flown on the simulated aircraft, "bench" for a
+   * bench episode flown from the seat, "replay" for a recorded run. */
   kind: string;
   status: MissionStatus;
   instruction: string;
@@ -153,7 +194,8 @@ export interface MissionState {
   error: string | null;
   reply_text: string | null;
   turns_used: number;
-  flights_flown: number;
+  /** Null in the run list on a bench run, whose row does not count them: the review counts its stops. */
+  flights_flown: number | null;
   /** Unix seconds. */
   started_at: number | null;
   // Which code flew this, read once when the mission starts. `git_dirty`
@@ -164,6 +206,10 @@ export interface MissionState {
   map_name?: string | null;
   /** The run's target footprint as a `[lon, lat]` ring; null where it draws none. */
   target_lonlat?: [number, number][] | null;
+  /** The target's centre, `[lon, lat]`: what a ring-scored run is measured to. */
+  target_point?: [number, number] | null;
+  /** Where a scored bench run committed, `[lon, lat]`; null on a run that never flew or records none. */
+  commit_lonlat?: [number, number] | null;
   transcript: TranscriptEntry[];
   flights: Flight[];
   /** Each waypoint's observation, fused as one north-up image, in order. */
@@ -195,10 +241,12 @@ export interface TrackPoint {
 
 /** `GET replay`: a finished run, plus its extent and the path it flew. */
 export interface ReplayState extends MissionState {
-  /** The scrubber's length, seconds. Null on a run with nothing to scrub. */
+  /** The scrubber's length, seconds. Null on a run with nothing to scrub: a
+   * bench run's aircraft was placed at each stop, never flown between them. */
   duration_s: number | null;
   /** The flown path, oldest first. A gap in the record is a real gap in this
-   * array: `trackLegs` breaks the line there. */
+   * array: `trackLegs` breaks the line there. A run with no recorded track
+   * carries its `visited_xy` here, one sample a pose in order. */
   track: TrackPoint[];
   path: string;
 }

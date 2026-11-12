@@ -8,9 +8,9 @@ carrying the same index.
 """
 from __future__ import annotations
 
-from maps.perception.base import DetectedObject
+from maps.perception.detection import DetectedObject
 from maps.perception.world_tracker import WorldTracker
-from maps.search.search_loop import SearchLoop
+from maps.mission.episode_world import EpisodeWorld
 
 
 def _det(xy, conf, idx):
@@ -41,8 +41,8 @@ def test_the_frame_local_index_never_keys_a_detection_id():
     that collides only on genuine co-location -- never the churning
     ``sam3_1_<index>`` and never the churning per-frame track_id."""
     d = _det((1805.2, 908.2), 0.41, 3)
-    key = SearchLoop._detection_id(d)
+    key = EpisodeWorld._detection_id(d)
     assert key == "parking@1805,908", key
     # the tracker's id, once present, wins
     d.metadata["track_id"] = "wt_7"
-    assert SearchLoop._detection_id(d) == "wt_7"
+    assert EpisodeWorld._detection_id(d) == "wt_7"

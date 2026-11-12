@@ -1,5 +1,5 @@
 """OpenAI-vision content parts: JPEG bytes packaged as the multi-part user
-content a reasoner's ``messages`` carry (``reasoner_agent.append_vision_user``),
+content a reasoner's ``messages`` carry (``Reasoner.append_vision_user``),
 and the server's vision-token bill for those parts.
 """
 

@@ -4,12 +4,13 @@ import pytest
 
 from maps.llm.model_cards import card_for, sampling_kwargs
 from maps.llm.vision_content import build_image_part, build_vision_user_content
+from maps.settings import Sampling, from_environ
 
 
-@pytest.fixture(autouse=True)
-def _no_ambient_sampling_env(monkeypatch) -> None:
-    """The envelope pins measure the code, not a shell that sourced an arm file."""
-    monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
+def _arm(effort: str) -> Sampling:
+    """The sampling of an environment whose SEARCH_SAMPLING_REASONING_EFFORT is ``effort``. A call
+    that names no sampling reads an empty environment's, never the shell's."""
+    return from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort}).sampling
 
 
 @pytest.mark.parametrize("model, top_k, extra", [
@@ -24,29 +25,28 @@ def test_the_envelope_is_the_cards_flat_top_level_keys(model, top_k, extra) -> N
         **extra}
 
 
-def test_reasoning_effort_rides_as_the_string_given(monkeypatch) -> None:
+def test_reasoning_effort_rides_as_the_string_given() -> None:
     """The arm's effort is sent verbatim, never parsed into a number; unset or
     empty sends no key; a mission's own effort wins, and None reads the arm's."""
     assert "reasoning_effort" not in sampling_kwargs("inkling-small")
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "")
-    assert "reasoning_effort" not in sampling_kwargs("inkling-small")
+    assert "reasoning_effort" not in sampling_kwargs("inkling-small", sampling=_arm(""))
     for arm in ("high", "none", "0.99", "0.0"):
-        monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", arm)
-        assert sampling_kwargs("inkling-small")["reasoning_effort"] == arm
-    assert sampling_kwargs("inkling-small", "0.3")["reasoning_effort"] == "0.3"
-    assert sampling_kwargs("inkling-small", None)["reasoning_effort"] == "0.0"
-    assert "reasoning_effort" not in sampling_kwargs("inkling-small", "")
+        assert sampling_kwargs("inkling-small", sampling=_arm(arm))["reasoning_effort"] == arm
+    assert sampling_kwargs("inkling-small", "0.3", _arm("0.0"))["reasoning_effort"] == "0.3"
+    assert sampling_kwargs("inkling-small", None, _arm("0.0"))["reasoning_effort"] == "0.0"
+    assert "reasoning_effort" not in sampling_kwargs("inkling-small", "", _arm("0.0"))
 
 
-def test_none_on_the_gemma_26b_card_sends_its_template_switch_off(monkeypatch) -> None:
+def test_none_on_the_gemma_26b_card_sends_its_template_switch_off() -> None:
     """Gemma's template reads enable_thinking and never reasoning_effort: none
     turns the switch off and sends no effort key; another rung still rides."""
     kw = sampling_kwargs("gemma4-26b-a4b-nvfp4", "none")
     assert kw["chat_template_kwargs"] == {"enable_thinking": False}
     assert "reasoning_effort" not in kw and kw["presence_penalty"] == 1.0
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "none")
-    assert sampling_kwargs("gemma4-26b-a4b-nvfp4")["chat_template_kwargs"] == {"enable_thinking": False}
-    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", "high")["chat_template_kwargs"] == {"enable_thinking": True}
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", sampling=_arm("none"))["chat_template_kwargs"] == {
+        "enable_thinking": False}
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", "high", _arm("none"))["chat_template_kwargs"] == {
+        "enable_thinking": True}
 
 
 def test_vision_content_helpers_build_openai_parts() -> None:

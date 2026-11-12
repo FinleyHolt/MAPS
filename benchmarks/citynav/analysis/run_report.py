@@ -1,4 +1,4 @@
-"""SR report for a run root, over the ``metrics`` of the attempts ``analysis.rows`` picks.
+"""SR report for a run root, over the ``metrics`` of the attempts ``run_record.rows`` picks.
 
 Usage:
     python -m benchmarks.citynav.analysis.run_report output/run_a [output/run_b ...]
@@ -11,16 +11,31 @@ from __future__ import annotations
 
 import argparse
 import functools
+import os
 import statistics
 import sys
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
 import yaml
 
 from benchmarks import REPO_ROOT
-from benchmarks.citynav.analysis import rows as _rows
-from benchmarks.citynav.analysis.rows import read_manifest
+from benchmarks.bench import Bench, bake_sha256
+from benchmarks.calcity.paths import calcity_bench
+from benchmarks.citynav.adapter import find_row, load_split, parse_episode
+from benchmarks.citynav.paths import citynav_bench
+from benchmarks.run_record import rows as _rows
+from benchmarks.run_record.rows import read_manifest
+
+
+def benches(environ: Mapping[str, str], *, first: Bench | None = None) -> tuple[Bench, ...]:
+    """The benches a report reads runs of, as ``environ`` places them: the
+    first is the one whose bake a run that records no tiles directory is
+    checked against (``first``, else CityNav); each split is read from the
+    bench that names it."""
+    both = (citynav_bench(environ), calcity_bench(environ))
+    return both if first is None else (first, *(b for b in both if b.name != first.name))
 
 
 def load_run(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
@@ -102,23 +117,21 @@ def _local_bake_dir(resolved: str | None) -> Path | None:
     return None
 
 
-def bake_line(root: Path) -> str:
+def bake_line(root: Path, default_tiles: Path) -> str:
     """One line: does the run's ``bake_sha256`` match the content of the bake
-    on disk (``paths.bake_sha256``)? Compared against the tiles dir the run
-    recorded, else this checkout's default. Never raises; missing tiles or
+    on disk (``bench.bake_sha256``)? Compared against the tiles dir the run
+    recorded, else ``default_tiles``. Never raises; missing tiles or
     stamp read as unknown or unverified, never as a pass."""
-    from benchmarks.citynav import paths
-
     perception = read_manifest(root).get("perception") or {}
     stamped = perception.get("bake_sha256")
     recorded = perception.get("tiles_dir_resolved")
 
     if not stamped:
         return "bake: UNVERIFIED (run stamps no bake_sha256)"
-    local = _local_bake_dir(recorded) if recorded else paths.TILES_DIR
+    local = _local_bake_dir(recorded) if recorded else Path(default_tiles)
     if local is None:
         return f"bake: UNKNOWN (the run's bake {recorded} is not on this machine)  run={stamped[:12]}"
-    here = paths.bake_sha256(local)
+    here = bake_sha256(local)
     if here is None:
         return f"bake: UNKNOWN (no bake at {local})  run={stamped[:12]}"
     if here == stamped:
@@ -130,7 +143,8 @@ def bake_line(root: Path) -> str:
     )
 
 
-def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
+def report(root: Path, known: Sequence[Bench], *, allow_partial: bool = False) -> dict[str, dict]:
+    """Print the report of the run at ``root``; ``known`` is :func:`benches`."""
     picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
     scored = _rows.scored_metrics(picked)
     n = len(scored)
@@ -143,7 +157,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
     sr = sum(1 for m in scored.values() if m.get("SR"))
     _criterion = run_criterion(list(scored.values()))
     print(f"\n=== {root} ===")
-    print(bake_line(root))
+    print(bake_line(root, known[0].tiles_dir))
     # ``rows`` counts attempts, ``scored`` episodes.
     print(
         f"scored={n}  attempts={stats.rows}  "
@@ -195,7 +209,7 @@ def report(root: Path, *, allow_partial: bool = False) -> dict[str, dict]:
             f"conversion(SR|OSR)={_pct(joint[(True, True)], osr)}"
         )
 
-    print_classes(root, scored, picked)
+    print_classes(root, scored, picked, known)
 
     # Commit provenance (prior landmark, runtime detection, world point, or none).
     prov = Counter(m.get("committed_provenance") or "none" for m in scored.values())
@@ -210,24 +224,20 @@ _BUCKETS = ("car", "building", "other")
 # episode); one edited on disk is read again by a new process only.
 @functools.lru_cache(maxsize=4)
 def _read_split(path: Path) -> list[dict]:
-    from benchmarks.citynav.adapter import load_split
-
     return load_split(path)
 
 
-def _split_rows(split: str | None) -> list[dict] | None:
-    """The rows of the split a run names, else ``None`` when its file is not on this machine."""
-    from benchmarks.calcity import paths as calcity_paths
-    from benchmarks.citynav import paths
-
+def _split_rows(split: str | None, known: Sequence[Bench]) -> list[dict] | None:
+    """The rows of the split a run names, read from the bench of ``known`` that
+    names it, else ``None`` when no bench does or its file is not on this machine."""
+    bench = next((b for b in known if split in b.split_files), None)
     try:
-        return _read_split(calcity_paths.split_path(split) if split in calcity_paths.SPLIT_FILES
-                           else paths.split_path(split))
+        return None if bench is None else _read_split(bench.split_path(split))
     except (OSError, ValueError):
         return None
 
 
-def print_classes(root: Path, scored: dict[str, dict], picked: dict) -> None:
+def print_classes(root: Path, scored: dict[str, dict], picked: dict, known: Sequence[Bench]) -> None:
     """SR by referent bucket and, where the corpus grades it, by intel quality
     (Cal City, as the flight measures' by_intel_quality). A recorded row's
     class is its own ``referent_bucket`` and ``intel_quality``; a pick without
@@ -236,8 +246,8 @@ def print_classes(root: Path, scored: dict[str, dict], picked: dict) -> None:
     a row that records its own description is bucketed by that wording.
     A split on this machine that lacks such a pick is not the run's corpus: no
     class line."""
-    from benchmarks.citynav.adapter import find_row, parse_episode
-    from benchmarks.citynav.run_benchmark.episode_runner import classify_referent
+    # Imported here: the episode runner brings the mission stack, which a report of recorded classes never needs.
+    from benchmarks.citynav.run_benchmark.episode_runner import classify_referent  # noqa: PLC0415
 
     classes = {eid: (m["referent_bucket"], m.get("intel_quality"))
                for eid, m in scored.items() if "referent_bucket" in m}
@@ -245,7 +255,7 @@ def print_classes(root: Path, scored: dict[str, dict], picked: dict) -> None:
     if unrecorded:
         split = read_manifest(root).get("split") or next(
             (a.row["split"] for a in picked.values() if a.row.get("split")), None)
-        corpus = _split_rows(split) or []
+        corpus = _split_rows(split, known) or []
         found = {eid: find_row(corpus, eid) for eid in unrecorded}
         missing = sum(f is None for f in found.values())
         if missing:
@@ -276,10 +286,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("roots", type=Path, nargs="+", help="run roots")
     _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
+    known = benches(os.environ)
     rc = 0
     for root in args.roots:
         try:
-            report(root, allow_partial=args.allow_partial)
+            report(root, known, allow_partial=args.allow_partial)
         except SystemExit as refused:  # a root it cannot report; the next is still read
             print(refused, file=sys.stderr)
             rc = 1

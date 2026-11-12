@@ -14,21 +14,24 @@ from types import SimpleNamespace
 
 import pytest
 
-from benchmarks.citynav import episodes
+from benchmarks.run_record import episodes
+from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark import dispatch
+from maps.settings import Settings
 
 
 @pytest.fixture
 def light(monkeypatch):
     """Keep the dispatch off the split file and the git subprocess."""
-    monkeypatch.setattr(dispatch, "arm_stamp", lambda policy: {"SEARCH_X": "1"})
+    monkeypatch.setattr(dispatch, "arm_stamp", lambda policy, bench: {"SEARCH_X": "1"})
     monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags, **kw: {"commit": "abc", "search_env_flags": flags})
 
 
 def _dispatch(tmp_path):
     return dispatch.dispatch_one(
         episode=SimpleNamespace(episode_id="b::1#0"), idx=0, total=1, objects_by_map={},
-        cfg=SimpleNamespace(source_path="x.yaml", policy=None), split="test", recorder=None, episode_dir=tmp_path,
+        cfg=SimpleNamespace(source_path="x.yaml", policy=None), bench=citynav_bench({}), settings=Settings(),
+        split="test", recorder=None, episode_dir=tmp_path,
     )
 
 
@@ -153,7 +156,7 @@ def test_rows_are_strict_json(tmp_path):
     the rows other people parse must not carry Python's dialect."""
     import json
 
-    from benchmarks.citynav import episodes
+    from benchmarks.run_record import episodes
 
     row = {"episode_id": "e", "status": "ok", "sensor": {"max_range_m": float("inf")},
            "metrics": {"NE": float("nan"), "SR": 1}, "visited_xy": [[1.0, float("-inf")]]}
@@ -173,7 +176,7 @@ def test_rows_are_strict_json(tmp_path):
 def test_a_cut_last_line_loses_only_its_own_row(tmp_path):
     """A worker killed mid-append leaves a cut last line; the next append
     starts a line of its own, so only the cut row is lost."""
-    from benchmarks.citynav.analysis import rows
+    from benchmarks.run_record import rows
 
     episodes.append_row(tmp_path, {"episode_id": "A", "status": "ok"})
     cut = json.dumps({"episode_id": "B", "status": "ok"})

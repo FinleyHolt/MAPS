@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from maps.perception.base import DetectedObject
+from maps.perception.detection import DetectedObject
 
 
 def test_a_detection_names_its_tier_and_carries_no_bucket():

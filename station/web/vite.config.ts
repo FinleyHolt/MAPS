@@ -21,6 +21,7 @@ export default defineConfig({
     // path the console asks for. `/mission` covers events, next, tasking,
     // clear, ownship and prior.json; `/missions` covers the run list.
     proxy: {
+      "/station": STATION,
       "/missions": STATION,
       "/mission": STATION,
       "/reasoner": STATION,

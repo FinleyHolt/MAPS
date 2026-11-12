@@ -13,17 +13,16 @@ import json
 import numpy as np
 import pytest
 
-import benchmarks.citynav.paths as citynav_paths
 from benchmarks.citynav.bake.city import BakeError, bake_block
-from maps.search.tests.ortho_fixture import write_rasters
+from maps.mission.tests.ortho_fixture import write_rasters
 
 BLOCK = "birmingham_block_9"
 POINT = ({"amenity": "bench", "osm_id": "n1"}, {"type": "Point", "coordinates": [810.0, 805.0]})
 
 
 @pytest.fixture
-def rasters(tmp_path, monkeypatch):
-    monkeypatch.setattr(citynav_paths, "CITYNAV_NATIVE_RGBD_DIR", tmp_path / "rasters")
+def rasters(tmp_path):
+    """The raster directory every bake here reads its block from."""
     return tmp_path / "rasters"
 
 
@@ -33,8 +32,8 @@ def _raster(rasters) -> None:
                   np.zeros((200, 400), dtype=np.float32), x_min=800.0, y_min=800.0)
 
 
-def _baked_meta(tiles) -> dict:
-    bake_block(BLOCK, [POINT], tiles)
+def _baked_meta(tiles, rasters) -> dict:
+    bake_block(BLOCK, [POINT], tiles, rgbd_dir=rasters)
     return json.loads((tiles / f"{BLOCK}_meta.json").read_text())
 
 
@@ -42,7 +41,7 @@ def test_bounds_and_grid_come_from_the_raster_into_an_empty_tiles_dir(tmp_path, 
     """Rows run north-to-south, so the grid is (y, x) = (10, 20); swapping them
     would transpose every non-square block."""
     _raster(rasters)
-    meta = _baked_meta(tmp_path / "tiles")
+    meta = _baked_meta(tmp_path / "tiles", rasters)
     assert meta["bounds"] == {"x_min": 800.0, "y_min": 800.0, "x_max": 840.0, "y_max": 820.0}
     assert meta["grid_shape"] == [10, 20] and meta["cell_size_m"] == 2.0
 
@@ -52,10 +51,10 @@ def test_a_left_over_sidecar_is_not_read(tmp_path, rasters):
     (tmp_path / f"{BLOCK}_meta.json").write_text(json.dumps({
         "cell_size_m": 5.0, "grid_shape": [60, 70],
         "bounds": {"x_min": 750.0, "y_min": 750.0, "x_max": 890.0, "y_max": 870.0}}))
-    meta = _baked_meta(tmp_path)
+    meta = _baked_meta(tmp_path, rasters)
     assert meta["bounds"]["x_min"] == 800.0 and meta["grid_shape"] == [10, 20]
 
 
 def test_a_block_without_a_raster_is_a_named_failure(tmp_path, rasters):
     with pytest.raises(BakeError, match=f"{BLOCK}.tif"):
-        bake_block(BLOCK, [POINT], tmp_path)
+        bake_block(BLOCK, [POINT], tmp_path, rgbd_dir=rasters)

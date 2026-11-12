@@ -22,7 +22,7 @@ if ! "$PY" -c 'import rasterio, scipy' >/dev/null 2>&1; then
 fi
 
 # A city not yet rasterized is skipped, so a partial rasterization bakes what it has.
-RGBD_DIR="$("$PY" -c 'from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR as d; print(d)')"
+RGBD_DIR="$("$PY" -c 'import os; from benchmarks.citynav.paths import citynav_bench; print(citynav_bench(os.environ).rgbd_dir)')"
 BAKED=0
 for CITY in birmingham cambridge; do
 	if ! compgen -G "$RGBD_DIR/${CITY}_block_*.tif" >/dev/null; then

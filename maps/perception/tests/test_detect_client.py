@@ -9,7 +9,7 @@ import pytest
 
 from maps.perception.observation import Observation
 from maps.perception.sam.detect_client import _SAM_INPUT_SIZE, SamDetectClient
-from maps.util.mask_codec import encode_mask_record
+from maps.perception.mask_codec import encode_mask_record
 from tests.serves import SegmentServe
 
 
@@ -44,18 +44,19 @@ def _block_mask(r0: int, r1: int, c0: int, c1: int) -> np.ndarray:
 
 
 @pytest.fixture
-def serve(monkeypatch):
+def serve():
     with SegmentServe() as fake:
-        monkeypatch.setenv("SAM_SERVER_URL", fake.url)
         yield fake
 
 
 @pytest.fixture
-def adapter(monkeypatch):
+def adapter(monkeypatch, serve):
+    """A client whose run names ``serve`` as its one segmenter replica (SAM_SERVER_URL)."""
     from maps.perception.sam import detect_client as dc
+    from maps.settings import from_environ
 
     monkeypatch.setattr(dc, "MIN_AREA_PX", 1)
-    return SamDetectClient(concepts=["building"])
+    return SamDetectClient(concepts=["building"], endpoint=from_environ({"SAM_SERVER_URL": serve.url}).endpoint)
 
 
 def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
@@ -153,7 +154,7 @@ def test_pick_url_is_round_robin():
 def test_cap_hit_says_whether_detections_were_dropped(adapter, monkeypatch, capsys, n_masks, cap_hit):
     """A frame filling the cap exactly drops nothing, so ``cap_hit`` is False; one past it is True."""
     from maps.perception.sam import detect_client as dc
-    from maps.util.mask_region import MaskRegion
+    from maps.perception.mask_region import MaskRegion
 
     monkeypatch.setattr(dc, "MAX_PER_STEP", 2)
     obs = _build_observation(_square_frame())

@@ -10,18 +10,22 @@ and the run readers in [`analysis/`](analysis/README.md).
 ## Prepare the data
 
 The episodes, the CityRefer catalog and the SensatUrban point clouds come from
-upstream; nothing is redistributed here.
+upstream; nothing is redistributed here. You request SensatUrban's
+`data_release.zip` from its authors' [form](https://github.com/QingyongHu/SensatUrban)
+(CC BY-NC-SA, non-commercial research use, no redistribution); one command
+does the rest ([`docs/data.md`](../../docs/data.md#citynav)):
 
 ```sh
 export CITYNAV_ROOT=~/datasets/citynav-arxiv
-benchmarks/citynav/data_prep/fetch_data.sh
-benchmarks/citynav/data_prep/rasterize_citynav_native.sh
-PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh
+benchmarks/citynav/data_prep/setup.sh --sensaturban <data_release.zip>
 ```
+
+It runs these steps, each of which stands alone and is skipped where its
+output is on disk:
 
 | Step | Writes | Notes |
 |---|---|---|
-| `fetch_data.sh` | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. The 34 SensatUrban block PLYs are placed by hand under `$CITYNAV_ROOT/raw_ply/`; the script prints where to get them. |
+| `fetch_data.sh` | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. `setup.sh --sensaturban` links the 34 SensatUrban block PLYs under `$CITYNAV_ROOT/raw_ply/`. |
 | `rasterize_citynav_native.sh [--blocks <block>...]` | `$CITYNAV_ROOT/data/rgbd_upstream/<block>.{png,tif}` | Runs upstream's `rasterize.py` (vendored as `data_prep/_vendor_citynav_rasterize.py`) in an environment with `pdal`, `rasterio` and `pillow`; `RASTERIZE_PYTHON` names its interpreter. |
 | `bake_tiles.sh` | `tiles/citynav_2m_osmv3/` | Bakes every block with a raster under `SEARCH_CITYNAV_RGBD_DIR` from the city's shipped OpenStreetMap cache, `tiles/osm_cache/<city>_osm_local.geojson` (already in CityNav local XY), on 2 m cells over the raster's extent. |
 
@@ -31,6 +35,9 @@ PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh
 | `SEARCH_CITYNAV_SPLITS` | `$CITYNAV_ROOT/data/citynav` | The episode split files. |
 | `SEARCH_CITYNAV_RGBD_DIR` | `$CITYNAV_ROOT/data/rgbd_upstream` | The nadir rasters the observation crops. |
 | `SEARCH_CITYNAV_TILES` | `tiles/citynav_2m_osmv3` | The OSM prior bake. |
+
+An entry point reads these once, into a bench value
+(`paths.citynav_bench(os.environ)`), and passes that value down.
 
 ## Run the bench
 
@@ -94,17 +101,28 @@ python -m benchmarks.citynav.run_benchmark --config configs/citynav.yaml --split
 config names it with `base:` and holds only the keys it changes
 (`configs/calcity.yaml`, `configs/withhold/*.yaml`). Unknown keys are refused
 and every value is checked by type and range at load
-(`run_benchmark/config.py`).
+(`benchmarks/run_record/config.py`).
 
 ## Modules
 
 | Module | Role |
 |---|---|
 | `bench_fullset.py` | The full-split driver. |
-| `run_benchmark/` | The runner: config, episode setup, the mission engine (`mission_engine.py`), scoring rows. |
-| `adapter.py`, `episodes.py`, `paths.py` | The dataset, the ledger, the file layout. |
-| `episode_workdir.py` | An attempt's directory, its `run.log`, and the `conversation.jsonl` and `detections.jsonl` written as the mission runs. |
+| `run_benchmark/` | The runner: episode setup, the mission engine (`mission_engine.py`), scoring rows. |
+| `adapter.py` | The dataset: split rows and the CityRefer catalog. |
+| `paths.py` | `citynav_bench(environ)`: the bench as a value (`benchmarks.bench.Bench`), its roots read from the variables above; `selected_bench(environ)` picks the bench an attempt child flies. |
+| `engine.py` | The episode engine a bench value carries, which the Cal City bench, the flight harness and the station fly through their bench. |
 | `eval.py` | Scoring: NE, SR, OSR, SPL, and the shape criterion the Cal City bench uses. |
 | `action_snap.py` | The six-action alphabet a flight is replayed in. |
 | `bake/city.py` | The OSM prior bake. |
+
+The run record both benches and the flight harness share lives in
+`benchmarks/run_record/`:
+
+| Module | Role |
+|---|---|
+| `episodes.py` | The ledger and the attempt's row. |
+| `episode_workdir.py` | An attempt's directory, its `run.log`, and the `conversation.jsonl` and `detections.jsonl` written as the mission runs. |
 | `run_manifest.py` | The run manifest and the audited environment. |
+| `config.py` | The run config and its loader. |
+| `rows.py` | Which attempt is an episode's result. |

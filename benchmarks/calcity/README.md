@@ -7,6 +7,9 @@ flat height plane, an OpenStreetMap prior, and an authored corpus. An episode
 succeeds when its commit point lies inside the target's own annotated
 footprint, the same test as the flight measures (the shape criterion).
 
+The corpus ships here. The bench also needs the block's map raster and an
+OSM bundle, which this repository does not ship.
+
 ## What ships and what you supply
 
 | Item | Path | Source |
@@ -15,7 +18,7 @@ footprint, the same test as the flight measures (the shape criterion).
 | The positions of the reviewed targets | `data_prep/authoring/ground_truth.json` | Ships. |
 | The C-12 v6 map raster of the block | `<map>_rgb.tif` | You supply it. |
 | A world bundle of OpenStreetMap layers | `osm/<layer>.geojson` in WGS84 for each of the eight `bundle.OSM_LAYERS` | You supply it, covering `aoi.BUNDLE_BBOX_WGS84`. |
-| The block's bare-earth surface, read by the flight harness | `calcity_dem.tif` under `SEARCH_CALCITY_TILES` | You supply it from public USGS 3DEP data (the top-level README's Cal City section). |
+| The block's bare-earth surface, read by the flight harness | `calcity_dem.tif` under `SEARCH_CALCITY_TILES` | You supply it from public USGS 3DEP data ([`docs/data.md`](../../docs/data.md#the-dem-the-flight-harness-reads)). |
 
 ## Build
 
@@ -46,7 +49,7 @@ defaults to `SEARCH_CALCITY_TILES`.
 
 ## The reviewed episodes
 
-The reviewed set is derived, not listed: a corpus row is reviewed when its
+The reviewed set is derived: a corpus row is reviewed when its
 first target position lies within 0.2 m of a position `ground_truth.json`
 lists on its own map. It holds 1,100 episodes. A row's `intel_quality`
 is its graded candidate count's class: G for one candidate, M for two to
@@ -73,13 +76,19 @@ python -m benchmarks.calcity.run_benchmark --config configs/calcity.yaml --episo
 
 Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
 
+Each launcher builds its bench once, from the process environment, and passes
+it down; nothing selects a bench for the process, so a CityNav bench and a
+Cal City bench can be held side by side. An attempt child of the driver
+learns its bench from the environment the bench carries
+(`SEARCH_BENCHMARK_NAME` and the roots under the runner's `SEARCH_CITYNAV_*`
+names), which every run manifest also records.
+
 ## Modules
 
 | Module | Role |
 |---|---|
-| `__init__.py` | `use()`: selects Cal City for the CityNav engine (`SEARCH_BENCHMARK_NAME` and the `SEARCH_CITYNAV_*` roots). |
-| `paths.py` | The file layout. |
-| `bench_fullset.py`, `run_benchmark.py` | The CityNav driver and runner with Cal City selected. |
+| `paths.py` | `calcity_bench(environ)`: the bench as a value (`benchmarks.bench.Bench`), its roots read from the `SEARCH_CALCITY_*` variables of the mapping it is given. It flies the CityNav engine. |
+| `bench_fullset.py`, `run_benchmark.py` | The CityNav driver and runner on the Cal City bench. |
 | `data_prep/aoi.py` | The area, its local metric frame and the flat ground plane. |
 | `data_prep/bundle.py` | Reads the world bundle. |
 | `data_prep/build_objects_json.py`, `data_prep/build_rgbd_ortho.py`, `data_prep/bake_tiles.py` | The build steps. |

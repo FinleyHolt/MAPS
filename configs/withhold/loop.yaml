@@ -1,3 +1,3 @@
-# CityNav with the loop part withheld (maps/search/withhold.py).
+# CityNav with the loop part withheld (maps/withhold.py).
 base: ../citynav.yaml
 withhold: [loop]

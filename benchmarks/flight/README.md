@@ -6,6 +6,13 @@ the bench hydrates one, its flights are legs an aircraft flies, and its
 observations are fused from the frames the aircraft recorded. The aircraft is
 reached through one protocol, `Vehicle`. This package also holds a kinematic
 twin of the aircraft, the as-flown replay and the closed-loop measures.
+[`docs/flight.md`](../../docs/flight.md) is the short guide to the twin, the
+replay and an aircraft of your own; this README is the reference.
+
+A mission is handed its bench as a value (`benchmarks.bench.Bench`): the
+twin, the replay and the measures build the Cal City bench from the
+environment when they start (`benchmarks.calcity.paths.calcity_bench`), and
+the mission reaches the episode engine through it.
 
 ## The flown chain
 
@@ -55,8 +62,8 @@ The ground under each frame is the block's bare-earth surface where the bake
 carries one, `<map>_dem.tif` beside `<map>_meta.json` (`map_render.terrain`,
 read through `map_render.ground_msl` by the twin and the live source), and the block's floor (`tile_georef.FLOOR_MSL_M`) where it
 does not. The flown bake carried Cal City's: USGS 3DEP 1/3 arc-second heights
-(NAVD88) on 10 m cells in EPSG:32611 over the bake's bounds; the top-level
-README's Cal City section says how to make it from the public 3DEP data.
+(NAVD88) on 10 m cells in EPSG:32611 over the bake's bounds; [`docs/data.md`](../../docs/data.md#the-dem-the-flight-harness-reads)
+says how to make it from the public 3DEP data.
 
 ## The Vehicle protocol
 
@@ -120,7 +127,7 @@ The station registered frames against NAIP 2024 imagery (the `calcity.png`
 of the v5 Cal City data release beside the flown bake); pass its directory as
 `--raster`. A replay's ledger row names the run it replays (`replay_of`) and
 is scored by `measures` on SR and NE (it records no start time and no
-track), not by the bench reader. The recordings are not
+track); the bench readers do not read it. The recordings are not
 distributed.
 
 ## The run's records
@@ -160,7 +167,7 @@ centres of the observations it fused, came within one camera footprint width
 of the target), time to identification, SPL, and tokens;
 the module's docstring says how each is read off the records. A run the
 serve failed under before its first report (the bench's infra rule) is out
-of every rate and named; a run that ends after a report without a new one
+of every rate and named; a run that ends after a report without another
 (the crew's Stop, a harness ending, a failure) is scored at that report:
 its end, time and flights. It prints the totals, the totals by intel
 quality and by model and reasoning effort, the median turn radius the way

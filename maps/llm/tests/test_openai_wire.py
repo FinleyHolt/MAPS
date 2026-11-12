@@ -10,20 +10,17 @@ from pathlib import Path
 import pytest
 
 from maps.llm import endpoint_spec as E
+from maps.settings import from_environ
 from maps.llm import openai_wire
 from maps.llm.flight_summary import reasoning_tokens_of, summarize
 from maps.llm.model_cards import CARDS, check_effort, sampling_kwargs
-from maps.search.parse_compile import compactor, reasoner_agent
-from maps.search.parse_compile.reasoner_agent import Reasoner
-from maps.search.tests.fakes import TEST_SPEC, jpeg
+from maps.mission import compactor
+from maps.mission import reasoner
+from maps.mission.reasoner import Reasoner
+from maps.mission.tests.fakes import TEST_SPEC, jpeg
 
 GPT = "gpt-5.6-sol"
 GPT_SPEC = replace(TEST_SPEC, model_id=GPT, tokenizer_name="openai/gpt-oss-120b")
-
-
-@pytest.fixture(autouse=True)
-def _no_ambient_effort(monkeypatch) -> None:
-    monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
 
 
 class _Tok:
@@ -39,7 +36,7 @@ class _Tok:
 @pytest.fixture(autouse=True)
 def _offline_tokenizer(monkeypatch) -> None:
     """The compactor sizes the transcript with a stub, never a hub download."""
-    monkeypatch.setattr(compactor, "load_tokenizer", lambda _model: _Tok())
+    monkeypatch.setattr(compactor, "load_tokenizer", lambda _model, _tokenizer_name="": _Tok())
 
 
 def test_the_card_is_the_one_an_openai_wire_reader_keys_on() -> None:
@@ -47,10 +44,10 @@ def test_the_card_is_the_one_an_openai_wire_reader_keys_on() -> None:
     assert [a for a, c in CARDS.items() if c.get("wire") == "openai"] == [GPT]
 
 
-def test_no_sampling_envelope_and_no_template_kwargs_ride_the_request(monkeypatch) -> None:
+def test_no_sampling_envelope_and_no_template_kwargs_ride_the_request() -> None:
     assert sampling_kwargs(GPT) == {}
-    monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "high")
-    assert sampling_kwargs(GPT) == {"reasoning_effort": "high"}
+    arm = from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "high"}).sampling
+    assert sampling_kwargs(GPT, sampling=arm) == {"reasoning_effort": "high"}
 
 
 @pytest.mark.parametrize("rung", ["none", "low", "medium", "high", "xhigh", "max"])
@@ -84,13 +81,13 @@ def test_each_message_carries_only_its_role_s_fields() -> None:
 def _serve(monkeypatch) -> list[dict]:
     sent: list[dict] = []
 
-    def _fake(url, api_key, **kwargs):
+    def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.append(kwargs)
         return {"choices": [{"finish_reason": "tool_calls", "message": {
             "content": None, "tool_calls": [
                 {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{\"code\": \"x\"}"}}]}}]}
 
-    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     return sent
 
 
@@ -117,15 +114,12 @@ def test_the_episode_s_routing_key_is_its_prompt_cache_key(monkeypatch) -> None:
     """Azure matches a GPT-5.6 prefix cache within a ``prompt_cache_key``; the episode's
     routing key carries its turns on one. A self-hosted card's body gains no such key."""
     sent = _serve(monkeypatch)
-    monkeypatch.delenv("SEARCH_LLM_CACHE_KEY", raising=False)
-    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "calcity::ep-7")
     for spec in (GPT_SPEC, TEST_SPEC):
-        r = Reasoner(endpoint_spec=spec)
+        r = Reasoner(endpoint_spec=spec, routing_key="calcity::ep-7")
         r.append_user("find the truck")
         r.step_tool_call([])
     assert sent[0]["prompt_cache_key"] == "calcity::ep-7"
     assert "prompt_cache_key" not in sent[1]
-    monkeypatch.delenv("SEARCH_LLM_ROUTING_KEY")
     r = Reasoner(endpoint_spec=GPT_SPEC)
     r.append_user("find the truck")
     r.step_tool_call([])
@@ -136,17 +130,17 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
     """A provider caches the longest prefix it has seen byte for byte: under the image
     cap and the budget, each turn's tools serialize as the last turn's did and its
     messages array opens with the last turn's bytes."""
-    from maps.search.parse_compile.prompts import served_tools
+    from maps.mission.served_text import served_tools
 
     sent: list[dict] = []
 
-    def _fake(url, api_key, **kwargs):
+    def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.append(json.loads(json.dumps(kwargs)))  # the bytes as sent, not a live alias
         return {"choices": [{"finish_reason": "tool_calls", "message": {"content": None, "tool_calls": [
             {"id": f"c{len(sent)}", "type": "function",
              "function": {"name": "run", "arguments": "{ \"code\":  \"look()\" }"}}]}}]}
 
-    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
     r.append_vision_user("look 0", [jpeg(64)] * 4)
     for k in range(1, 5):
@@ -162,7 +156,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
 def test_the_run_tool_s_documentation_rides_the_system_turn(monkeypatch) -> None:
     """OpenAI refuses a function description over 1,024 characters; the run tool's is far
     longer, so it moves verbatim into the system turn and the tool points at it."""
-    from maps.search.parse_compile.prompts import served_tools
+    from maps.mission.served_text import served_tools
 
     tools = served_tools()
     doc = tools[0]["function"]["description"]
@@ -202,7 +196,7 @@ def test_a_self_hosted_card_keeps_its_shape(monkeypatch) -> None:
 
 
 def test_the_request_never_carries_more_images_than_azure_takes(monkeypatch) -> None:
-    from maps.search.parse_compile.views import LOOK_MAX_CROPS
+    from maps.mission.picture_requests import LOOK_MAX_CROPS
 
     sent = _serve(monkeypatch)
     r = Reasoner(endpoint_spec=GPT_SPEC)
@@ -255,9 +249,9 @@ def test_the_model_list_is_read_where_the_endpoint_keeps_it(monkeypatch) -> None
         return {"data": [{"id": "gemma4-e4b"}, {"id": "inkling-small"}]}
 
     monkeypatch.setattr(E, "_get_json", _get)
-    monkeypatch.setattr(E, "_require_tokenizer", lambda m: f"tok:{m}")
-    monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", listing)
-    spec = E.discover(base, override=E.EndpointOverride("inkling-small", 262144))
+    monkeypatch.setattr(E, "_require_tokenizer", lambda m, override="": f"tok:{m}")
+    spec = E.discover(base, override=E.EndpointOverride("inkling-small", 262144),
+                      settings=from_environ({"SEARCH_REASONER_MODELS_URL": listing}))
     assert (spec.base_url, spec.model_id, spec.max_model_len, seen) == (base, "inkling-small", 262144, [listing])
 
 
@@ -273,14 +267,13 @@ def test_a_deployment_name_the_listing_does_not_carry_passes_discovery(monkeypat
         return {"data": [{"id": "gpt-5.6-sol-2026-07-09"}, {"id": "gpt-5.4-2026-03-05"}]}
 
     monkeypatch.setattr(E, "_get_json", _get)
-    monkeypatch.setattr(E, "_require_tokenizer", lambda m: f"tok:{m}")
-    monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
-    monkeypatch.delenv("SEARCH_REASONER_MODELS_URL", raising=False)
-    spec = E.discover(base, override=E.EndpointOverride(GPT, 262144))
+    monkeypatch.setattr(E, "_require_tokenizer", lambda m, override="": f"tok:{m}")
+    keyed = from_environ({"SEARCH_REASONER_API_KEY": "k"})
+    spec = E.discover(base, override=E.EndpointOverride(GPT, 262144), settings=keyed)
     assert (spec.model_id, spec.max_model_len) == (GPT, 262144)
     assert seen == [(f"{base}/models", "k")], "the listing is asked, with the key"
     with pytest.raises(E.EndpointDiscoveryError, match="does not match the live endpoint"):
-        E.discover(base, override=E.EndpointOverride("inkling-small", 262144))
+        E.discover(base, override=E.EndpointOverride("inkling-small", 262144), settings=keyed)
 
 
 def test_a_chat_body_becomes_the_responses_request_carrying_the_same_conversation() -> None:
@@ -337,18 +330,18 @@ def test_a_responses_answer_reads_as_the_chat_answer_the_engine_takes(status, re
 def test_the_turn_s_encrypted_reasoning_rides_the_next_request(monkeypatch) -> None:
     """The reasoner keeps a Responses turn's reasoning items on its assistant turn and the
     wire narrowing passes them on; the compactor prices them by the tokens they took."""
-    from maps.search.parse_compile import compactor
+    from maps.mission import compactor
 
     sent: list[dict] = []
 
-    def _fake(url, api_key, **kwargs):
+    def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.append(json.loads(json.dumps(kwargs)))
         return {"choices": [{"finish_reason": "tool_calls", "message": {
             "content": "", "reasoning_items": [{"type": "reasoning", "id": f"rs{len(sent)}", "encrypted_content": "E"}],
             "tool_calls": [{"id": f"c{len(sent)}", "type": "function", "function": {"name": "run", "arguments": "{}"}}]}}],
             "usage": {"completion_tokens_details": {"reasoning_tokens": 5000}}}
 
-    monkeypatch.setattr(reasoner_agent, "chat_completions_raw", _fake)
+    monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="medium")
     r.append_user("find the truck")
     r.step_tool_call([])
@@ -366,9 +359,8 @@ def test_a_bench_worker_s_cache_key_outranks_the_episode_s(monkeypatch) -> None:
     """The bench names one key per worker, shared by the episodes it flies in turn, so each
     after its first reads the common head from the cache."""
     sent = _serve(monkeypatch)
-    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "calcity::ep-7")
-    monkeypatch.setenv("SEARCH_LLM_CACHE_KEY", "gto2_CG-HI_M_89_abc/w3")
-    r = Reasoner(endpoint_spec=GPT_SPEC)
+    r = Reasoner(endpoint_spec=GPT_SPEC, routing_key="calcity::ep-7",
+                 settings=from_environ({"SEARCH_LLM_CACHE_KEY": "gto2_CG-HI_M_89_abc/w3"}))
     r.append_user("find the truck")
     r.step_tool_call([])
     assert sent[0]["prompt_cache_key"] == "gto2_CG-HI_M_89_abc/w3"

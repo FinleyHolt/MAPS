@@ -11,7 +11,7 @@ import numpy as np
 
 from maps.perception.tests.regions import region_of
 
-from maps.perception.base import DetectedObject
+from maps.perception.detection import DetectedObject
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.ortho.detection_stamping import (
     project_and_stamp_ortho_detections,

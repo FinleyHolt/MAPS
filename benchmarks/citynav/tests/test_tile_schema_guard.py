@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.paths import assert_current_tile_schema
+from benchmarks.citynav.run_benchmark.assets import assert_current_tile_schema
 
 _REPO = Path(__file__).resolve().parents[3]
 

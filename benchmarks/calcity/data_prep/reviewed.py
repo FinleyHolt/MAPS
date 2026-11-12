@@ -14,11 +14,13 @@ shuffle::
 from __future__ import annotations
 
 import json
+import os
 import sys
+from pathlib import Path
 
 import numpy as np
 
-from benchmarks.calcity.paths import PACKAGE_ROOT, split_path
+from benchmarks.calcity.paths import PACKAGE_ROOT, calcity_bench
 from benchmarks.citynav.adapter import parse_episode
 
 GROUND_TRUTH = PACKAGE_ROOT / "data_prep" / "authoring" / "ground_truth.json"
@@ -26,9 +28,9 @@ GROUND_TRUTH = PACKAGE_ROOT / "data_prep" / "authoring" / "ground_truth.json"
 TOL_M = 0.2
 
 
-def reviewed_episode_ids() -> list[str]:
-    """Episode ids of the corpus rows that match a reviewed shape, in corpus order."""
-    rows = json.loads(split_path("calcity").read_text())
+def reviewed_episode_ids(split_file: Path) -> list[str]:
+    """Episode ids of the corpus rows of ``split_file`` that match a reviewed shape, in corpus order."""
+    rows = json.loads(Path(split_file).read_text())
     keys: dict[str, list[tuple[float, float]]] = {}
     for key in json.loads(GROUND_TRUTH.read_text()):
         map_name, _, xy = key.partition("::")
@@ -48,7 +50,7 @@ def reviewed_episode_ids() -> list[str]:
 
 
 def main() -> int:
-    sys.stdout.write("".join(f"{eid}\n" for eid in reviewed_episode_ids()))
+    sys.stdout.write("".join(f"{eid}\n" for eid in reviewed_episode_ids(calcity_bench(os.environ).split_path("calcity"))))
     return 0
 
 

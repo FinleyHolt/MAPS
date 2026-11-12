@@ -43,7 +43,7 @@ def blank() -> dict:
     }
 
 
-def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int:
+def reasoning_tokens_of(response_json: dict, *, model: str | None = None, tokenizer_name: str = "") -> int:
     """The reasoning-span token count of one response, a slice of
     ``usage.completion_tokens``.
 
@@ -52,7 +52,8 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
     decides, because a serve's ``usage.reasoning_tokens`` can claim thinking
     on a response that carries none: no ``reasoning``/``reasoning_content``
     reads 0; else ``usage.reasoning_tokens`` when positive; else the span
-    tokenized with the response ``model``'s tokenizer; else 0.
+    tokenized with the response ``model``'s tokenizer (``tokenizer_name``
+    in its place when the run names one); else 0.
     """
     usage = _as_dict(response_json.get("usage"))
     wire = speaks_openai(model)
@@ -81,7 +82,7 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
     if not isinstance(model_alias, str):
         return 0
     try:
-        tok = load_tokenizer(model_alias)
+        tok = load_tokenizer(model_alias, tokenizer_name)
     except Exception:  # noqa: BLE001 — no tokenizer reads 0
         return 0
     total = 0
@@ -94,7 +95,7 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None) -> int
     return total
 
 
-def _scan_transcript(path: Path, out: dict) -> None:
+def _scan_transcript(path: Path, out: dict, tokenizer_name: str = "") -> None:
     """Fold one transcript into ``out`` in a raw line scan (no request is
     rebuilt): ``params`` for the model, ``request`` for timestamps,
     ``response`` for the rest."""
@@ -131,7 +132,7 @@ def _scan_transcript(path: Path, out: dict) -> None:
                 out["latency_s_sum"] += float(t1) - t0
 
             body = _as_dict(rec.get("response"))
-            out["reasoning_tokens"] += reasoning_tokens_of(body, model=model)
+            out["reasoning_tokens"] += reasoning_tokens_of(body, model=model, tokenizer_name=tokenizer_name)
             usage = _as_dict(body.get("usage"))
             for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
                 v = usage.get(key)
@@ -149,13 +150,14 @@ def _scan_transcript(path: Path, out: dict) -> None:
     out["unanswered"] = len(started)
 
 
-def summarize(flight_dir: Path) -> dict:
+def summarize(flight_dir: Path, tokenizer_name: str = "") -> dict:
     """One episode's LLM activity from its flight dir; :func:`blank` when it
-    kept no transcript. Never raises: it runs on the episode's way out."""
+    kept no transcript. ``tokenizer_name`` is the run's tokenizer override
+    (``Endpoint.tokenizer_name``). Never raises: it runs on the episode's way out."""
     out = blank()
     transcript = Path(flight_dir) / "llm" / TRANSCRIPT_JSONL
     try:
-        _scan_transcript(transcript, out)
+        _scan_transcript(transcript, out, tokenizer_name)
     except OSError:
         return blank()
     except Exception as exc:  # noqa: BLE001 — never fail the episode

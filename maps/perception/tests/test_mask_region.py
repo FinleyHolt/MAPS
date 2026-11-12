@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from maps.util.mask_region import MaskRegion
+from maps.perception.mask_region import MaskRegion
 from maps.perception.tests.regions import full, region_of
 
 

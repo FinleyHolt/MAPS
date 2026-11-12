@@ -5,6 +5,7 @@ records the flown sorties carry, read back by the bench's own reader."""
 from __future__ import annotations
 
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -18,14 +19,13 @@ START = (1000.0, 300.0)
 
 @pytest.fixture
 def calcity(tmp_path, monkeypatch):
-    """A Cal City data root, bake, split and raster on a 2 km window, the
-    bench's paths pointed at them and put back afterwards."""
+    """A Cal City data root, bake, split and raster on a 2 km window. The
+    environment names them as an operator's does (``SEARCH_CALCITY_*``), so
+    every entry point builds this bench; ``bench`` is the same value."""
     from shapely.geometry import Polygon
 
-    import benchmarks.calcity
-    from benchmarks.calcity import paths
     from benchmarks.calcity.data_prep import bake_tiles
-    from benchmarks.citynav import paths as shared_paths
+    from benchmarks.calcity.paths import calcity_bench
 
     x0, y0 = TARGET[0] - 20, TARGET[1] - 20
     church = Polygon([(x0, y0), (x0 + 40, y0), (x0 + 40, y0 + 40), (x0, y0 + 40)])
@@ -50,19 +50,9 @@ def calcity(tmp_path, monkeypatch):
     rgbd.mkdir(parents=True)
     world.write_raster_pair(rgbd, world.texture(2000, 3000), 1.0)
 
-    objects = root / "data" / "cityrefer" / "objects.json"
-    for name, value in (("CALCITY_ROOT", root), ("DATA_DIR", root / "data"), ("SPLITS_DIR", splits),
-                        ("OBJECTS_JSON", objects), ("TILES_DIR", tiles), ("CALCITY_NATIVE_RGBD_DIR", rgbd)):
-        monkeypatch.setattr(paths, name, value)
-    # What benchmarks.calcity.use() gives a fresh process, on the already-imported CityNav paths.
-    for name, value in (("CITYNAV_ROOT", root), ("DATA_DIR", root / "data"), ("SPLITS_DIR", splits),
-                        ("OBJECTS_JSON", objects), ("TILES_DIR", tiles), ("CITYNAV_NATIVE_RGBD_DIR", rgbd),
-                        ("BENCHMARK", "calcity"), ("SUCCESS_CRITERION", "shape"), ("DEFAULT_SPLIT", "calcity"),
-                        ("SPLIT_FILES", {"calcity": "calcity.json"})):
-        monkeypatch.setattr(shared_paths, name, value)
-    monkeypatch.setattr(benchmarks.calcity, "use", lambda: None)
-    monkeypatch.setenv("SEARCH_BENCHMARK_NAME", "calcity")
-    return SimpleNamespace(root=root, tiles=tiles, rgbd=rgbd)
+    for name, value in (("DATA", root), ("SPLITS", splits), ("TILES", tiles), ("RGBD_DIR", rgbd)):
+        monkeypatch.setenv(f"SEARCH_CALCITY_{name}", str(value))
+    return SimpleNamespace(root=root, tiles=tiles, rgbd=rgbd, bench=calcity_bench(os.environ))
 
 
 @pytest.fixture
@@ -80,7 +70,7 @@ def serves(monkeypatch):
                         max_output_tokens=40000)
     monkeypatch.setattr(endpoint_spec, "_SPEC", None)
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")   # no tokenizer to measure the prompt with
-    monkeypatch.setattr(endpoint_spec, "discover_from_env", lambda: spec)
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: spec)
     sent: list[dict] = []
 
     def reply(url, headers, body, *, timeout, cancel_event):
@@ -101,7 +91,7 @@ def serves(monkeypatch):
 
     seen = SamDetectClient()
     seen.detect = lambda obs: []
-    monkeypatch.setattr(episode_runner, "make_perception", lambda: seen)
+    monkeypatch.setattr(episode_runner, "make_perception", lambda settings: seen)
     return sent
 
 
@@ -138,7 +128,7 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--out", str(out)]) == 0
     sortie = next(out.iterdir())
-    rows, _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
+    rows, _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
     (run,) = rows
     assert run["success"] is True and run["track_source"] == "GNSS track", run
     assert run["track_coverage"] == 1.0 and run["oracle_success"] is True and run["agl_ft"] is not None
@@ -162,10 +152,10 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
     from maps.llm import endpoint_spec
     from maps.perception.sam.detect_client import SamDetectClient
 
-    monkeypatch.setattr(episode_runner, "make_perception", SamDetectClient)
-    endpoint_spec.install_spec(endpoint_spec.discover_from_env())
-    h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
-    h.search_loop.declare_mission_concepts(["car", "tree"])
+    monkeypatch.setattr(episode_runner, "make_perception", lambda settings: SamDetectClient())
+    endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
+    h = M.hydrate(bench=calcity.bench, episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
+    h.world.declare_mission_concepts(["car", "tree"])
     assert h.perception.concepts == ["car", "tree"]
 
 
@@ -173,8 +163,8 @@ def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(calcity, 
     from benchmarks.flight import mission as M
     from maps.llm import endpoint_spec
 
-    endpoint_spec.install_spec(endpoint_spec.discover_from_env())
-    h = M.hydrate(episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=1828.8)
+    endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
+    h = M.hydrate(bench=calcity.bench, episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=1828.8)
     assert h.state.altitude_m - h.ground_z_m == pytest.approx(1828.8)
 
 
@@ -251,7 +241,7 @@ def test_a_retasked_mission_is_measured_to_its_last_report(calcity, serves, tmp_
                       "--then", "Check the west side too.", "--out", str(out)]) == 0
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
     assert row["flights_flown"] == 2
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
@@ -267,8 +257,8 @@ def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path,
         s.bind(("127.0.0.1", 0))
         closed = s.getsockname()[1]
     monkeypatch.setattr(endpoint_spec, "_PROBE_TRIES", 1)
-    monkeypatch.setattr(endpoint_spec, "discover_from_env",
-                        lambda: endpoint_spec._get_json(f"http://127.0.0.1:{closed}/v1/models"))
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings",
+                        lambda settings: endpoint_spec._get_json(f"http://127.0.0.1:{closed}/v1/models"))
     out = tmp_path / "out"
     assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
                       "--out", str(out)]) == 1
@@ -305,7 +295,7 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] == "SamServerOutage: no tile answered"
     assert row["flights_flown"] == 1 and len(row["visited_xy"]) == 2
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
     assert run["commit_xy"] == pytest.approx(row["visited_xy"][-1], abs=0.01) and run["end"] == "reply" and run["success"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
@@ -359,7 +349,7 @@ def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_repor
     assert row["flights_flown"] == 1 and len(row["visited_xy"]) == 2
     second_leg = [r for r in conversation if r.get("kind") == "leg"][-1]
     assert row["elapsed_s"] < second_leg["t_s"]
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"]))
+    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
     assert run["end"] == "reply" and run["success"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 

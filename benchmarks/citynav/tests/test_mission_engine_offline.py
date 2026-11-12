@@ -5,6 +5,7 @@ unknown) against a stubbed graph resolver.
 """
 
 from benchmarks.citynav.run_benchmark.mission_engine import resolve_flight_target
+from maps.settings import Settings
 
 _GRAPH = {
     "building_7": ((100.0, 200.0), "prior"),
@@ -43,7 +44,7 @@ def test_xy_token_is_a_point():
 
 
 def test_bare_xy_token_matches_the_one_grammar():
-    # maps.util.xy_token accepts the bracket-less form too.
+    # maps.xy_token accepts the bracket-less form too.
     out = _resolve("1530.5, -12")
     assert out == {"xy": (1530.5, -12.0), "provenance": "point"}
 
@@ -55,16 +56,16 @@ def test_bare_xy_token_matches_the_one_grammar():
 
 
 def _bare_loop():
-    from maps.search.tests.fakes import search_loop
+    from maps.mission.tests.fakes import episode_world
 
     pushes: list[list] = []
-    return search_loop(sam_setter=pushes.append), pushes
+    return episode_world(sam_setter=pushes.append), pushes
 
 
 def test_declare_arms_the_director_on_first_call():
     loop, pushes = _bare_loop()
     assert loop.declare_mission_concepts(["car"]) is None
-    d = loop.state.perception_director
+    d = loop.state.segmenter_tasking
     assert d is not None
     assert d.watchlist == ["car"]
     assert pushes[-1] == ["car"]
@@ -73,9 +74,9 @@ def test_declare_arms_the_director_on_first_call():
 def test_redeclare_is_latest_wins_on_the_same_director():
     loop, pushes = _bare_loop()
     loop.declare_mission_concepts(["car"])
-    director_first = loop.state.perception_director
+    director_first = loop.state.segmenter_tasking
     loop.declare_mission_concepts(["building"])
-    d = loop.state.perception_director
+    d = loop.state.segmenter_tasking
     assert d is director_first, "a redeclare updates the live director, never rebuilds"
     assert d.watchlist == ["building"]
     assert pushes[-1] == ["building"]
@@ -97,14 +98,11 @@ def test_the_pose_echo_follows_a_flight_and_ignores_an_error():
 def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
     """Unset means NO clock, which is the flight mission's case and the
     default."""
-    from benchmarks.citynav.episodes import DEADLINE_ENV
+    from benchmarks.run_record.episodes import DEADLINE_ENV
     from benchmarks.citynav.run_benchmark.mission_engine import _mission_deadline_epoch
 
-    monkeypatch.delenv(DEADLINE_ENV, raising=False)
-    assert _mission_deadline_epoch() is None
-
-    monkeypatch.setenv(DEADLINE_ENV, "1788050346.5")
-    assert _mission_deadline_epoch() == 1788050346.5
+    assert _mission_deadline_epoch({}) is None
+    assert _mission_deadline_epoch({DEADLINE_ENV: "1788050346.5"}) == 1788050346.5
 
 
 def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
@@ -127,11 +125,8 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
     assert "error" in session.fly({"target_fid": "nowhere"}) and len(flights) == 1
 
 
-def test_an_end_commit_withhold_flight_report_names_no_answer(stub_session, monkeypatch):
-    from maps.search import withhold
-
-    monkeypatch.setenv(withhold.ENV, "end_commit")
-    session = stub_session(update_perception=lambda **kw: [])
+def test_an_end_commit_withhold_flight_report_names_no_answer(stub_session):
+    session = stub_session(withhold=["end_commit"], update_perception=lambda **kw: [])
     report = session.fly({"target_fid": "building_7"})
     assert report["target"] == "building_7" and "answer_if_you_reply_now" not in report
     assert session.flights[-1]["target"] == "building_7", "the commit is still the last flight"
@@ -171,6 +166,7 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
     session.h = SimpleNamespace(sensor=resolve_sensor("oryx_orx32_25mm_nadir"),
                                 cfg=SimpleNamespace(start_altitude_agl_m=914.4),
                                 state=SimpleNamespace(altitude_m=600.0),
-                                ground_z_m=100.0)
+                                ground_z_m=100.0, bench=SimpleNamespace(environ={}),
+                                settings=Settings(), workdir=None, routing_key=None)
     session.run("find it")
     assert "at the 1,640 ft AGL this run flies" in served["sensor_description"], served["sensor_description"]

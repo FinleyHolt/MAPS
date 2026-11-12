@@ -5,16 +5,15 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from benchmarks.citynav.run_benchmark import episode_runner
+from maps.settings import Settings
 
 
-def test_the_prior_withhold_starts_an_empty_graph(monkeypatch):
+def test_the_prior_withhold_starts_an_empty_graph():
     feats = {"prior": [{"cells": [[0, 0], [0, 1]], "centroid_row": 0, "centroid_col": 0,
                         "name": "Mill Lane", "class": "road"}]}
     assets = SimpleNamespace(base_features=feats, cell_size_m=2.0)
-    monkeypatch.delenv("SEARCH_WITHHOLD", raising=False)
-    assert len(episode_runner._episode_graph(assets).nodes) == 1
-    monkeypatch.setenv("SEARCH_WITHHOLD", "prior")
-    assert len(episode_runner._episode_graph(assets).nodes) == 0
+    assert len(episode_runner._episode_graph(assets, Settings()).nodes) == 1
+    assert len(episode_runner._episode_graph(assets, Settings(withhold=frozenset({"prior"}))).nodes) == 0
 
 
 def test_the_prior_withhold_builds_no_prior_colour(monkeypatch, stub_session):
@@ -26,9 +25,7 @@ def test_the_prior_withhold_builds_no_prior_colour(monkeypatch, stub_session):
 
     asked: list = []
     monkeypatch.setattr(me, "prior_percepts", lambda *a: asked.append(a) or [])
-    session = stub_session(rgb=np.zeros((4, 4, 3), np.uint8))
-    monkeypatch.delenv("SEARCH_WITHHOLD", raising=False)
-    session.fly({"target_fid": "building_7"})
-    monkeypatch.setenv("SEARCH_WITHHOLD", "prior")
-    session.fly({"target_fid": "building_7"})
+    stub_session(rgb=np.zeros((4, 4, 3), np.uint8)).fly({"target_fid": "building_7"})
+    assert len(asked) == 1
+    stub_session(rgb=np.zeros((4, 4, 3), np.uint8), withhold=["prior"]).fly({"target_fid": "building_7"})
     assert len(asked) == 1

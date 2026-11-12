@@ -21,7 +21,8 @@ from pathlib import Path
 
 import yaml
 
-from benchmarks.citynav.analysis import rows as _rows
+from benchmarks.citynav.analysis.run_report import criterion_label, load_run, run_criterion
+from benchmarks.run_record import rows as _rows
 
 
 def wilson_ci(k: int, n: int) -> tuple[float, float]:
@@ -200,8 +201,6 @@ def main() -> None:
                     help="permit comparing runs with different code/config/model (NOT a valid A/B)")
     _rows.add_allow_partial(ap)
     args = ap.parse_args()
-
-    from benchmarks.citynav.analysis.run_report import criterion_label, load_run, run_criterion
 
     a = load_run(Path(args.run_a), allow_partial=args.allow_partial)
     b = load_run(Path(args.run_b), allow_partial=args.allow_partial)

@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import os
+from collections.abc import Mapping
 
 # The briefed area of operations the C-12 flew, WGS84 (w, s, e, n).
 AO_BBOX_WGS84: tuple[float, float, float, float] = (-118.003686, 35.1017, -117.922950, 35.140292)
@@ -60,12 +60,10 @@ BUNDLE_BBOX_WGS84: tuple[float, float, float, float] = (
 # ``GROUND_LEVEL["calcity"]`` carries the same value.
 GROUND_LEVEL_M = 0.0
 
-def bundle_root() -> Path:
-    """The world bundle directory (``CALCITY_BUNDLE`` env override), else
-    ``bundle/`` under the Cal City root."""
-    from benchmarks.calcity.paths import CALCITY_ROOT  # noqa: PLC0415
-
-    return Path(os.environ.get("CALCITY_BUNDLE", str(CALCITY_ROOT / "bundle"))).expanduser()
+def bundle_root(root: Path, environ: Mapping[str, str]) -> Path:
+    """The world bundle directory (``CALCITY_BUNDLE`` in ``environ``), else
+    ``bundle/`` under the Cal City data ``root``."""
+    return Path(environ.get("CALCITY_BUNDLE", str(Path(root) / "bundle"))).expanduser()
 
 
 @dataclass(frozen=True)

@@ -78,7 +78,7 @@ fi
 say "    $N_PLY block point clouds"
 
 say "3/4 nadir rasters (upstream's PDAL rasterizer)"
-RGBD_DIR="$("$PY" -c 'from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR as d; print(d)')"
+RGBD_DIR="$("$PY" -c 'import os; from benchmarks.citynav.paths import citynav_bench; print(citynav_bench(os.environ).rgbd_dir)')"
 TODO=()
 while IFS= read -r ply; do
 	block="$(basename "$ply" .ply)"
@@ -118,14 +118,16 @@ say "4/4 tile bake"
 
 "$PY" - <<'PY'
 import collections
+import os
 
-from benchmarks.citynav import paths
 from benchmarks.citynav.adapter import load_split, parse_episode
+from benchmarks.citynav.paths import citynav_bench
 
-baked = {p.name.removesuffix("_meta.json") for p in paths.TILES_DIR.glob("*_meta.json")}
-print(f"[citynav-setup] {len(baked)} blocks baked under {paths.TILES_DIR}; bake_sha256 {paths.bake_sha256()}")
+bench = citynav_bench(os.environ)
+baked = {p.name.removesuffix("_meta.json") for p in bench.tiles_dir.glob("*_meta.json")}
+print(f"[citynav-setup] {len(baked)} blocks baked under {bench.tiles_dir}; bake_sha256 {bench.bake_sha256()}")
 for split in ("val_unseen", "test_unseen", "val_seen", "train_seen"):
-    blocks = collections.Counter(parse_episode(r, row_index=i).map_name for i, r in enumerate(load_split(paths.split_path(split))))
+    blocks = collections.Counter(parse_episode(r, row_index=i).map_name for i, r in enumerate(load_split(bench.split_path(split))))
     held = sum(n for b, n in blocks.items() if b in baked)
     missing = sorted(b for b in blocks if b not in baked)
     word = "ready" if not missing else f"lacks {len(missing)} of its {len(blocks)} blocks"

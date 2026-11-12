@@ -20,7 +20,7 @@ Endpoints
     response = {detections: [...]}
 
 Each detection is ``{label, score}`` plus the bbox-cropped mask record of
-:mod:`maps.util.mask_codec`. The score floor and the encoder's input size
+:mod:`maps.perception.mask_codec`. The score floor and the encoder's input size
 are the engine's own (``sam_engine.SCORE_THRESHOLD``, ``RESOLUTION``).
 
 A ``threading.Lock`` serializes GPU access: one forward at a time. A
@@ -49,7 +49,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
-from maps.util.mask_codec import encode_mask_record
+from maps.perception.mask_codec import encode_mask_record
 
 log = logging.getLogger("sam_server")
 logging.basicConfig(level=logging.INFO)

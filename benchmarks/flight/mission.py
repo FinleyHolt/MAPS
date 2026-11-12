@@ -22,23 +22,31 @@ import queue
 import threading
 import time
 from io import BytesIO
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 
+from benchmarks import git_provenance
+from benchmarks.bench import Bench
 from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
-from benchmarks.citynav.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
-                                                ConversationLog)
-from maps.llm.model_cards import effort
+from benchmarks.run_record.config import assert_flight_config, engine_settings, load_config
+from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
+                                                   ConversationLog)
+from benchmarks.run_record.episodes import MANIFEST_NAME, STATUS_INFRA, STATUS_OK, upsert_row, write_episode_json
+from benchmarks.run_record.run_manifest import arm_env_stamp, build_manifest, emit_or_verify, settle_effort
+from maps.llm import endpoint_spec
+from maps.llm.http import CallCanceled
+from maps.llm.model_cards import check_effort, effort
+from maps.perception.observation import ground_sides_m
+from maps.settings import from_environ
 
-if TYPE_CHECKING:
-    # Imported where used: the engine binds the bench's paths at import,
-    # after benchmarks.calcity.use() has selected Cal City.
-    from benchmarks.citynav.run_benchmark.episode_runner import Hydrated
+#: The engine's hydrated search stack (``EpisodeEngine.build_episode``), reached through the bench.
+Hydrated = Any
 
 log = logging.getLogger("flight.mission")
 
@@ -101,48 +109,44 @@ def _held_points(cov: dict[str, Any] | None) -> dict[str, Any] | None:
     return {"fraction": cov["fraction"], "held": [b is not None for b in cov["best"]], "frames": cov["frames"]}
 
 
-def resolve_episode(episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
-    """The split's row named ``episode_id``; with ``start_xy``, a mission
-    flown under the operator's own words: the map its id names, the start
-    given, and no target."""
-    from benchmarks.citynav.adapter import CityNavEpisode, find_row, load_split, parse_episode  # noqa: PLC0415
-    from benchmarks.citynav.paths import split_path  # noqa: PLC0415
-
+def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
+    """The row of ``bench``'s split named ``episode_id``; with ``start_xy``, a
+    mission flown under the operator's own words: the map its id names, the
+    start given, and no target."""
+    engine = bench.engine
     if start_xy is not None:
-        return CityNavEpisode(
-            map_name=episode_id.split("::")[0], episode_id=episode_id, description="",
-            start_xy=(float(start_xy[0]), float(start_xy[1])), start_z=None, target_xy=None,
-            target_object_ids=[], target_mask=None,
-        )
-    found = find_row(load_split(split_path(split)), episode_id)
+        return engine.authored_episode(episode_id, start_xy)
+    found = engine.find_row(engine.load_split(bench.split_path(split)), episode_id)
     if found is None:
         raise ValueError(f"{split} holds no episode {episode_id}")
-    return parse_episode(found[1], row_index=found[0])
+    return engine.parse_episode(found[1], row_index=found[0])
 
 
-def flight_config(config: str):
-    """The config a flight flies, refused (before any sortie is written) when
-    it withholds a part of the flown engine; the loader refuses a missing or
+def flight_config(config: str, environ: Mapping[str, str]):
+    """The config a flight flies under ``environ`` (the run's,
+    ``Bench.environ``), refused (before any sortie is written) when either
+    withholds a part of the flown engine; the loader refuses a missing or
     unresolved sensor."""
-    from benchmarks.citynav.run_benchmark.config import load_config  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.config import assert_flight_config  # noqa: PLC0415
-
     cfg = load_config(str(config))
-    assert_flight_config(cfg)
+    assert_flight_config(cfg, environ)
     return cfg
 
 
-def hydrate(*, episode_id: str, split: str, config: str, agl_m: float,
-            start_xy: tuple[float, float] | None = None) -> Hydrated:
-    """The engine for one mission, built by the bench's :func:`build_episode`,
-    at the operator's start and at ``agl_m``, the crew's commanded height
-    above ground: the one height the served sensor block and every leg read."""
-    from benchmarks.citynav.run_benchmark.assets import load_episode_assets  # noqa: PLC0415
-    from benchmarks.citynav.run_benchmark.episode_runner import build_episode  # noqa: PLC0415
-
-    cfg = flight_config(config)
-    episode = resolve_episode(episode_id, split, start_xy)
-    h = build_episode(cfg, episode, load_episode_assets(episode.map_name))
+def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: float,
+            start_xy: tuple[float, float] | None = None, workdir: Path | None = None,
+            perception_factory: Callable[[], Any] | None = None) -> Hydrated:
+    """The engine for one mission, built by the bench's engine
+    (``EpisodeEngine.build_episode``), at the operator's start and at
+    ``agl_m``, the crew's commanded height above ground: the one height the
+    served sensor block and every leg read. The mission records under
+    ``workdir`` and its requests ride its episode id as their routing key.
+    ``perception_factory`` builds the segmenter in place of the engine's own."""
+    engine = bench.engine
+    cfg = flight_config(config, bench.environ)
+    episode = resolve_episode(bench, episode_id, split, start_xy)
+    h = engine.build_episode(cfg, episode, engine.load_assets(bench, episode.map_name), bench,
+                             settings=engine_settings(cfg, bench.environ), workdir=workdir,
+                             routing_key=episode_id, perception_factory=perception_factory)
     h.state.altitude_m = h.ground_z_m + float(agl_m)
     return h
 
@@ -150,8 +154,6 @@ def hydrate(*, episode_id: str, split: str, config: str, agl_m: float,
 def leg_span_m(h: Hydrated) -> float:
     """The run's observation span in metres: what one frame holds along its
     long side at the mission's height."""
-    from maps.perception.observation import ground_sides_m  # noqa: PLC0415
-
     return float(max(ground_sides_m(float(h.state.altitude_m), h.ground_z_m, h.sensor)))
 
 
@@ -159,7 +161,7 @@ def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:
     """The ground a leg is flown for, in tile metres: the target's footprint
     cells (at most ``AREA_POINTS``), else a disc of half the observation span
     about the point (a centre, six points at a quarter span, twelve at half)."""
-    cells = h.search_loop.node_cells_xy(token) if token else None
+    cells = h.world.node_cells_xy(token) if token else None
     # Three cells at least: fewer is a point or a line, which no coverage
     # fraction answers. A row that thin is flown as a cover stop.
     if cells and len(cells) >= 3:
@@ -188,10 +190,15 @@ class _StampedLog(ConversationLog):
 class Mission:
     """A mission in the seat: its thread, its tasking queue, its record."""
 
-    def __init__(self, *, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
+    def __init__(self, *, bench: Bench, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
                  recorder: Any, close_log, agl_m: float, instruction: str | None = None,
                  run_id: str | None = None, run_no: int | None = None,
-                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None) -> None:
+                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None,
+                 perception_factory: Callable[[], Any] | None = None) -> None:
+        #: The bench the mission flies: its split, its bake, its engine.
+        self.bench = bench
+        #: Builds the segmenter in place of the engine's own (a forced replay's recorded one).
+        self._perception_factory = perception_factory
         self.episode_id = episode_id
         self.split = split
         self.config = config
@@ -252,8 +259,6 @@ class Mission:
         self._closest_m = float("inf")
         #: The leg being waited on (its area and the share the recording holds so far), None between legs.
         self.waiting: dict[str, Any] | None = None
-
-        from benchmarks import git_provenance  # noqa: PLC0415
 
         prov = git_provenance()
         self.git_commit: str | None = prov.get("git_commit")
@@ -619,25 +624,20 @@ class Mission:
         self._thread.start()
 
     def _run(self) -> None:
-        from benchmarks.citynav.paths import TILES_DIR  # noqa: PLC0415
-        from benchmarks.citynav.run_benchmark.dispatch import is_infra_fault  # noqa: PLC0415
-        from benchmarks.citynav.run_benchmark.mission_engine import MissionSession  # noqa: PLC0415
-        from benchmarks.citynav.run_manifest import settle_effort  # noqa: PLC0415
-        from maps.llm.endpoint_spec import discover_from_env, install_spec, spec  # noqa: PLC0415
-        from maps.llm.http import CallCanceled  # noqa: PLC0415
-        from maps.llm.model_cards import check_effort  # noqa: PLC0415
-        from maps.search.parse_compile.reasoner_loop import continue_mission  # noqa: PLC0415
+        from maps.mission.loop import continue_mission  # noqa: PLC0415  (the mission stack, with its tokenizer)
 
+        engine = self.bench.engine
         try:
             self._set(STATE_FLYING)
-            install_spec(discover_from_env())
-            settle_effort()
+            endpoint_spec.install_spec(endpoint_spec.discover_from_settings(from_environ(self.bench.environ)))
+            self.bench = settle_effort(self.bench)
             if self.reasoning_effort:
-                check_effort(spec().model_id, self.reasoning_effort)
+                check_effort(endpoint_spec.spec().model_id, self.reasoning_effort)
             self._write_manifests()
 
-            h = hydrate(episode_id=self.episode_id, split=self.split, config=self.config, start_xy=self._start_xy,
-                        agl_m=self.agl_m)
+            h = hydrate(bench=self.bench, episode_id=self.episode_id, split=self.split, config=self.config,
+                        start_xy=self._start_xy, agl_m=self.agl_m, workdir=self.workdir,
+                        perception_factory=self._perception_factory)
             self.hydrated = h
             instruction = self.instruction or h.episode.description
             # The override IS the operator's instruction, so the episode
@@ -650,10 +650,10 @@ class Mission:
             with self._lock:
                 self.instruction = instruction
                 self.map_name = h.episode.map_name
-            self._tiles_dir = TILES_DIR
+            self._tiles_dir = self.bench.tiles_dir
 
             # look crops what this run captured, never the bake's raster.
-            h.search_loop.look_imagery = self._imagery
+            h.world.look_imagery = self._imagery
 
             def observe():
                 # The pass fused over the flight's area, fetched by the flight
@@ -669,7 +669,7 @@ class Mission:
                 self._imagery.add(obs)
                 return obs
 
-            session = MissionSession(h, recorder=self._recorder, observe=observe)
+            session = engine.open_session(h, recorder=self._recorder, observe=observe)
             self.flights = session.flights
             # On the aircraft the leg is flown BEFORE the frame is read, and a
             # pass takes the stop the recording holds first.
@@ -705,7 +705,7 @@ class Mission:
                 log.exception("mission %s failed", self.episode_id)
                 error = f"{type(exc).__name__}: {exc}"
                 # A run that has reported stands at its report, whatever failed after it.
-                self._set(STATE_FAILED, error=error, infra=not self.replies and is_infra_fault(exc))
+                self._set(STATE_FAILED, error=error, infra=not self.replies and engine.is_infra_fault(exc))
         finally:
             self.bank()
             self.close_log()
@@ -720,11 +720,8 @@ class Mission:
     def _write_manifests(self) -> None:
         """The sortie's ``run_manifest.json`` (by its first mission) and this
         mission's own in its workdir; a failure is logged."""
-        from benchmarks.citynav.episodes import MANIFEST_NAME  # noqa: PLC0415
-        from benchmarks.citynav.run_manifest import build_manifest, emit_or_verify  # noqa: PLC0415
-
         sortie = self.workdir.parent
-        common = dict(config_path=Path(self.config), split=self.split, sample_seed=None,
+        common = dict(bench=self.bench, config_path=Path(self.config), split=self.split, sample_seed=None,
                       limit=None, allowlist_path=None)
         try:
             if not (sortie / MANIFEST_NAME).exists():
@@ -738,7 +735,8 @@ class Mission:
         """The mission's grain of the run manifest: which mission, and the
         reasoning effort its requests carry."""
         return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
-                "reasoning_effort": effort(self.reasoning_effort)}
+                "reasoning_effort": effort(self.reasoning_effort if self.reasoning_effort is not None
+                                           else self.bench.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", ""))}
 
     def turns(self) -> int:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""
@@ -781,11 +779,6 @@ class Mission:
 
     def row(self) -> dict[str, Any]:
         """The mission as a ledger row with a bench row's keys; the commit is the last of ``visited_xy``."""
-        from benchmarks.citynav import paths  # noqa: PLC0415
-        from benchmarks.citynav.episodes import STATUS_INFRA, STATUS_OK  # noqa: PLC0415
-        from benchmarks.citynav.run_manifest import arm_env_stamp  # noqa: PLC0415
-        from maps.llm.endpoint_spec import spec, spec_installed  # noqa: PLC0415
-
         episode = self.hydrated.episode if self.hydrated else None
         with self._lock:
             visited = [[float(episode.start_xy[0]), float(episode.start_xy[1])]] if episode else []
@@ -800,9 +793,10 @@ class Mission:
             "status": STATUS_INFRA if infra else STATUS_OK,
             "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": len(scored),
             "provenance": {"git_commit": self.git_commit, "git_dirty": self.git_dirty,
-                           "served_model": spec().model_id if spec_installed() else None,
-                           "bake_sha256": paths.bake_sha256()},
-            "search_env_flags": arm_env_stamp(),
+                           "served_model": (endpoint_spec.spec().model_id if endpoint_spec.spec_installed()
+                                            else None),
+                           "bake_sha256": self.bench.bake_sha256()},
+            "search_env_flags": arm_env_stamp(self.bench),
             "ts": self.started_at,
             "started_at_utc": self.started_at_utc,
             "elapsed_s": self.ended_s if self.ended_s is not None else self.elapsed_s(),
@@ -813,8 +807,6 @@ class Mission:
         ``episodes.jsonl``, replaced at every report, then the track flown
         since; a row that will not land is logged, never raised. A start
         without a fix takes its UTC at the first bank with one."""
-        from benchmarks.citynav.episodes import upsert_row, write_episode_json  # noqa: PLC0415
-
         try:
             if self.started_at_utc is None and self._t0 is not None and (utc := self._utc_now()) is not None:
                 # No fix at the start: the start's UTC is the first fix's, back through the seconds since.

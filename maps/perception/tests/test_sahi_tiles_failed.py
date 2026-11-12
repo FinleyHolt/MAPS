@@ -18,7 +18,7 @@ def test_a_partially_failed_frame_counts_its_failed_tiles(monkeypatch):
 
     monkeypatch.setattr(
         "maps.perception.sam.detect_client._post_segment",
-        lambda json_body: payload_by_b64.get(json_body["image_b64"])
+        lambda json_body, endpoint=None: payload_by_b64.get(json_body["image_b64"])
         if json_body["image_b64"] in answered else None,
     )
     captured = []

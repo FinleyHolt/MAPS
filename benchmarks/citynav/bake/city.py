@@ -25,6 +25,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -32,9 +33,10 @@ from typing import Any
 
 import numpy as np
 
+from benchmarks.bench import BAKE_OUTPUT_SUFFIXES
 from benchmarks.citynav.eval import WorldBounds
-from benchmarks.citynav.paths import BAKE_OUTPUT_SUFFIXES, TILES_DIR
-from maps.search.analyze_scene.geom_compute import is_closed_chain
+from benchmarks.citynav.paths import citynav_bench
+from maps.query.spatial_math import is_closed_chain
 
 log = logging.getLogger("bake_city")
 
@@ -67,20 +69,18 @@ class BakeError(RuntimeError):
 CELL_SIZE_M = 2.0
 
 
-def _raster_tif(block: str) -> Path:
-    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
-
-    return Path(CITYNAV_NATIVE_RGBD_DIR) / f"{block}.tif"
+def _raster_tif(block: str, rgbd_dir: Path) -> Path:
+    return Path(rgbd_dir) / f"{block}.tif"
 
 
-def _raster_bounds(block: str) -> tuple[float, float, float, float]:
+def _raster_bounds(block: str, rgbd_dir: Path) -> tuple[float, float, float, float]:
     """World extent of a block's 0.1 m/px raster.
 
     The CityNav TIFFs carry no CRS, but they do carry an affine transform, so
     the local-XY extent is exact. That extent is the block's imagery: the
     same line the raw point cloud and the baked ortho stop at.
     """
-    tif = _raster_tif(block)
+    tif = _raster_tif(block, rgbd_dir)
     try:
         import rasterio  # noqa: PLC0415  (ships with the ortho extra)
 
@@ -96,6 +96,7 @@ def _cell_coverage(
     bounds: WorldBounds,
     grid_shape: tuple[int, int],
     cell_size_m: float,
+    rgbd_dir: Path,
 ) -> np.ndarray | None:
     """Boolean ``grid_shape`` mask of where the block's IMAGERY has pixels: a
     cell is covered iff any pixel of the filled ortho under it has
@@ -103,13 +104,12 @@ def _cell_coverage(
     bounds rectangle is the coverage) when the ortho's geometry disagrees
     with the block grid; an unreadable ortho is a ``BakeError``.
     """
-    from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR
     from maps.perception.ortho.camera_model import load_ortho_or_rasters
 
     try:
-        ortho = load_ortho_or_rasters(block, rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR))
+        ortho = load_ortho_or_rasters(block, rgbd_dir=str(rgbd_dir))
     except Exception as exc:  # noqa: BLE001 - every failure is the same refusal
-        raise BakeError(f"{block}: cannot read the block imagery under {CITYNAV_NATIVE_RGBD_DIR} ({exc})") from exc
+        raise BakeError(f"{block}: cannot read the block imagery under {rgbd_dir} ({exc})") from exc
     ppm = float(ortho["px_per_m"])
     step = int(round(cell_size_m * ppm))
     px_tol = 0.5 / ppm
@@ -560,29 +560,33 @@ def _file_sha256(path: Path) -> str:
 def bake_block(
     name: str,
     records: list[tuple[dict[str, Any], dict[str, Any]]],
-    tiles_dir: str | Path = TILES_DIR,
+    tiles_dir: str | Path,
     *,
     bounds: WorldBounds | None = None,
     meta: dict[str, Any] | None = None,
+    rgbd_dir: Path | None = None,
 ) -> int:
     """Bake ``records`` into block ``name``'s window, write its sidecars and
     return the number of features written.
 
-    The grid is ``CELL_SIZE_M`` cells over the block's raster extent, covered
-    where its imagery has pixels; a block with no CityNav raster (Cal City)
-    passes its ``bounds``, all covered. ``meta`` keys (a caller's
+    The grid is ``CELL_SIZE_M`` cells over the block's raster extent (its
+    raster under ``rgbd_dir``), covered where its imagery has pixels; a block
+    with no CityNav raster (Cal City) passes its ``bounds``, all covered, and
+    no ``rgbd_dir``. ``meta`` keys (a caller's
     ``coordinate_frame`` and ``georef``, a city-cache bake's ``provenance``)
     are written to the meta sidecar after the grid, as given.
     """
     tiles_path = Path(tiles_dir).expanduser().resolve()
     imagery = bounds is None
     if bounds is None:
-        x_min, y_min, x_max, y_max = _raster_bounds(name)
+        if rgbd_dir is None:
+            raise BakeError(f"{name}: a block baked without bounds reads them off its raster: pass rgbd_dir")
+        x_min, y_min, x_max, y_max = _raster_bounds(name, rgbd_dir)
         bounds = WorldBounds(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
     # Row 0 is y_min (south) and rows run north, so grid_shape is (rows, cols) = (y, x).
     grid_shape = (int(round((bounds.y_max - bounds.y_min) / CELL_SIZE_M)),
                   int(round((bounds.x_max - bounds.x_min) / CELL_SIZE_M)))
-    coverage = _cell_coverage(name, bounds, grid_shape, CELL_SIZE_M) if imagery else None
+    coverage = _cell_coverage(name, bounds, grid_shape, CELL_SIZE_M, rgbd_dir) if imagery else None
     features = _features_from_records(
         records, bounds=bounds, grid_shape=grid_shape, cell_size_m=CELL_SIZE_M, coverage=coverage,
     )
@@ -607,12 +611,12 @@ def bake_block(
     return count
 
 
-def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path = TILES_DIR) -> None:
+def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path, rgbd_dir: Path) -> None:
     """Bake ``osm_cache``, city-frame records in CityNav local XY, into
-    ``tiles_dir`` for every ``<city>_block_<n>.tif`` raster (block bounds are
-    windows of the shared city frame)."""
+    ``tiles_dir`` for every ``<city>_block_<n>.tif`` raster under ``rgbd_dir``
+    (block bounds are windows of the shared city frame)."""
     tiles_path = Path(tiles_dir).expanduser().resolve()
-    rasters = _raster_tif(f"{city}_block_0").parent
+    rasters = Path(rgbd_dir)
     blocks = sorted(p.stem for p in rasters.glob(f"{city}_block_*.tif")
                     if re.fullmatch(rf"{city}_block_\d+", p.stem))
     if not blocks:
@@ -629,7 +633,7 @@ def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path = TILES_DI
         "georef": (cache_meta or {}).get("georef_provenance"),
     }
     for block in blocks:
-        bake_block(block, records, tiles_path, meta={"provenance": provenance})
+        bake_block(block, records, tiles_path, meta={"provenance": provenance}, rgbd_dir=rgbd_dir)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -644,10 +648,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--city", choices=_CITY_CHOICES, required=True)
     ap.add_argument("--osm-cache", type=Path, required=True,
                     help="the city's GeoJSON cache in CityNav local XY (tiles/osm_cache)")
-    ap.add_argument("--tiles-dir", type=Path, default=TILES_DIR)
+    bench = citynav_bench(os.environ)
+    ap.add_argument("--tiles-dir", type=Path, default=bench.tiles_dir)
     args = ap.parse_args(argv)
     try:
-        bake_city(args.city, args.osm_cache, args.tiles_dir)
+        bake_city(args.city, args.osm_cache, args.tiles_dir, bench.rgbd_dir)
     except BakeError as exc:
         ap.error(str(exc))
     return 0

@@ -11,18 +11,18 @@ import functools
 import hashlib
 import importlib
 import logging
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
+from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.eval import score_arrival
-from benchmarks.citynav.episode_workdir import LiveRecorder
-from benchmarks.citynav.paths import CITYNAV_NATIVE_RGBD_DIR, SUCCESS_CRITERION, tile_stem
+from benchmarks.run_record.episode_workdir import LiveRecorder
 from benchmarks.citynav.run_benchmark.assets import BlockAssets, load_episode_assets
-from benchmarks.citynav.run_benchmark.config import RunConfig
+from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.mission_engine import (
     MissionSession,
     perceive,
@@ -33,11 +33,13 @@ from maps.llm import flight_summary
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
+from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.sam.detect_client import SamDetectClient
-from maps.search.search_loop import SearchLoop
-from maps.search.withhold import withheld
-from maps.sws.graph.builder import build_object_graph
-from maps.sws.graph.model import GridDomain
+from maps.mission.episode_world import EpisodeWorld
+from maps.settings import Settings
+from maps.withhold import withholding
+from maps.world_state.prior_graph import build_object_graph
+from maps.world_state.graph import GridDomain
 
 log = logging.getLogger("run_benchmark")
 
@@ -45,17 +47,17 @@ log = logging.getLogger("run_benchmark")
 @dataclass
 class EpisodeState:
     """The aircraft's pose during the mission and the stop it is flying; the
-    graph lives on the ``SearchLoop``."""
+    graph lives on the ``EpisodeWorld``."""
 
     pose_xy: tuple[float, float]
     altitude_m: float
     step_idx: int = 0
 
 
-def make_perception() -> SamDetectClient:
-    """The SAM client; it detects the classes last pushed through
-    ``set_concepts`` (none before the first push)."""
-    return SamDetectClient()
+def make_perception(settings: Settings) -> SamDetectClient:
+    """The SAM client over the replicas ``settings`` names; it detects the
+    classes last pushed through ``set_concepts`` (none before the first push)."""
+    return SamDetectClient(endpoint=settings.endpoint)
 
 
 def uniform_spawn_xy(
@@ -98,10 +100,6 @@ def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, 
     """``(start altitude AMSL, block ground datum)`` for one episode: ground
     + ``start_altitude_agl_m`` when set, else the split row's start z, held to
     ``[ground + 1, altitude_cap_m]``."""
-    from maps.perception.ortho.ground_level import (  # noqa: PLC0415
-        GROUND_LEVEL,
-    )
-
     ground = float(GROUND_LEVEL[map_name])
     if cfg.start_altitude_agl_m is not None:
         alt = ground + float(cfg.start_altitude_agl_m)
@@ -118,10 +116,10 @@ def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, 
     )
 
 
-def _episode_graph(assets):
+def _episode_graph(assets, settings: Settings):
     """The episode's object graph, built from the bake's features. The
     ``prior`` withhold starts it empty."""
-    features = {} if withheld("prior") else assets.base_features
+    features = {} if "prior" in settings.withhold else assets.base_features
     return build_object_graph(features, cell_size_m=float(assets.cell_size_m))
 
 
@@ -148,7 +146,16 @@ class Hydrated:
     # The block's ground datum: every height above ground is read off it.
     ground_z_m: float
     perception: Any
-    search_loop: SearchLoop
+    world: EpisodeWorld
+    #: The bench the episode is flown on: its rasters, its bake, its criterion.
+    bench: Bench
+    #: The run's engine settings (``maps.settings``): endpoints, sampling, what is withheld.
+    settings: Settings
+    #: The attempt's directory, where the mission records (its wire log, its
+    #: frames, its tour cursor); None records nothing.
+    workdir: Path | None = None
+    #: The mission's router-affinity key (the episode's id on a run).
+    routing_key: str | None = None
 
     def crop(self, xy: tuple[float, float], altitude_m: float):
         """The raster's north-up frame through the run's sensor at this pose."""
@@ -156,43 +163,50 @@ class Hydrated:
             (float(xy[0]), float(xy[1])),
             altitude_m=float(altitude_m),
             sensor=self.sensor,
-            rgbd_dir=CITYNAV_NATIVE_RGBD_DIR,
+            rgbd_dir=self.bench.rgbd_dir,
             map_name=self.episode.map_name,
         )
 
 
-def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets) -> Hydrated:
-    """The engine for one episode: its graph, the start pose, the segmenter
-    wired to the director's watchlist (the declared classes plus the boosts
-    riding a flight), and the started SearchLoop."""
-    graph = _episode_graph(assets)
+def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, bench: Bench, *,
+                  settings: Settings, workdir: Path | None = None, routing_key: str | None = None,
+                  perception_factory: Callable[[], Any] | None = None) -> Hydrated:
+    """The engine for one episode on ``bench`` under ``settings``: its graph,
+    the start pose, the segmenter wired to the director's watchlist (the
+    declared classes plus the boosts riding a flight), and the started
+    EpisodeWorld. ``workdir`` and ``routing_key`` are the mission's own
+    (:class:`Hydrated`). ``perception_factory`` builds the segmenter in place
+    of :func:`make_perception` (the flight's forced replay brings the
+    recorded one)."""
+    graph = _episode_graph(assets, settings)
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m)
-    # A module global looked up at call time: the flight's forced replay swaps it.
-    perception = make_perception()
+    # ``make_perception`` is a module global looked up at call time: a test swaps it.
+    perception = perception_factory() if perception_factory is not None else make_perception(settings)
     grid_h, grid_w = assets.grid_shape
-    search_loop = SearchLoop(
+    world = EpisodeWorld(
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),
         tile_origin_xy=(assets.bounds.x_min, assets.bounds.y_min),
         map_name=assets.map_name,
         sam_setter=perception.set_concepts,
         # The look tool's crop raster (a live run crops its own imagery).
-        rgbd_dir=str(CITYNAV_NATIVE_RGBD_DIR),
+        rgbd_dir=str(bench.rgbd_dir),
     )
     # Runtime observations accumulate in this same graph; ``provenance``
     # separates them from the prebaked nodes.
-    search_loop.start(graph)
+    world.start(graph)
     return Hydrated(
         cfg=cfg, state=state, assets=assets, episode=episode,
         sensor=resolve_sensor(cfg.sensor),
         tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
                              cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
-        ground_z_m=ground, perception=perception, search_loop=search_loop,
+        ground_z_m=ground, perception=perception, world=world, bench=bench,
+        settings=settings, workdir=workdir, routing_key=routing_key,
     )
 
 
-def _detected_fids(search_loop) -> set[str]:
-    return {nid for nid, node in search_loop.state.runtime_graph.nodes.items()
+def _detected_fids(world) -> set[str]:
+    return {nid for nid, node in world.state.runtime_graph.nodes.items()
             if node.provenance == "detected"}
 
 
@@ -217,13 +231,13 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
         log.exception("retro segment failed")
         return {"error": f"segment failed: {type(exc).__name__}: {exc}"}
-    before = _detected_fids(h.search_loop)
+    before = _detected_fids(h.world)
     try:
         perceive(h, obs, dets)
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
         log.exception("retro ingest failed")
         return {"error": f"ingest failed: {type(exc).__name__}: {exc}"}
-    new = sorted(_detected_fids(h.search_loop) - before)
+    new = sorted(_detected_fids(h.world) - before)
     sid = flown_entry.get("stop_id")
     return {
         "n_dets": len(dets),
@@ -242,11 +256,29 @@ def run_episode(
     episode: CityNavEpisode,
     objects_by_map: dict,
     cfg: RunConfig,
+    bench: Bench,
     recorder: LiveRecorder | None = None,
+    *,
+    settings: Settings,
+    workdir: Path | None = None,
+    routing_key: str | None = None,
+    converse: Callable[[MissionSession], Any] | None = None,
 ) -> dict:
-    """Fly one episode and return its scored record."""
-    assets = load_episode_assets(episode.map_name)
-    log.info("tile_stem=%s map_name=%s", tile_stem(episode.map_name), episode.map_name)
+    """Fly one episode of ``bench`` under ``settings`` and return its scored
+    record; ``workdir`` is the attempt's directory and ``routing_key`` its
+    router-affinity key. The whole episode runs under the set the run
+    withholds, so a baseline policy's calls read it as the mission's do.
+    ``converse`` drives the mission conversation over the episode's session in
+    place of :func:`run_mission_episode` and returns its last reply (the
+    station's, which holds the conversation open for an operator); the build,
+    the replay and the scoring around it are this function's either way."""
+    with withholding(settings.withhold):
+        return _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdir, routing_key, converse)
+
+
+def _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdir, routing_key, converse=None) -> dict:
+    assets = load_episode_assets(bench, episode.map_name)
+    log.info("tile_stem=%s map_name=%s", bench.tile_stem(episode.map_name), episode.map_name)
     if cfg.spawn == "uniform":
         # The FLOWN start replaces the dataset's on the episode itself, so
         # every downstream reader sees it.
@@ -256,14 +288,14 @@ def run_episode(
             cfg.spawn_seed, episode.episode_id))
         log.info("  uniform spawn: (%.1f, %.1f) (spawn_seed=%d, episode=%s)",
                  *episode.start_xy, int(cfg.spawn_seed), episode.episode_id)
-    h = build_episode(cfg, episode, assets)
+    h = build_episode(cfg, episode, assets, bench, settings=settings, workdir=workdir, routing_key=routing_key)
     state = h.state
     ground = h.ground_z_m
     agl = cfg.start_altitude_agl_m
     log.info("  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, episode=%s)",
              state.altitude_m, f"AGL {agl:.0f} m" if agl is not None else f"row z={episode.start_z:.2f}",
              ground, float(cfg.altitude_cap_m), episode.episode_id)
-    h.search_loop.set_retro_perceiver(functools.partial(retro_perceive, h))
+    h.world.set_retro_perceiver(functools.partial(retro_perceive, h))
 
     # The takeoff pose, before the mission moves the drone: the replay flies
     # from exactly here, facing upstream's start heading.
@@ -272,7 +304,7 @@ def run_episode(
     start_alt = float(state.altitude_m)
     if cfg.policy is None:
         session = MissionSession(h, recorder=recorder)
-        reply = run_mission_episode(session)
+        reply = (converse or run_mission_episode)(session)
         flights = session.flights
         own = {"mission": {"ended_by": reply.ended_by}}
     else:
@@ -298,7 +330,7 @@ def run_episode(
     last = flights[-1] if flights else {}
     commit_xy = (float(last["resolved_xy"][0]), float(last["resolved_xy"][1])) if flights else None
     scores = score_arrival(
-        criterion=SUCCESS_CRITERION,
+        criterion=bench.success_criterion,
         final_pos_xy=final_xy,
         target_xy=episode.target_xy,
         pos_trajectory=[(float(p[0]), float(p[1])) for p in visited],
@@ -313,9 +345,8 @@ def run_episode(
     scores["steps_taken"] = steps_taken
     # What the episode spent on the LLM, at row size, read after the mission
     # from its transcript; a mission that never flew spent turns too.
-    flight_dir = os.environ.get("SEARCH_COMPILE_WORKDIR")
-    scores["llm"] = (flight_summary.summarize(Path(flight_dir) / "flight")
-                     if flight_dir else flight_summary.blank())
+    scores["llm"] = (flight_summary.summarize(Path(workdir) / "flight", settings.endpoint.tokenizer_name)
+                     if workdir else flight_summary.blank())
     scores["committed_provenance"] = last.get("provenance")
     # The mission's ending, or the baseline's policy, commit tier and numbers.
     scores.update(own)

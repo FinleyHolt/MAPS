@@ -55,7 +55,7 @@ def repo_provenance(
     prov: dict = git_provenance()
     if config_path is not None:
         prov["config"] = str(config_path)
-        from benchmarks.citynav.run_benchmark.config import config_sha256  # noqa: PLC0415
+        from benchmarks.run_record.config import config_sha256  # noqa: PLC0415
 
         prov["config_sha256"] = config_sha256(config_path)
     # One served alias can name two quantizations; the tokenizer (served_build) tells them apart.
