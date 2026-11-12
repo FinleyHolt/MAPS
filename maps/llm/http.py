@@ -480,10 +480,12 @@ def stream_chat_completions(
                 event = json.loads(payload)
             except json.JSONDecodeError:
                 continue
+            # A serve sends usage on a trailing chunk with no choices or on the
+            # finish chunk; the last one sent is the total.
+            if event.get("usage"):
+                usage = event["usage"]
             choices = event.get("choices") or []
             if not choices:
-                if event.get("usage"):
-                    usage = event["usage"]
                 if event.get("model"):
                     model = event["model"]
                 continue

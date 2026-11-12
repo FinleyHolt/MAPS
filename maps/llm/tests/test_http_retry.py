@@ -320,3 +320,21 @@ def test_a_whole_responses_answer_comes_back_in_the_chat_shape(monkeypatch) -> N
     assert out["choices"][0]["message"]["tool_calls"] == [
         {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{}"}}
     ]
+
+
+def test_usage_on_the_finish_chunk_is_metered(monkeypatch) -> None:
+    """A serve that attaches ``usage`` to the chunk carrying the finish_reason is metered from
+    it, as one that sends it on a trailing chunk with no choices is."""
+    sse = (
+        b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
+        b'data: {"usage":{"prompt_tokens":7,"completion_tokens":2},'
+        b'"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
+        b"data: [DONE]\n\n"
+    )
+    real = httpx.Client
+    mock = httpx.MockTransport(lambda _r: httpx.Response(200, content=sse))
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=mock, **kw))
+    out = http_mod.stream_chat_completions(
+        "http://e/v1/chat/completions", {}, {}, timeout=5.0, cancel_event=threading.Event()
+    )
+    assert out["usage"] == {"prompt_tokens": 7, "completion_tokens": 2}
