@@ -3,8 +3,7 @@
 ``_connected_components`` labels a ``MaskRegion``'s crop rather than a
 frame-sized canvas. The reference here is an independent whole-frame
 ``ndimage.label``, not a second call to the same function, so this pins the
-crop-native result against the semantics it replaced rather than against
-itself.
+crop-native result against whole-frame labelling.
 
 Order is the load-bearing part, not just membership: ``_decode_one`` takes
 ``max(comps, key=area)`` as the detection's primary and ``max`` returns the

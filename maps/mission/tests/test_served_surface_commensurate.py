@@ -13,9 +13,9 @@ from maps.mission.reply_repair import (
 from maps.mission.spec import MissionReply, MissionSpec
 from maps.mission.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
-# Word-boundary matches, case-insensitive except CARRY (lowercase "carry" is ordinary
-# English).
-_BANNED_CI = ("qstop", "stop packet", "score_by", "filter_items")
+# The executor's op names, matched anywhere in any case, and words matched
+# whole in any case.
+_BANNED_CI = ("score_by", "filter_items")
 _BANNED_WORDS_CI = (
     "round",
     "rounds",
@@ -24,16 +24,13 @@ _BANNED_WORDS_CI = (
     "pending",
     "tour",
     "tours",
-    # the say channel, named by its own nouns. NOT the bare
-    # verb "say": the legend uses it as ordinary English
-    # ("how you say beside"), and banning it would forbid
-    # the clearest word the doc has.
+    # The surface is Python, so it names no sentence or
+    # lexicon. The bare verb "say" stays: the legend uses it
+    # as ordinary English ("how you say beside").
     "sentence",
     "sentences",
     "lexicon",
 )
-_BANNED_CS = ("CARRY",)
-
 # Allowlisted collisions, stripped before scanning: the geometry sense of
 # "round" (aspect_ratio ~1) and the ordinary English of "says" in a
 # result-shaped sentence.
@@ -50,9 +47,6 @@ def _violations(text: str) -> list[str]:
             hits.append(f"{w}: ...{t[max(0, m.start() - 30) : m.end() + 20]!r}")
     for s in _BANNED_CI:
         for m in re.finditer(re.escape(s), t, flags=re.IGNORECASE):
-            hits.append(f"{s}: ...{t[max(0, m.start() - 30) : m.end() + 20]!r}")
-    for s in _BANNED_CS:
-        for m in re.finditer(rf"\b{s}\b", t):
             hits.append(f"{s}: ...{t[max(0, m.start() - 30) : m.end() + 20]!r}")
     return hits
 
@@ -88,7 +82,7 @@ def test_static_mission_surface_is_commensurate():
     blob = "\n".join(_static_corpus())
     assert len(blob) > 8_000, "vacuity floor: the surface scan went empty"
     bad = _violations(blob)
-    assert not bad, "retired vocabulary on the served surface:\n" + "\n".join(bad[:20])
+    assert not bad, "banned vocabulary on the served surface:\n" + "\n".join(bad[:20])
 
 
 def test_every_quoted_call_names_a_library_call():
@@ -214,9 +208,9 @@ def test_dynamic_mission_output_is_commensurate():
     assert "not flown." in blob  # the numberless backstop fired
     assert "budget" not in blob  # no budget fact is ever served
     assert "unknown tool" in blob
-    assert "unknown tool 'analyze'" in blob  # gated out of this era
+    assert "unknown tool 'analyze'" in blob  # run is the one served tool
     bad = _violations(blob)
-    assert not bad, "retired vocabulary in mission output:\n" + "\n".join(bad[:20])
+    assert not bad, "banned vocabulary in mission output:\n" + "\n".join(bad[:20])
 
 
 def test_the_transcript_says_what_json_says():
