@@ -23,7 +23,7 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from benchmarks.bench import Bench
+from benchmarks.bench import Bench, env_path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 
@@ -31,11 +31,6 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 SPLIT_FILES: dict[str, str] = {
     "calcity": "calcity.json",
 }
-
-
-def _env_path(environ: Mapping[str, str], name: str, default: Path) -> Path:
-    value = environ.get(name)
-    return Path(value if value else default).expanduser().resolve()
 
 
 def bake_meta(tiles_dir: Path) -> dict:
@@ -93,15 +88,13 @@ def calcity_bench(environ: Mapping[str, str]) -> Bench:
     variables too (``SEARCH_BENCHMARK_NAME`` and the four ``SEARCH_CITYNAV_*``):
     an attempt child selects Cal City by the first, and every run records all five.
     """
-    root = _env_path(
-        environ,
-        "SEARCH_CALCITY_DATA",
-        Path(environ.get("CALCITY_ROOT", Path.home() / "datasets" / "calcity")),
+    root = env_path(
+        environ, "SEARCH_CALCITY_DATA", "CALCITY_ROOT", default=Path.home() / "datasets" / "calcity"
     )
     data = root / "data"
-    splits = _env_path(environ, "SEARCH_CALCITY_SPLITS", PACKAGE_ROOT / "data")
-    rgbd = _env_path(environ, "SEARCH_CALCITY_RGBD_DIR", data / "rgbd_upstream")
-    tiles = _env_path(environ, "SEARCH_CALCITY_TILES", PACKAGE_ROOT / "tiles")
+    splits = env_path(environ, "SEARCH_CALCITY_SPLITS", default=PACKAGE_ROOT / "data")
+    rgbd = env_path(environ, "SEARCH_CALCITY_RGBD_DIR", default=data / "rgbd_upstream")
+    tiles = env_path(environ, "SEARCH_CALCITY_TILES", default=PACKAGE_ROOT / "tiles")
     return Bench(
         name="calcity",
         root=root,
