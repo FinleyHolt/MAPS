@@ -47,16 +47,16 @@ def test_unknown_sensor_dies_loud_naming_the_registry():
 def test_the_dump_surface_section_names_every_call_the_namespace_serves():
     import inspect
 
-    from maps.library.block_scan import _LIBRARY_CALLS
+    from maps.library.block_scan import LIBRARY_CALLS
     from maps.library.calls import Library
 
     text = contract.dump_text()
     assert "=== SURFACE" in text
     section = text.split("=== SURFACE", 1)[1].split("=== USER TURN", 1)[0]
     # Vacuity floor.
-    assert len(_LIBRARY_CALLS) >= 11, _LIBRARY_CALLS
+    assert len(LIBRARY_CALLS) >= 11, LIBRARY_CALLS
     kws = 0
-    for call in _LIBRARY_CALLS:
+    for call in LIBRARY_CALLS:
         line = next((ln for ln in section.splitlines() if ln.strip().startswith(f"{call}(")), None)
         assert line, call
         sig = inspect.signature(getattr(Library, call))

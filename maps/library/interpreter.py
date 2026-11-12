@@ -15,26 +15,26 @@ import re
 import time
 
 from maps.library.block_ceilings import (
-    _block_ceilings,
-    _block_line,
-    _code_objects,
-    _outer_block_line,
+    block_line,
+    charging_lines,
+    code_objects,
+    outer_block_line,
 )
 from maps.library.block_scan import (
-    _LIBRARY_CALLS,
-    _SAFE_BUILTINS,
-    _SAFE_MODULES,
     BLOCK_FILENAME,
+    LIBRARY_CALLS,
     METHOD_FOR_FREE_SPELLING,
-    _instrument,
-    _safe_import,
-    _shadows,
+    SAFE_BUILTINS,
+    SAFE_MODULES,
+    safe_import,
     scan_block,
+    shadowing_remedy,
+    show_bare_expressions,
 )
-from maps.library.call_arguments import MissionEnv, Names, _no_such_fid, _Stop
+from maps.library.call_arguments import MissionEnv, Names, _Stop, no_such_fid
 from maps.library.calls import Library
 from maps.library.op_compiler import CodeError, fid_like
-from maps.library.rows import Row, Rows, _said
+from maps.library.rows import Row, Rows, as_called
 
 # Liveness ceiling on one block's own lines (harness frames are untraced).
 # A block that runs 100k model-written lines is a runaway loop, not a plan.
@@ -74,7 +74,7 @@ class MissionNamespace(dict):
             if isinstance(row, dict):
                 return Row(row, mp=mp)
             if k.startswith(("prior_", "detected_")):
-                raise _no_such_fid(k)
+                raise no_such_fid(k)
             return k
         # A plain KeyError is what lets LOAD_GLOBAL fall through to
         # __builtins__.
@@ -108,9 +108,9 @@ class MissionNamespace(dict):
         known = [
             n
             for n in self
-            if isinstance(n, str) and not n.startswith("__") and n not in _SAFE_MODULES
+            if isinstance(n, str) and not n.startswith("__") and n not in SAFE_MODULES
         ]
-        close = difflib.get_close_matches(k, _LIBRARY_CALLS + tuple(known), n=2, cutoff=0.6)
+        close = difflib.get_close_matches(k, LIBRARY_CALLS + tuple(known), n=2, cutoff=0.6)
         if close:
             raise CodeError(
                 f"there is no {k} here -- did you mean " + " or ".join(dict.fromkeys(close)) + "?"
@@ -125,17 +125,17 @@ class MissionPython:
 
     def __init__(self, env: MissionEnv):
         self.env = env
-        self.ns = MissionNamespace({"__builtins__": dict(_SAFE_BUILTINS)})
+        self.ns = MissionNamespace({"__builtins__": dict(SAFE_BUILTINS)})
         self.names = Names(self.ns)
         self.library = self.ns.mp = Library(env, self.names)
         self.ns["__builtins__"]["print"] = self._print
-        self.ns["__builtins__"]["__import__"] = _safe_import
+        self.ns["__builtins__"]["__import__"] = safe_import
         self.ns["__show__"] = self._show
-        self.ns.update(_SAFE_MODULES)
+        self.ns.update(SAFE_MODULES)
         # The mission calls are builtins, as len is: a name the model binds
         # over one shadows it until ``del`` gives the call back.
-        for name in _LIBRARY_CALLS:
-            self.ns["__builtins__"][name] = _said(getattr(self.library, name), name)
+        for name in LIBRARY_CALLS:
+            self.ns["__builtins__"][name] = as_called(getattr(self.library, name), name)
         self._picked: dict = {}  # fids the model's Row names hold
         # Every block's code objects: a def from an earlier block is still
         # the model's own lines.
@@ -189,25 +189,25 @@ class MissionPython:
         self._printed = ""
         self._lines = 0
         try:
-            tree = _instrument(scan_block(code, bound=self.ns))
+            tree = show_bare_expressions(scan_block(code, bound=self.ns))
             compiled = compile(tree, BLOCK_FILENAME, "exec")
         except CodeError as e:
             return self.env.say_err(out, f"nothing in this block ran -- {e}")
-        codes = _code_objects(compiled)
+        codes = code_objects(compiled)
         self._block_codes = set(codes)  # the block the model just sent
         self.names.running(self._block_codes)
         self._codes.extend(codes)
 
         self._deadline = time.monotonic() + TRACE_DEADLINE_S
         try:
-            with _block_ceilings(self):
+            with charging_lines(self):
                 exec(compiled, self.ns)
         except Exception as e:
-            self._unbind_failed_assign(tree, _outer_block_line())
+            self._unbind_failed_assign(tree, outer_block_line())
             if not isinstance(e, _Stop):  # a _Stop's refusal is in the receipt
-                line = _block_line(self._block_codes)
+                line = block_line(self._block_codes)
                 what = str(e) if isinstance(e, CodeError) else f"{type(e).__name__}: {e}"
-                if isinstance(e, NameError) and e.name in _LIBRARY_CALLS:
+                if isinstance(e, NameError) and e.name in LIBRARY_CALLS:
                     # a call name resolves through the builtins, so only a
                     # del of it misses
                     what = (
@@ -222,13 +222,13 @@ class MissionPython:
                             if isinstance(n, ast.Call)
                             and isinstance(n.func, ast.Name)
                             and n.lineno <= line <= n.end_lineno
-                            and n.func.id in _LIBRARY_CALLS
+                            and n.func.id in LIBRARY_CALLS
                             and n.func.id in self.ns
                         ),
                         None,
                     )
                     if shadowed:
-                        what += f": {_shadows(shadowed)}"
+                        what += f": {shadowing_remedy(shadowed)}"
                 out.update(self.env.say_err({}, f"line {line}: {what}"))
         return self._finish(out)
 

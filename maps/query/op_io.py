@@ -8,15 +8,15 @@ import re
 
 from maps.query import spatial_math as G
 from maps.query.result_tables import (
-    _COMPARE_COL_PREFIXES,
+    COMPARE_COL_PREFIXES,
     MODEL_UNSERVED_COLUMNS,
     STANDING_SIDE_PREFIXES,
-    _column_ref,
+    column_ref,
 )
 from maps.xy_token import is_xy
 
 
-def _quote(v) -> str:
+def quote_value(v) -> str:
     """A user value as a refusal quotes it: its repr, cut to 120 chars."""
     s = repr(v)
     return s if len(s) <= 120 else s[:120] + "..."
@@ -27,7 +27,7 @@ class ProgramError(Exception):
 
 
 # What a refusal of a token that names no surface row says to do.
-_SAY_A_FID = "Say a fid off a served row."
+SAY_A_FID = "Say a fid off a served row."
 
 
 class Result(list):
@@ -58,7 +58,7 @@ class Result(list):
         self.cut_stats, self.empty_condition = cut_stats, empty_condition
 
 
-def _ordered(rows) -> bool:
+def keeps_order(rows) -> bool:
     """Whether an op's input rows carry a real order its output keeps."""
     return bool(getattr(rows, "ordered", False))
 
@@ -76,7 +76,7 @@ def _grouped_keys(present) -> str:
     family is its column prefix plus its stem's leading word."""
     fams: dict[str, list] = {}
     for k in present:
-        col = _column_ref(k, _COMPARE_COL_PREFIXES + ("color_",))
+        col = column_ref(k, COMPARE_COL_PREFIXES + ("color_",))
         if col is None:
             fams.setdefault(k, []).append(k)
             continue
@@ -92,7 +92,7 @@ def _grouped_keys(present) -> str:
     return ", ".join(parts)
 
 
-def _present_keys_hint(items, numeric: bool) -> str:
+def present_keys_hint(items, numeric: bool) -> str:
     """For an op on an absent key: the served keys the items DO carry --
     numeric ones (grouped) for a sort or a numeric cut, every scalar one
     for any other cut."""
@@ -119,7 +119,7 @@ def _present_keys_hint(items, numeric: bool) -> str:
     )
 
 
-def _attach_standing_columns(items, frame, with_distance=False):
+def attach_standing_columns(items, frame, with_distance=False):
     """Copies of the rows with a staged viewpoint's side columns, standing
     at ``from_xy`` looking along ``up_unit``: 'left of'/'right of <h>' and
     'ahead of'/'behind <h>' in metres, the key present naming the side (0
@@ -152,7 +152,7 @@ def _attach_standing_columns(items, frame, with_distance=False):
     return out
 
 
-class _Run:
+class ProgramRun:
     """One ``run_program`` call: the surface, the seed, the results so far
     and the op running."""
 
@@ -186,7 +186,7 @@ class _Run:
         return _window(v, win) if win else v
 
 
-class _Args(dict):
+class OpArgs(dict):
     """An op's args; an absent required arg raises a ProgramError."""
 
     def __init__(self, d, cx):
@@ -194,7 +194,9 @@ class _Args(dict):
         self._cx = cx
 
     def __missing__(self, key):
-        raise ProgramError(f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}")
+        raise ProgramError(
+            f"op {quote_value(self._cx.op)} is missing required arg {quote_value(key)}"
+        )
 
 
 def empty_window_refusal(part: str, n: int) -> str:
@@ -224,7 +226,7 @@ def _window(cur, win):
     return rows
 
 
-def _as_rows(cx, arg):
+def as_rows(cx, arg):
     """An ``items`` arg -> point-bearing rows: a handle's rows, a fid's row,
     an ``[x, y]`` as an xy-only row, or a list of those (handles flatten).
     A list of rows comes back as itself, keeping its order attributes."""
@@ -242,16 +244,16 @@ def _as_rows(cx, arg):
         elif is_xy(it):
             out.append({"xy": list(it)})
         elif cx.is_ref(it):
-            out.extend(_as_rows(cx, it))
+            out.extend(as_rows(cx, it))
         else:
             raise ProgramError(
-                f"cannot resolve a point in the list from item {_quote(it)}: each item must "
-                f"be a fid on this surface, an [x, y], or a set. " + _SAY_A_FID
+                f"cannot resolve a point in the list from item {quote_value(it)}: each item must "
+                f"be a fid on this surface, an [x, y], or a set. " + SAY_A_FID
             )
     return out
 
 
-def _named_rows(cx, el, need):
+def named_rows(cx, el, need):
     """Every row a crossings/ends ref names (a road is several ways): a fid,
     an rN, a list of them, or {ref, as}. A row off the surface counts when
     it carries ``need``; a string that is neither a fid nor a handle names
@@ -274,35 +276,37 @@ def _named_rows(cx, el, need):
     return out
 
 
-def _as_said(el):
+def as_said(el):
     """A crossings/ends ref as the model said it: its label, else itself."""
     return el["as"] if isinstance(el, dict) and el.get("as") else el
 
 
-def _refuse_if_empty(cx, el, what: str) -> None:
+def refuse_if_empty(cx, el, what: str) -> None:
     """Refuse a crossings/ends ref whose handles hold no rows, saying so."""
     ref = el.get("ref") if isinstance(el, dict) else el
     refs = ref if isinstance(ref, list) else [ref]
     if refs and all(isinstance(t, str) and cx.is_ref(t) and not cx.resolve(t) for t in refs):
-        raise ProgramError(f"{_quote(_as_said(el))} holds 0 rows here; there is nothing to {what}.")
+        raise ProgramError(
+            f"{quote_value(as_said(el))} holds 0 rows here; there is nothing to {what}."
+        )
 
 
-def _relate_ran(key, items) -> bool:
+def relate_ran(key, items) -> bool:
     """Whether the compare that writes a ``facing <lab>`` or ``<dir> of
     <lab>`` key ran: its sibling ``distance to <lab>`` is on a row, so the
     key absent everywhere means no row has a word or a side to name."""
-    col = _column_ref(key, ("facing ", "north of ", "south of ", "east of ", "west of "))
+    col = column_ref(key, ("facing ", "north of ", "south of ", "east of ", "west of "))
     if col is None:
         return False
     sib = "distance to " + col[1]
     return any(isinstance(it, dict) and sib in it for it in items)
 
 
-def _contact_fact(cx, key) -> str:
+def contact_fact(cx, key) -> str:
     """For an absent 'distance to' / 'facing' a <fid> whose mask contains
     the whole surface window: why neither is stamped. Returns the fact, or
     ''."""
-    col = _column_ref(key, ("distance to ", "facing "))
+    col = column_ref(key, ("distance to ", "facing "))
     if col is not None:
         ref_fid = col[1]
         ref_row = cx.by_fid.get(ref_fid)

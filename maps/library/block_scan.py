@@ -22,10 +22,10 @@ from maps.library.op_compiler import CodeError
 BLOCK_FILENAME = "<mission-block>"
 
 _MOVE_CALLS = ("go_to", "explore")
-_MOVE_SAYS = {"go_to": "go to", "explore": "cover"}
+MOVE_SAYS = {"go_to": "go to", "explore": "cover"}
 # order/filter are METHODS on a result (rows.order(...), rows.filter(...)),
 # served through Rows.
-_LIBRARY_CALLS = (
+LIBRARY_CALLS = (
     "find",
     "look_for",
     "go_to",
@@ -71,7 +71,7 @@ _FORBIDDEN_NAMES = frozenset(
     }
 )
 
-_SAFE_BUILTINS = {
+SAFE_BUILTINS = {
     n: getattr(builtins, n)
     for n in (
         "len",
@@ -124,7 +124,7 @@ _SAFE_BUILTINS = {
 # Pure, deterministic stdlib only: no I/O, no clock, no randomness --
 # anything ambient would break identical bytes -> identical trajectory, and
 # numpy-class C loops would bypass the trace-line liveness ceiling.
-_SAFE_MODULES = {
+SAFE_MODULES = {
     m.__name__: m
     for m in (bisect, collections, functools, heapq, itertools, json, math, operator, re)
 }
@@ -133,16 +133,16 @@ _SAFE_MODULES = {
 def _import_refusal(mod: str) -> str:
     return (
         f"cannot import {mod}; the modules already loaded -- "
-        + ", ".join(sorted(_SAFE_MODULES))
+        + ", ".join(sorted(SAFE_MODULES))
         + " -- need no import"
     )
 
 
-def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
     """The one importer the namespace serves: the whitelist, nothing else.
     (The import STATEMENT resolves through ``__builtins__['__import__']``,
     so the pre-scan's refusal needs this runtime twin.)"""
-    if level or name.split(".")[0] not in _SAFE_MODULES:
+    if level or name.split(".")[0] not in SAFE_MODULES:
         raise CodeError(_import_refusal(name.split(".")[0] or "that"))
     return __import__(name, globals, locals, fromlist, level)
 
@@ -154,7 +154,7 @@ _LOOP_MOVE_MSG = (
 )
 
 
-def _shadows(name: str) -> str:
+def shadowing_remedy(name: str) -> str:
     """The remedy for a mission call's name the model bound over."""
     return f"binding {name} shadows the {name}() call; del {name} gives the call back."
 
@@ -239,7 +239,7 @@ def scan_block(code: str, bound=()) -> ast.Module:
                 raise CodeError(_import_refusal("a relative module"))
             for m in mods:
                 root = (m or "").split(".")[0]
-                if root not in _SAFE_MODULES:
+                if root not in SAFE_MODULES:
                     raise CodeError(_import_refusal(root or "that"))
         if isinstance(node, ast.ClassDef):
             raise CodeError("no class definitions -- write the calls you want run")
@@ -262,7 +262,7 @@ def scan_block(code: str, bound=()) -> ast.Module:
                 raise CodeError(f"no underscore names ({node.id})")
             if node.id in _FORBIDDEN_NAMES:
                 raise CodeError(f"there is no {node.id}()")
-            if isinstance(node.ctx, ast.Store) and node.id in _SAFE_MODULES:
+            if isinstance(node.ctx, ast.Store) and node.id in SAFE_MODULES:
                 # one bad bind would break the module for the rest of the
                 # mission
                 raise CodeError(
@@ -306,7 +306,7 @@ def scan_block(code: str, bound=()) -> ast.Module:
     return tree
 
 
-def _instrument(tree: ast.Module) -> ast.Module:
+def show_bare_expressions(tree: ast.Module) -> ast.Module:
     """Wrap top-level bare expressions in a show call, REPL-style
     (``pools`` alone shows the rows, ``len(pools)`` prints the number);
     everything else, control flow included, is the model's."""
@@ -332,6 +332,6 @@ def looks_like_code(text: str) -> bool:
     except SyntaxError:
         return False
     return any(
-        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _LIBRARY_CALLS
+        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in LIBRARY_CALLS
         for n in ast.walk(tree)
     )

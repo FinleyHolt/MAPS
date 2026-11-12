@@ -6,17 +6,17 @@ reads them, the grounding that opens it and the ack that closes it."""
 
 from __future__ import annotations
 
-from maps.library.block_scan import _MOVE_SAYS
+from maps.library.block_scan import MOVE_SAYS
 from maps.library.call_arguments import (
-    _SITE_SLOT,
+    SITE_SLOT,
     MissionEnv,
     Names,
-    _Name,
-    _no_such_fid,
-    _plain,
+    PlaceName,
     _Stop,
-    _tok,
+    as_spelled,
     fold,
+    grounded_token,
+    no_such_fid,
     place_token,
 )
 from maps.library.op_compiler import (
@@ -35,7 +35,7 @@ from maps.library.op_compiler import (
     refuse_metres_in_within,
     rn_spelled,
 )
-from maps.library.rows import Row, Rows, _index_it, _one_row, _places, _set_as_list
+from maps.library.rows import Row, Rows, index_it_remedy, one_row_spelling, places_of, set_as_list
 from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.row_geometry import SurfaceGeometry
 from maps.query.spatial_math import COMPASS_UNIT
@@ -110,7 +110,7 @@ class Library:
         if isinstance(v, dict):
             raise CodeError(f"a place is a row, a set, a fid or an [x, y]; got a dict ({v!r:.60}).")
         if isinstance(v, (set, frozenset)):
-            v = _set_as_list(v)
+            v = set_as_list(v)
         if isinstance(v, (list, tuple)) and not is_xy(v):
             # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
             # element-wise.
@@ -141,9 +141,9 @@ class Library:
         ``{name: top-tie fids}``."""
         why: dict = {}
         for n, w in sites:
-            if isinstance(n, _Name):
+            if isinstance(n, PlaceName):
                 if not n.strip():
-                    raise CodeError(f"{_SITE_SLOT[w]} got an empty name, which is no place.")
+                    raise CodeError(f"{SITE_SLOT[w]} got an empty name, which is no place.")
                 why.setdefault(n, w)
         got = self.env.ground(why)
         if "error" in got:
@@ -155,7 +155,7 @@ class Library:
         the answer (served under ``shown`` when given)."""
         if shown is not None:
             self._show_as(ref, shown)
-        ties = self._ground((_Name(n), "anchor") for n in p.anchor_names())
+        ties = self._ground((PlaceName(n), "anchor") for n in p.anchor_names())
         p.ground(ties)
         ack = self.env.analyze(p.ops, p.rn, ref, page)
         if "results" not in ack.get("result", {"results": None}):
@@ -168,7 +168,7 @@ class Library:
         """Ground the NAMES among ``sites`` (``(site, why)`` pairs), then run
         the act ``verb`` on their tokens."""
         ties = self._ground(sites)
-        self._end(verb(*[_tok(s, ties) for s, _w in sites], *args, **kw))
+        self._end(verb(*[grounded_token(s, ties) for s, _w in sites], *args, **kw))
 
     def _end(self, ack: dict) -> None:
         """Close one call: finish an ack nothing refused, fold it into the
@@ -234,7 +234,7 @@ class Library:
         q = str(query)
         # A fid is no name to search for: one no row carries is refused.
         if q.startswith(("prior_", "detected_")) and fid_like(q) and self.env.row_of_fid(q) is None:
-            raise _no_such_fid(q)
+            raise no_such_fid(q)
         refuse_metres_in_within(within)
         nearest = self._slot(nearest)
         near = self._slot(near)
@@ -385,7 +385,7 @@ class Library:
                 "in one call -- a set is one place and means its nearest "
                 "member."
             )
-        a, b = _places(a, "distance"), _places(b, "distance")
+        a, b = places_of(a, "distance"), places_of(b, "distance")
         for fid, xy in a + b:
             if xy is None and self.env.row_of_fid(fid) is None:
                 raise CodeError(
@@ -449,7 +449,7 @@ class Library:
                 lead = [(site, "crops")]
         marks = [(place_token(m, "marks"), "marks") for m in mk or []]
         ties = self._ground(lead + marks)
-        toks = [_tok(s, ties) for s, _w in marks] if mk else None
+        toks = [grounded_token(s, ties) for s, _w in marks] if mk else None
         if isinstance(x, Rows):
             ack = self.env.analyze(p.ops, p.rn, None, None)
             if "error" not in ack:
@@ -459,7 +459,11 @@ class Library:
             ack = self.env.crops(x.ref, None, toks)
         else:
             ack = self.env.crops(
-                None, [_tok(f, ties) for f in fids] if fids is not None else _tok(site, ties), toks
+                None,
+                [grounded_token(f, ties) for f in fids]
+                if fids is not None
+                else grounded_token(site, ties),
+                toks,
             )
         self._end(ack)
         return None
@@ -538,15 +542,15 @@ class Library:
                 s = name or "s"
                 raise CodeError(
                     f"go_to() takes ONE thing and {name or 'that'} is a set "
-                    f"of {len(x)} row(s). {_index_it(name)} -- go_to({_one_row(x, s)})"
+                    f"of {len(x)} row(s). {index_it_remedy(name)} -- go_to({one_row_spelling(x, s)})"
                     f" -- or explore({s}) to cover the whole set."
                 )
         elif isinstance(x, (list, tuple, set, frozenset)):
             if isinstance(x, (set, frozenset)):
-                x = _set_as_list(x)
+                x = set_as_list(x)
             if not x:
                 raise CodeError(
-                    f"{call}() got an empty list; there is nothing to {_MOVE_SAYS[call]}."
+                    f"{call}() got an empty list; there is nothing to {MOVE_SAYS[call]}."
                 )
             if any(e is None for e in x):
                 raise CodeError(
@@ -578,7 +582,7 @@ class Library:
             if isinstance(e, Rows) and not len(e):
                 raise CodeError(
                     f"{self.names.spelling(e) or 'that set'} holds 0 row(s) here; "
-                    f"there is nothing to {_MOVE_SAYS[call]}."
+                    f"there is nothing to {MOVE_SAYS[call]}."
                 )
         if isinstance(x, str) and VIEWPOINT_RE.fullmatch(x):
             # A staged viewpoint is a pose, not a thing on the map: the
@@ -598,12 +602,14 @@ class Library:
             # whole top tie group.
             many = isinstance(x, (list, tuple)) and not is_xy(x)
             sites = [place_token(a, "cover") for a in (x if many else [x])]
-            said = _plain(x)
+            said = as_spelled(x)
             ties = self._ground((s, "cover") for s in sites)
             self._end(
                 self.env.cover(
                     [
-                        ties[s] if isinstance(s, _Name) and len(ties[s]) > 1 else _tok(s, ties)
+                        ties[s]
+                        if isinstance(s, PlaceName) and len(ties[s]) > 1
+                        else grounded_token(s, ties)
                         for s in sites
                     ],
                     said if isinstance(said, str) else ", ".join(str(a) for a in said),

@@ -7,13 +7,13 @@ from itertools import islice
 
 from maps.query import spatial_math as G
 from maps.query.op_io import (
-    _SAY_A_FID,
+    SAY_A_FID,
     ProgramError,
     Result,
-    _as_said,
-    _named_rows,
-    _quote,
-    _refuse_if_empty,
+    as_said,
+    named_rows,
+    quote_value,
+    refuse_if_empty,
 )
 from maps.query.row_geometry import chains_of
 from maps.xy_token import format_xy_token
@@ -71,19 +71,19 @@ def _sibling_crossing(by_fid, la, fa, lb, fb) -> str:
     return ""
 
 
-def _crossings(cx, a):
+def run_crossings(cx, a):
     """The places two features meet: one row per distinct crossing, its fid
     the [x, y] token of its whole-metre point. None raises."""
     sides, members = [], []
     for el in a["refs"]:
-        nodes = _named_rows(cx, el, "xy")
+        nodes = named_rows(cx, el, "xy")
         members.append((nodes, el))
         polys = [p for n in nodes for p in chains_of(n)]
         if not polys:
-            _refuse_if_empty(cx, el, "cross")
+            refuse_if_empty(cx, el, "cross")
             raise ProgramError(
-                f"{_quote(_as_said(el))} names no geometry on this surface "
-                f"-- a crossing needs two features that HAVE a shape. " + _SAY_A_FID
+                f"{quote_value(as_said(el))} names no geometry on this surface "
+                f"-- a crossing needs two features that HAVE a shape. " + SAY_A_FID
             )
         sides.append((_x_label(nodes, el), polys, {str(n.get("fid")) for n in nodes}))
     # A row on both sides would hand back its own corners.
@@ -160,17 +160,17 @@ def _crossings(cx, a):
     return Result(rows, ordered=True, notes=notes, set_notes=notes)
 
 
-def _ends(cx, a):
+def run_ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
     rows = []
     n_end = 0
     no_line: list = []
     for el in a["refs"]:
-        nodes = _named_rows(cx, el, "centerline")
+        nodes = named_rows(cx, el, "centerline")
         if not nodes:
-            _refuse_if_empty(cx, el, "take the ends of")
+            refuse_if_empty(cx, el, "take the ends of")
             raise ProgramError(
-                f"{_quote(_as_said(el))} names no row on this surface. " + _SAY_A_FID
+                f"{quote_value(as_said(el))} names no row on this surface. " + SAY_A_FID
             )
         for nd in nodes:
             cl = nd.get("centerline")

@@ -12,7 +12,7 @@ import re
 import sys
 from typing import TYPE_CHECKING
 
-from maps.library.block_scan import _LIBRARY_CALLS, _shadows
+from maps.library.block_scan import LIBRARY_CALLS, shadowing_remedy
 from maps.library.op_compiler import (
     CARDINAL_ORDER,
     CodeError,
@@ -107,7 +107,7 @@ _FILTER_SAY = "near=/within=/dwithin=/facing= with direction=, " + "/".join(
 _MISSING = object()
 
 
-def _said(fn, name: str | None = None):
+def as_called(fn, name: str | None = None):
     """``fn`` as the model calls it, ``name`` (a method: its own name): a
     TypeError binding its arguments is re-said without the internal or
     class name and counting no self, with the keywords that do exist; a
@@ -153,7 +153,7 @@ class _Cuts:
         # row (``r1.xy``) or a keyword spelled as a method (``r1.nearest``).
         if k.startswith("_"):
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {k!r}")
-        if k in _LIBRARY_CALLS:
+        if k in LIBRARY_CALLS:
             raise AttributeError(f"{k}() is a call, not a method: call it on its own, {k}(...)")
         if isinstance(self, Rows):
             name = self._mp.names.spelling(self)
@@ -171,7 +171,7 @@ class _Cuts:
         )
         if kw:
             raise AttributeError(f"{k} is a keyword, not a method: {then}{said}.{kw}({k}=...)")
-        one = _one_row(self, said)
+        one = one_row_spelling(self, said)
         if one is None:
             whose = "there is no row to read it off."
         elif k in ("keys", "get"):
@@ -212,7 +212,7 @@ class _Cuts:
         what = "a row" if isinstance(self, Row) else f"a set of {len(self)} row(s)"
         raise TypeError(
             f"{name} is {what}, not a call"
-            + (f": {_shadows(name)}" if name in _LIBRARY_CALLS else ".")
+            + (f": {shadowing_remedy(name)}" if name in LIBRARY_CALLS else ".")
         )
 
     def _mission(self):
@@ -227,7 +227,7 @@ class _Cuts:
     def _sorted(self, key, reverse: bool) -> RowList:
         return RowList(sorted(self._in_hand(), key=key, reverse=reverse))
 
-    @_said
+    @as_called
     def filter(
         self,
         pred=None,
@@ -289,7 +289,7 @@ class _Cuts:
             )
         return RowList(r for r in self._in_hand() if pred(r))
 
-    @_said
+    @as_called
     def order(self, key=None, *, nearest=None, color=None, direction=None, reverse=False, **kw):
         """Put the rows in one order; a table sorts by one column.
         ``direction=`` and ``key=`` sort the rows in hand (``reverse=`` flips a
@@ -347,7 +347,7 @@ class Row(_Cuts):
         self.name = row.get("name")
         self._src = src  # (ref, index) or None
 
-    @_said
+    @as_called
     def distance(self, other) -> float:
         """Metres from this row's footprint to ``other``."""
         mp = object.__getattribute__(self, "_mp")
@@ -671,7 +671,7 @@ class Rows(_Cuts):
     def _target(self):
         return self._mp, self if not self._spec else self._mp._materialize(self)
 
-    @_said
+    @as_called
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free
         ``distance(a, b)`` as a method."""
@@ -724,7 +724,7 @@ def _tuple_xy(xy):
 Row.__module__ = RowList.__module__ = Rows.__module__ = "builtins"
 
 
-def _index_it(name: str | None) -> str:
+def index_it_remedy(name: str | None) -> str:
     """The remedy's opening for a set refused where one place goes: a set
     the model has no name for is bound first, as ``s``."""
     return "Index it" if name else "Bind it first (s = ...), then index it"
@@ -752,7 +752,7 @@ def _not_an_int(name: str, i, x) -> CodeError:
     )
 
 
-def _one_row(x, said: str) -> str | None:
+def one_row_spelling(x, said: str) -> str | None:
     """How a remedy spells one row of the set ``x`` the model calls
     ``said``: its first row, a tied view's nearest way, None when it holds
     no row."""
@@ -763,12 +763,12 @@ def _one_row(x, said: str) -> str | None:
     return f"{said}[0]"
 
 
-def _set_as_list(v) -> list:
+def set_as_list(v) -> list:
     """A Python SET of things is the list of them, in a fixed order."""
     return sorted(v, key=lambda x: str(x._bind) if isinstance(x, Row) else repr(x))
 
 
-def _places(v, who: str) -> tuple:
+def places_of(v, who: str) -> tuple:
     """A Python value -> the ``(fid, xy)`` places geometry measures over. A set
     is one place meaning its nearest member; the xy rides for a computed row (a
     crossing, a terminus), whose point is its whole footprint."""
@@ -781,7 +781,7 @@ def _places(v, who: str) -> tuple:
     if is_xy(v):
         return ((None, (float(v[0]), float(v[1]))),)
     if isinstance(v, (list, tuple, set, frozenset)):
-        return tuple(p for x in v for p in _places(x, who))
+        return tuple(p for x in v for p in places_of(x, who))
     if isinstance(v, str):
         if fid_like(v):
             return ((v, None),)

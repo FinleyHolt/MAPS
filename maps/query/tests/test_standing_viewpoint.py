@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from maps.query.op_io import _attach_standing_columns
+from maps.query.op_io import attach_standing_columns
 from maps.query.program import run_program
 
 # Viewer at the origin looking EAST: east is ahead, south is the viewer's
@@ -23,7 +23,7 @@ def _rows_by_fid(rows):
 
 
 def test_attach_signs_are_the_cw_handedness_law():
-    out = _rows_by_fid(_attach_standing_columns(_CANDS, _V1))
+    out = _rows_by_fid(attach_standing_columns(_CANDS, _V1))
     assert out["c_e"]["ahead of v1"] == 10.0
     assert "behind v1" not in out["c_e"]
     assert out["c_w"]["behind v1"] == 10.0
@@ -36,7 +36,7 @@ def test_attach_signs_are_the_cw_handedness_law():
 
 def test_attach_copies_rows_never_mutates_the_surface():
     before = [dict(c) for c in _CANDS]
-    _attach_standing_columns(_CANDS, _V1)
+    attach_standing_columns(_CANDS, _V1)
     assert before == _CANDS
 
 

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from maps.library.block_scan import _LIBRARY_CALLS
+from maps.library.block_scan import LIBRARY_CALLS
 from maps.library.calls import Library
 from maps.library.rows import Rows
 from maps.mission import served_text
@@ -71,7 +71,7 @@ def surface_lines() -> list[str]:
         ]
         return str(sig.replace(parameters=ps, return_annotation=sig.empty))[1:-1]
 
-    out = [f"  {call}({_params(getattr(Library, call))})" for call in _LIBRARY_CALLS]
+    out = [f"  {call}({_params(getattr(Library, call))})" for call in LIBRARY_CALLS]
     # A cut, a sort and a distance are methods on a result.
     return out + [
         f"  <rows>.{name}({_params(getattr(Rows, name))})"

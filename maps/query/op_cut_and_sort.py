@@ -8,14 +8,14 @@ from maps.query import spatial_math as G
 from maps.query.op_io import (
     ProgramError,
     Result,
-    _as_rows,
-    _contact_fact,
-    _ordered,
-    _present_keys_hint,
-    _quote,
-    _relate_ran,
+    as_rows,
+    contact_fact,
+    keeps_order,
+    present_keys_hint,
+    quote_value,
+    relate_ran,
 )
-from maps.query.result_tables import _num
+from maps.query.result_tables import number_or_none
 
 
 def is_color_column_key(k) -> bool:
@@ -31,7 +31,7 @@ def _resolve_color_word(word: str) -> tuple[str, str | None]:
     canon = color_words.normalize_color(w)
     if canon not in color_words.COLOR_ENUM:
         raise ProgramError(
-            f"{_quote(w)} is not a color on the closed palette; color columns "
+            f"{quote_value(w)} is not a color on the closed palette; color columns "
             f"are color_<word> with word one of: "
             f"{', '.join(color_words.COLOR_ENUM)} (an open word that maps onto the "
             f"palette is accepted, e.g. navy -> blue)."
@@ -39,7 +39,7 @@ def _resolve_color_word(word: str) -> tuple[str, str | None]:
     note = (
         None
         if canon == w
-        else f"color {_quote(w)} maps onto the closed palette as {_quote(canon)}; "
+        else f"color {quote_value(w)} maps onto the closed palette as {quote_value(canon)}; "
         f"the column is color_{canon}."
     )
     return canon, note
@@ -61,10 +61,10 @@ def _attach_color_column(items, canon):
     return out
 
 
-def _score_by(cx, a):
+def run_score_by(cx, a):
     """The sort: a signed, key-normalized composite over exactly the
     columns the emphasis names."""
-    items = _as_rows(cx, a["items"])
+    items = as_rows(cx, a["items"])
     notes: list = []
     emphasis: dict = {}
     for el in a["emphasis"]:
@@ -92,20 +92,20 @@ def _score_by(cx, a):
                     del emphasis[key]
                     continue
                 raise ProgramError(
-                    f"nothing orders by {_quote(key)} here: no row carries a "
+                    f"nothing orders by {quote_value(key)} here: no row carries a "
                     f"perceived color, so no color column attaches (rows "
                     f"without a color read omit color_<word> columns). "
-                    f"{_present_keys_hint(items, True)}"
+                    f"{present_keys_hint(items, True)}"
                 )
             raise ProgramError(
-                f"nothing orders by {_quote(key)} here: no row carries a "
-                f"numeric {_quote(key)}. "
-                f"{_contact_fact(cx, key)}"
-                f"{_present_keys_hint(items, True)}"
+                f"nothing orders by {quote_value(key)} here: no row carries a "
+                f"numeric {quote_value(key)}. "
+                f"{contact_fact(cx, key)}"
+                f"{present_keys_hint(items, True)}"
             )
     for key in dropped_color:
         notes.append(
-            f"{_quote(key)} ranked nothing here: no row in this set carries "
+            f"{quote_value(key)} ranked nothing here: no row in this set carries "
             "a perceived colour yet (a row gets one once a flight has "
             "passed over it); the other keys still rank."
         )
@@ -119,19 +119,19 @@ def _score_by(cx, a):
     )
 
 
-def _filter_items(cx, a):
+def run_filter_items(cx, a):
     """The op that drops rows, keeping its input's order: ``le`` on a
     numeric column, ``truthy`` on a present key, ``on_side`` keeps a row its
     cardinal column places on the side or does not place, ``in_or_blank``
     keeps a word column reading one of ``value`` or blank."""
-    items = _as_rows(cx, a["items"])
+    items = as_rows(cx, a["items"])
     key, opr, val = a["key"], a["op"], a.get("value")
     if opr == "le":
         if items and not any(isinstance(it.get(key), (int, float)) for it in items):
             raise ProgramError(
-                f"no item carries a numeric {_quote(key)}. "
-                f"{_contact_fact(cx, key)}"
-                f"{_present_keys_hint(items, True)}"
+                f"no item carries a numeric {quote_value(key)}. "
+                f"{contact_fact(cx, key)}"
+                f"{present_keys_hint(items, True)}"
             )
         # The nearest excluded row, the bound that would admit it and how
         # many rows that bound admits.
@@ -142,7 +142,7 @@ def _filter_items(cx, a):
             (kept if v is not None and v <= val else excluded).append(it)
 
         stats = {"cut": f"{len(items)}->{len(kept)}"}
-        excl_vals = [(e, it) for it in excluded if (e := _num(it.get(key))) is not None]
+        excl_vals = [(e, it) for it in excluded if (e := number_or_none(it.get(key))) is not None]
         if excl_vals:
             ne_v, ne_it = min(excl_vals, key=lambda t: t[0])
             stats["nearest_excluded"] = {
@@ -151,14 +151,14 @@ def _filter_items(cx, a):
             }
             stats["admit_at"] = round(float(ne_v), 3)
             stats["n_at_admit"] = sum(
-                1 for it in items if (v := _num(it.get(key))) is not None and v <= ne_v
+                1 for it in items if (v := number_or_none(it.get(key))) is not None and v <= ne_v
             )
-        return Result(kept, "cut", ordered=_ordered(items), op_cols=[key], cut_stats=stats)
-    if items and not any(key in it for it in items) and not _relate_ran(key, items):
+        return Result(kept, "cut", ordered=keeps_order(items), op_cols=[key], cut_stats=stats)
+    if items and not any(key in it for it in items) and not relate_ran(key, items):
         raise ProgramError(
-            f"no item carries {_quote(key)}. "
-            f"{_contact_fact(cx, key)}"
-            f"{_present_keys_hint(items, False)}"
+            f"no item carries {quote_value(key)}. "
+            f"{contact_fact(cx, key)}"
+            f"{present_keys_hint(items, False)}"
         )
     if opr == "in_or_blank":
         # The caller passes every word that counts (south: southeast,
@@ -176,14 +176,14 @@ def _filter_items(cx, a):
         if not (len(on) - blank):
             stats["nothing_reads_those_words"] = (
                 f"no surveyed row reads "
-                f"any of {want} in {_quote(key)}; "
+                f"any of {want} in {quote_value(key)}; "
                 f"the rows kept are the ones the geometry never "
                 f"measured (a row TOUCHING the reference has no "
                 f"facing word). Widen, or read the column and "
                 f"see which words are actually there."
             )
     elif opr == "on_side":
-        on = [it for it in items if it.get(key) is None or (_num(it.get(key)) or 0) > 0]
+        on = [it for it in items if it.get(key) is None or (number_or_none(it.get(key)) or 0) > 0]
         blank = sum(1 for it in on if it.get(key) is None)
         stats = {
             "cut": f"{len(items)}->{len(on)}",
@@ -204,7 +204,7 @@ def _filter_items(cx, a):
     return Result(
         on,
         "cut",
-        ordered=_ordered(items),
+        ordered=keeps_order(items),
         op_cols=[key],
         cut_stats=stats,
         name_set=getattr(items, "name_set", False) and len(on) == len(items),
