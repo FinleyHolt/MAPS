@@ -7,7 +7,7 @@ the set `data_prep/reviewed.py` derives and every Cal City experiment flies.
 |---|---|
 | `mask_qa.csv` | One line per reviewed episode: corpus row, episode id, where its shape comes from, the prompt, and blank `verdict` and `note` columns |
 | `../data/calcity.json` | The corpus. Row `row` of this array is the pair: `descriptions[0]` is the prompt, and the shape is `target_mask` or a linked object |
-| `objects.json` | Linked object contours, under `$SEARCH_CALCITY_DATA/data/cityrefer/` (the data release, not git) |
+| `objects.json` | Linked object contours, under `$SEARCH_CALCITY_DATA/data/cityrefer/` (built by `data_prep/build_objects_json.py`; not in git) |
 
 ## What to check
 

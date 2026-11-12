@@ -1,8 +1,28 @@
 # maps
 
-The method: one mission conversation in which a reasoning model writes Python
+The engine: one mission conversation in which a reasoning model writes Python
 into one `run` tool, against a library of calls over a world-state graph that
-holds the OSM prior and the segmenter's detections.
+holds the OSM prior and the segmenter's detections. The top-level README's
+[How it works](../README.md#how-it-works) section is the overview and
+[`docs/architecture.md`](../docs/architecture.md) follows one mission through
+these packages.
+
+## The packages
+
+| Package | Holds | Read first |
+|---|---|---|
+| `mission/` | The conversation: the turn loop, the request each turn sends, the served text, the verbs a library call runs on, the per-episode world, compaction. | `mission/loop.py`, `mission/spec.py`, `mission/served_text.py` |
+| `library/` | The Python the model writes: the interpreter, the calls, rows with `.filter` and `.order`, result handles, the compiler from calls to ops. | `library/calls.py`, `library/interpreter.py`, `library/rows.py` |
+| `query/` | The op program behind `find`, the cuts and sorts, `intersection`, `ends_of` and `distance`; the surface it runs over; the tables a result serves. | `query/program.py`, `query/surface.py`, `query/result_tables.py` |
+| `world_state/` | The graph of prior features and detected nodes, its build from a bake, the upserts a flight folds in, the context a query reads it through. | `world_state/graph.py`, `world_state/upsert.py`, `world_state/context.py` |
+| `perception/` | The orthographic observation, the SAM 3.1 client, the watchlist, world-space tracking, seen colour, sensor geometry. | `perception/observation.py`, `perception/sam/detect_client.py`, `perception/detection.py` |
+| `render/` | The `look` crop, the `show_map` schematic and the marks drawn on them. | `render/look_render.py`, `render/map_render.py` |
+| `llm/` | Endpoint discovery, per-model sampling cards, the chat-completions transport, the hosted OpenAI wire. | `llm/model_cards.py`, `llm/endpoint_spec.py`, `llm/http.py` |
+| `settings.py` | The run's settings, read from the environment once. | |
+| `withhold.py` | The parts a bench ablation arm withholds. | |
+| `xy_token.py` | The `[x, y]` point grammar every slot that takes a fid or a point reads. | |
+
+## The boundaries
 
 `maps` imports nothing from `benchmarks`. A benchmark or the flight harness
 hands the loop a `MissionSpec` (`mission/spec.py`)
@@ -16,7 +36,16 @@ key beside it. The withheld set is fixed when a mission is built and bound
 for each of its turns (`withhold.py`), so two missions in one process keep
 their own settings, directory and withholds.
 
-## Concepts and modules
+Print the served contract (the system turn and the tool schema the model
+receives):
+
+```sh
+python -m maps.mission.contract --sensor oryx_orx32_25mm_nadir   # --agl-m <m>, default configs/calcity.yaml's 914.4
+```
+
+## Module index
+
+Every concept and the modules that hold it, by path under `maps/`.
 
 | Concept | Module |
 |---|---|

@@ -10,18 +10,22 @@ and the run readers in [`analysis/`](analysis/README.md).
 ## Prepare the data
 
 The episodes, the CityRefer catalog and the SensatUrban point clouds come from
-upstream; nothing is redistributed here.
+upstream; nothing is redistributed here. You request SensatUrban's
+`data_release.zip` from its authors' [form](https://github.com/QingyongHu/SensatUrban)
+(CC BY-NC-SA, non-commercial research use, no redistribution); one command
+does the rest ([`docs/data.md`](../../docs/data.md#citynav)):
 
 ```sh
 export CITYNAV_ROOT=~/datasets/citynav-arxiv
-benchmarks/citynav/data_prep/fetch_data.sh
-benchmarks/citynav/data_prep/rasterize_citynav_native.sh
-PY=.venv/bin/python benchmarks/citynav/data_prep/bake_tiles.sh
+benchmarks/citynav/data_prep/setup.sh --sensaturban <data_release.zip>
 ```
+
+It runs these steps, each of which stands alone and is skipped where its
+output is on disk:
 
 | Step | Writes | Notes |
 |---|---|---|
-| `fetch_data.sh` | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. The 34 SensatUrban block PLYs are placed by hand under `$CITYNAV_ROOT/raw_ply/`; the script prints where to get them. |
+| `fetch_data.sh` | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. `setup.sh --sensaturban` links the 34 SensatUrban block PLYs under `$CITYNAV_ROOT/raw_ply/`. |
 | `rasterize_citynav_native.sh [--blocks <block>...]` | `$CITYNAV_ROOT/data/rgbd_upstream/<block>.{png,tif}` | Runs upstream's `rasterize.py` (vendored as `data_prep/_vendor_citynav_rasterize.py`) in an environment with `pdal`, `rasterio` and `pillow`; `RASTERIZE_PYTHON` names its interpreter. |
 | `bake_tiles.sh` | `tiles/citynav_2m_osmv3/` | Bakes every block with a raster under `SEARCH_CITYNAV_RGBD_DIR` from the city's shipped OpenStreetMap cache, `tiles/osm_cache/<city>_osm_local.geojson` (already in CityNav local XY), on 2 m cells over the raster's extent. |
 

@@ -24,7 +24,7 @@ stderr.
 ## Every claim and its reader
 
 The run roots are named as in the
-[README's reproduction commands](../../../README.md#reproduce-the-experiments).
+[reproduction commands](../../../docs/experiments.md#reproduce-the-bench-experiments).
 Every command runs from the repository root.
 
 | Claim | Quantity | Reader | Command |
