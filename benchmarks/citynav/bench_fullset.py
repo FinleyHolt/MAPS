@@ -797,6 +797,11 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     except (OSError, ValueError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
+    try:
+        bench.assert_available()
+    except (OSError, RuntimeError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
     driver = Driver(args, bench, config)
     # The selection and its block assets too, so a refusal makes no out-root and asks no serve.
     try:
