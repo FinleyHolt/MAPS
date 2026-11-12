@@ -2,7 +2,7 @@
 
 Where an episode has an annotated shape, success is landing inside it; where
 it has none, it falls back
-to a disc of the dataset's radius. Synthetic geometry throughout — the
+to a disc of the dataset's radius. Synthetic geometry throughout: the
 function is pure, so none of this needs a run.
 """
 
@@ -32,7 +32,7 @@ def test_just_outside_the_shape_fails():
 
 
 def test_the_shape_beats_the_radius_when_both_are_available():
-    """A generous radius must not rescue a miss on an annotated shape —
+    """A generous radius must not rescue a miss on an annotated shape;
     otherwise annotating a target would make the episode EASIER."""
     out = score_precise(
         final_xy=(30.0, 5.0),

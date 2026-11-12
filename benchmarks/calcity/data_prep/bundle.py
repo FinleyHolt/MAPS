@@ -7,10 +7,10 @@ layout. The block's imagery is not in the bundle: it is the block's own map,
 
 Two consumers:
 
-* :func:`load_features_local` — every OSM feature across all vector layers,
+* :func:`load_features_local`: every OSM feature across all vector layers,
   geometry reprojected into a block's local CityNav task frame as
   shapely objects, tags verbatim.
-* :func:`grid_shape` — the block raster's ``(H, W)`` at a cell, from the frame.
+* :func:`grid_shape`: the block raster's ``(H, W)`` at a cell, from the frame.
 """
 
 from __future__ import annotations

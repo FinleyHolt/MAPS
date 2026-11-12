@@ -1,7 +1,7 @@
 """One verdict per row, under the bench's own success mask.
 
 ``eval.score_arrival`` is the single entry point every writer of a scored
-row goes through — the main merge and the zero-flight branch. What it
+row goes through: the main merge and the zero-flight branch. What it
 returns IS the row's metrics, so the two cannot drift onto different
 criteria.
 """

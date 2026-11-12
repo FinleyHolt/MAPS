@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetch the CityNav benchmark data into $CITYNAV_ROOT. Nothing is
-# redistributed by this repo — everything comes from the canonical
+# redistributed by this repo: everything comes from the canonical
 # upstream sources, then benchmarks/citynav/data_prep/rasterize_citynav_native.sh
 # and bake_tiles.sh regenerate the rasters and tile sidecars locally.
 #
@@ -20,16 +20,16 @@ CITYNAV_ROOT="${SEARCH_CITYNAV_DATA:-${CITYNAV_ROOT:-$HOME/datasets/citynav-arxi
 
 echo "== 1/4: upstream CityNav checkout -> ${CITYNAV_ROOT}"
 if [[ -d "${CITYNAV_ROOT}/.git" ]]; then
-	echo "   already cloned — reusing."
+	echo "   already cloned; reusing."
 else
 	git clone https://github.com/water-cookie/citynav-arxiv "${CITYNAV_ROOT}"
 fi
 
 echo "== 2/4: episode splits + CityRefer objects.json (upstream downloader)"
 (cd "${CITYNAV_ROOT}" && sh scripts/download_data.sh) ||
-	echo "   WARNING: upstream download_data.sh failed — re-run it manually inside ${CITYNAV_ROOT}"
+	echo "   WARNING: upstream download_data.sh failed; re-run it manually inside ${CITYNAV_ROOT}"
 
-echo "== 3/4: SensatUrban block PLYs (manual — license-gated upstream)"
+echo "== 3/4: SensatUrban block PLYs (manual: license-gated upstream)"
 PLY_COUNT="$(find "${CITYNAV_ROOT}/raw_ply" -name '*.ply' 2>/dev/null | wc -l)"
 echo "   present: ${PLY_COUNT}/34 block PLYs under ${CITYNAV_ROOT}/raw_ply/"
 if [[ "${PLY_COUNT}" -lt 34 ]]; then
@@ -56,7 +56,7 @@ EOF
 echo
 echo "== verify =="
 if python3 -c "import os; from benchmarks.citynav.paths import citynav_bench; citynav_bench(os.environ).assert_available()" 2>/dev/null; then
-	echo "paths.assert_available(): OK — splits + objects.json present."
+	echo "paths.assert_available(): OK: splits + objects.json present."
 else
 	echo "paths.assert_available(): NOT YET (see messages above; splits/objects missing)."
 	exit 1
