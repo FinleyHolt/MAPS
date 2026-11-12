@@ -304,15 +304,15 @@ def _contact_fact(cx, key) -> str:
     ''."""
     col = _column_ref(key, ("distance to ", "facing "))
     if col is not None:
-        _p = col[1]
-        _n = cx.by_fid.get(_p)
-        if isinstance(_n, dict) and _n.get("covers_window"):
+        ref_fid = col[1]
+        ref_row = cx.by_fid.get(ref_fid)
+        if isinstance(ref_row, dict) and ref_row.get("covers_window"):
             return (
-                f"{_p}'s mask contains the whole surface window, so "
-                f"'distance to {_p}'=0 for every row (containment, "
+                f"{ref_fid}'s mask contains the whole surface window, so "
+                f"'distance to {ref_fid}'=0 for every row (containment, "
                 f"not proximity) and neither the distance nor the "
                 f"facing is stamped; 'center distance to "
-                f"{_p}'/'bearing from {_p}' attach per-row and DO "
+                f"{ref_fid}'/'bearing from {ref_fid}' attach per-row and DO "
                 f"order/filter. "
             )
     return ""

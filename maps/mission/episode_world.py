@@ -162,16 +162,16 @@ class EpisodeWorld:
             if (x1 - x0) > float(minor_spacing_m) and (y1 - y0) > float(minor_spacing_m):
                 pitch = max(1.0, float(minor_spacing_m))
                 x_major = (x1 - x0) >= (y1 - y0)
-                _maj = (lambda p: p[0]) if x_major else (lambda p: p[1])
-                _mnr = (lambda p: p[1]) if x_major else (lambda p: p[0])
+                along = (lambda p: p[0]) if x_major else (lambda p: p[1])
+                across = (lambda p: p[1]) if x_major else (lambda p: p[0])
                 lo_min = y0 if x_major else x0
                 rows: dict[int, list] = {}
                 for p in zip(xs, ys):
-                    rows.setdefault(int((_mnr(p) - lo_min) // pitch), []).append(p)
+                    rows.setdefault(int((across(p) - lo_min) // pitch), []).append(p)
                 picks = []
                 for ri, ridx in enumerate(sorted(rows)):
-                    row = sorted(rows[ridx], key=_maj, reverse=bool(ri % 2))
-                    r_reach = abs(_maj(row[-1]) - _maj(row[0]))
+                    row = sorted(rows[ridx], key=along, reverse=bool(ri % 2))
+                    r_reach = abs(along(row[-1]) - along(row[0]))
                     picks.extend(spread(row, min(int(max_stops), int(r_reach // span) + 1)))
                 if len(picks) > int(max_stops):
                     picks = spread(picks, int(max_stops))

@@ -43,7 +43,7 @@ _LIBRARY_CALLS = (
 # Free-call spellings the surface refuses, mapped to the method that performs
 # the operation. The refusal names the method; nothing here defines the free
 # name or runs anything.
-_MOVED_TO_METHOD = {
+METHOD_FOR_FREE_SPELLING = {
     "narrow": "rows.filter(near=<place>, dwithin=<metres>)",
     "order_by": "rows.order(nearest=<place>)",
     # The one distance is the footprint gap, spelled as the served column

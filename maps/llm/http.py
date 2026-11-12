@@ -260,9 +260,7 @@ def _put_image(url: str, raw: bytes, media_type: str, cancel_event: threading.Ev
             watch.close()
 
 
-def _wire_body(
-    body: dict, cancel_event: threading.Event | None = None, image_store_url: str = ""
-) -> dict:
+def _wire_body(body: dict, cancel_event: threading.Event | None, image_store_url: str) -> dict:
     """``body`` as it crosses the wire: with an image store set
     (``image_store_url``, the run's ``MAPS_IMAGE_STORE_URL``), every
     data-URL image part rides as ``sha256:<sha>``, its bytes PUT once; a
@@ -595,7 +593,7 @@ def stream_responses(
 
 
 def _raise_on_served_model_mismatch(
-    base_url: str, requested: str | None, refusal: str, endpoint: Endpoint = Endpoint()
+    base_url: str, requested: str | None, refusal: str, endpoint: Endpoint
 ) -> None:
     """On a 404, re-probe the served ids and raise when the request's model is
     no longer among them (the server behind the URL changed since discovery).

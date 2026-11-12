@@ -97,7 +97,7 @@ def hydrate(
     start_xy: tuple[float, float] | None = None,
     workdir: Path | None = None,
 ) -> Hydrated:
-    """The engine for one mission, built by the bench's engine
+    """The hydrated search stack for one mission, built by the bench's engine
     (``EpisodeEngine.build_episode``), at the operator's start and at
     ``agl_m``, the crew's commanded height above ground: the one height the
     served sensor block and every leg read. The mission records under
@@ -196,7 +196,7 @@ class Mission:
         self._t0: float | None = None
         #: The same instant on the receiver's clock (UTC, unix seconds).
         self.started_at_utc: float | None = None
-        #: How many track fixes have been written.
+        #: How many track periods have been read; one with no pose writes no line.
         self._tracked = 0
         #: Every row lands in ``<workdir>/conversation.jsonl`` as it happens.
         self.transcript: list[dict] = _StampedLog(self.workdir / CONVERSATION_JSONL, self.elapsed_s)
@@ -404,13 +404,13 @@ class Mission:
             # pass takes the stop the recording holds first.
             session.mission_spec.fly = functools.partial(self.legs.fly, session)
             session.mission_spec.held_now = functools.partial(self.legs.held_now, h)
-            heard = dict(transcript=self.transcript, retask=self._next_tasking)
             reply, conversation = session.run(
                 instruction,
                 cancel_event=self._cancel,
                 diag=self._turn_diag,
                 reasoning_effort=self.reasoning_effort,
-                **heard,
+                transcript=self.transcript,
+                retask=self._next_tasking,
             )
             self._record_reply(reply)
 

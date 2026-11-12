@@ -57,23 +57,23 @@ def run_ops(
             standing=ns.get("standing"),
         )
     except ProgramError as exc:
-        _err = str(exc)
+        err = str(exc)
         if raw_sink is not None:
             raw_sink["error_op"] = getattr(exc, "op", "")
         if preflight and any(_requests_color(op) for op in ops):
             # The color request errored before any envelope existed (e.g.
             # the emphasis absent-color guard) -- the phase fact rides the
             # error so "no color" reads as WHEN, not broken.
-            _err = join_hints(_err, PREFLIGHT_COLOR_NOTE)
-        return {"error": _err}
+            err = join_hints(err, PREFLIGHT_COLOR_NOTE)
+        return {"error": err}
     except Exception as exc:
         return {"error": f"program failed: {exc}"}
-    _raw_results = out["results"]
+    raw_results = out["results"]
     if raw_sink is not None:
-        raw_sink["results"] = _raw_results
+        raw_sink["results"] = raw_results
     # ``answer_ref`` names the one table a plan returns; the other ops' hints
     # ride it.
-    out["results"] = compact_results(_raw_results, answer_ref=answer_ref)
+    out["results"] = compact_results(raw_results, answer_ref=answer_ref)
     return out
 
 
@@ -140,8 +140,7 @@ class Carry:
 
     def _closure(self, ref) -> set:
         """``ref`` and every handle its ops read that is not fresh under the
-        current version; an event handle, an alias or an unknown re-derives
-        nothing."""
+        current version; an event handle or an unknown re-derives nothing."""
         out: set = set()
         todo = [ref]
         while todo:

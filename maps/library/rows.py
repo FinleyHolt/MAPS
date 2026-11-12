@@ -707,8 +707,8 @@ class Rows(_Cuts):
         if self._tied():
             # A TIED VIEW SHOWS ITS SHAPE, as the served head does: no
             # fids and no points.
-            _nm = str((rows[0] or {}).get("name") or name)
-            return f"<{_nm}: {len(rows)} ways>"
+            way_name = str((rows[0] or {}).get("name") or name)
+            return f"<{way_name}: {len(rows)} ways>"
         head = ", ".join(_one(r) for r in rows[:3])
         more = f", +{len(rows) - 3} more" if len(rows) > 3 else ""
         return f"<{name}: {len(rows)} row(s): {head}{more}>"
