@@ -5,7 +5,7 @@ A ``SensorSpec`` on the crop switches the view rectangle from the CityNav
 2·AGL square to ``2·AGL·tan(fov/2)`` per axis and the output from the ortho's
 own pixel span to the sensor's native ``image_width × image_height``. The warp
 stays orthographic, so the projection contract stays the corners — these tests
-pin the geometry, the replay identity, and the sensorless path's byte-parity.
+pin the geometry and the sensorless path's altitude square.
 """
 
 from __future__ import annotations

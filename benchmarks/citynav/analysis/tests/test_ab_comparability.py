@@ -44,7 +44,7 @@ def test_same_bake_under_different_site_roots_is_comparable():
     """The bake's identity is its name: one bake under two mount prefixes is comparable."""
     fatal, varied = comparability_issues(
         _prov(tiles="/local/a/MAPS/tiles/citynav_2m_osmv2"),
-        _prov(tiles="/scratch/b/MAPS/tiles/citynav_2m_osmv2"),
+        _prov(tiles="/srv/b/MAPS/tiles/citynav_2m_osmv2"),
     )
     assert fatal == [] and varied == []
 

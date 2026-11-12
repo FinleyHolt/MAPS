@@ -20,7 +20,7 @@ def test_the_dump_is_the_code_arm_the_flight_path_serves():
     # user turn, and the dump says so instead of rendering one.
     assert "STOP PACKET" not in text
     # No sentence surface anywhere in it: no decoder mask (Python is not
-    # EBNF-able and the arm builds none), no closed-class lexicon.
+    # EBNF-able and the run builds none), no closed-class lexicon.
     assert "=== LANGUAGE" not in text and "=== LEXICON" not in text
     assert "root ::= sentence" not in text
     # Vacuity floor: the whole served surface, not a header skeleton.

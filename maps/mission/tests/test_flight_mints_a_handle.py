@@ -42,7 +42,7 @@ def test_the_flight_names_the_rows_it_added(_n=3):
     assert handle.startswith("r") and handle[1:].isdigit(), rep
     assert f"the {_n} rows this flight added" in rep["new_rows"], rep
     # a fact and a capability, never an imperative sequence -- and in the
-    # register of the surface being served, which is the code arm's
+    # register of the surface being served, which is Python's
     assert (
         f"the handle is bound, so {handle}, {handle}[0] and {handle}.order(...) all reach them"
     ) in rep["new_rows"], rep

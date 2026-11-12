@@ -371,7 +371,7 @@ def test_a_split_that_is_not_the_run_s_corpus_prints_no_class_split(tmp_path, mo
 
 
 def test_a_root_without_a_manifest_reads_its_split_off_the_rows(tmp_path, monkeypatch, capsys):
-    """A released-baseline root has no run manifest; each row records its split."""
+    """A released root carries no run manifest; each row records its split."""
     _calcity_corpus(tmp_path, monkeypatch, ("the red car", "G"))
     root = tmp_path / "released"
     write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1, split="calcity"))
