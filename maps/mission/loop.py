@@ -153,7 +153,7 @@ class _Mission:
         # verbs that say the model's own name for a set ask it through these.
         self.surface = Surface(
             ctx, compute_namespace, preflight=preflight,
-            name_of_ref=lambda ref: self.python.ref_name(ref) or UNNAMED)
+            name_of_ref=lambda ref: self.python.names.ref_name(ref) or UNNAMED)
         self.rejections = Rejections(self.surface)
         self.programs = Programs(self.surface, self.rejections, self.progress)
         self.stance = Stance(self.surface, self.rejections)
@@ -161,8 +161,8 @@ class _Mission:
             self.surface, self.rejections, self.progress,
             look_renderer=look_renderer, workdir=workdir,
             obs_span_m=obs_span_m, obs_minor_m=obs_minor_m,
-            name_of_ref=lambda ref: self.python.ref_name(ref),
-            look_argument=lambda: self.python.call_arg("look"))
+            name_of_ref=lambda ref: self.python.names.ref_name(ref),
+            look_argument=lambda: self.python.names.call_arg("look"))
         self.flights = Flights(mission_spec, self.surface, self.rejections,
                                self.pictures, self.progress, obs_span_m=obs_span_m)
         self.watchlist = Watchlist(mission_spec, self.surface, self.rejections,
@@ -415,7 +415,7 @@ class _Mission:
         carry = self.surface.carry
         carry.in_play.clear()
         carry.in_play.update(HANDLE_WORD_RE.findall(code))
-        carry.in_play.update(self.python.held_refs())
+        carry.in_play.update(self.python.names.held_refs())
         carry.minted.clear()
         self._script_lines += len(code.strip().splitlines())
         out = self.python.run_block(code)

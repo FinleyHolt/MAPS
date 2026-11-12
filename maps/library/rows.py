@@ -23,11 +23,11 @@ from maps.query.spatial_math import COMPASS_UNIT
 from maps.xy_token import is_xy
 
 if TYPE_CHECKING:
-    from maps.library.interpreter import MissionPython
+    from maps.library.calls import Library
 
 
 # What a set the model has no name for is called where a label must be said
-# (MissionPython.spelling): never the executor's rN, which it never bound.
+# (Names.spelling): never the executor's rN, which it never bound.
 UNNAMED = "(unnamed)"
 
 # The cardinal cut kwargs, derived from the compiler's (the geometry's) four.
@@ -140,10 +140,10 @@ class _Cuts:
             raise AttributeError(
                 f"{k}() is a call, not a method: call it on its own, {k}(...)")
         if isinstance(self, Rows):
-            name = self._mp.spelling(self)
+            name = self._mp.names.spelling(self)
         else:
             mp = self._mission()
-            name = mp and mp.name_of(self)
+            name = mp and mp.names.name_of(self)
         # A remedy names the set as the model does, else binds it first.
         said, then = (name, "") if name else ("s", "bind it first (s = ...); ")
         kw = ("order" if k in ("nearest", "color", "direction")
@@ -176,23 +176,23 @@ class _Cuts:
         # so. A builtin that calls it (sorted(key=s)) is not its name; a
         # subscript called (cars[0]()) is.
         mp = self._mission()
-        node = mp and mp.running_node()
+        node = mp and mp.names.running_node()
         f = node.func if isinstance(node, ast.Call) else None
         # A subscript is the set's own spelling only when called bare: a
         # builtin reached through one passes its arguments.
-        name = ((ast.get_source_segment(mp._code, f) or ast.unparse(f))
+        name = ((ast.get_source_segment(mp.names.code, f) or ast.unparse(f))
                 if isinstance(f, ast.Subscript) and not node.args and not node.keywords
                 else f.id if isinstance(f, ast.Name) and dict.get(mp.ns, f.id) is self else
-                (mp.spelling(self) if isinstance(self, Rows)
-                 else mp and mp.name_of(self)) or UNNAMED)
+                (mp.names.spelling(self) if isinstance(self, Rows)
+                 else mp and mp.names.name_of(self)) or UNNAMED)
         what = "a row" if isinstance(self, Row) else f"a set of {len(self)} row(s)"
         raise TypeError(f"{name} is {what}, not a call"
                         + (f": {_shadows(name)}" if name in _LIBRARY_CALLS else "."))
 
     def _mission(self):
-        """The mission the rows came from; rows that carry none (an empty
-        list) are read by a block (two frames up) running in the mission's
-        namespace."""
+        """The library of the mission the rows came from; rows that carry
+        none (an empty list) are read by a block (two frames up) running in
+        the mission's namespace."""
         return (self._target()[0]
                 or getattr(sys._getframe(2).f_globals, "mp", None))
 
@@ -230,7 +230,7 @@ class _Cuts:
             facing=facing, direction=direction).items() if v is not None}
         if pred is None:
             mp, src = self._target()
-            return RowList() if mp is None else mp._rows_filter(src, **kw)
+            return RowList() if mp is None else mp.rows_filter(src, **kw)
         if kw:
             raise CodeError(
                 f"filter takes a predicate OR {_FILTER_SAY}, not both")
@@ -261,7 +261,7 @@ class _Cuts:
                     "reverse=True).")
             mp, src = self._target()
             return (RowList() if mp is None
-                    else mp._rows_order(src, nearest=nearest, color=color))
+                    else mp.rows_order(src, nearest=nearest, color=color))
         if key is not None and direction is not None:
             raise CodeError(
                 'order takes a key OR direction=, not both: '
@@ -289,7 +289,9 @@ class Row(_Cuts):
 
     def __init__(self, row: dict, src: tuple | None = None, mp=None):
         object.__setattr__(self, "_row", dict(row))
-        object.__setattr__(self, "_mp", mp)  # receipt-note sink, optional
+        # The mission's Library, or None for a row made outside one. The
+        # slot keeps its name: a block's dir() of a row serves it.
+        object.__setattr__(self, "_mp", mp)
         self._bind = bind_row(row)
         self.fid = row.get("fid")
         self.name = row.get("name")
@@ -299,7 +301,7 @@ class Row(_Cuts):
     def distance(self, other) -> float:
         """Metres from this row's footprint to ``other``."""
         mp = object.__getattribute__(self, "_mp")
-        return mp._call_distance(self, other)
+        return mp.distance(self, other)
 
     # ONE row cuts and orders as the one-element set it is:
     # r.order(nearest=poppy) puts a "distance to poppy" column on the row
@@ -406,9 +408,9 @@ class Row(_Cuts):
                 k.replace("_", " "), self.keys(), n=1, cutoff=0.6)
             if close and k not in mp._get_noted:
                 mp._get_noted.add(k)
-                mp._fold({"note": (
+                mp.note(
                     f".get({k!r}) matched no column and returned the "
-                    f"default; the near column is {close[0]!r}")})
+                    f"default; the near column is {close[0]!r}")
         return default
 
     def keys(self) -> list:
@@ -488,7 +490,7 @@ class RowList(_Cuts, list):
         except (IndexError, TypeError) as e:
             past_end = isinstance(e, IndexError)
         mp = self._mission()
-        name = (mp and (mp.name_of(self) or mp.call_arg(None))) or UNNAMED
+        name = (mp and (mp.names.name_of(self) or mp.names.call_arg(None))) or UNNAMED
         if past_end:
             raise CodeError(f"{name}[{i}] did not bind: {name} holds "
                             f"{len(self)} row(s)."
@@ -502,7 +504,7 @@ class Rows(_Cuts):
 
     __slots__ = ("_ref", "_spec", "_mp", "_label")
 
-    def __init__(self, ref: str, mp: "MissionPython", spec: str = "",
+    def __init__(self, ref: str, mp: "Library", spec: str = "",
                  label: str = ""):
         self._ref = ref
         self._spec = spec
@@ -545,7 +547,7 @@ class Rows(_Cuts):
         # every row ties, so an index would read as a choice and be a coin
         # flip.
         if self._tied():
-            self._refuse_tied(self._mp.said_name(self, None),
+            self._refuse_tied(self._mp.names.said_name(self, None),
                               "is not subscriptable")
         if isinstance(i, slice):
             lo = int(i.start or 0)
@@ -563,10 +565,10 @@ class Rows(_Cuts):
                 lo, hi = s.start, s.stop
             return Rows(self._ref, self._mp, f"[{lo}:{hi}]")
         if not isinstance(i, int):
-            raise _not_an_int(self._mp.said_name(self, None), i, self)
+            raise _not_an_int(self._mp.names.said_name(self, None), i, self)
         rows = self._rows()
         if not (-len(rows) <= i < len(rows)):
-            name = self._mp.said_name(self, None)
+            name = self._mp.names.said_name(self, None)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
                 "row(s) here. " + ("Show it first, then index it." if rows
@@ -600,7 +602,7 @@ class Rows(_Cuts):
     def _stratum(self, tier: str) -> "Rows":
         src = self if not self._spec else self._mp._materialize(self)
         p = self._mp._program(src._ref)
-        name = self._mp.spelling(self)
+        name = self._mp.names.spelling(self)
         return Rows(self._mp._analyze(
             p, p.add("stratum", {"items": src._ref, "tier": tier}),
             shown=name and f"{name}.{tier}"), self._mp)
@@ -613,7 +615,7 @@ class Rows(_Cuts):
     def distance(self, other) -> float:
         """Metres to ``other``, this set counting as ONE place: the free
         ``distance(a, b)`` as a method."""
-        return self._mp._call_distance(self, other)
+        return self._mp.distance(self, other)
 
     def __add__(self, other):
         # Set union, the Python way: a list of rows to loop and read.
@@ -630,7 +632,7 @@ class Rows(_Cuts):
 
     def __repr__(self):
         """Named rows, not an opaque count."""
-        name = self._mp.spelling(self) or UNNAMED
+        name = self._mp.names.spelling(self) or UNNAMED
         rows = self._rows()
         if not rows:
             return f"<{name}: 0 rows>"

@@ -660,7 +660,7 @@ def test_a_tied_view_is_not_subscriptable_the_way_dict_keys_is_not():
     rows = [{"fid": f"prior_{i}", "name": "Neuralia Road"} for i in range(12)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: True)
     mp = MissionPython(env)
-    view = Rows("r1", mp)
+    view = Rows("r1", mp.library)
 
     assert len(view) == 12
     assert len(list(view)) == 12, "a tied view still iterates"
@@ -688,7 +688,7 @@ def test_an_ordered_result_stays_subscriptable():
 
     rows = [{"fid": f"detected_{i}", "class": "car"} for i in range(6)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
-    view = Rows("r2", MissionPython(env))
+    view = Rows("r2", MissionPython(env).library)
     assert view[0].get("fid") == "detected_0"
     assert len(view[0:3]) == 3
 
@@ -705,14 +705,14 @@ def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
         return quiet_env(rows_of_ref=lambda ref: rows,
                          tied_of_ref=lambda ref: tied)
 
-    tied = repr(Rows("r1", MissionPython(_env(True))))
+    tied = repr(Rows("r1", MissionPython(_env(True)).library))
     assert "Neuralia Road" in tied and "64" in tied, tied
     assert "prior_5775" not in tied, tied
     assert "2242" not in tied, tied
 
     # VACUITY FLOOR: an UNTIED result still names its rows and points, or
     # this would pass on a repr that had stopped saying anything at all.
-    untied = repr(Rows("r1", MissionPython(_env(False))))
+    untied = repr(Rows("r1", MissionPython(_env(False)).library))
     assert "prior_5775" in untied, untied
     assert "2242" in untied, untied
 
@@ -809,7 +809,7 @@ def test_a_window_of_a_window_composes_the_python_way():
 
     rows = [{"fid": f"detected_{i}"} for i in range(20)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
-    r = Rows("r1", MissionPython(env))
+    r = Rows("r1", MissionPython(env).library)
     assert [x.get("fid") for x in r[2:5][0:10]] == \
         [x["fid"] for x in rows[2:5][0:10]]
     assert [x.get("fid") for x in r[2:6][0:-1]] == \
@@ -824,7 +824,7 @@ def test_an_empty_window_of_a_window_names_its_own_span_and_parent():
 
     rows = [{"fid": f"detected_{i}"} for i in range(20)]
     env = quiet_env(rows_of_ref=lambda ref: rows, tied_of_ref=lambda ref: False)
-    r = Rows("r1", MissionPython(env))
+    r = Rows("r1", MissionPython(env).library)
     with pytest.raises(CodeError) as e:
         r[2:5][5:8]
     assert str(e.value) == (
@@ -872,7 +872,7 @@ def test_distance_refuses_a_place_with_nothing_to_measure(arg, says):
     rows = {"prior_1": {"fid": "prior_1", "xy": [0.0, 0.0],
                         "mask": [[[0.0, 0.0]]]}}
     mp = MissionPython(quiet_env(row_of_fid=rows.get))
-    mp.ns["r1"] = Rows("r1", mp)
+    mp.ns["r1"] = Rows("r1", mp.library)
     out = mp.run_block(f"print(distance(prior_1, {arg}))\n")
     assert says in out.get("error", ""), out
 

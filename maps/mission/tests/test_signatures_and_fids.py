@@ -4,7 +4,7 @@ import threading
 
 
 from maps.mission import contract
-from maps.library.interpreter import MissionPython
+from maps.library.calls import Library
 
 
 def test_the_surface_serves_keyword_only_calls_as_keyword_only():
@@ -12,7 +12,7 @@ def test_the_surface_serves_keyword_only_calls_as_keyword_only():
     positional arguments must not be served as taking them."""
     doc = "\n".join(contract.surface_lines())
     for call in ("stand", "look"):
-        sig = inspect.signature(getattr(MissionPython, f"_call_{call}"))
+        sig = inspect.signature(getattr(Library, call))
         if any(p.kind is p.KEYWORD_ONLY for p in sig.parameters.values()):
             line = next(ln for ln in doc.splitlines() if ln.strip().startswith(f"{call}("))
             assert "*" in line, line

@@ -19,11 +19,10 @@ from maps.library.block_ceilings import (
 from maps.library.block_scan import (
     BLOCK_FILENAME, _MOVED_TO_METHOD, _SAFE_BUILTINS, _SAFE_MODULES, _instrument,
     _LIBRARY_CALLS, _safe_import, _shadows, scan_block)
-from maps.library.call_arguments import MissionEnv, _Stop, _no_such_fid
-from maps.library.calls import _LibraryCalls
+from maps.library.call_arguments import MissionEnv, Names, _Stop, _no_such_fid
+from maps.library.calls import Library
 from maps.library.op_compiler import CodeError, fid_like
 from maps.library.rows import Row, Rows, _said
-from maps.query.row_geometry import SurfaceGeometry
 
 
 # Liveness ceiling on one block's own lines (harness frames are untraced).
@@ -49,9 +48,13 @@ class MissionNamespace(dict):
     fid spelling is the string; a name this mission unbound says why, and a
     near-miss gets a did-you-mean."""
 
-    def __init__(self, mp: "MissionPython", base: dict):
+    def __init__(self, base: dict):
         super().__init__(base)
-        self.mp = mp
+        #: The mission's library, read by the rows a name resolves to (and,
+        #: under this name, by ``rows._Cuts._mission``); set once it is built.
+        self.mp: Library | None = None
+        #: name -> why this mission removed it.
+        self.unbound: dict = {}
 
     def __missing__(self, k):
         mp = self.mp
@@ -66,8 +69,8 @@ class MissionNamespace(dict):
         # __builtins__.
         if k in (dict.get(self, "__builtins__") or {}):
             raise KeyError(k)
-        if k in mp._unbound:
-            raise CodeError(f"{k} is unbound: {mp._unbound[k]}")
+        if k in self.unbound:
+            raise CodeError(f"{k} is unbound: {self.unbound[k]}")
         # A near-miss of a LIVE fid names the correction (detect_59 ->
         # detected_59), but ONLY when the prefix is a near-miss of a fid
         # family: a `corner_5` typo falls through to the bound handles.
@@ -103,13 +106,16 @@ class MissionNamespace(dict):
         raise KeyError(k)
 
 
-class MissionPython(_LibraryCalls):
-    """The persistent interpreter for one mission's run channel."""
+class MissionPython:
+    """The persistent interpreter for one mission's run channel: the
+    namespace the model's blocks run in, the library its calls are
+    (:class:`Library`) and the receipt each block returns."""
 
     def __init__(self, env: MissionEnv):
         self.env = env
-        self.ns: dict = MissionNamespace(
-            self, {"__builtins__": dict(_SAFE_BUILTINS)})
+        self.ns = MissionNamespace({"__builtins__": dict(_SAFE_BUILTINS)})
+        self.names = Names(self.ns)
+        self.library = self.ns.mp = Library(env, self.names)
         self.ns["__builtins__"]["print"] = self._print
         self.ns["__builtins__"]["__import__"] = _safe_import
         self.ns["__show__"] = self._show
@@ -117,33 +123,16 @@ class MissionPython(_LibraryCalls):
         # The mission calls are builtins, as len is: a name the model binds
         # over one shadows it until ``del`` gives the call back.
         for name in _LIBRARY_CALLS:
-            self.ns["__builtins__"][name] = _said(getattr(self, f"_call_{name}"), name)
-        # Model spelling for every ref it was shown rows under, so the
-        # served envelope is keyed by the model's own name.
-        self._shown: dict = {}
-        self._labels: dict = {}         # ref -> the call that made it (find)
-        self._unnamed: dict = {}        # nameless set -> its slot number
+            self.ns["__builtins__"][name] = _said(getattr(self.library, name), name)
         self._picked: dict = {}         # fids the model's Row names hold
-        self._unbound: dict = {}        # name -> why this mission removed it
-        self._get_noted: set = set()    # .get near-miss keys noted, per block
-        self._call_minted: list = []    # handles the last call's flights minted
-        # Footprint geometry BY FID off the live surface, cached until a
-        # call ends: a flight folds detections in under it.
-        self._geom = SurfaceGeometry(env.row_of_fid)
-        self._measure_calls = 0
         # Every block's code objects: a def from an earlier block is still
         # the model's own lines.
         self._codes: list = []
         # per-block state
-        self._out: dict = {}
-        self._code = ""
-        self._nodes: dict | None = None  # the block's calls by position
         self._block_codes: set = set()
         self._printed = ""
         self._lines = 0
         self._deadline = 0.0
-        self._block_shown: set = set()
-        self._unrendered: dict = {}     # deduped this block -> surface version
 
     def _print(self, *parts, sep=" ", end="\n", flush=False):
         # print()'s own signature; the block's output is one text, cut into
@@ -154,15 +143,16 @@ class MissionPython(_LibraryCalls):
     def _show(self, value, label: str | None):
         if value is None:
             return
+        library = self.library
         if isinstance(value, Rows) and not value._spec \
-                and self._unrendered.get(value._ref) == self.env.version():
+                and library.unrendered.get(value._ref) == self.env.version():
             return
         if isinstance(value, Rows):
             # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
             # executor's ref the window compiled onto (the window shows it
             # under a label; a nameless set is served whole all the same).
-            self._block_shown.add(
-                self._window(value._ref, value._spec, label, value._ref))
+            library.shown_whole.add(
+                library._window(value._ref, value._spec, label, value._ref))
         elif isinstance(value, Row) and value._src \
                 and not re.fullmatch(r"\w+", label):
             # Render the ROW: a one-row window keeps the ordering
@@ -170,24 +160,19 @@ class MissionPython(_LibraryCalls):
             # asked for rather than a census of one.
             ref, i = value._src
             spec = f"[{i}:{i + 1}]"
-            self._window(ref, spec, label, ref)
+            library._window(ref, spec, label, ref)
         elif isinstance(value, Row):
-            self._out.setdefault("shown", {})[label] = value._bind
+            library.out.setdefault("shown", {})[label] = value._bind
         else:
             self._printed += (f"{label} = {value!r}" if label != repr(value)
                               else repr(value)) + "\n"
 
     def run_block(self, code: str) -> dict:
-        self._out = out = {}
-        self._code = code
-        self._nodes = None
+        out: dict = {}
+        self.library.begin_block(out)
+        self.names.begin_block(code)
         self._printed = ""
         self._lines = 0
-        self._block_shown = set()
-        self._unrendered.clear()
-        self._get_noted.clear()
-        self._geom.clear()
-        self._measure_calls = 0
         try:
             tree = _instrument(scan_block(code, bound=self.ns))
             compiled = compile(tree, BLOCK_FILENAME, "exec")
@@ -195,6 +180,7 @@ class MissionPython(_LibraryCalls):
             return self.env.say_err(out, f"nothing in this block ran -- {e}")
         codes = _code_objects(compiled)
         self._block_codes = set(codes)     # the block the model just sent
+        self.names.running(self._block_codes)
         self._codes.extend(codes)
 
         self._deadline = time.monotonic() + TRACE_DEADLINE_S
@@ -251,7 +237,7 @@ class MissionPython(_LibraryCalls):
                     for n in ast.walk(t):
                         if isinstance(n, ast.Name):
                             self.ns.pop(n.id, None)
-                            self._unbound[n.id] = (
+                            self.ns.unbound[n.id] = (
                                 "its assignment failed, so the stale "
                                 "value was removed -- re-derive it")
 
@@ -283,7 +269,7 @@ class MissionPython(_LibraryCalls):
         if picked:
             out["picked"] = picked
         # Serve the model's own names over the executor's refs.
-        mine = dict(self._shown)
+        mine = dict(self.names.shown)
         for k, v in self.ns.items():
             if isinstance(v, Rows) and not v._spec and not k.startswith("__"):
                 mine[v._ref] = k
@@ -300,14 +286,14 @@ class MissionPython(_LibraryCalls):
                        if isinstance(_a, dict) else ())
             folded = []
             for k in keys[:-1]:
-                if k in self._block_shown:
+                if k in self.library.shown_whole:
                     continue
                 env = results.pop(k)
                 hint = env.get("hint") if isinstance(env, dict) else None
                 # Under a name the model can read, else unprefixed; a line
                 # the answer already says is dropped, but a named result
                 # keeps its own status line.
-                name = mine.get(k) or self._labels.get(k)
+                name = mine.get(k) or self.names.labels.get(k)
                 keep = [ln for i, ln in enumerate(str(hint or "").splitlines())
                         if (i == 0 and name) or ln not in said]
                 if keep:
@@ -323,9 +309,9 @@ class MissionPython(_LibraryCalls):
             said = {mine[k] for k in results if k in mine}
             keys = []
             for k in results:
-                name = mine.get(k) or self._labels.get(k)
+                name = mine.get(k) or self.names.labels.get(k)
                 if name is None or (k not in mine and name in said):
-                    name = self._unnamed_label(k)
+                    name = self.names.unnamed_label(k)
                 said.add(name)
                 keys.append(name)
             # The legend rides the receipt's first table only.

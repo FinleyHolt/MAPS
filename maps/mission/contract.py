@@ -48,9 +48,9 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
 
 def surface_lines() -> list[str]:
     """Every call the namespace serves, with its real signature, read off
-    the executing functions themselves (``MissionPython._call_*`` for each
+    the executing functions themselves (the ``Library`` method of each
     served call, then the ``Rows`` methods)."""
-    from maps.library.interpreter import MissionPython
+    from maps.library.calls import Library
     from maps.library.rows import Rows
     from maps.library.block_scan import _LIBRARY_CALLS
 
@@ -64,7 +64,7 @@ def surface_lines() -> list[str]:
               and not (p.kind is p.VAR_POSITIONAL and p.name == "more")]
         return str(sig.replace(parameters=ps, return_annotation=sig.empty))[1:-1]
 
-    out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
+    out = [f"  {call}({_params(getattr(Library, call))})"
            for call in _LIBRARY_CALLS]
     # A cut, a sort and a distance are methods on a result.
     return out + [f"  <rows>.{name}({_params(getattr(Rows, name))})"
