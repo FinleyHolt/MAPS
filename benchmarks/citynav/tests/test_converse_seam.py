@@ -5,6 +5,7 @@ row with its own."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 from benchmarks.citynav.adapter import parse_episode
@@ -89,25 +90,27 @@ def test_a_converse_drives_the_conversation_and_the_bench_scores_what_it_flew(
 def test_the_engine_flies_an_attempt_as_the_runner_dispatches_it(monkeypatch, tmp_path) -> None:
     cfg = _stub_engine(monkeypatch, tmp_path)
     monkeypatch.setattr(dispatch, "run_env_stamp", lambda bench: {})
-    monkeypatch.setattr(
-        dispatch, "_cached_run_provenance", lambda flags, **kw: {"split": kw["split"]}
-    )
+    monkeypatch.setattr(dispatch, "_RUN_PROVENANCE", {})
+    monkeypatch.setattr(dispatch, "repo_provenance", lambda **kw: dict(kw))
+    spec = SimpleNamespace(model_id="served-model", tokenizer_name="served-build")
     row = ENGINE.fly_attempt(
         episode=parse_episode(_ROW, row_index=0),
         objects_by_map={},
         cfg=cfg,
-        bench=citynav_bench({}),
+        bench=replace(citynav_bench({}), endpoint_spec=spec),
         settings=Settings(),
         split="val_seen",
         recorder=None,
         episode_dir=tmp_path,
         converse=_converse,
     )
+    assert row["status"] == "ok" and row["metrics"]["SR"] == 1
+    # The served model and build come from the bench's discovered spec.
     assert (
-        row["status"] == "ok"
-        and row["metrics"]["SR"] == 1
-        and row["provenance"] == {"split": "val_seen"}
-    )
+        row["provenance"]["split"],
+        row["provenance"]["served_model"],
+        row["provenance"]["served_build"],
+    ) == ("val_seen", "served-model", "served-build")
     assert (tmp_path / "episode.json").is_file()
 
 
