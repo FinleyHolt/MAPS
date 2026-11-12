@@ -235,9 +235,7 @@ _BUCKETS = ("car", "building", "other")
 
 # ponytail: a split file is read once per process (the bench reports after every landed
 # episode); one edited on disk is read again by a new process only.
-@functools.lru_cache(maxsize=4)
-def _read_split(path: Path) -> list[dict]:
-    return load_split(path)
+_read_split = functools.lru_cache(maxsize=4)(load_split)
 
 
 def _split_rows(split: str | None, known: Sequence[Bench]) -> list[dict] | None:
