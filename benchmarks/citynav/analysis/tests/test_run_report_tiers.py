@@ -355,9 +355,7 @@ def test_a_split_that_is_not_the_run_s_corpus_prints_no_class_split(tmp_path, mo
     report(root)
     out = capsys.readouterr().out
     assert "by bucket" not in out and "intel quality" not in out
-    assert (
-        "by class: -- (2 of the run's 2 episodes are not in its split None on this machine)" in out
-    )
+    assert "by class: -- (2 of the run's 2 episodes carry no class and no split recorded)" in out
     (root / "run_manifest.json").write_text(json.dumps({"split": "calcity"}))
     report(root)
     assert (

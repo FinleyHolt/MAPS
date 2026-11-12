@@ -278,10 +278,12 @@ def print_classes(
         found = {eid: find_row(corpus, eid) for eid in unrecorded}
         missing = sum(f is None for f in found.values())
         if missing:
-            print(
-                f"by class: -- ({missing} of the run's {len(scored)} episodes are not in "
-                f"its split {split} on this machine)"
+            where = (
+                f"are not in its split {split} on this machine"
+                if split
+                else "carry no class and no split recorded"
             )
+            print(f"by class: -- ({missing} of the run's {len(scored)} episodes {where})")
             return
         for eid, f in found.items():
             episode = parse_episode(f[1])
