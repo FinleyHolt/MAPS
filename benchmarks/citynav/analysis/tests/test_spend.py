@@ -134,3 +134,21 @@ def test_attempts_that_made_no_workdir_cost_nothing(tmp_path: Path) -> None:
         )
     )
     assert spend.spend(tmp_path)["usd_total"] == 0
+
+
+def test_attempts_are_read_where_the_ledger_places_them(tmp_path: Path) -> None:
+    """A root gathered from several runs nests its workdirs deeper than ``w*/``;
+    a single runner's root holds its attempt at the top."""
+    _attempt(tmp_path, "a/w24/maps_1_a", prompt=1_000_000, cached=0, write=0, out=0)
+    _attempt(tmp_path, "maps_2_b", prompt=1_000_000, cached=0, write=0, out=0)
+    _attempt(tmp_path, "a/w3/maps_3_c", prompt=1_000_000, cached=0, write=0, out=0)  # flying
+    (tmp_path / "episodes.jsonl").write_text(
+        "".join(
+            json.dumps({"episode_id": eid, "workdir": wd, "status": "ok", "metrics": {"SR": 1}})
+            + "\n"
+            for eid, wd in (("e::1", "a/w24/maps_1_a"), ("e::2", "maps_2_b"))
+        )
+    )
+    out = spend.spend(tmp_path)
+    assert out["usd"] == {"scored": 10.0, "infra": 0.0, "flying": 5.0}
+    assert out["scored_episodes"] == 2
