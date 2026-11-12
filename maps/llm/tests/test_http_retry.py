@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from maps.llm import http as http_mod
+from maps.llm import openai_wire
 from tests.serves import ChatServe
 
 _MESSAGES = [{"role": "user", "content": "hi"}]
@@ -291,3 +292,26 @@ def test_a_streamed_tool_call_arrives_in_fragments_and_merges_by_index():
         },
         1: {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{}"}},
     }
+
+
+def test_a_whole_responses_answer_comes_back_in_the_chat_shape(monkeypatch) -> None:
+    """A Responses card's call that cannot be cancelled posts once to the Responses path and
+    reads the answer back as the chat completion the engine takes."""
+    posted: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        posted.append(request.url.path)
+        output = [{"type": "function_call", "call_id": "c1", "name": "run", "arguments": "{}"}]
+        return httpx.Response(200, json={"id": "r", "status": "completed", "output": output})
+
+    real = httpx.Client
+    mock = httpx.MockTransport(answer)
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=mock, **kw))
+    out = http_mod.chat_completions_raw(
+        "http://e/v1", None, timeout=5.0, model="gpt-5.6-sol", messages=[]
+    )
+    assert posted == ["/v1" + openai_wire.RESPONSES_PATH]
+    assert out["choices"][0]["finish_reason"] == "tool_calls"
+    assert out["choices"][0]["message"]["tool_calls"] == [
+        {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{}"}}
+    ]

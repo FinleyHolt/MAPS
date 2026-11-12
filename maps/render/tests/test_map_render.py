@@ -386,6 +386,26 @@ def test_a_terminus_mark_is_drawn_at_its_own_row_not_the_newest_of_its_fid():
     assert marks["end_0"] == [10.0, 20.0], marks
 
 
+def test_a_look_crops_only_ground_within_half_the_footprint_s_short_side_of_a_stop():
+    """A crop's reach is the frame's inscribed circle: half of ``obs_minor_m`` from a flown stop."""
+    from maps.mission.picture_requests import crop_requests
+
+    places = {"near": [40.0, 0.0], "far": [60.0, 0.0]}
+    reqs, skipped, notes = crop_requests(
+        ["near", "far"],
+        None,
+        rows={},
+        resolve=places.get,
+        carry=None,
+        stops={"stop_000": (0.0, 0.0)},
+        obs_minor_m=100.0,
+        obs_span_m=None,
+        frame=(None, ""),
+    )
+    assert [r["center_fid"] for r in reqs] == ["near"] and skipped == []
+    assert notes and notes[0].startswith("1 crop(s) not rendered (far)"), notes
+
+
 def test_a_map_window_always_holds_its_around():
     spec = _far_set_map("[0, 0]")
     (cx, cy), half = spec["center_xy"], spec["context_m"] / 2.0
