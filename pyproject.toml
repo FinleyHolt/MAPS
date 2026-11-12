@@ -12,7 +12,6 @@ dependencies = [
     "numpy",
     "scipy>=1.11",
     "pillow",
-    "requests",
     "httpx",
     "pyyaml",
     "transformers",
