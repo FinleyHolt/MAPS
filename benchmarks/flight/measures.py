@@ -11,7 +11,8 @@ the records. A root is a flown or twin sortie (``episodes.jsonl`` beside
 * **The truth**: the analyst's entry (``<sortie>.json`` in a truth
   directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``,
   keyed by episode id, so it speaks for every run of its sortie flown under
-  that id; a run reads its first tasking's quality, ``intel_quality[0]``):
+  that id; a run reads its first tasking's quality, ``intel_quality[0]``,
+  else the quality of the tasking set's row for the run's description):
   its hand-drawn mask, else the tasking set's footprint for the run's
   description (a split JSON given as a truth path). The mask's area
   centroid is the target.
@@ -117,10 +118,16 @@ class Truth:
     def __init__(self, paths: list[Path], bench: Bench) -> None:
         self.dirs = [p for p in paths if p.is_dir()]
         self.masks: dict[str, list[list[float]] | None] = {}
+        #: The tasking set's intel quality by description, None where two rows disagree.
+        self.quality: dict[str, str | None] = {}
         for p in paths:
             if p.is_file():
                 for i, r in enumerate(json.loads(p.read_text())):
                     ep = bench.engine.parse_episode(r, row_index=i)
+                    if q := ep.intel_quality:
+                        graded = self.quality.setdefault(ep.description, q)
+                        if graded is not None and graded != q:
+                            self.quality[ep.description] = None
                     if ep.target_mask:
                         ring = [[float(x), float(y)] for x, y in ep.target_mask]
                         seen = self.masks.setdefault(ep.description, ring)
@@ -528,7 +535,7 @@ def run_measures(
         "episode_id": row.get("episode_id"),
         "model": params.get("model"),
         "reasoning_effort": params.get("reasoning_effort"),
-        "intel_quality": quality[0],
+        "intel_quality": quality[0] or truth.quality.get(str(row.get("description") or "")),
         "end": end,
         "excluded": " ".join(str(reason or "").split()) or None,
         "infra": is_infra_abort(row),

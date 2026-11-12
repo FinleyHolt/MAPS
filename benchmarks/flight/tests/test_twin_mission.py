@@ -75,6 +75,7 @@ def calcity(tmp_path, monkeypatch):
                     "trajectory": [[*START, 125.0]],
                     "source": "authored",
                     "target_mask": [list(p) for p in church.exterior.coords[:-1]],
+                    "intel_quality": "G",
                 }
             ]
         )
@@ -222,6 +223,8 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
     )
     (run,) = rows
     assert run["success"] is True and run["track_source"] == "GNSS track", run
+    # With no analyst entry, the split row's own quality classes the run.
+    assert run["intel_quality"] == "G"
     assert (
         run["track_coverage"] == 1.0 and run["oracle_success"] is True and run["agl_ft"] is not None
     )
