@@ -51,7 +51,13 @@ from pydantic import BaseModel
 from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import open_live
-from benchmarks.flight.mission import Mission, resolve_episode
+from benchmarks.flight.mission import (
+    STATE_AWAITING,
+    STATE_ENDED,
+    STATE_FLYING,
+    Mission,
+    resolve_episode,
+)
 from benchmarks.flight.tile_georef import map_bounds
 from benchmarks.flight.twin import Twin
 from benchmarks.run_record import rows
@@ -80,7 +86,8 @@ TILE_PX = 256
 STREAM_PERIOD_S, STREAM_KEEPALIVE_S = 0.5, 15.0
 #: The live trail's length, in ownship reads (one a second).
 TRAIL_POINTS = 3600
-LIVE = ("flying", "awaiting_tasking")
+#: The statuses in which a mission holds the seat, the twin's and the bench's alike.
+LIVE = (STATE_FLYING, STATE_AWAITING)
 #: What marks the id of a mission flown under the operator's own words, with no row in the split.
 OPERATOR = "::operator-"
 #: What a map's name is made of. A name is a file stem under the bake and the raster directory, so nothing else is one.
@@ -127,10 +134,10 @@ def prior_group(f: dict) -> str | None:
 @functools.lru_cache(maxsize=2)
 def prior_json(tiles_dir: str, map_name: str) -> bytes:
     """The bake's features as ``[[group, [[x, y], ...]], ...]`` in local metres, built once."""
-    rows = json.loads((Path(tiles_dir) / f"{map_name}_features.json").read_text())["prior"]
+    features = json.loads((Path(tiles_dir) / f"{map_name}_features.json").read_text())["prior"]
     out = [
         [g, [[round(float(x), 1), round(float(y), 1)] for x, y in f["world_contour"]]]
-        for f in rows
+        for f in features
         if (g := prior_group(f)) is not None
     ]
     return json.dumps(out, separators=(",", ":")).encode()
@@ -214,7 +221,8 @@ class Station:
         self.ortho_dir = ortho_dir
         #: Where each map's raster pair lies: the twin's directory, else the bench's own.
         self.raster_dir = Path(ortho_dir) if ortho_dir is not None else Path(bench.rgbd_dir)
-        self._picture_arg = basemap
+        #: ``--basemap``: the default map's north-up picture, or a directory of ``<map>.jpg|.jpeg|.png``.
+        self._basemap_pictures = basemap
         self._catalogs: dict[str, tuple[list, dict]] = {}
         self._targets: dict[tuple[str, str], list | None] = {}
         self._ledgers: dict[Path, tuple[tuple, list]] = {}
@@ -345,7 +353,7 @@ class Station:
         """``--basemap``'s picture of ``map_name`` as ``(rgb, bounds, px_per_m)`` over the bake's bounds, or None."""
         from PIL import Image
 
-        arg = self._picture_arg
+        arg = self._basemap_pictures
         if arg is None or not (self.tiles_dir / f"{map_name}_meta.json").is_file():
             return None
         if Path(arg).is_dir():
@@ -531,7 +539,7 @@ class Station:
         observations = self._observations(m.workdir, targets)
         report = (
             self._reported(m.workdir, transcript)
-            if m.status in ("awaiting_tasking", "ended")
+            if m.status in (STATE_AWAITING, STATE_ENDED)
             else None
         )
         ring, point = self.target(m.split, m.episode_id)
