@@ -154,8 +154,8 @@ that flies each arm, and the reader that derives each number.
 - CityNav experiments use the setup above.
 - Cal City needs a map raster and an OSM bundle that this repository doesn't
   ship. See [`docs/data.md`](docs/data.md#cal-city).
-- The closed-loop flight recordings aren't distributed.
-  [`docs/differences-from-flight.md`](docs/differences-from-flight.md) lists
+- The closed-loop flight recordings aren't distributed. The tag
+  [`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1) records
   every place this engine differs from the engine as flown.
 
 ## Use your own aircraft

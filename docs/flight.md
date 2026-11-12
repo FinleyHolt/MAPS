@@ -94,6 +94,3 @@ autopilot can take the same hand-off.
 A planner or autonomy stack that executes moves itself, without the leg and
 recording chain, connects one layer down, at `MissionSpec.fly`. See
 [`architecture.md`](architecture.md#where-another-system-connects).
-
-For the places where this engine differs from the engine as flown, see
-[`differences-from-flight.md`](differences-from-flight.md).

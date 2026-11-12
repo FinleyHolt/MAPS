@@ -135,6 +135,3 @@ python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications d
 - The flight recordings and the adjudications aren't distributed, so the two
   tables are the record of the flight week, and the command runs only on your
   own sorties. A twin run ([`flight.md`](flight.md)) is scored the same way.
-
-For the places where this engine differs from the engine as flown, see
-[`differences-from-flight.md`](differences-from-flight.md).
