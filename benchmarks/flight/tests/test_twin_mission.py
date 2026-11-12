@@ -123,7 +123,7 @@ def serves(monkeypatch):
         max_output_tokens=40000,
     )
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")  # no tokenizer to measure the prompt with
-    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: spec)
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings, **kw: spec)
     sent: list[dict] = []
 
     def reply(url, headers, body, *, timeout, cancel_event):
