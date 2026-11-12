@@ -56,11 +56,11 @@ def bake_meta(tiles_dir: Path) -> dict:
 
 def _assert_available(bench: Bench) -> None:
     """Fail with the Cal City preparation recipe when runtime data is absent."""
-    # The tile bake is checked by its meta file, not the directory: a
-    # deployed tree carries the (gitkept) directory with no contents, and
-    # a missing bake must abort HERE — the runner otherwise builds
-    # substitute graphs / features on the fly and scores against the
-    # wrong priors with a normal-looking row.
+    # The tile bake is checked by its meta file, not the directory: the
+    # directory is gitignored, so a tree can carry it empty (an interrupted
+    # bake, a copied checkout), and a missing bake must abort here. The
+    # runner otherwise builds substitute graphs / features on the fly and
+    # scores against the wrong priors with a normal-looking row.
     required = [bench.splits_dir, bench.objects_json, bench.tiles_dir / "calcity_meta.json"]
     required.extend(bench.split_path(split) for split in bench.split_files)
     missing = [path for path in required if not path.exists()]
@@ -76,7 +76,7 @@ def _assert_available(bench: Bench) -> None:
         )
     # The bake must speak the engine's world frame (x east, y north). A
     # bake authored to a y-south frame would score every N/S
-    # relation mirrored with a normal-looking row — refuse it loudly.
+    # relation mirrored with a normal-looking row, so it is refused here.
     frame = (bake_meta(bench.tiles_dir).get("coordinate_frame") or {}).get("y_axis")
     if frame != "north":
         raise RuntimeError(
