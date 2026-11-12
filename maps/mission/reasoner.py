@@ -198,6 +198,18 @@ class Reasoner:
         "text", "tool_calls"?, "content", "reasoning", "finish_reason"}``.
         A degenerate completion raises ``DegenerateCompletion`` unappended.
         """
+        resp = chat_completions_raw(
+            self.endpoint_spec.base_url,
+            self.api_key,
+            workdir=self.workdir,
+            routing_key=self.routing_key,
+            endpoint=self.settings.endpoint,
+            **self._request(tools),
+        )
+        return self._take_reply(resp)
+
+    def _request(self, tools: list[dict]) -> dict[str, Any]:
+        """Compact the history and build the turn's request keywords."""
         # A card's ``max_images`` (a hosted endpoint's per-request limit)
         # bounds the crop COUNT by evicting the oldest; it runs BEFORE the
         # compactor, which would otherwise price crops about to go.
@@ -245,15 +257,11 @@ class Reasoner:
             if self.cancel_event.is_set():
                 raise CallCanceled("reasoner.step_tool_call: cancel_event set before dispatch")
             kwargs["cancel_event"] = self.cancel_event
+        return kwargs
 
-        resp = chat_completions_raw(
-            self.endpoint_spec.base_url,
-            self.api_key,
-            workdir=self.workdir,
-            routing_key=self.routing_key,
-            endpoint=self.settings.endpoint,
-            **kwargs,
-        )
+    def _take_reply(self, resp: dict) -> dict:
+        """Append the reply's assistant turn and return its shape; a
+        degenerate completion raises before the append."""
         choice = resp["choices"][0]
         msg = choice.get("message", {})
         # The reasoning rides the assistant turn back to the next request (the

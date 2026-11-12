@@ -378,6 +378,36 @@ def render_candidate_crops(
     return out
 
 
+def _subject_facts(req: dict, true_xy, window, caption_window, validity) -> dict:
+    """The caption's facts about the subject at ``true_xy``: in frame
+    (``caption_window``, as the caption states it), how big, cut by the
+    frame, and on raster data (``validity`` over ``window``; 0 renders
+    black)."""
+    true_x, true_y = true_xy
+    x0, y0, x1, y1 = window
+    subject_in, centroid_in = subject_window_containment(
+        caption_window, (true_x, true_y), req.get("center_boundary")
+    )
+    facts = {"subject_in_window": subject_in, "subject_centroid_in_window": centroid_in}
+    subject_pts = xy_list(req.get("center_boundary"))
+    if len(subject_pts) >= 3:
+        sx0, sx1 = min(p[0] for p in subject_pts), max(p[0] for p in subject_pts)
+        sy0, sy1 = min(p[1] for p in subject_pts), max(p[1] for p in subject_pts)
+        facts["subject_extent_m"] = [round(sx1 - sx0, 1), round(sy1 - sy0, 1)]
+        facts["subject_outline_cut"] = bool(sx0 < x0 or sx1 > x1 or sy0 < y0 or sy1 > y1)
+    else:
+        facts["subject_extent_m"] = None
+        facts["subject_outline_cut"] = False
+    valid_h, valid_w = validity.shape[:2]
+    facts["window_valid_frac"] = round(float((validity > 0).mean()), 3) if validity.size else 0.0
+    subject_col = int(min(max((true_x - x0) / ((x1 - x0) or 1.0) * valid_w, 0.0), valid_w - 1))
+    subject_row = int(min(max((y1 - true_y) / ((y1 - y0) or 1.0) * valid_h, 0.0), valid_h - 1))
+    facts["subject_on_data"] = (
+        bool(validity[subject_row, subject_col] > 0) if (centroid_in and validity.size) else None
+    )
+    return facts
+
+
 def _crop_record(
     req: dict, *, map_name: str, true_xy, pose_xy, ctx: float, rgbd_dir: str, imagery
 ) -> dict | None:
@@ -490,28 +520,8 @@ def _crop_record(
             "look: identification overlay failed, skipping crop at %s: %s", (true_x, true_y), exc
         )
         return None
-    # the caption's facts: is the subject in frame, how big, cut by the
-    # frame, and on raster data (validity 0 renders black)
-    subject_in, centroid_in = subject_window_containment(
-        meta["world_window"], (true_x, true_y), req.get("center_boundary")
-    )
-    meta["subject_in_window"] = subject_in
-    meta["subject_centroid_in_window"] = centroid_in
-    subject_pts = xy_list(req.get("center_boundary"))
-    if len(subject_pts) >= 3:
-        sx0, sx1 = min(p[0] for p in subject_pts), max(p[0] for p in subject_pts)
-        sy0, sy1 = min(p[1] for p in subject_pts), max(p[1] for p in subject_pts)
-        meta["subject_extent_m"] = [round(sx1 - sx0, 1), round(sy1 - sy0, 1)]
-        meta["subject_outline_cut"] = bool(sx0 < x0 or sx1 > x1 or sy0 < y0 or sy1 > y1)
-    else:
-        meta["subject_extent_m"] = None
-        meta["subject_outline_cut"] = False
-    valid_h, valid_w = validity.shape[:2]
-    meta["window_valid_frac"] = round(float((validity > 0).mean()), 3) if validity.size else 0.0
-    subject_col = int(min(max((true_x - x0) / sx * valid_w, 0.0), valid_w - 1))
-    subject_row = int(min(max((y1 - true_y) / sy * valid_h, 0.0), valid_h - 1))
-    meta["subject_on_data"] = (
-        bool(validity[subject_row, subject_col] > 0) if (centroid_in and validity.size) else None
+    meta.update(
+        _subject_facts(req, (true_x, true_y), oc["world_window"], meta["world_window"], validity)
     )
     meta["legend"] = legend
     meta["marks_dropped"] = marks_dropped
