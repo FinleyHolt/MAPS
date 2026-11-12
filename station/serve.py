@@ -54,7 +54,9 @@ from benchmarks.flight.live_source import open_live
 from benchmarks.flight.mission import (
     STATE_AWAITING,
     STATE_ENDED,
+    STATE_FAILED,
     STATE_FLYING,
+    STATE_IDLE,
     Mission,
     resolve_episode,
 )
@@ -472,7 +474,7 @@ class Station:
             "split": row.get("split") or prov.get("split"),
             "kind": "replay",
             "run_no": row.get("run_no"),
-            "status": "failed" if row.get("status") == STATUS_INFRA else "ended",
+            "status": STATE_FAILED if row.get("status") == STATUS_INFRA else STATE_ENDED,
             "instruction": row.get("description") or "",
             "ended_by": rows.ended_by(row),
             "error": row.get("error"),
@@ -560,7 +562,7 @@ class Station:
             "split": m.split,
             "kind": kind,
             "run_no": m.run_no,
-            "status": "ready" if m.status == "idle" else m.status,
+            "status": "ready" if m.status == STATE_IDLE else m.status,
             "instruction": m.instruction,
             "ended_by": m.ended_by,
             "error": m.error,
