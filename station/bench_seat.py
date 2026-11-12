@@ -29,6 +29,7 @@ from typing import Any
 
 from benchmarks import git_provenance
 from benchmarks.bench import Bench
+from benchmarks.flight.mission import STATE_AWAITING, STATE_ENDED, STATE_FAILED, STATE_FLYING
 from benchmarks.run_record import rows
 from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (
@@ -86,7 +87,7 @@ class BenchMission:
         )
         self._objects = objects_by_map
         self.sortie, self.workdir, self._ep = Path(sortie), ep.dir, ep
-        self.status = "flying"
+        self.status = STATE_FLYING
         self.ended_by: str | None = None
         self.error: str | None = None
         #: The scored row, once the mission has ended and the bench has scored it.
@@ -175,12 +176,12 @@ class BenchMission:
             for turn in range(2, 1 << 30):
                 self._turns += int(reply.turns_used)
                 self._turn_diag.clear()
-                self.status = "awaiting_tasking"
+                self.status = STATE_AWAITING
                 while (nxt := self._next_tasking()) is None and not self._cancel.wait(0.2):
                     pass
                 if nxt is None:
                     return reply
-                self.status = "flying"
+                self.status = STATE_FLYING
                 reply = continue_mission(conversation, nxt, rid_tag=f"m{turn}")
         except CallCanceled:
             return MissionReply(
@@ -226,11 +227,13 @@ class BenchMission:
             append_row(self.sortie, row)
             self.row, self.ended_by, self.error = row, rows.ended_by(row), row.get("error")
             self.status = (
-                "failed" if row.get("status") == STATUS_INFRA or not rows.metrics(row) else "ended"
+                STATE_FAILED
+                if row.get("status") == STATUS_INFRA or not rows.metrics(row)
+                else STATE_ENDED
             )
         except Exception as exc:
             log.exception("mission %s failed", self.episode_id)
-            self.error, self.status = f"{type(exc).__name__}: {exc}", "failed"
+            self.error, self.status = f"{type(exc).__name__}: {exc}", STATE_FAILED
         finally:
             self._ep.close()
 

@@ -54,7 +54,9 @@ from benchmarks.flight.live_source import open_live
 from benchmarks.flight.mission import (
     STATE_AWAITING,
     STATE_ENDED,
+    STATE_FAILED,
     STATE_FLYING,
+    STATE_IDLE,
     Mission,
     resolve_episode,
 )
@@ -71,6 +73,7 @@ from benchmarks.run_record.episode_workdir import (
 from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA, TOUR_CURSOR
 from benchmarks.run_record.rows import iter_json_rows
 from maps.llm import endpoint_spec, model_cards
+from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.settings import from_environ
 from station.bench_seat import END_WAIT_S, BenchMission, with_words
@@ -425,7 +428,7 @@ class Station:
         answer with no tool call) onto the transcript: every report but the last rides its
         ``mission_end`` row as ``said``, and the last is returned as the mission's report."""
         replies = []
-        for row in iter_json_rows(workdir / "flight" / "llm" / "transcript.jsonl"):
+        for row in iter_json_rows(workdir / "flight" / "llm" / TRANSCRIPT_JSONL):
             message = ((row.get("response") or {}).get("choices") or [{}])[0].get("message") or {}
             if (
                 row.get("kind") == "response"
@@ -472,7 +475,7 @@ class Station:
             "split": row.get("split") or prov.get("split"),
             "kind": "replay",
             "run_no": row.get("run_no"),
-            "status": "failed" if row.get("status") == STATUS_INFRA else "ended",
+            "status": STATE_FAILED if row.get("status") == STATUS_INFRA else STATE_ENDED,
             "instruction": row.get("description") or "",
             "ended_by": rows.ended_by(row),
             "error": row.get("error"),
@@ -560,7 +563,7 @@ class Station:
             "split": m.split,
             "kind": kind,
             "run_no": m.run_no,
-            "status": "ready" if m.status == "idle" else m.status,
+            "status": "ready" if m.status == STATE_IDLE else m.status,
             "instruction": m.instruction,
             "ended_by": m.ended_by,
             "error": m.error,
@@ -945,12 +948,17 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
     @app.get("/reasoner")
     def reasoner() -> dict[str, Any]:
         """The served model and the reasoning efforts its card takes: the seat's serve, else
-        the one discovery finds; ``model`` is None while no reasoner answers."""
+        the one discovery finds; ``model`` is None while no reasoner answers. A station that
+        flies nothing answers at once: the console asks on every load."""
         seat = station.mission
+        if seat is None and (why := station.why_not_flying()) is not None:
+            return {"model": None, "efforts": [], "error": why}
         try:
             model = (
                 (seat.bench.endpoint_spec if seat is not None else None)
-                or endpoint_spec.discover_from_settings(from_environ(station.bench.environ))
+                or endpoint_spec.discover_from_settings(
+                    from_environ(station.bench.environ), probe_sam=False
+                )
             ).model_id
         except Exception as exc:
             return {"model": None, "efforts": [], "error": str(exc)}

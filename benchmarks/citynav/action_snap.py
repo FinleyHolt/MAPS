@@ -25,6 +25,8 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
+from maps.query.spatial_math import bearing_deg
+
 
 class CityNavAction(str, Enum):
     """CityNav's movement actions, the primitives the trajectory log holds."""
@@ -64,17 +66,6 @@ def _wrap_signed(angle_deg: float) -> float:
     """Wrap an angle into (-180, 180] degrees."""
     a = (angle_deg + 180.0) % 360.0 - 180.0
     return a + 360.0 if a <= -180.0 else a
-
-
-def bearing_deg(from_xy: tuple[float, float], to_xy: tuple[float, float]) -> float:
-    """Compass bearing from ``from_xy`` to ``to_xy`` (0 = north, CW).
-
-    The one place this build states the convention, so every flight model
-    points at a target the same way.
-    """
-    dx = to_xy[0] - from_xy[0]
-    dy = to_xy[1] - from_xy[1]
-    return math.degrees(math.atan2(dx, dy))
 
 
 def apply_action(pose: Pose, action: CityNavAction) -> Pose:

@@ -37,9 +37,17 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
         and client.get("/missions", params={"q": "mosque"}).json()["missions"] == []
     )
     assert client.post("/mission/tasking", json={"text": "hello"}).status_code == 409
+    # A station that flies asks discovery for the reasoner alone; SAM answers a mission, not the console.
+    asked, discover = [], endpoint_spec.discover_from_settings
+    monkeypatch.setattr(
+        endpoint_spec,
+        "discover_from_settings",
+        lambda settings, **kw: asked.append(kw) or discover(settings, **kw),
+    )
     assert (
         client.get("/reasoner").json()["model"] == "inkling-small"
         and "max" in client.get("/reasoner").json()["efforts"]
+        and asked == [{"probe_sam": False}] * 2
     )
 
     state = client.post(
@@ -52,7 +60,7 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
     )
     assert parked["reply_text"] == "The church is under the last flight."
 
-    def refused(settings):
+    def refused(settings, **kw):
         raise RuntimeError("asked a serve")
 
     # A seat answers from the serve it flies, asking no discovery.
@@ -143,5 +151,11 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
     assert review.get(f"/tiles/calcity/12/{rx}/{ry}.png").content[:4] == b"\x89PNG"
     assert review.post("/mission/next", json={"instruction": "fly"}).status_code == 409
     assert not review.get("/station").json()["flies"]
+    # A reviewing station answers the reasoner menu at once, with no discovery to wait on.
+    assert review.get("/reasoner").json() == {
+        "model": None,
+        "efforts": [],
+        "error": reviewer.why_not_flying(),
+    }
     groups = {g for g, _ in client.get("/mission/prior.json").json()}
     assert "building" in groups and len(client.get("/area").json()["bbox"]) == 4

@@ -26,8 +26,9 @@ Hydrated = Any
 # A leg's lines are the mission's: one logger for the flight.
 log = logging.getLogger("flight.mission")
 
-#: How long a leg may fly before its arrival is given up, counted from the
-#: aircraft leaving the ground: the cap ends a leg the crew never fly.
+#: How long one wait on a leg's arrival runs before the leg is given up,
+#: counted from the aircraft's last moment on the ground: the cap ends a leg
+#: the crew never fly. Each short-pass re-fly starts a fresh wait.
 ARRIVAL_TIMEOUT_S = 1800.0
 #: A leg has arrived when the recording holds this share of the area it was
 #: flown for. ponytail: a share rather than all of it, because a footprint's
@@ -147,8 +148,9 @@ class Legs:
     def fly(self, session, item: dict[str, Any]) -> dict[str, Any]:
         """A flight on the aircraft. An area the ring already holds is served
         without a leg; otherwise the leg is posted and waited on until the
-        recording holds the area and the point leaves the frame, or until
-        ``ARRIVAL_TIMEOUT_S``, when what the pass held is served. The ``leg``
+        recording holds the area and the point leaves the frame, or until a
+        wait runs ``ARRIVAL_TIMEOUT_S`` airborne (each re-fly waits afresh),
+        when what the pass held is served. The ``leg``
         row says which. A stopped mission posts, fetches and perceives nothing
         more: the flight is refused."""
         if self._cancel.is_set():

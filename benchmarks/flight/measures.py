@@ -11,7 +11,8 @@ the records. A root is a flown or twin sortie (``episodes.jsonl`` beside
 * **The truth**: the analyst's entry (``<sortie>.json`` in a truth
   directory, ``{episode_id: {"target_mask", "excluded", "intel_quality"}}``,
   keyed by episode id, so it speaks for every run of its sortie flown under
-  that id; a run reads its first tasking's quality, ``intel_quality[0]``):
+  that id; a run reads its first tasking's quality, ``intel_quality[0]``,
+  else the quality of the tasking set's row for the run's description):
   its hand-drawn mask, else the tasking set's footprint for the run's
   description (a split JSON given as a truth path). The mask's area
   centroid is the target.
@@ -58,7 +59,7 @@ from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.ortho.sensor_frame import footprint_m
-from maps.query.spatial_math import point_in_polygon
+from maps.query.spatial_math import bearing_deg, point_in_polygon
 from maps.settings import from_environ
 
 FT_PER_M = 1.0 / 0.3048
@@ -117,10 +118,16 @@ class Truth:
     def __init__(self, paths: list[Path], bench: Bench) -> None:
         self.dirs = [p for p in paths if p.is_dir()]
         self.masks: dict[str, list[list[float]] | None] = {}
+        #: The tasking set's intel quality by description, None where two rows disagree.
+        self.quality: dict[str, str | None] = {}
         for p in paths:
             if p.is_file():
                 for i, r in enumerate(json.loads(p.read_text())):
                     ep = bench.engine.parse_episode(r, row_index=i)
+                    if q := ep.intel_quality:
+                        graded = self.quality.setdefault(ep.description, q)
+                        if graded is not None and graded != q:
+                            self.quality[ep.description] = None
                     if ep.target_mask:
                         ring = [[float(x), float(y)] for x, y in ep.target_mask]
                         seen = self.masks.setdefault(ep.description, ring)
@@ -337,11 +344,6 @@ def _agl(
     return (statistics.median(asked), "waypoint altitude") if asked else (None, None)
 
 
-def bearing_deg(from_xy, to_xy) -> float:
-    """Compass bearing from ``from_xy`` to ``to_xy`` (0 = north, clockwise), signed."""
-    return math.degrees(math.atan2(to_xy[0] - from_xy[0], to_xy[1] - from_xy[1]))
-
-
 def first_leg_m(p, h: float, q, r: float) -> float | None:
     """The length of one turn at ``r`` and the straight to ``q`` from pose ``(p, h)``, the shorter side; None inside both circles."""
     best = None
@@ -533,7 +535,7 @@ def run_measures(
         "episode_id": row.get("episode_id"),
         "model": params.get("model"),
         "reasoning_effort": params.get("reasoning_effort"),
-        "intel_quality": quality[0],
+        "intel_quality": quality[0] or truth.quality.get(str(row.get("description") or "")),
         "end": end,
         "excluded": " ".join(str(reason or "").split()) or None,
         "infra": is_infra_abort(row),

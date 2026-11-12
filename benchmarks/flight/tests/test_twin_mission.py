@@ -75,6 +75,7 @@ def calcity(tmp_path, monkeypatch):
                     "trajectory": [[*START, 125.0]],
                     "source": "authored",
                     "target_mask": [list(p) for p in church.exterior.coords[:-1]],
+                    "intel_quality": "G",
                 }
             ]
         )
@@ -123,7 +124,7 @@ def serves(monkeypatch):
         max_output_tokens=40000,
     )
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")  # no tokenizer to measure the prompt with
-    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: spec)
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings, **kw: spec)
     sent: list[dict] = []
 
     def reply(url, headers, body, *, timeout, cancel_event):
@@ -222,6 +223,8 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
     )
     (run,) = rows
     assert run["success"] is True and run["track_source"] == "GNSS track", run
+    # With no analyst entry, the split row's own quality classes the run.
+    assert run["intel_quality"] == "G"
     assert (
         run["track_coverage"] == 1.0 and run["oracle_success"] is True and run["agl_ft"] is not None
     )
@@ -745,3 +748,10 @@ def test_a_pass_flies_first_the_stop_the_recording_holds(calcity, serves, tmp_pa
     sortie = next((tmp_path / "flown").iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     assert row["visited_xy"][-2:] == [shed, church]
+
+
+def test_an_unknown_episode_is_one_line_on_stderr(calcity, tmp_path, capsys):
+    from benchmarks.flight import twin
+
+    code = twin.main(["--episode", "nope", "--ortho", str(calcity.rgbd), "--out", str(tmp_path)])
+    assert code != 0 and capsys.readouterr().err.strip() == "calcity holds no episode nope"
