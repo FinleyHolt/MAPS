@@ -38,6 +38,7 @@ import socket
 import threading
 import time
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import httpx
@@ -415,13 +416,45 @@ def _merge_tool_call_delta(calls: dict[int, dict], delta: dict) -> None:
         slot["function"]["arguments"] += fn["arguments"]
 
 
+@contextlib.contextmanager
+def _sse_payloads(
+    url: str, headers: dict[str, str], body: dict, *, timeout: float, cancel_event: threading.Event
+) -> Iterator[Iterator[str]]:
+    """POST ``body`` streamed and yield an iterator over its SSE ``data:``
+    payloads, stripped and non-empty. A cancel raises :class:`CallCanceled`,
+    mid-stream or in flight, and so does any transport fault the ``with``
+    body raises once the event is set."""
+    watch = _CancelWatch(cancel_event)
+
+    def payloads(resp: httpx.Response) -> Iterator[str]:
+        for raw_line in resp.iter_lines():
+            # a chunk that arrived just before the cancel fired
+            if cancel_event.is_set():
+                raise CallCanceled("canceled mid-stream")
+            if raw_line.startswith("data:") and (payload := raw_line[len("data:") :].strip()):
+                yield payload
+
+    try:
+        with (
+            httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client,
+            client.stream(
+                "POST", url, headers=headers, json=body, extensions={"trace": watch.trace}
+            ) as resp,
+        ):
+            if resp.status_code >= 400:
+                resp.read()  # the body is legible after the stream closes
+            resp.raise_for_status()
+            yield payloads(resp)
+    except httpx.HTTPError:
+        if cancel_event.is_set():
+            raise CallCanceled("canceled in flight") from None
+        raise
+    finally:
+        watch.close()
+
+
 def stream_chat_completions(
-    url: str,
-    headers: dict[str, str],
-    body: dict,
-    *,
-    timeout: float,
-    cancel_event: threading.Event | None = None,
+    url: str, headers: dict[str, str], body: dict, *, timeout: float, cancel_event: threading.Event
 ) -> dict:
     """POST with ``stream: true`` and reassemble the SSE deltas into the
     non-streaming response shape. Streaming exists for cancellation. A stream
@@ -438,86 +471,57 @@ def stream_chat_completions(
     empty_chunk_count = 0
     first_empty_at: float | None = None
 
-    watch = _CancelWatch(cancel_event) if cancel_event is not None else None
-    try:
-        with (
-            httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client,
-            client.stream(
-                "POST",
-                url,
-                headers=headers,
-                json=body,
-                extensions={"trace": watch.trace} if watch is not None else None,
-            ) as resp,
-        ):
-            if resp.status_code >= 400:
-                resp.read()  # the body is legible after the stream closes
-            resp.raise_for_status()
-            for raw_line in resp.iter_lines():
-                # a chunk that arrived just before the cancel fired
-                if cancel_event is not None and cancel_event.is_set():
-                    raise CallCanceled("canceled mid-stream")
-                if not raw_line or not raw_line.startswith("data:"):
-                    continue
-                payload = raw_line[len("data:") :].strip()
-                if payload == "[DONE]":
-                    saw_done = True
-                    continue
-                if not payload:
-                    continue
-                try:
-                    event = json.loads(payload)
-                except json.JSONDecodeError:
-                    continue
-                choices = event.get("choices") or []
-                if not choices:
-                    if event.get("usage"):
-                        usage = event["usage"]
-                    if event.get("model"):
-                        model = event["model"]
-                    continue
-                choice = choices[0]
-                delta = choice.get("delta") or {}
-                if "role" in delta and role is None:
-                    role = delta["role"]
-                content_delta = delta.get("content")
-                if content_delta:
-                    aggregated_text.append(content_delta)
-                # The serve names the span ``reasoning`` or ``reasoning_content``.
-                reasoning_delta = delta.get("reasoning") or delta.get("reasoning_content")
-                if reasoning_delta:
-                    aggregated_reasoning.append(reasoning_delta)
-                for tc in delta.get("tool_calls") or []:
-                    _merge_tool_call_delta(aggregated_tool_calls, tc)
-                fin = choice.get("finish_reason")
-                if fin is not None:
-                    finish_reason = fin
-                if (
-                    content_delta
-                    or reasoning_delta
-                    or delta.get("tool_calls")
-                    or fin is not None
-                    or delta.get("role")
-                ):
-                    empty_chunk_count = 0
-                    first_empty_at = None
-                    continue
-                empty_chunk_count += 1
-                first_empty_at = first_empty_at or time.monotonic()
-                if (
-                    time.monotonic() - first_empty_at >= _EMPTY_STREAM_S
-                    or empty_chunk_count >= _EMPTY_STREAM_CHUNKS
-                ):
-                    raise httpx.ReadTimeout(f"{_EMPTY_STREAM_ERROR} for {empty_chunk_count} chunks")
-            if finish_reason is None and not saw_done:
-                raise httpx.RemoteProtocolError("LLM stream ended without a finish_reason")
-    except httpx.HTTPError:
-        if cancel_event is not None and cancel_event.is_set():
-            raise CallCanceled("canceled in flight") from None
-        raise
-    finally:
-        if watch is not None:
-            watch.close()
+    with _sse_payloads(url, headers, body, timeout=timeout, cancel_event=cancel_event) as payloads:
+        for payload in payloads:
+            if payload == "[DONE]":
+                saw_done = True
+                continue
+            try:
+                event = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            choices = event.get("choices") or []
+            if not choices:
+                if event.get("usage"):
+                    usage = event["usage"]
+                if event.get("model"):
+                    model = event["model"]
+                continue
+            choice = choices[0]
+            delta = choice.get("delta") or {}
+            if "role" in delta and role is None:
+                role = delta["role"]
+            content_delta = delta.get("content")
+            if content_delta:
+                aggregated_text.append(content_delta)
+            # The serve names the span ``reasoning`` or ``reasoning_content``.
+            reasoning_delta = delta.get("reasoning") or delta.get("reasoning_content")
+            if reasoning_delta:
+                aggregated_reasoning.append(reasoning_delta)
+            for tc in delta.get("tool_calls") or []:
+                _merge_tool_call_delta(aggregated_tool_calls, tc)
+            fin = choice.get("finish_reason")
+            if fin is not None:
+                finish_reason = fin
+            if (
+                content_delta
+                or reasoning_delta
+                or delta.get("tool_calls")
+                or fin is not None
+                or delta.get("role")
+            ):
+                empty_chunk_count = 0
+                first_empty_at = None
+                continue
+            empty_chunk_count += 1
+            first_empty_at = first_empty_at or time.monotonic()
+            if (
+                time.monotonic() - first_empty_at >= _EMPTY_STREAM_S
+                or empty_chunk_count >= _EMPTY_STREAM_CHUNKS
+            ):
+                raise httpx.ReadTimeout(f"{_EMPTY_STREAM_ERROR} for {empty_chunk_count} chunks")
+        if finish_reason is None and not saw_done:
+            raise httpx.RemoteProtocolError("LLM stream ended without a finish_reason")
 
     message: dict = {"role": role or "assistant", "content": "".join(aggregated_text)}
     if aggregated_reasoning:
@@ -539,57 +543,27 @@ _RESPONSES_TERMINAL = ("response.completed", "response.incomplete")
 
 
 def stream_responses(
-    url: str,
-    headers: dict[str, str],
-    body: dict,
-    *,
-    timeout: float,
-    cancel_event: threading.Event | None = None,
+    url: str, headers: dict[str, str], body: dict, *, timeout: float, cancel_event: threading.Event
 ) -> dict:
     """POST a Responses body with ``stream: true`` and return the closing
     event's response in the chat shape. Streaming exists for cancellation; a
     stream that fails or ends with no closing event is a transport fault."""
     final: dict | None = None
-    watch = _CancelWatch(cancel_event) if cancel_event is not None else None
-    try:
-        with (
-            httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client,
-            client.stream(
-                "POST",
-                url,
-                headers=headers,
-                json=body,
-                extensions={"trace": watch.trace} if watch is not None else None,
-            ) as resp,
-        ):
-            if resp.status_code >= 400:
-                resp.read()  # the body is legible after the stream closes
-            resp.raise_for_status()
-            for raw_line in resp.iter_lines():
-                if cancel_event is not None and cancel_event.is_set():
-                    raise CallCanceled("canceled mid-stream")
-                if not raw_line or not raw_line.startswith("data:"):
-                    continue
-                try:
-                    event = json.loads(raw_line[len("data:") :].strip())
-                except json.JSONDecodeError:
-                    continue
-                kind = event.get("type")
-                if kind in _RESPONSES_TERMINAL:
-                    final = event.get("response") or {}
-                elif kind in ("response.failed", "error"):
-                    raise httpx.RemoteProtocolError(
-                        f"Responses stream {kind}: {json.dumps(event)[:300]}"
-                    )
-            if final is None:
-                raise httpx.RemoteProtocolError("Responses stream ended without a closing event")
-    except httpx.HTTPError:
-        if cancel_event is not None and cancel_event.is_set():
-            raise CallCanceled("canceled in flight") from None
-        raise
-    finally:
-        if watch is not None:
-            watch.close()
+    with _sse_payloads(url, headers, body, timeout=timeout, cancel_event=cancel_event) as payloads:
+        for payload in payloads:
+            try:
+                event = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            kind = event.get("type")
+            if kind in _RESPONSES_TERMINAL:
+                final = event.get("response") or {}
+            elif kind in ("response.failed", "error"):
+                raise httpx.RemoteProtocolError(
+                    f"Responses stream {kind}: {json.dumps(event)[:300]}"
+                )
+        if final is None:
+            raise httpx.RemoteProtocolError("Responses stream ended without a closing event")
     return openai_wire.from_responses(final)
 
 

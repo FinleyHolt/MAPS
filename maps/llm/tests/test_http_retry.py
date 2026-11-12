@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 
 import httpx
 import pytest
@@ -243,9 +244,13 @@ def test_a_stream_cut_before_its_end_is_a_transport_fault(monkeypatch, tail, fin
     monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=mock, **kw))
     if finish is None:
         with pytest.raises(httpx.RemoteProtocolError, match="without a finish_reason"):
-            http_mod.stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
+            http_mod.stream_chat_completions(
+                "http://e/v1/chat/completions", {}, {}, timeout=5.0, cancel_event=threading.Event()
+            )
         return
-    out = http_mod.stream_chat_completions("http://e/v1/chat/completions", {}, {}, timeout=5.0)
+    out = http_mod.stream_chat_completions(
+        "http://e/v1/chat/completions", {}, {}, timeout=5.0, cancel_event=threading.Event()
+    )
     assert out["choices"][0]["finish_reason"] == finish
     assert out["choices"][0]["message"]["content"] == "half"
 
