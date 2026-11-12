@@ -459,11 +459,11 @@ class Row(_Cuts):
         mp = object.__getattribute__(self, "_mp")
         if mp is not None and isinstance(k, str):
             close = difflib.get_close_matches(k.replace("_", " "), self.keys(), n=1, cutoff=0.6)
-            if close and k not in mp._get_noted:
-                mp._get_noted.add(k)
-                mp.note(
+            if close:
+                mp.note_once(
+                    k,
                     f".get({k!r}) matched no column and returned the "
-                    f"default; the near column is {close[0]!r}"
+                    f"default; the near column is {close[0]!r}",
                 )
         return default
 

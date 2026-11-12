@@ -156,27 +156,8 @@ class MissionPython:
     def _show(self, value, label: str | None):
         if value is None:
             return
-        library = self.library
-        if (
-            isinstance(value, Rows)
-            and not value._spec
-            and library.unrendered.get(value._ref) == self.env.version()
-        ):
-            return
-        if isinstance(value, Rows):
-            # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
-            # executor's ref the window compiled onto (the window shows it
-            # under a label; a nameless set is served whole all the same).
-            library.shown_whole.add(library._window(value._ref, value._spec, label, value._ref))
-        elif isinstance(value, Row) and value._src and not re.fullmatch(r"\w+", label):
-            # Render the ROW: a one-row window keeps the ordering
-            # attribute a bare dict loses, so the model sees the row it
-            # asked for rather than a census of one.
-            ref, i = value._src
-            spec = f"[{i}:{i + 1}]"
-            library._window(ref, spec, label, ref)
-        elif isinstance(value, Row):
-            library.out.setdefault("shown", {})[label] = value._bind
+        if isinstance(value, (Row, Rows)):
+            self.library.show(value, label)
         else:
             self._printed += (
                 f"{label} = {value!r}" if label != repr(value) else repr(value)

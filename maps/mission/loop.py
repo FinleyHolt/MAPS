@@ -24,7 +24,6 @@ from pathlib import Path
 
 from maps.library.call_arguments import MissionEnv
 from maps.library.interpreter import MissionPython
-from maps.library.op_compiler import HANDLE_WORD_RE
 from maps.library.rows import UNNAMED
 from maps.llm.http import CallCanceled
 from maps.mission.acks import Rejections, summarise_exc
@@ -197,10 +196,10 @@ class _Mission:
             MissionEnv(
                 rows_of_ref=lambda ref: list(carry.read(ref) or []),
                 tied_of_ref=lambda ref: bool(getattr(carry.read(ref), "name_set", False)),
-                version=lambda: carry.version,
+                version=lambda: self.surface.version,
                 plan_rn=carry.next_rn,
                 widened=carry.paged,
-                minted=carry.minted,
+                take_minted=carry.take_minted,
                 row_of_fid=self.surface.rows.get,
                 say_err=self.rejections.error,
                 ground=self.programs.ground,
@@ -466,13 +465,7 @@ class _Mission:
         code = args.get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}
-        # Every rN in play (bound handles and those this block spells): a
-        # flight's mint skips them.
-        carry = self.surface.carry
-        carry.in_play.clear()
-        carry.in_play.update(HANDLE_WORD_RE.findall(code))
-        carry.in_play.update(self.python.names.held_refs())
-        carry.minted.clear()
+        self.surface.carry.begin_block(code, self.python.names.held_refs())
         self._script_lines += len(code.strip().splitlines())
         out = self.python.run_block(code)
         out["script_lines"] = self._script_lines

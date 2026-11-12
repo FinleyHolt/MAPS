@@ -544,7 +544,7 @@ def quiet_env(**kw):
         rows_of_ref=lambda ref: [],
         plan_rn=[0],
         widened={},
-        minted=[],
+        take_minted=lambda: [],
         say_err=lambda ack, msg: {**ack, "error": msg},
         ground=lambda names: {"ties": {n: [n] for n in names}},
         analyze=nop,

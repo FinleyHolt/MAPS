@@ -6,6 +6,8 @@ reads them, the grounding that opens it and the ack that closes it."""
 
 from __future__ import annotations
 
+import re
+
 from maps.library.block_scan import MOVE_SAYS
 from maps.library.call_arguments import (
     SITE_SLOT,
@@ -69,13 +71,37 @@ class Library:
         self.shown_whole: set = set()
         #: The refs a dedup left unrendered this block -> surface version.
         self.unrendered: dict = {}
-        self._get_noted: set = set()  # .get near-miss keys noted this block
+        self._noted: set = set()  # keys note_once noted this block
         self._measure_calls = 0
         self._geom.clear()
 
     def note(self, text: str) -> None:
         """One note on the block's receipt."""
         fold(self.out, {"note": text})
+
+    def note_once(self, key, text: str) -> None:
+        """The block's note for ``key``: a repeat of ``key`` notes nothing."""
+        if key not in self._noted:
+            self._noted.add(key)
+            self.note(text)
+
+    def show(self, value, label: str | None) -> None:
+        """Serve a set or a row the block showed bare, under ``label``."""
+        if isinstance(value, Rows):
+            if not value._spec and self.unrendered.get(value._ref) == self.env.version():
+                return
+            # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
+            # executor's ref the window compiled onto (the window shows it
+            # under a label; a nameless set is served whole all the same).
+            self.shown_whole.add(self._window(value._ref, value._spec, label, value._ref))
+        elif value._src and not re.fullmatch(r"\w+", label):
+            # Render the ROW: a one-row window keeps the ordering
+            # attribute a bare dict loses, so the model sees the row it
+            # asked for rather than a census of one.
+            ref, i = value._src
+            self._window(ref, f"[{i}:{i + 1}]", label, ref)
+        else:
+            self.out.setdefault("shown", {})[label] = value._bind
 
     # -- how one call runs ------------------------------------------------
 
@@ -178,10 +204,9 @@ class Library:
             ack = self.env.finish(ack)
         self._geom.clear()
         fold(self.out, ack)
-        self._call_minted = list(self.env.minted)
+        self._call_minted = self.env.take_minted()
         for h in self._call_minted:
             self.ns[h] = Rows(h, self)
-        del self.env.minted[:]
         if "error" in ack:
             raise _Stop()
 

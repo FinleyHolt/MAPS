@@ -106,15 +106,14 @@ def program_reads(ops: list) -> set:
 
 class Carry:
     """Every successful program's raw results by ref (``rows``), and the op
-    history that re-derives them per surface ``version``; ``name(ref)`` is
-    the model's name for a handle, said when its replay is refused."""
+    history that re-derives them once per ``surface_version()``;
+    ``name(ref)`` is the model's name for a handle, said when its replay is
+    refused."""
 
-    def __init__(self, namespace: dict, name):
+    def __init__(self, namespace: dict, name, surface_version):
         self.ns = namespace
         self.name = name
-        # The surface version: bumped by whatever moves the surface (a
-        # flight, a boost, a stance).
-        self.version = 0
+        self.surface_version = surface_version
         self.rows: dict = {}
         self._history: list = []  # every op, in execution order
         self._reads: list = []  # per op: the handles its args name
@@ -127,8 +126,8 @@ class Carry:
         # The handles' names. ``next_rn`` is the mission-global rN counter,
         # shared with the library's compiler; ``in_play`` holds every rN
         # bound or spelled by the running block, which a flight's mint
-        # skips; ``minted`` the handles flights minted during the running
-        # block, for the block to bind.
+        # skips; ``minted`` the handles flights minted since the running
+        # call opened, for the call to bind.
         self.next_rn: list = [0]
         self.in_play: set = set()
         self.minted: list = []
@@ -157,8 +156,9 @@ class Carry:
         surface, once per surface version; a refused replay raises
         :class:`CodeError` naming the handles asked for whose replay reached
         the refused op, and none of them is marked fresh."""
-        if self._armed != self.version:
-            self._armed = self.version
+        version = self.surface_version()
+        if self._armed != version:
+            self._armed = version
             self._fresh.clear()
             self._fresh.update(self._events)
         closures = {r: self._closure(r) for r in refs}
@@ -199,6 +199,21 @@ class Carry:
             self._producers.setdefault(op["ref"], []).append(len(self._history))
             self._history.append(op)
             self._reads.append(_refs_read(op))
+
+    def begin_block(self, code: str, held) -> None:
+        """A block starts: every rN it spells and every handle the mission
+        holds (``held``) is in play, and nothing is minted yet."""
+        self.in_play.clear()
+        self.in_play.update(HANDLE_WORD_RE.findall(code))
+        self.in_play.update(held)
+        self.minted.clear()
+
+    def take_minted(self) -> list:
+        """A call closes: the handles its flights minted, which it binds;
+        the next call mints from an empty list."""
+        taken = list(self.minted)
+        self.minted.clear()
+        return taken
 
     def mint(self, rows: list) -> str:
         """An event handle over ``rows`` (the rows a flight added), never
