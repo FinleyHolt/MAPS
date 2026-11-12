@@ -1,4 +1,4 @@
-"""One flying mission, held open across operator turns: the method half of the station that flew the C-12.
+"""One mission flown on a ``Vehicle`` (the twin, or an aircraft's own), held open across operator turns.
 
 The search stack is hydrated as the bench hydrates it and the conversation
 flies on a worker thread. Two things differ from the bench. The reply is a

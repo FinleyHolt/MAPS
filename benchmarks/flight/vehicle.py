@@ -1,11 +1,12 @@
 """The aircraft as the flight harness sees it: legs go out, poses and recorded frames come back.
 
-On the C-12 the station speaks to the recorder and the cockpit display over
-HTTP; these are the semantics it reads off them, and nothing else. A leg is posted
-for an area and flown however the vehicle flies it (on the C-12, by the crew
-off the cockpit display). The vehicle records frames as it flies, each tagged
-with the pose the aircraft had at its stamp (``nav_track.pose_tag``), and
-serves the ring's index without pixels and any frame's pixels by sequence.
+``Vehicle`` is the protocol the harness reaches an aircraft through, and
+these are the semantics it reads, nothing else. A leg is posted for an area
+and flown however the vehicle flies it. The vehicle records frames as it
+flies, each tagged with the pose the aircraft had at its stamp
+(``nav_track.pose_tag``), and serves the ring's index without pixels and any
+frame's pixels by sequence. The twin (``twin.Twin``) is the implementation in
+this repository; the paper's C-12 flew through one that is not distributed.
 
 The vehicle owns the clock the harness waits on: a real aircraft's is the
 wall clock, a twin's can run faster than it.
