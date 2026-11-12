@@ -109,21 +109,19 @@ run root's layout and the driver's flags, see
 ## How it works
 
 A search is one conversation with one model. The model has one tool, `run`,
-whose argument is a block of Python. Each block runs in a namespace that lasts
-the whole search, and its printed output returns to the model. The search ends
-when the model replies without a tool call; the answer is the target of its
-last flight.
+whose argument is a block of Python. Each block reads or extends the
+world-state graph, and its printed output returns to the model, which then
+writes the next block. The search ends when the model replies without a tool
+call; the answer is the target of its last flight.
 
-![The code of one search, turn by turn.](docs/figures/example-trace.png)
+![The model writes a block of Python, the block reads or extends the world-state graph, and the result returns to the model for its next step.](docs/figures/how-it-works.png)
 
-*One search: the code of each of its eight turns.*
+*One search of 13 steps. The model finds a street in the map, flies a pass
+over it, looks at the cars the pass detected, and flies to the one it picks.*
 
-Earlier methods fix the steps or the roles around the model. MAPS gives the
-model a library and lets it write each next step:
-
-![Fixed pipelines, a fixed multi-agent workflow, and MAPS, drawn as the steps each leaves to the model.](docs/figures/harness.png)
-
-### Library
+The world-state graph holds everything the search knows as rows: map features
+from OpenStreetMap, and the objects that the segmenter detects on each flight.
+The model's Python calls this library:
 
 | Call | Description |
 |---|---|
@@ -137,41 +135,15 @@ model a library and lets it write each next step:
 | `intersection`, `ends_of`, `distance` | Road crossings, road ends, and metres between footprints. |
 | `more_of` | Returns the next block of a long result. |
 
-A result is a set of rows with `.filter` and `.order`. Only `go_to` and
-`explore` move the aircraft.
+Only `go_to` and `explore` move the aircraft.
 
-### Structured world state
-
-One graph holds everything the search knows. Each row is a node with an ID, a
-point and footprint in local metres, and one of the following:
-
-- OSM tags and a name, for a prior row from the OpenStreetMap bake.
-- A class label, for a row the segmenter detected on a flight.
-
-The prior seeds the graph before the first flight, and each flight adds its
-detections as rows of the same kind. To integrate a planner or another
-autonomy stack, supply moves and observations on one side and read typed,
-georeferenced rows on the other.
-
-### Code map
-
-| Component | Location |
-|---|---|
-| Mission conversation | [`maps/mission/`](maps/mission/) |
-| Library the model writes against | [`maps/library/`](maps/library/), [`maps/query/`](maps/query/) |
-| World state | [`maps/world_state/`](maps/world_state/) |
-| Perception and the SAM 3.1 serve | [`maps/perception/`](maps/perception/), [`serving/`](serving/) |
-| Benchmarks and run records | [`benchmarks/`](benchmarks/) |
-| Flight harness and kinematic twin | [`benchmarks/flight/`](benchmarks/flight/README.md) |
-| Console | [`station/`](station/README.md) |
-
-To print the system turn and tool schema that the model receives:
+To print the exact system turn and tool schema that the model receives:
 
 ```sh
 python -m maps.mission.contract --sensor oryx_orx32_25mm_nadir
 ```
 
-For a walk through one search in the code, see
+For the code behind each part, see [`maps/README.md`](maps/README.md) and
 [`docs/architecture.md`](docs/architecture.md).
 
 ## Reproduce the paper
