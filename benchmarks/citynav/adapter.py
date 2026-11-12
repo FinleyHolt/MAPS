@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
@@ -80,10 +80,7 @@ def load_objects(objects_json: Path) -> dict[str, list[CityRefObject]]:
         for map_name, entries in raw.items():
             objs: list[CityRefObject] = []
             iterator: Iterable[dict]
-            if isinstance(entries, dict):
-                iterator = entries.values()
-            else:
-                iterator = entries
+            iterator = entries.values() if isinstance(entries, dict) else entries
             for obj in iterator:
                 parsed = _mk(obj)
                 if parsed is not None:

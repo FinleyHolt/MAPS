@@ -2,7 +2,6 @@
 only when its named count is the same too, so no set loses its count."""
 
 from maps.query.op_io import Result
-
 from maps.query.result_tables import compact_results
 
 

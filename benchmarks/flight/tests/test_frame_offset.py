@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from benchmarks.flight import frame_offset
 from benchmarks.flight.tests import world
 

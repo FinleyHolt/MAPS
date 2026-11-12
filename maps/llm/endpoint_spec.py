@@ -338,7 +338,7 @@ def _require_tokenizer(model_id: str, override: str = "") -> str:
             add_generation_prompt=True,
             tokenize=False,
         )
-    except Exception as exc:  # noqa: BLE001 - any render failure refuses the tokenizer
+    except Exception as exc:
         raise EndpointDiscoveryError(
             f"tokenizer {tokenizer_name!r} for served model {model_id!r} cannot render its chat "
             f"template ({type(exc).__name__}: {exc}). Point SEARCH_COMPACT_TOKENIZER_NAME at a "
@@ -460,7 +460,7 @@ def install_spec(new_spec: EndpointSpec) -> None:
                 new_spec.max_output_tokens,
                 new_spec.base_url,
             )
-        elif _SPEC != new_spec:
+        elif new_spec != _SPEC:
             raise EndpointDiscoveryError(
                 f"divergent second install_spec: installed={_SPEC} new={new_spec}"
             )

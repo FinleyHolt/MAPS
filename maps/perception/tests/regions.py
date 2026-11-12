@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.perception.observation import Observation
 from maps.perception.mask_region import MaskRegion
+from maps.perception.observation import Observation
 
 
 def region_of(mask: np.ndarray) -> MaskRegion | None:

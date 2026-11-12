@@ -23,7 +23,7 @@ def is_color_column_key(k) -> bool:
     return isinstance(k, str) and k.startswith("color_") and k != "color_conf"
 
 
-def _resolve_color_word(word: str) -> "tuple[str, str | None]":
+def _resolve_color_word(word: str) -> tuple[str, str | None]:
     """A cue color word on the closed palette: ``(canonical, note)``, the
     note set when the word was normalized (navy -> blue). Off-palette
     raises."""

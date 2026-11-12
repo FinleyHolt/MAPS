@@ -17,11 +17,12 @@ import math
 import threading
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -116,7 +117,7 @@ def composite(
     frames on one ground grid. ``corners`` is ``(n, 4, 2)`` floor corners in
     bake-local metres for the n RGB ``images``; an overlapped ground pixel
     takes the frame whose centre it is nearest, so seams fall mid-overlap."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     allc = np.concatenate(corners)
     x0, y0 = np.floor(allc.min(axis=0) / gsd_m) * gsd_m
@@ -180,7 +181,7 @@ def corrected_ortho(
     """The product turned about its window's centre by ``yaw_deg`` (heading
     sense) and moved by the shift, resampled north-up on the grid it was on:
     ``(rgb, alpha, extent)``, the extent grown to hold the turned corners."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     x0, y0, x1, y1 = (float(v) for v in extent)
     h, w = rgb.shape[:2]
@@ -265,7 +266,7 @@ class Boresight:
     path: Path | None = None
 
     @classmethod
-    def load(cls, path: str | Path) -> "Boresight":
+    def load(cls, path: str | Path) -> Boresight:
         doc = json.loads(Path(path).read_text())
         sensor = resolve_sensor(doc["sensor"])
         if sensor is None:

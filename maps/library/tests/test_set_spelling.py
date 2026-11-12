@@ -9,8 +9,8 @@ import re
 
 import pytest
 
-from maps.perception.watchlist import SegmenterTasking
 from maps.mission.tests.fakes import CANDS, drive, run, tool_results
+from maps.perception.watchlist import SegmenterTasking
 
 _CANDS = CANDS + [
     {"fid": f"car_{i}", "xy": [5.0 * i, 7.0], "class": "car", "search_text": "car"}
@@ -76,7 +76,7 @@ def test_no_served_text_names_an_rn_the_model_did_not_bind(code):
 
 
 def _keys(out: dict) -> list:
-    return list(((out.get("result") or {}).get("results") or {}))
+    return list((out.get("result") or {}).get("results") or {})
 
 
 def test_a_slice_prints_under_its_spelling():

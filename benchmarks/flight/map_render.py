@@ -82,7 +82,7 @@ def terrain(map_name: str, tiles_dir: str) -> Terrain | None:
     path = Path(tiles_dir) / f"{map_name}{TERRAIN_SUFFIX}"
     if not path.is_file():
         return None
-    import rasterio  # noqa: PLC0415
+    import rasterio
 
     with rasterio.open(path) as src:
         grid = src.read(1).astype(np.float64)
@@ -110,7 +110,7 @@ def window_render(
     """The map north-up over ``window`` (``(x0, y0, x1, y1)`` bake-local metres)
     at ``shape`` (rows, cols), row 0 the window's north edge; None where the
     window reaches off the raster."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     rgb, bounds, ppm = ortho
     x0, y0, x1, y1 = window

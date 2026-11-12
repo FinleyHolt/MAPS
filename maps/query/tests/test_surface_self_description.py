@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from maps.query.program import run_program
 
 # a small runtime pool + a point anchor (shed) and a road (centerline)

@@ -5,11 +5,10 @@ from __future__ import annotations
 import pytest
 
 from maps.query.op_io import ProgramError
-from maps.query.result_tables import _grid_cell
 from maps.query.program import run_program
+from maps.query.result_tables import _grid_cell
 from maps.query.surface import build_surface_from_graph
 from maps.query.text_match import find_score, fuzzy_prepare_query, token_idf
-
 
 # --- fixture surface: two mask-bearing buildings in CONTACT, one detached ---
 # b1 and b2 share the x=20 edge (d=0, distinct centroids); b3 sits 10 m away

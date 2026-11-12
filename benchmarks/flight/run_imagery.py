@@ -56,7 +56,7 @@ class RunImagery:
         Where nothing reached, alpha 0 and black -- ground this run has not
         imaged. Row 0 is the window's north edge, the layout every ortho
         crop assumes."""
-        import cv2  # noqa: PLC0415
+        import cv2
 
         x0, y0, x1, y1 = (float(v) for v in window)
         gsd = float(self.gsd_m)

@@ -88,13 +88,13 @@ def reasoning_tokens_of(
         return 0
     try:
         tok = load_tokenizer(model_alias, tokenizer_name)
-    except Exception:  # noqa: BLE001 — no tokenizer reads 0
+    except Exception:
         return 0
     total = 0
     for text in reasoning_texts:
         try:
             ids = tok.encode(text, add_special_tokens=False)
-        except Exception:  # noqa: BLE001 — tokenizer quirks; fall through silently
+        except Exception:
             continue
         total += len(ids)
     return total
@@ -167,7 +167,7 @@ def summarize(flight_dir: Path, tokenizer_name: str = "") -> dict:
         _scan_transcript(transcript, out, tokenizer_name)
     except OSError:
         return blank()
-    except Exception as exc:  # noqa: BLE001 — never fail the episode
+    except Exception as exc:
         log.warning("flight summary scan failed at %s: %s", transcript, exc)
         return blank()
 

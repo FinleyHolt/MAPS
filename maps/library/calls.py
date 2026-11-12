@@ -8,12 +8,12 @@ from __future__ import annotations
 
 from maps.library.block_scan import _MOVE_SAYS
 from maps.library.call_arguments import (
+    _SITE_SLOT,
     MissionEnv,
     Names,
     _Name,
     _no_such_fid,
     _plain,
-    _SITE_SLOT,
     _Stop,
     _tok,
     fold,
@@ -40,7 +40,6 @@ from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.row_geometry import SurfaceGeometry
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.xy_token import is_xy
-
 
 # One block's measuring budget: a nested loop of distance() calls is one per
 # PAIR, millions of mask-to-mask scans at real set sizes.
@@ -199,7 +198,7 @@ class Library:
         p = self._program(*args)
         return self._analyze(p, p.window(ref, spec), shown=label)
 
-    def _materialize(self, sliced: "Rows") -> "Rows":
+    def _materialize(self, sliced: Rows) -> Rows:
         """A sliced set becomes a real ref via the identity window, so a
         slice rides every slot a set can (find(near=r1[0:5]) is the union
         of the head, which is what the spelling plainly means)."""
@@ -277,12 +276,10 @@ class Library:
             return
         anchor = dkey[len("distance to ") :]
         self.note(
-            (
-                f"nothing found for {str(query)!r} lies near {anchor} -- the "
-                f"nearest match is {min(vals):,.0f} m away."
-                f" Rows of a watched class appear near {anchor} only when a "
-                "flight covers it."
-            )
+            f"nothing found for {str(query)!r} lies near {anchor} -- the "
+            f"nearest match is {min(vals):,.0f} m away."
+            f" Rows of a watched class appear near {anchor} only when a "
+            "flight covers it."
         )
 
     def rows_order(self, items, *, nearest=None, color=None):

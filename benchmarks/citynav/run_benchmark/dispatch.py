@@ -11,14 +11,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from benchmarks.run_record.config import repo_provenance
 from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import CityNavEpisode
-from benchmarks.run_record import rows as _rows
-from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
-from benchmarks.run_record.episode_workdir import LiveRecorder
-from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.episode_runner import run_episode
+from benchmarks.run_record import rows as _rows
+from benchmarks.run_record.config import RunConfig, repo_provenance
+from benchmarks.run_record.episode_workdir import LiveRecorder
+from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
 from benchmarks.run_record.run_manifest import arm_env_stamp
 from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.endpoint_spec import TRANSIENT_CLIENT_STATUS

@@ -48,7 +48,7 @@ RING_HZ = 2.0
 #: A twin frame's JPEG quality, the recorder's own.
 FRAME_JPEG_QUALITY = 90
 #: The receiver's clock at the twin's time zero.
-EPOCH = dt.datetime(2000, 1, 1, tzinfo=dt.timezone.utc)
+EPOCH = dt.datetime(2000, 1, 1, tzinfo=dt.UTC)
 
 
 class Twin:
@@ -176,7 +176,7 @@ class Twin:
     def frame(self, seq: int):
         """``(jpeg, t_host, log_time, seq, tag)``: the frame rendered off the
         ortho at the camera pose the tag places it at; None off the ortho."""
-        from PIL import Image  # noqa: PLC0415
+        from PIL import Image
 
         row = dict(self.rows[seq]) if 0 <= seq < len(self.rows) else None
         if row is None:
@@ -287,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         register_raster=args.register,
     )
 
-    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
     sortie = args.out / stamp
     ep = open_episode_dir(sortie, episode_id=args.episode, benchmark=bench.name, run_no=1)
     mission = Mission(

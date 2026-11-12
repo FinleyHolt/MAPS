@@ -10,17 +10,16 @@ pin the geometry, the replay identity, and the sensorless path's byte-parity.
 
 from __future__ import annotations
 
-
 import numpy as np
 import pytest
 
+from maps.mission.tests.ortho_fixture import write_rasters
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import (
     crop_ortho_observation,
     ground_sides_m,
 )
 from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m
-from maps.mission.tests.ortho_fixture import write_rasters
 
 MAP = "unit_test_sensor_block"
 GROUND_Z = 0.0

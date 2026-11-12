@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from maps.mission.tests.fakes import drive, run, tool_results
 
 

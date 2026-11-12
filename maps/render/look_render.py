@@ -320,11 +320,11 @@ def render_candidate_crops(
     else:
         try:
             _wb = ortho_world_bounds(map_name, rgbd_dir=rgbd_dir)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.debug("look: no raster bounds for %s (%s); no edge-shift", map_name, exc)
         try:
             _gsd = ortho_gsd_m(map_name, rgbd_dir=rgbd_dir)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _gsd = 0.10
             log.debug("look: no ortho gsd for %s (%s); sizing at 0.1 m/px", map_name, exc)
     _min_m, _budget_m = look_window_bounds_m(_gsd)
@@ -405,7 +405,7 @@ def _crop_record(
             rgbd_dir=rgbd_dir,
             ortho=imagery.ortho(_window) if imagery is not None else None,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("look: crop render failed at %s: %s", (true_x, true_y), exc)
         return None
     # north-up: row 0 is the window's max world y
@@ -489,7 +489,7 @@ def _crop_record(
             neighbor_px=neighbor_px,
             band_text=band_text,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # a crop whose subject cannot be marked is worse than none
         log.warning(
             "look: identification overlay failed, skipping crop at %s: %s", (true_x, true_y), exc

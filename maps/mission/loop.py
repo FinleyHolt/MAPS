@@ -18,10 +18,9 @@ import json
 import logging
 import threading
 import time
-from pathlib import Path
-from typing import Callable
-
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from maps.library.call_arguments import MissionEnv
 from maps.library.interpreter import MissionPython
@@ -51,7 +50,6 @@ from maps.mission.watch_verbs import Watchlist
 from maps.settings import Settings
 from maps.world_state.context import QueryContext
 
-
 log = logging.getLogger(__name__)
 
 
@@ -69,11 +67,11 @@ def run_mission(
     routing_key: str | None = None,
     seed: int | None = None,
     sensor_description: str = "",
-    cancel_event: "threading.Event | None" = None,
+    cancel_event: threading.Event | None = None,
     reasoning_effort: str | None = None,
     rid_tag: str = "m0",
     **turn,
-) -> tuple[MissionReply, "_Mission"]:
+) -> tuple[MissionReply, _Mission]:
     """THE mission entry: build the Reasoner and the mission over it, and run
     the first operator turn (``turn`` is :class:`_Mission`'s). ``settings``
     is the run's (``maps.settings``), fixed for the mission; ``workdir`` is
@@ -101,7 +99,7 @@ def run_mission(
     return mission.converse(instruction.strip()), mission
 
 
-def continue_mission(mission: "_Mission", instruction: str, *, rid_tag: str) -> MissionReply:
+def continue_mission(mission: _Mission, instruction: str, *, rid_tag: str) -> MissionReply:
     """One more operator turn on the same mission: it follows a reply (the
     field path: the reply is a report), reads the surface the mission's
     ``ctx`` holds now, and keeps every name, handle, flown stop, staged view

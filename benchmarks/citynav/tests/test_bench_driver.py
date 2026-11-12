@@ -5,6 +5,7 @@ The children are ``fake_runner``, whose behaviour is the episode id's map.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import signal
@@ -379,10 +380,8 @@ def test_a_sigkilled_driver_takes_its_attempt_with_it() -> None:
         assert not _alive(child), "the attempt outlived its driver"
     finally:
         parent.kill()
-        try:
+        with contextlib.suppress(ProcessLookupError):
             os.kill(child, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
 
 
 _INTERRUPTED = (

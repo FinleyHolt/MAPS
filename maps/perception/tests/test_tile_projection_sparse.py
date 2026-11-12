@@ -10,7 +10,6 @@ from maps.perception.geometry.geolocate import (
 )
 from maps.perception.tests.regions import region_of
 
-
 # Non-square grid so a row/col transposition cannot pass, and a view square much
 # smaller than one cell-grid span so many pixels collapse into one cell.
 _TILE = TileFrame(x_min=0.0, y_min=0.0, cell_size_m=2.0, grid_shape=(64, 96))

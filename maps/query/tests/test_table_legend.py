@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from maps.query import spatial_math as G
-from maps.query.result_tables import _TABLE_LEGEND, compact_results
 from maps.query.program import run_program
+from maps.query.result_tables import _TABLE_LEGEND, compact_results
 
 _CANDS = [
     {"fid": "d0", "xy": [10.0, 0.0], "class": "car", "search_text": "car"},

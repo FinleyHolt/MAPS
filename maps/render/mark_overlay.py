@@ -3,11 +3,10 @@ renderers, whose tool text carries the digit -> fid legend."""
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import cv2
 import numpy as np
-
 
 #: The JPEG quality of every image the model is sent.
 JPEG_QUALITY = 85

@@ -27,8 +27,9 @@ the C-12's ``oryx_orx32_25mm_nadir``.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 

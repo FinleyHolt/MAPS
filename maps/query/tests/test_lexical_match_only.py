@@ -226,7 +226,8 @@ def test_a_query_token_no_matched_row_carries_is_named():
 
 
 def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
-    from maps.query.text_match import COLORS, _colors_read, unmatched_query_tokens as U
+    from maps.query.text_match import COLORS, _colors_read
+    from maps.query.text_match import unmatched_query_tokens as U
 
     coloured = _rows("car", "car", colour="gray 0.55 / black 0.30")
 

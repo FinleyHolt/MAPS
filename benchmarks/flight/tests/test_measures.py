@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-
 from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import measures as Q
 
@@ -141,7 +140,7 @@ def _keyframe_run(tmp_path, *keyframe_xy, gnss_agl_m=600.0, fixes=5):
             json.dumps(
                 {
                     "pose_xy": xy,
-                    "utc": dt.datetime.fromtimestamp(T0 + 300.0 + k, dt.timezone.utc).isoformat(),
+                    "utc": dt.datetime.fromtimestamp(T0 + 300.0 + k, dt.UTC).isoformat(),
                     "altitude_m": 600.0,
                 }
             )

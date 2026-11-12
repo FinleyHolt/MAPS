@@ -2,9 +2,8 @@
 serves the cut's stats (the nearest row it dropped and the bound that would
 admit it), and no line about a compare step the model never wrote."""
 
-from maps.query.result_tables import compact_results
-
 from maps.query.program import run_program
+from maps.query.result_tables import compact_results
 
 
 def _sq(x0, y0, x1, y1):

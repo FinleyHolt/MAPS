@@ -8,7 +8,6 @@ import re
 
 from maps.library.block_scan import looks_like_code
 
-
 # Consecutive zero-flight replies that end the mission: the first two draw
 # NO_FLIGHT_REPLY_NUDGE, the third is an abstain. Anything the model
 # executes between two replies resets the streak.

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from maps.query import spatial_math as G
-from maps.query.result_tables import _fmt_float, _render_grid_rows
 from maps.query.program import run_program
+from maps.query.result_tables import _fmt_float, _render_grid_rows
 
 
 def test_fmt_float_serves_stored_value_verbatim():

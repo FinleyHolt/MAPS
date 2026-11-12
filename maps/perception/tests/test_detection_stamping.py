@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.perception.tests.regions import region_of
-
 from maps.perception.detection import DetectedObject
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.ortho.detection_stamping import (
     project_and_stamp_ortho_detections,
 )
+from maps.perception.tests.regions import region_of
 
 # 64x64 crop over a 100 m axis-aligned view square on a 2 m tile grid.
 _CORNERS = ((0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0))

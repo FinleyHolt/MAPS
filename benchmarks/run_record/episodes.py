@@ -9,6 +9,7 @@ owner knows (``workdir``, ``worker_id``) and the owner's own verdicts
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
@@ -177,10 +178,8 @@ def atomic_write_json(path: Path, payload: Any) -> None:
             os.fsync(fh.fileno())
         os.replace(tmp, path)
     except Exception:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp)
-        except FileNotFoundError:
-            pass
         raise
 
 

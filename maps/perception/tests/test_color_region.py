@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.perception.sam.detect_client import _dominant_color, _interior_mask
 from maps.perception.color import m6_attributes
+from maps.perception.sam.detect_client import _dominant_color, _interior_mask
 from maps.perception.tests.regions import region_of
 
 _SHAPE = (200, 240)

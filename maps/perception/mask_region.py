@@ -37,11 +37,11 @@ class MaskRegion:
 
     # --- construction ---------------------------------------------------
 
-    def with_crop(self, crop: np.ndarray) -> "MaskRegion":
+    def with_crop(self, crop: np.ndarray) -> MaskRegion:
         """A region over the same box carrying another selection (a component)."""
         return MaskRegion(crop, self.bbox, self.frame_shape)
 
-    def tightened(self) -> "MaskRegion | None":
+    def tightened(self) -> MaskRegion | None:
         """The same pixels, re-boxed to their own extent."""
         ext = extent(self.crop)
         if ext is None:

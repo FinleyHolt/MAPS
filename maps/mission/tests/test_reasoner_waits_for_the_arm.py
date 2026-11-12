@@ -6,11 +6,10 @@ import httpx
 import pytest
 
 from maps.llm.http import CallCanceled
-from maps.mission.reasoner import DegenerateCompletion
-from maps.mission.reasoner import Reasoner
+from maps.mission.loop import _Mission
+from maps.mission.reasoner import DegenerateCompletion, Reasoner
 from maps.mission.serve_refusals import _RETRIABLE_LLM_ERRORS
 from maps.mission.spec import MissionReply, MissionSpec
-from maps.mission.loop import _Mission
 from maps.mission.tests.fakes import TEST_SPEC, bare_ctx, unarmed_boost
 
 _REPLY = {"kind": "text", "content": "the goal is the flown object", "reasoning": ""}
@@ -24,7 +23,7 @@ class _Stop(threading.Event):
         self.waits: list[float] = []
         self.set_on = set_on
 
-    def wait(self, timeout=None):  # noqa: D102
+    def wait(self, timeout=None):
         self.waits.append(timeout)
         if self.set_on is not None and len(self.waits) >= self.set_on:
             self.set()

@@ -8,13 +8,12 @@ from __future__ import annotations
 import ast
 import inspect
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from maps.library.op_compiler import Bind, CodeError, Ref, act_needs_a_thing, fid_like
-from maps.library.rows import Rows, UNNAMED, _index_it, _one_row
+from maps.library.rows import UNNAMED, Rows, _index_it, _one_row
 from maps.xy_token import format_xy_token, is_xy, parse_xy_token
-
 
 # Each act's place slot as the model spells it, by the act's ``why``.
 _SITE_SLOT = {
@@ -188,7 +187,7 @@ class Names:
                 return k
         return getattr(obj, "_label", "") or None
 
-    def spelling(self, x: "Rows") -> str | None:
+    def spelling(self, x: Rows) -> str | None:
         """The model's spelling of a set, the one name every served label
         uses: its bound name, else its whole result's name with the window;
         None when the model has no name for it (never the executor's rN)."""
@@ -206,7 +205,7 @@ class Names:
                 return k
         return self.shown.get(ref) or self.labels.get(ref)
 
-    def said_name(self, x: "Rows", fn: str | None) -> str:
+    def said_name(self, x: Rows, fn: str | None) -> str:
         """What a refusal or a page calls ``x``: its bound name, else the
         model's text for it in the running ``fn(...)`` call (:meth:`call_arg`),
         else its spelling, else unnamed."""
@@ -254,9 +253,9 @@ class Names:
 
     def unnamed_label(self, ref: str) -> str:
         """A nameless set's label, numbered once per mission."""
-        return "(unnamed {})".format(self._unnamed.setdefault(ref, len(self._unnamed) + 1))
+        return f"(unnamed {self._unnamed.setdefault(ref, len(self._unnamed) + 1)})"
 
-    def not_one_place(self, kw: str, x: "Rows") -> str:
+    def not_one_place(self, kw: str, x: Rows) -> str:
         """The refusal of a set where ``kw=`` takes one place."""
         name = self.spelling(x)
         one = _one_row(x, name or "s")

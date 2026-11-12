@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import logging
@@ -142,10 +143,8 @@ class _CancelWatch:
 
 
 def _shutdown(sock: socket.socket) -> None:
-    try:
+    with contextlib.suppress(OSError):  # already closed
         sock.shutdown(socket.SHUT_RDWR)
-    except OSError:
-        pass  # already closed
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +288,7 @@ def _forget_missing(resp: httpx.Response) -> bool:
     eviction, a restart): forget them, so the next send PUTs them."""
     try:
         missing = resp.json()["missing"]
-    except Exception:  # noqa: BLE001 - a 409 from anything but the store
+    except Exception:
         return False
     _IMAGE_STORE_HELD.difference_update(missing)
     return True
@@ -360,7 +359,7 @@ def _flight_request_record(
                     "new_messages": scrubbed[n_prefix:],
                 },
             )
-        except Exception as exc:  # noqa: BLE001 - never fail the LLM call
+        except Exception as exc:
             log.warning("flight request record failed at %s: %s", directory, exc)
 
 

@@ -27,4 +27,4 @@ class DetectedObject:
 
     # The segmentation mask, as a crop plus where it sits in the frame
     # (``maps.perception.mask_region``), so no consumer scans the whole frame.
-    mask: "MaskRegion | None" = None
+    mask: MaskRegion | None = None

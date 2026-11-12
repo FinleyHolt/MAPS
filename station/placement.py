@@ -35,7 +35,7 @@ class Placement(NamedTuple):
 @lru_cache(maxsize=8)
 def _city(osm_cache_dir: str, city: str) -> Placement | None:
     """The placement a city's OSM cache states, or None without a cache that states one."""
-    from pyproj import Transformer  # noqa: PLC0415
+    from pyproj import Transformer
 
     try:
         payload = json.loads((Path(osm_cache_dir) / f"{city}_osm_local.geojson").read_text())

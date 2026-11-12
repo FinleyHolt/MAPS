@@ -324,7 +324,7 @@ class EpisodeWorld:
                 return _upsert_prior_percept(
                     self.state.runtime_graph, str(fid), dict(attrs or {}), px=px
                 )
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.debug("upsert_prior_percept failed for %s", fid, exc_info=True)
             return False
 

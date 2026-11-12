@@ -129,7 +129,7 @@ def raster_source_gsd_m(rgbd_dir, map_name: str) -> float | None:
     path = _geotiff_pair(rgbd_dir, map_name)
     if path is None:
         return None
-    import rasterio  # noqa: PLC0415
+    import rasterio
 
     with rasterio.open(path) as src:
         return float(abs(src.transform.a))
@@ -146,8 +146,8 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict) -> None:
     under no-data is 0. No hole fill. A destination that cannot be written
     raises: there is no in-heap alternative at this size.
     """
-    import rasterio  # noqa: PLC0415
-    from rasterio.windows import Window  # noqa: PLC0415
+    import rasterio
+    from rasterio.windows import Window
 
     rgbd_dir = Path(rgbd_dir)
     tmp = d.with_name(f"{d.name}.tmp{os.getpid()}")
@@ -203,8 +203,8 @@ def bake_ortho_from_rasters(rgbd_dir, map_name: str) -> dict:
     Interior holes are filled (:func:`ortho_fill.fill_ortho_holes`); boundary
     no-data keeps ``alpha`` 0 and height 0.
     """
-    import rasterio  # noqa: PLC0415
-    from PIL import Image  # noqa: PLC0415
+    import rasterio
+    from PIL import Image
 
     rgbd_dir = Path(rgbd_dir)
     rgb = np.asarray(Image.open(rgbd_dir / f"{map_name}.png").convert("RGB"), dtype=np.uint8)

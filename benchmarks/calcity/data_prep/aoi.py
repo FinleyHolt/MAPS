@@ -33,9 +33,9 @@ because a lon/lat rectangle is not axis-aligned after projection to UTM.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Mapping
 
 # The one map, ``calcity``, as a WGS84 bbox (w, s, e, n): the briefed area of
 # operations plus 3 km on every side, so a C-12 hold about a target at the

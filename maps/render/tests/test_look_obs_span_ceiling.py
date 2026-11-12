@@ -74,7 +74,7 @@ def test_the_observation_ceiling_clamps_the_window_and_drops_badges(ortho_dir):
     # that happened to fit inside 40 m would pass every line below while
     # exercising no clamp at all.
     assert free["context_m"] > 40.0, free["context_m"]
-    assert _BUDGET_M > free["context_m"], free["context_m"]  # not the budget
+    assert free["context_m"] < _BUDGET_M, free["context_m"]  # not the budget
     assert 0 < len(capped["legend"]) < len(free["legend"]), (
         len(capped["legend"]),
         len(free["legend"]),

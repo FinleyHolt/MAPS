@@ -14,9 +14,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from benchmarks.run_record import episodes
 from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark import dispatch
+from benchmarks.run_record import episodes
 from maps.settings import Settings
 
 

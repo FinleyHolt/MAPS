@@ -68,7 +68,7 @@ async def _admission():
     """FastAPI dependency: bound concurrent decoded-payload residency."""
     try:
         await asyncio.wait_for(_inflight_sem.acquire(), _INFLIGHT_WAIT_S)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise HTTPException(
             503,
             detail={
@@ -136,7 +136,7 @@ def _prewarm() -> None:
                 rgb, ["car", "building", "road"], device=_DEVICE, min_area_px=32, max_per_image=4
             )
         log.info("prewarm: SAM 3.1 warm")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("prewarm failed (%s); continuing without warmup", exc)
 
 

@@ -26,7 +26,6 @@ from pathlib import Path
 
 import numpy as np
 
-from benchmarks.calcity.paths import calcity_bench
 from benchmarks.calcity.data_prep.aoi import (
     AOI_BBOX,
     GROUND_LEVEL_M,
@@ -36,6 +35,7 @@ from benchmarks.calcity.data_prep.aoi import (
     tag_value,
 )
 from benchmarks.calcity.data_prep.bundle import load_features_local
+from benchmarks.calcity.paths import calcity_bench
 
 logging.basicConfig(
     level=logging.INFO,

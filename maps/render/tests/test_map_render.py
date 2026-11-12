@@ -7,17 +7,17 @@ import pytest
 
 cv2 = pytest.importorskip("cv2")
 
+from maps.mission.tests.fakes import map_mission
+from maps.render.map_render import (
+    features_window_paint,
+    render_map_from_spec,
+)
 from maps.render.osm_palette import (
     osm_kind,
     osm_label,
     paint_color,
     paint_word,
 )
-from maps.render.map_render import (
-    features_window_paint,
-    render_map_from_spec,
-)
-from maps.mission.tests.fakes import map_mission
 
 # A 10x10-cell tile at 2 m/cell, origin (0, 0): a landuse block in the
 # SOUTH-WEST corner, a detection cell in the NORTH-EAST corner.
@@ -424,8 +424,8 @@ def test_the_image_axis_convention_is_stated_once_and_correctly():
 def test_a_picture_states_its_own_pixel_grid(ortho_dir):
     import cv2
 
-    from maps.render.look_render import render_candidate_crops
     from maps.mission.tests.fakes import ORTHO_MAP
+    from maps.render.look_render import render_candidate_crops
 
     (look,) = render_candidate_crops(
         [

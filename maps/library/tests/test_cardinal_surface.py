@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from maps.query import program as gp
 from maps.library.op_compiler import CodeError
 from maps.mission.tests.fakes import acts_of_block, ops_of_block, raising_ops_of_block
+from maps.query import program as gp
 
 
 def _road(x, y0=-400.0, y1=400.0, n=9):
@@ -327,8 +327,8 @@ def test_a_diagonal_filter_kwarg_refuses_and_names_the_conjunction(kw, pair):
 
 
 def test_an_unknown_filter_kwarg_is_refused_never_dropped():
-    from maps.library.op_compiler import CodeError
     from maps.library.interpreter import MissionPython
+    from maps.library.op_compiler import CodeError
     from maps.library.rows import Row, RowList
     from maps.mission.tests.fakes import quiet_env
 

@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.world_state.prior_graph import mask_centerline
 from maps.world_state.graph import MapObject, ObjectGraph
-
+from maps.world_state.prior_graph import mask_centerline
 
 # The color attrs of one best-view read, overwritten together.
 _BEST_VIEW_COLOR_KEYS = ("color", "color_conf", "color_shade", "color_flag", "color_rgb")

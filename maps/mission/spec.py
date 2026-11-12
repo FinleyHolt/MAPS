@@ -4,8 +4,8 @@ half the loop calls (:class:`MissionSpec`) and how the conversation ended
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 
 @dataclass
@@ -15,15 +15,15 @@ class MissionSpec:
     ``{"error": ...}``; ``declare_concepts`` arms the watchlist and returns
     the error a failed arming serves, or None."""
 
-    fly: "Callable[[dict], dict]"
-    declare_concepts: "Callable[[list[str]], str | None]"
+    fly: Callable[[dict], dict]
+    declare_concepts: Callable[[list[str]], str | None]
     # ``coverage_stops(fid, spacing_m)``: an explore's stops over that fid's
     # footprint, or None when it carries no cells.
-    coverage_stops: "Callable[[str, float], list | None] | None" = None
+    coverage_stops: Callable[[str, float], list | None] | None = None
     #: Which stops of a pass the recording already holds
     #: (``[(token, xy or None), ...] -> [bool, ...]``); a held stop flies
     #: first. None on the bench.
-    held_now: "Callable[[list], list[bool]] | None" = None
+    held_now: Callable[[list], list[bool]] | None = None
     # Liveness backstops, never served; a stop of a pass is a flight.
     flight_budget: int = 1000
     turn_cap: int = 100

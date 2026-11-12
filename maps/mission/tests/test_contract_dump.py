@@ -1,8 +1,7 @@
 """The contract dump serves the real surfaces, not a drifted copy."""
 
+from maps.mission import contract, served_text
 from maps.perception.geometry.sensor_spec import list_sensors
-from maps.mission import contract
-from maps.mission import served_text
 
 
 def test_the_dump_is_the_code_arm_the_flight_path_serves():

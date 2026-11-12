@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from maps.query.result_tables import compact_results
-from maps.query.program import run_program
 from maps.library.result_handles import (
     PREFLIGHT_COLOR_NOTE,
     run_ops,
 )
+from maps.query.program import run_program
+from maps.query.result_tables import compact_results
 
 # Three cars strung along a road with a stored centerline, plus a plain
 # building anchor (no centerline) and a landmark the cars are away from.

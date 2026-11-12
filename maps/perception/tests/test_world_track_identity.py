@@ -9,9 +9,9 @@ carrying the same index.
 
 from __future__ import annotations
 
+from maps.mission.episode_world import EpisodeWorld
 from maps.perception.detection import DetectedObject
 from maps.perception.world_tracker import WorldTracker
-from maps.mission.episode_world import EpisodeWorld
 
 
 def _det(xy, conf, idx):

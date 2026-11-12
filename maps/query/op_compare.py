@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from maps.query import spatial_math as G
 from maps.query.op_io import (
+    _SAY_A_FID,
     ProgramError,
     Result,
-    _SAY_A_FID,
     _as_rows,
     _attach_standing_columns,
     _ordered,
@@ -17,7 +17,6 @@ from maps.query.op_io import (
 from maps.query.result_tables import _MODEL_HIDDEN_ROW_FIELDS
 from maps.query.row_geometry import geom_of, place_geom
 from maps.xy_token import is_xy
-
 
 # A wall-clock net: a union measures members x items gaps.
 _UNION_MAX_MEMBERS = 400

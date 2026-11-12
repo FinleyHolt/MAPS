@@ -9,7 +9,6 @@ from collections import Counter
 from maps.query import color_words
 from maps.query import text_match as T
 
-
 # Row fields the executor resolves by fid and the model never reads.
 _MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask", "mask_centroid", "cells")
 
@@ -342,7 +341,7 @@ _COMPARE_COL_PREFIXES = (
 AUTOATTACH_PREFIXES = tuple(p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
 
 
-def _column_ref(key, prefixes) -> "tuple[str, str] | None":
+def _column_ref(key, prefixes) -> tuple[str, str] | None:
     """``(prefix, ref)`` of a ``<prefix><ref>`` column key, the prefix one
     of ``prefixes``; else None."""
     if isinstance(key, str):
@@ -405,7 +404,7 @@ _NO_ORDER_HINT = (
 )
 
 
-def _table(head, rows, op_cols, legend) -> "str | None":
+def _table(head, rows, op_cols, legend) -> str | None:
     """``rows`` as ``head["rows"]``, a markdown grid; the response's first
     grid takes the legend ``legend`` holds. Returns the elided-columns note,
     or None."""

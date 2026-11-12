@@ -11,7 +11,6 @@ from transformers import AutoTokenizer
 
 from maps.llm.model_cards import CARDS
 
-
 # A pure cache: a tokenizer is immutable once loaded, so one per repo serves
 # every mission in the process.
 _TOKENIZER_CACHE: dict[str, Any] = {}
@@ -38,7 +37,7 @@ def load_tokenizer(model: str, tokenizer_name: str = ""):
         return cached
     try:
         tok = AutoTokenizer.from_pretrained(hf_name)
-    except Exception as exc:  # noqa: BLE001 — tokenizer load fails for many reasons
+    except Exception as exc:
         raise RuntimeError(
             f"tokenizer {hf_name!r} for served model {model!r} failed to load: {exc}. "
             f"Set SEARCH_COMPACT_TOKENIZER_NAME to the HF repo or local directory that carries it."

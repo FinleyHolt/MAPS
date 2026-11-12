@@ -52,7 +52,7 @@ def _monitor_tool() -> int:
 
 
 @contextlib.contextmanager
-def _block_ceilings(mp: "MissionPython"):
+def _block_ceilings(mp: MissionPython):
     """Charge ``mp._tick`` for every line of the mission's blocks while one
     runs."""
     tid = _monitor_tool()

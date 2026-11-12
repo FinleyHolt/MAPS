@@ -6,13 +6,11 @@ import json
 
 import numpy as np
 
-from maps.query.op_find import _FIND_MEMO
-
-from maps.query.result_tables import compact_results
-
-from maps.query.program import run_program
-from maps.query.surface import build_surface_from_graph
 from maps.query import row_geometry as RG
+from maps.query.op_find import _FIND_MEMO
+from maps.query.program import run_program
+from maps.query.result_tables import compact_results
+from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 
 

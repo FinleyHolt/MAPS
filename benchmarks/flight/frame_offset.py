@@ -12,6 +12,7 @@ how a whole north-up mosaic is registered as one.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 
 from benchmarks.flight import locator
@@ -36,7 +37,7 @@ def structure(gray: np.ndarray, down: int = DOWN) -> np.ndarray:
     """The edge structure at ``1/down`` of the image's size, float32 ``(3, h, w)``:
     averaged down first and the operator run there. ``down=1`` reads an image
     already at that size."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     small = (
         np.asarray(gray)
@@ -90,7 +91,7 @@ def similarity(
     at :data:`YAW_STEP_DEG` and again at a quarter step about that; ``du`` and
     ``dv`` are the offset of the content turned back by it.
     """
-    import cv2  # noqa: PLC0415
+    import cv2
 
     h, w = np.asarray(frame_rgb).shape[:2]
     centre = ((w - 1) / 2.0, (h - 1) / 2.0)
@@ -124,7 +125,7 @@ def _jacobian(
     ``pose`` carries ``pose_xy``, ``yaw_deg``, ``roll_deg`` and ``pitch_deg``
     in aerospace signs; the projector's pitch is nose down, so it enters negated.
     """
-    from maps.perception.geometry.geolocate import project_world_to_pixels  # noqa: PLC0415
+    from maps.perception.geometry.geolocate import project_world_to_pixels
 
     x, y = at_xy
     world = np.asarray(

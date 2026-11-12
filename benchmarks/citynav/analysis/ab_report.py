@@ -17,7 +17,6 @@ import math
 import random
 from pathlib import Path
 
-
 from benchmarks.citynav.analysis.run_report import criterion_label, load_run, run_criterion
 from benchmarks.run_record import rows as _rows
 

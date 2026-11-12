@@ -8,8 +8,8 @@ import pytest
 
 cv2 = pytest.importorskip("cv2")
 
-from maps.mission.picture_requests import map_vision_text  # noqa: E402
-from maps.render import map_render  # noqa: E402
+from maps.mission.picture_requests import map_vision_text
+from maps.render import map_render
 
 _TILE = {"tile_origin_xy": (0.0, 0.0), "cell_size_m": 2.0, "grid_shape": (100, 100)}
 _FEATS = [

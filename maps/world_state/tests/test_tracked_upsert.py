@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.world_state.prior_graph import build_object_graph
 from maps.world_state.graph import MapObject
+from maps.world_state.prior_graph import build_object_graph
 from maps.world_state.upsert import upsert_tracked_detected
 
 GRID = (32, 32)

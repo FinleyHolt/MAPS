@@ -19,7 +19,7 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(bf, "WORKER_STAGGER_S", 0)
     # No spec another test installed: its SAM replicas are gone, and the
     # launch gate would wait on them.
-    from maps.llm import endpoint_spec  # noqa: PLC0415
+    from maps.llm import endpoint_spec
 
     monkeypatch.setattr(endpoint_spec, "_SPEC", None)
 
@@ -70,8 +70,8 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
     pose_xy=, rgb=)``."""
     from types import SimpleNamespace
 
-    from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
     from benchmarks.citynav.run_benchmark import mission_engine as me
+    from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
     from maps.mission.tests.fakes import episode_world
 
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)

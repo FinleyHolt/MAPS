@@ -161,7 +161,7 @@ class BenchMission:
         """The conversation over the bench's session (``run_episode``'s
         ``converse``): each reply parks the mission until the operator speaks
         or ends it. Returns how the last conversation ended."""
-        from maps.mission.loop import continue_mission  # noqa: PLC0415  (the mission stack, with its tokenizer)
+        from maps.mission.loop import continue_mission
 
         self._session = session
         try:
@@ -226,7 +226,7 @@ class BenchMission:
             self.status = (
                 "failed" if row.get("status") == STATUS_INFRA or not rows.metrics(row) else "ended"
             )
-        except Exception as exc:  # noqa: BLE001 -- the operator must see why
+        except Exception as exc:
             log.exception("mission %s failed", self.episode_id)
             self.error, self.status = f"{type(exc).__name__}: {exc}", "failed"
         finally:

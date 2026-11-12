@@ -15,9 +15,9 @@ from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark import episode_runner
 from benchmarks.run_record.config import load_config
-from maps.settings import from_environ
 from benchmarks.run_record.episode_workdir import mint_workdir
 from benchmarks.run_record.run_manifest import arm_env_stamp
+from maps.settings import from_environ
 
 BLOCK = "birmingham_block_0"
 

@@ -74,7 +74,7 @@ def work_sensor(sensor, agl_m: float):
 
 def gray(rgb: np.ndarray) -> np.ndarray:
     """Luma of an RGB frame; a frame already gray comes back as it is."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     a = np.asarray(rgb)
     if a.ndim == 2:
@@ -86,7 +86,7 @@ def unique_peak(
     score: np.ndarray, radius: int = UNIQUE_RADIUS
 ) -> tuple[tuple[int, int], float, float]:
     """``(at, peak, margin)``: the best score and by how much it beats everything ``radius`` away."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     _min, peak, _at_min, at = cv2.minMaxLoc(score)
     side = np.ones(score.shape, dtype=np.uint8)
@@ -100,7 +100,7 @@ def unique_peak(
 def edge_maps(gray: np.ndarray, *, template_half: int = EDGE_TEMPLATE_HALF) -> np.ndarray:
     """The frame's structure tensor as three maps, smoothed and padded for the
     template, float32 ``(3, H + 2 pad, W + 2 pad)``."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     g = cv2.GaussianBlur(np.asarray(gray, dtype=np.float32), (0, 0), EDGE_SIGMA)
     gx, gy = cv2.Sobel(g, cv2.CV_32F, 1, 0), cv2.Sobel(g, cv2.CV_32F, 0, 1)
@@ -131,7 +131,7 @@ def joint_ncc(window: np.ndarray, template: np.ndarray) -> np.ndarray | None:
     """Normalised cross-correlation of a stack of maps, the mean and the norm
     taken over the whole stack: the cosine between the two stacks at every
     window position."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     t = template.astype(np.float32) - float(template.mean())
     t_norm = float(np.sqrt((t * t).sum()))
@@ -143,16 +143,14 @@ def joint_ncc(window: np.ndarray, template: np.ndarray) -> np.ndarray | None:
         cv2.matchTemplate(np.ascontiguousarray(w), np.ascontiguousarray(tc), cv2.TM_CCORR)
         for w, tc in zip(window, t)
     )
-    box = (
-        lambda a: cv2.boxFilter(
-            np.ascontiguousarray(a),
-            -1,
-            (k[1], k[0]),
-            normalize=False,  # noqa: E731
-            anchor=(0, 0),
-            borderType=cv2.BORDER_CONSTANT,
-        )[: window.shape[1] - k[0] + 1, : window.shape[2] - k[1] + 1]
-    )
+    box = lambda a: cv2.boxFilter(
+        np.ascontiguousarray(a),
+        -1,
+        (k[1], k[0]),
+        normalize=False,
+        anchor=(0, 0),
+        borderType=cv2.BORDER_CONSTANT,
+    )[: window.shape[1] - k[0] + 1, : window.shape[2] - k[1] + 1]
     w_sum = sum(box(w) for w in window)
     w_sq = sum(box(w * w) for w in window)
     w_norm = np.sqrt(np.maximum(w_sq - w_sum * w_sum / n, 0.0))
@@ -166,7 +164,7 @@ def locate_edges(
     the actual one: each map's normalised correlation averaged, so an edge
     counts where it is and which way it runs. ``((u, v), peak, margin)``, or
     None off the frame or over no structure."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     pad = EDGE_TEMPLATE_HALF - TEMPLATE_HALF
     u, v = int(round(predicted[0])), int(round(predicted[1]))

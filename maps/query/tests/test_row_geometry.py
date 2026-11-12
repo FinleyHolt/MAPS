@@ -4,12 +4,12 @@ import math
 
 import pytest
 
-from maps.query import spatial_math as G
-from maps.query.program import run_program
-from maps.library.op_compiler import CodeError
 from maps.library.interpreter import MissionPython
+from maps.library.op_compiler import CodeError
 from maps.library.rows import Row, Rows, _places
 from maps.mission.tests.fakes import quiet_env
+from maps.query import spatial_math as G
+from maps.query.program import run_program
 
 ROAD = {
     "fid": "prior_1",

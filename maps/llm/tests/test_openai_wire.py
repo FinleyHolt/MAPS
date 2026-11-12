@@ -10,14 +10,13 @@ from pathlib import Path
 import pytest
 
 from maps.llm import endpoint_spec as E
-from maps.settings import from_environ
 from maps.llm import openai_wire
 from maps.llm.flight_summary import reasoning_tokens_of, summarize
 from maps.llm.model_cards import CARDS, check_effort, sampling_kwargs
-from maps.mission import compactor
-from maps.mission import reasoner
+from maps.mission import compactor, reasoner
 from maps.mission.reasoner import Reasoner
 from maps.mission.tests.fakes import TEST_SPEC, jpeg
+from maps.settings import from_environ
 
 GPT = "gpt-5.6-sol"
 GPT_SPEC = replace(TEST_SPEC, model_id=GPT, tokenizer_name="openai/gpt-oss-120b")

@@ -8,13 +8,13 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from maps.perception.color import m6_attributes
 from maps.perception.detection import DetectedObject
 from maps.perception.geometry.geolocate import (
     TileFrame,
     project_mask_to_tile_cells_ortho,
     world_contour_from_region,
 )
-from maps.perception.color import m6_attributes
 
 
 def project_and_stamp_ortho_detections(

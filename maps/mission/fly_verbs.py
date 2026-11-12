@@ -16,7 +16,6 @@ from maps.mission.surface_state import Progress, Surface
 from maps.render.look_render import look_xy
 from maps.xy_token import format_xy_token, parse_xy_token
 
-
 log = logging.getLogger(__name__)
 
 
@@ -83,7 +82,7 @@ class Flights:
                     for it in queue
                 ]
             )
-        except Exception as exc:  # noqa: BLE001 - the order is a convenience, never a fault
+        except Exception as exc:
             log.warning("%s pass: held_now failed: %s", self.progress.rid_tag, summarise_exc(exc))
             return 0
         pick = next((i for i, h in enumerate(held) if h), 0)

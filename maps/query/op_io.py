@@ -8,9 +8,9 @@ import re
 
 from maps.query import spatial_math as G
 from maps.query.result_tables import (
+    _COMPARE_COL_PREFIXES,
     MODEL_UNSERVED_COLUMNS,
     STANDING_SIDE_PREFIXES,
-    _COMPARE_COL_PREFIXES,
     _column_ref,
 )
 from maps.xy_token import is_xy

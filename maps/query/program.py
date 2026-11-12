@@ -16,7 +16,6 @@ from maps.query.op_find import _find, _stratum
 from maps.query.op_io import ProgramError, _Args, _Run
 from maps.query.op_roads import _crossings, _ends
 
-
 OPS = {
     "find": _find,
     "crossings": _crossings,

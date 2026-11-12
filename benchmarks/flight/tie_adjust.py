@@ -118,7 +118,7 @@ def _huber_scale(norms: np.ndarray) -> float:
 
 def _normal_solve(A, b: np.ndarray, w: np.ndarray) -> np.ndarray:
     """The weighted normal equations solved by Cholesky."""
-    import scipy.linalg  # noqa: PLC0415
+    import scipy.linalg
 
     aw = A.multiply(w[:, None]).tocsr()
     normal = (aw.T @ aw).toarray()
@@ -132,8 +132,8 @@ def _normal_solve(A, b: np.ndarray, w: np.ndarray) -> np.ndarray:
 
 def _components(frames: list, ties: list[TieRow]) -> list[set]:
     """The tie graph's connected components over ``frames``."""
-    import scipy.sparse  # noqa: PLC0415
-    from scipy.sparse.csgraph import connected_components  # noqa: PLC0415
+    import scipy.sparse
+    from scipy.sparse.csgraph import connected_components
 
     index = {f: k for k, f in enumerate(frames)}
     rows = [index[t.i] for t in ties] + [index[t.j] for t in ties]
@@ -182,7 +182,7 @@ def _system(
     width: int,
 ):
     """``(A, b, priors)``: two equations a row, each scaled by its sigma, the priors first."""
-    import scipy.sparse  # noqa: PLC0415
+    import scipy.sparse
 
     data, rows, cols, b = [], [], [], []
     n = 0

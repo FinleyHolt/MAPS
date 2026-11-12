@@ -3,17 +3,18 @@ prior colour enrichment (``benchmarks.citynav.run_benchmark.osm_prior``)."""
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import cv2
 import numpy as np
 
 from maps.perception.geometry.geolocate import TileFrame
-from maps.perception.ortho.sensor_frame import frame_corners_px
 from maps.perception.mask_region import MaskRegion
+from maps.perception.ortho.sensor_frame import frame_corners_px
 
 
-def _fill_region(polys: "list[np.ndarray]", *, img_h: int, img_w: int) -> "MaskRegion | None":
+def _fill_region(polys: list[np.ndarray], *, img_h: int, img_w: int) -> MaskRegion | None:
     """Fill pixel-space polygons into a region covering only what they touch.
 
     ``cv2.fillPoly`` clips to whatever array it is handed, so translating the
@@ -47,7 +48,7 @@ def _rasterize_cells_to_mask(
     world_to_px: np.ndarray,
     img_h: int,
     img_w: int,
-) -> "MaskRegion | None":
+) -> MaskRegion | None:
     """Project a feature's tile-grid cells onto the image plane, all at once.
 
     Each cell is a square of side ``bounds.cell_size_m``; its corners (BL, BR,

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from maps.xy_token import parse_xy_token
 
-
 # --------------------------------------------------------------------------- #
 # the ONE token grammar                                                        #
 # --------------------------------------------------------------------------- #

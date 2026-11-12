@@ -8,8 +8,8 @@ forward (the ``examples/sam3_image_batched_inference.ipynb`` pattern).
 
 from __future__ import annotations
 
-import os
 import gc
+import os
 import warnings
 from dataclasses import dataclass
 from typing import Any
@@ -75,16 +75,16 @@ def _ensure_sam(device: str) -> _LoadedSam:
     warnings.filterwarnings("ignore", category=FutureWarning)
 
     import torch as _torch
+    from sam3.eval.postprocessors import PostProcessImage
+    from sam3.model.utils.misc import copy_data_to_device
     from sam3.model_builder import build_sam3_image_model, download_ckpt_from_hf
+    from sam3.train.data.collator import collate_fn_api
     from sam3.train.transforms.basic_for_api import (
         ComposeAPI,
         NormalizeAPI,
         RandomResizeAPI,
         ToTensorAPI,
     )
-    from sam3.train.data.collator import collate_fn_api
-    from sam3.eval.postprocessors import PostProcessImage
-    from sam3.model.utils.misc import copy_data_to_device
 
     print(
         f"[sam3_engine] building sam3 image model on {device}",
@@ -227,14 +227,15 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str]):
     """One Datapoint with one image and a text query per concept, and the
     query ids (1, 2, ...): each query's ``coco_image_id`` aligns its results
     back to its concept."""
+    from PIL import Image
     from sam3.train.data.sam3_image_dataset import (
         Datapoint,
         FindQueryLoaded,
-        Image as SAMImage,
         InferenceMetadata,
     )
-
-    from PIL import Image
+    from sam3.train.data.sam3_image_dataset import (
+        Image as SAMImage,
+    )
 
     h, w = rgb.shape[:2]
     qids = list(range(1, len(concepts) + 1))

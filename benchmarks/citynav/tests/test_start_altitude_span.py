@@ -19,10 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.adapter import map_name_for_row
-from benchmarks.run_record.config import load_config
+from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
+from benchmarks.run_record.config import load_config
 from maps.render.look_render import look_window_bounds_m
 
 # Every CityNav block is a 0.1 m/px ortho.
@@ -54,10 +54,10 @@ def test_the_observation_ceiling_never_binds_on_the_citynav_test_split():
     rows = json.loads(SPLIT_FILE.read_text())
     spans = []
     maps = set()
-    for i, row in enumerate(rows):
+    for _i, row in enumerate(rows):
         mn = map_name_for_row(row)
         maps.add(mn)
-        for d_i, _ in enumerate(row.get("descriptions") or [None]):
+        for _d_i, _ in enumerate(row.get("descriptions") or [None]):
             spans.append(_span(cfg, mn, float(row["trajectory"][0][2])))
     # VACUITY FLOOR: a split that failed to parse would leave an empty
     # sweep, and "no span was below the budget" would pass on nothing.

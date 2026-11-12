@@ -83,11 +83,11 @@ def _raster_bounds(block: str, rgbd_dir: Path) -> tuple[float, float, float, flo
     """
     tif = _raster_tif(block, rgbd_dir)
     try:
-        import rasterio  # noqa: PLC0415  (ships with the ortho extra)
+        import rasterio
 
         with rasterio.open(tif) as ds:
             b = ds.bounds
-    except Exception as exc:  # noqa: BLE001 - every failure is the same refusal
+    except Exception as exc:
         raise BakeError(f"{block}: cannot read the block raster {tif} ({exc})") from exc
     return (float(b.left), float(b.bottom), float(b.right), float(b.top))
 
@@ -107,7 +107,7 @@ def _cell_coverage(
     """
     try:
         ortho = camera_model.load_ortho_or_rasters(block, rgbd_dir=str(rgbd_dir))
-    except Exception as exc:  # noqa: BLE001 - every failure is the same refusal
+    except Exception as exc:
         raise BakeError(f"{block}: cannot read the block imagery under {rgbd_dir} ({exc})") from exc
     ppm = float(ortho["px_per_m"])
     step = int(round(cell_size_m * ppm))
@@ -498,7 +498,7 @@ def _features_from_records(
     named_priors_total = 0
     named_off_raster: list[list[Any]] = []  # [name, metres off imagery] per off prior
     if coverage is not None:
-        from scipy import ndimage  # noqa: PLC0415  (ships with the ortho extra)
+        from scipy import ndimage
 
         # Meters from any no-coverage cell to the nearest imagery, for the
         # off-imagery warning below.

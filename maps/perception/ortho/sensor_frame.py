@@ -69,7 +69,7 @@ def ground_corners_xy(
     airframe tilt included); :func:`footprint_corners_xy` is the level,
     mount-aligned case to within half a pixel.
     """
-    from maps.perception.geometry.geolocate import project_pixels_to_world  # noqa: PLC0415  (cv2)
+    from maps.perception.geometry.geolocate import project_pixels_to_world
 
     intr = sensor.intrinsics
     w, h = intr.image_width, intr.image_height
@@ -152,7 +152,7 @@ def source_map(src_px: np.ndarray, width: int, height: int) -> tuple[np.ndarray,
     """``(map_x, map_y)``: the ortho pixel every pixel of a ``width x height``
     frame reads (the inverted four-corner homography, float64 evaluated,
     float32 returned)."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     inv = np.linalg.inv(
         np.asarray(cv2.getPerspectiveTransform(src_px, frame_corners_px(width, height)), np.float64)
@@ -171,7 +171,7 @@ def warp_window(ortho_rgb: np.ndarray, src_px: np.ndarray, width: int, height: i
     refuses a source of 32,767 px or more. The window offset is a whole
     number of pixels, so every tap reads what a whole-raster warp would.
     """
-    import cv2  # noqa: PLC0415
+    import cv2
 
     map_x, map_y = source_map(src_px, width, height)
     x0 = max(0, int(np.floor(map_x.min())) - TAP_MARGIN_PX)

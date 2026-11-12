@@ -6,9 +6,8 @@ past the cut, or one before a later line errored, left no trace of the flight.
 
 from __future__ import annotations
 
-from maps.mission.spec import MissionSpec
-
 from maps.mission.loop import _Mission
+from maps.mission.spec import MissionSpec
 from maps.mission.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
 

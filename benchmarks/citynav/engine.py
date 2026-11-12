@@ -21,7 +21,7 @@ from maps.settings import Settings
 
 
 def _episode_runner():
-    from benchmarks.citynav.run_benchmark import episode_runner  # noqa: PLC0415  (the mission stack)
+    from benchmarks.citynav.run_benchmark import episode_runner
 
     return episode_runner
 
@@ -80,7 +80,7 @@ class Engine:
         )
 
     def open_session(self, h: Any, *, recorder: Any = None, observe: Any = None) -> Any:
-        from benchmarks.citynav.run_benchmark import mission_engine  # noqa: PLC0415  (the mission stack)
+        from benchmarks.citynav.run_benchmark import mission_engine
 
         return mission_engine.MissionSession(h, recorder=recorder, observe=observe)
 
@@ -88,12 +88,12 @@ class Engine:
         return adapter.load_objects(objects_json)
 
     def fly_attempt(self, **attempt: Any) -> dict:
-        from benchmarks.citynav.run_benchmark import dispatch  # noqa: PLC0415  (the mission stack)
+        from benchmarks.citynav.run_benchmark import dispatch
 
         return dispatch.dispatch_one(idx=0, total=1, **attempt)
 
     def is_infra_fault(self, exc: BaseException) -> bool:
-        from benchmarks.citynav.run_benchmark import dispatch  # noqa: PLC0415  (the mission stack)
+        from benchmarks.citynav.run_benchmark import dispatch
 
         return dispatch.is_infra_fault(exc)
 

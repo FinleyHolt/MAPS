@@ -6,10 +6,10 @@ import json
 
 import pytest
 
-from benchmarks.run_record.episode_workdir import OBSERVATIONS_DIR, TRACK_JSONL
 from benchmarks.flight import legs
 from benchmarks.flight import mission as M
 from benchmarks.flight.tests import world
+from benchmarks.run_record.episode_workdir import OBSERVATIONS_DIR, TRACK_JSONL
 
 
 @pytest.fixture

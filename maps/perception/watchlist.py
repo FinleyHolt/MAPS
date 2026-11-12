@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from maps.xy_token import parse_xy_token
 
@@ -114,7 +114,7 @@ class SegmenterTasking:
                     self.watchlist + [c for b in self.boosts if b.riding for c in b.concepts]
                 )
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.warning("live concept push failed: %s", e)
             return str(e)
         return None
@@ -131,7 +131,7 @@ class SegmenterTasking:
             }
         try:
             res = self.retro_perceiver(dict(flown), list(concepts))
-        except Exception as exc:  # noqa: BLE001 -- served to the model; never crash the turn
+        except Exception as exc:
             log.exception("retro perceiver raised")
             res = {"error": f"retrospective re-segmentation failed: {type(exc).__name__}: {exc}"}
         rec = {"where": token}

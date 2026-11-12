@@ -262,7 +262,7 @@ def print_classes(
     A split on this machine that lacks such a pick is not the run's corpus: no
     class line."""
     # Imported here: the episode runner brings the mission stack, which a report of recorded classes never needs.
-    from benchmarks.citynav.run_benchmark.episode_runner import classify_referent  # noqa: PLC0415
+    from benchmarks.citynav.run_benchmark.episode_runner import classify_referent
 
     classes = {
         eid: (m["referent_bucket"], m.get("intel_quality"))

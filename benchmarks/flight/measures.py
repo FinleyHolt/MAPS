@@ -55,8 +55,8 @@ from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, FRAMES_JSO
 from benchmarks.run_record.episodes import EPISODES_JSONL
 from benchmarks.run_record.rows import is_infra_abort, iter_json_rows
 from maps.llm.http import TRANSCRIPT_JSONL
-from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.ortho.sensor_frame import footprint_m
 from maps.query.spatial_math import point_in_polygon
 from maps.settings import from_environ
@@ -83,8 +83,7 @@ def _utc(t: float | None) -> str:
     return (
         ""
         if t is None
-        else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-4]
-        + "Z"
+        else dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-4] + "Z"
     )
 
 
@@ -477,7 +476,7 @@ def ended(row: dict[str, Any]) -> str:
 def tokens(bases: list[Path], tokenizer_name: str = "") -> dict[str, Any]:
     """The run's reasoner use off its transcript (``maps.llm.flight_summary``);
     ``tokenizer_name`` is the reader's tokenizer override."""
-    from maps.llm.flight_summary import summarize  # noqa: PLC0415  (the tokenizer's transformers)
+    from maps.llm.flight_summary import summarize
 
     flight = next(
         (b / "flight" for b in bases if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None

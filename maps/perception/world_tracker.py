@@ -13,7 +13,6 @@ from scipy.optimize import linear_sum_assignment
 
 from maps.perception.detection import DetectedObject
 
-
 # χ²(2 dof, p=0.99) ≈ 9.21 — Mahalanobis gate for a 2-D position residual.
 _CHI2_2DOF_P99 = 9.21
 _BIG = 1.0e9  # finite sentinel for gated-out assignment-matrix cells

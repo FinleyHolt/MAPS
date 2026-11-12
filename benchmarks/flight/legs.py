@@ -13,7 +13,8 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.vehicle import Leg
@@ -396,7 +397,9 @@ class Legs:
             shift = max(extent, span)
             moved = [cx + dx / span * shift, cy + dy / span * shift]
         side = (
-            "N NE E SE S SW W NW".split()[round(math.degrees(math.atan2(dx, dy)) / 45.0) % 8]
+            ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][
+                round(math.degrees(math.atan2(dx, dy)) / 45.0) % 8
+            ]
             if span >= 1.0
             else "-"
         )

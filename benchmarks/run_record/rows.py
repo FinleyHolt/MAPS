@@ -25,9 +25,9 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Iterable, Iterator
 
 from benchmarks.run_record.episodes import (
     EPISODES_JSONL,

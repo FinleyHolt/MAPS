@@ -5,7 +5,6 @@ filter_items, strata, union) the model never wrote."""
 import pytest
 
 from maps.query.op_io import ProgramError
-
 from maps.query.program import run_program
 
 _ROWS = [

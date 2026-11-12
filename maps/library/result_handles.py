@@ -7,12 +7,11 @@ from __future__ import annotations
 import json
 import re
 
-from maps.query.op_io import ProgramError
-from maps.query.result_tables import compact_results, join_hints
-from maps.query.op_cut_and_sort import is_color_column_key
-from maps.query.program import run_program
 from maps.library.op_compiler import HANDLE_RE, HANDLE_WORD_RE, CodeError
-
+from maps.query.op_cut_and_sort import is_color_column_key
+from maps.query.op_io import ProgramError
+from maps.query.program import run_program
+from maps.query.result_tables import compact_results, join_hints
 
 # Served on a refused preflight program that names a color column: before
 # landing no row carries perceived color.
@@ -67,7 +66,7 @@ def run_ops(
             # error so "no color" reads as WHEN, not broken.
             _err = join_hints(_err, PREFLIGHT_COLOR_NOTE)
         return {"error": _err}
-    except Exception as exc:  # noqa: BLE001 -- served to the model; never crash the turn
+    except Exception as exc:
         return {"error": f"program failed: {exc}"}
     _raw_results = out["results"]
     if raw_sink is not None:
@@ -178,7 +177,7 @@ class Carry:
                 staged=ns.get("staged"),
                 standing=ns.get("standing"),
             )
-        except Exception as exc:  # noqa: BLE001 - served on the read that asked
+        except Exception as exc:
             bad = getattr(exc, "ref", None)
             hit = [r for r, c in closures.items() if c and (bad is None or bad in c)]
             said = ", ".join(self.name(r) for r in sorted(hit, key=lambda r: self._producers[r][0]))

@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
-
+from typing import Any
 
 from benchmarks.calcity.data_prep.aoi import LocalFrame
 
@@ -59,7 +59,7 @@ def load_features_local(bundle: Path, lf: LocalFrame) -> list[dict[str, Any]]:
     blocks window a shared city frame).
     """
     from pyproj import Transformer
-    from shapely.geometry import shape, box
+    from shapely.geometry import box, shape
     from shapely.ops import transform as shp_transform
 
     t = Transformer.from_crs("EPSG:4326", lf.crs_utm, always_xy=True)

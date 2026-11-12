@@ -279,10 +279,10 @@ def test_a_row_serves_no_second_point_to_subtract():
     r = Row(
         {"fid": "detected_1", "xy": [10.0, 20.0], "mask_centroid": [11.0, 21.0], "class": "car"}
     )
-    assert "mask_centroid" not in r.keys(), r.keys()
+    assert "mask_centroid" not in r, r.keys()
     assert r.get("mask_centroid") is None
     with pytest.raises(AttributeError):
-        r.mask_centroid
+        _ = r.mask_centroid
     # the point that IS a place stays reachable
     assert r.xy == [10.0, 20.0] and r.x == 10.0
 

@@ -93,7 +93,7 @@ def test_a_partly_visible_ring_draws_its_in_frame_arc_only():
     assert any(abs(x - 100.0) < 1e-9 for x, _ in drawn), drawn  # it reaches
     # no drawn EDGE lies along the cut
     for a in arcs:
-        for (x0, y0), (x1, y1) in zip(a, a[1:]):
+        for (x0, _y0), (x1, _y1) in zip(a, a[1:]):
             on_cut = abs(x0 - 100.0) < 1e-9 and abs(x1 - 100.0) < 1e-9
             assert not on_cut, (a, "edge synthesised along the clip boundary")
 

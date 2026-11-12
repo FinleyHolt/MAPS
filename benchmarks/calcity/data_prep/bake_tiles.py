@@ -18,9 +18,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from benchmarks.calcity.paths import calcity_bench
 from benchmarks.calcity.data_prep.aoi import AOI_BBOX, build_local_frame, bundle_root
 from benchmarks.calcity.data_prep.bundle import load_features_local
+from benchmarks.calcity.paths import calcity_bench
 from benchmarks.citynav.bake import city
 from benchmarks.citynav.bake.city import normalise_props
 from benchmarks.citynav.eval import WorldBounds

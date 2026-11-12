@@ -7,9 +7,9 @@ from itertools import islice
 
 from maps.query import spatial_math as G
 from maps.query.op_io import (
+    _SAY_A_FID,
     ProgramError,
     Result,
-    _SAY_A_FID,
     _as_said,
     _named_rows,
     _quote,

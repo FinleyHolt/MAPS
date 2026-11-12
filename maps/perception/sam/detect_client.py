@@ -9,9 +9,9 @@ import base64
 import itertools
 import threading
 import time
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Iterable
 
 import numpy as np
 import requests
@@ -163,7 +163,7 @@ _COLOR_INTERIOR_PCTL = 50
 _COLOR_INTERIOR_MIN_PX = 12
 
 
-def _interior_mask(region) -> "np.ndarray":
+def _interior_mask(region) -> np.ndarray:
     """The region's inner pixels (distance-from-edge >= the
     ``_COLOR_INTERIOR_PCTL`` percentile) as a selection over its crop, or the
     whole crop when that would leave too few pixels (a tiny detection)."""
@@ -222,7 +222,7 @@ _INSTANCE_SPLIT_MIN_REF_SAMPLES = 5
 _INSTANCE_SPLIT_REDUNDANT_FRAC = 0.5
 
 
-def _connected_components(region: MaskRegion) -> "list[MaskRegion]":
+def _connected_components(region: MaskRegion) -> list[MaskRegion]:
     """8-connected components of a region, each re-boxed, in raster order
     (``max(comps, key=area)`` takes the FIRST maximum); ``[region]`` when single."""
     from scipy import ndimage
@@ -233,7 +233,7 @@ def _connected_components(region: MaskRegion) -> "list[MaskRegion]":
     return [region.with_crop(labels == i).tightened() for i in range(1, n + 1)]
 
 
-def record_region(record: dict, frame_hw: tuple[int, int]) -> "MaskRegion | None":
+def record_region(record: dict, frame_hw: tuple[int, int]) -> MaskRegion | None:
     """A wire mask record as a region of a ``frame_hw`` frame, clipped to it;
     ``None`` when nothing is left."""
     frame_h, frame_w = frame_hw
@@ -249,11 +249,11 @@ def record_region(record: dict, frame_hw: tuple[int, int]) -> "MaskRegion | None
 
 
 def split_into_instances(
-    comps: "list[MaskRegion]",
+    comps: list[MaskRegion],
     *,
     ref_area_px: float | None = None,
-    coverage_count: "np.ndarray | None" = None,
-) -> "list[MaskRegion]":
+    coverage_count: np.ndarray | None = None,
+) -> list[MaskRegion]:
     """A SAM concept mask's connected components as per-instance components,
     never empty: the largest is kept, each other one dropped as speckle (under
     ``MIN_AREA_PX`` or ``_INSTANCE_SPLIT_AREA_FRAC`` of ``ref_area_px``, the
@@ -347,13 +347,13 @@ class SamDetectClient:
         return self.segment(obs, concepts) if concepts else []
 
     @staticmethod
-    def _tile_bounds(H: int, W: int) -> "list[tuple[int, int, int, int]]":
+    def _tile_bounds(H: int, W: int) -> list[tuple[int, int, int, int]]:
         """``(r0, r1, c0, c1)`` of the ``_SAM_INPUT_SIZE`` tiles covering an
         ``H x W`` frame, overlapping by at least ``SAHI_OVERLAP``: a 2016 px
         side gives starts {0, 504, 1008}."""
         t = _SAM_INPUT_SIZE
 
-        def starts(size: int) -> "list[int]":
+        def starts(size: int) -> list[int]:
             if size <= t:
                 return [0]
             step = max(1, int(round(t * (1.0 - SAHI_OVERLAP))))
@@ -366,8 +366,8 @@ class SamDetectClient:
 
     @staticmethod
     def _nms_masks(
-        items: "list[tuple[MaskRegion, str, float]]",
-    ) -> "list[tuple[MaskRegion, str, float]]":
+        items: list[tuple[MaskRegion, str, float]],
+    ) -> list[tuple[MaskRegion, str, float]]:
         """The cross-tile seam dedup: greedy IoU-NMS over ``(region, label,
         score)``, highest score first (ties in input order), pixels compared on
         the box intersection only."""
@@ -404,7 +404,7 @@ class SamDetectClient:
         )
         bounds = self._tile_bounds(canvas.shape[0], canvas.shape[1])
 
-        def _one_tile(bound) -> "list[tuple[MaskRegion, str, float]] | None":
+        def _one_tile(bound) -> list[tuple[MaskRegion, str, float]] | None:
             """One tile's ``(region, label, score)`` items, or ``None`` when its ``/segment`` failed."""
             r0, r1, c0, c1 = bound
             tile = np.ascontiguousarray(canvas[r0:r1, c0:c1], dtype=np.uint8)
@@ -467,7 +467,7 @@ class SamDetectClient:
     def detections(
         self,
         obs: Observation,
-        masks: "list[tuple[MaskRegion | None, str, int, float]]",
+        masks: list[tuple[MaskRegion | None, str, int, float]],
     ) -> list[DetectedObject]:
         """``(region, label, object_id, score)`` masks as detections, in input
         order: each split into instances, projected through ``obs.depth`` and

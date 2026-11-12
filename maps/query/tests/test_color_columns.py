@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-from maps.query.program import run_program
-from maps.query.op_io import ProgramError
 from maps.query import color_words
 from maps.query import spatial_math as G
+from maps.query.op_io import ProgramError
+from maps.query.program import run_program
 
 _CANDS = [
     {"fid": "d0", "xy": [0.0, 0.0], "class": "car", "color": "blue", "color_conf": 0.9},
@@ -236,7 +236,7 @@ def test_palette_equals_the_m6_emitted_vocabulary():
         color_words.COLOR_ENUM,
         sorted(set(_VDW_TO_VOCAB.values())),
     )
-    assert color_words.COLOR_COLUMNS == frozenset("color_" + w for w in color_words.COLOR_ENUM)
+    assert frozenset("color_" + w for w in color_words.COLOR_ENUM) == color_words.COLOR_COLUMNS
 
 
 # --- ONE-FAMILY guard: a word scores in the family its column is named for ---

@@ -21,21 +21,20 @@ from maps.library.block_ceilings import (
     _outer_block_line,
 )
 from maps.library.block_scan import (
-    BLOCK_FILENAME,
+    _LIBRARY_CALLS,
     _MOVED_TO_METHOD,
     _SAFE_BUILTINS,
     _SAFE_MODULES,
+    BLOCK_FILENAME,
     _instrument,
-    _LIBRARY_CALLS,
     _safe_import,
     _shadows,
     scan_block,
 )
-from maps.library.call_arguments import MissionEnv, Names, _Stop, _no_such_fid
+from maps.library.call_arguments import MissionEnv, Names, _no_such_fid, _Stop
 from maps.library.calls import Library
 from maps.library.op_compiler import CodeError, fid_like
 from maps.library.rows import Row, Rows, _said
-
 
 # Liveness ceiling on one block's own lines (harness frames are untraced).
 # A block that runs 100k model-written lines is a runaway loop, not a plan.
@@ -202,8 +201,8 @@ class MissionPython:
         self._deadline = time.monotonic() + TRACE_DEADLINE_S
         try:
             with _block_ceilings(self):
-                exec(compiled, self.ns)  # noqa: S102 -- the surface
-        except Exception as e:  # noqa: BLE001
+                exec(compiled, self.ns)
+        except Exception as e:
             self._unbind_failed_assign(tree, _outer_block_line())
             if not isinstance(e, _Stop):  # a _Stop's refusal is in the receipt
                 line = _block_line(self._block_codes)

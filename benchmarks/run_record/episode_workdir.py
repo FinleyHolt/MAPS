@@ -28,12 +28,14 @@ so a reader sees at most one torn final line; the file exists from the start.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from benchmarks.run_record.episodes import RUN_LOG, json_default
 
@@ -157,9 +159,7 @@ def open_episode_dir(
 
     def close() -> None:
         logging.getLogger().removeHandler(handler)
-        try:
+        with contextlib.suppress(OSError):
             handler.close()
-        except OSError:
-            pass
 
     return OpenEpisode(dir=d, recorder=recorder, close=close)

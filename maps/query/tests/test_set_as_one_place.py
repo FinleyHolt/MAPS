@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from maps.query.op_io import ProgramError
-
+from maps.mission.tests.fakes import drive, ops_of_block, run, tool_results
 from maps.query.op_compare import _UNION_MAX_MEMBERS
-
+from maps.query.op_io import ProgramError
 from maps.query.program import run_program
 from maps.query.result_tables import compact_results
-from maps.mission.tests.fakes import drive, ops_of_block, run, tool_results
 
 
 def _house(fid, x, name=None):

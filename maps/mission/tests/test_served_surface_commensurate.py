@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from maps.mission import served_text
+from maps.mission.loop import _Mission
 from maps.mission.reply_repair import (
     CODE_REPLY_NUDGE,
     EMPTY_TURN_NUDGE,
@@ -10,7 +11,6 @@ from maps.mission.reply_repair import (
     NO_FLIGHT_REPLY_NUDGE,
 )
 from maps.mission.spec import MissionReply, MissionSpec
-from maps.mission.loop import _Mission
 from maps.mission.tests.fakes import FakeReasoner, bare_ctx, unarmed_boost
 
 # Word-boundary matches, case-insensitive except CARRY (lowercase "carry" is ordinary

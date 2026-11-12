@@ -7,6 +7,7 @@ import io
 import numpy as np
 import pytest
 
+from maps.mission.tests.ortho_fixture import write_rasters
 from maps.render.look_render import (
     LOOK_CAR_MARGIN_M,
     LOOK_MAX_BADGES,
@@ -14,7 +15,6 @@ from maps.render.look_render import (
     look_window_bounds_m,
     render_candidate_crops,
 )
-from maps.mission.tests.ortho_fixture import write_rasters
 
 # The bounds are pixel counts; the fixture ortho below is 0.1 m/px.
 _MIN_M, _BUDGET_M = look_window_bounds_m(0.1)

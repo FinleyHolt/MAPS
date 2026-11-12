@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from maps.render.look_render import render_candidate_crops
 from maps.mission.tests.fakes import ORTHO_MAP as MAP
+from maps.render.look_render import render_candidate_crops
 
 
 def test_framed_crop_rotates(ortho_dir):

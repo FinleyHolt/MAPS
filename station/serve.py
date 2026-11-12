@@ -148,7 +148,7 @@ def tile_png(ortho, to_local, z: int, x: int, y: int) -> bytes | None:
     placed in the raster (``to_local``, the map's placement) and the quad
     between them warped: over one tile the mercator grid and the map's own
     grid differ by less than a pixel."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     rgb, bounds, ppm = ortho
     rows_, cols = rgb.shape[:2]
@@ -343,7 +343,7 @@ class Station:
 
     def _picture(self, map_name: str):
         """``--basemap``'s picture of ``map_name`` as ``(rgb, bounds, px_per_m)`` over the bake's bounds, or None."""
-        from PIL import Image  # noqa: PLC0415
+        from PIL import Image
 
         arg = self._picture_arg
         if arg is None or not (self.tiles_dir / f"{map_name}_meta.json").is_file():
@@ -374,7 +374,7 @@ class Station:
             return None
         try:
             return map_render.load_raster(self.raster_dir, map_name) or self._picture(map_name)
-        except Exception:  # noqa: BLE001 -- a raster that does not read leaves the map bare, and the review standing
+        except Exception:
             log.exception("no basemap for %s", map_name)
             return None
 
@@ -761,7 +761,7 @@ class Station:
                 raise HTTPException(
                     409, f"mission {self.mission.episode_id} is flying; stop it first"
                 )
-            stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
             if self.bench.name == "calcity":
                 mission = self._twin_mission(episode_id, instruction, effort, stamp)
             else:
@@ -943,7 +943,7 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
                 if endpoint_spec.spec_installed()
                 else endpoint_spec.discover_from_settings(from_environ(station.bench.environ))
             ).model_id
-        except Exception as exc:  # noqa: BLE001 -- a station with no reasoner still reviews
+        except Exception as exc:
             return {"model": None, "efforts": [], "error": str(exc)}
         return {
             "model": model,
@@ -1134,7 +1134,7 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s"
     )
 
-    import uvicorn  # noqa: PLC0415
+    import uvicorn
 
     args.out.mkdir(parents=True, exist_ok=True)
     station = Station(

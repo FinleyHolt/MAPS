@@ -19,7 +19,6 @@ import re
 
 from maps.library.op_compiler import CodeError
 
-
 BLOCK_FILENAME = "<mission-block>"
 
 _MOVE_CALLS = ("go_to", "explore")

@@ -7,11 +7,17 @@ exclude = [
 ]
 
 [lint]
-select = ["E", "F", "W"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF100"]
 ignore = [
     "E501",
     "E402",
     "E702",
     "E731",
     "E741",
+    "B905",  # zip over lengths the code already holds equal
+    "B023",  # closures called inside the iteration that defines them
+    "UP042",  # StrEnum changes str(), which reaches run records
+    "SIM115",
+    "SIM117",
+    "B008",  # FastAPI and argparse defaults
 ]

@@ -14,10 +14,10 @@ import threading
 import numpy as np
 import pytest
 
-from maps.perception.tests.regions import full, region_of, square_view
+from maps.perception.mask_codec import decode_mask_crop, encode_mask_record
 from maps.perception.sam import detect_client as dc
 from maps.perception.sam.detect_client import SamDetectClient, _png_wire_bytes
-from maps.perception.mask_codec import decode_mask_crop, encode_mask_record
+from maps.perception.tests.regions import full, region_of, square_view
 
 
 def _reference_nms_full_masks(items, iou_thr):
@@ -76,7 +76,7 @@ def _random_blobs(rng, n, H, W):
 def test_nms_matches_full_frame_reference(monkeypatch):
     rng = np.random.default_rng(20260802)
     H = W = 160
-    for trial in range(5):
+    for _trial in range(5):
         masks = _random_blobs(rng, 25, H, W)
         items = [(region_of(m), lab, sc) for m, lab, sc in masks]
         for thr in (0.3, 0.5, 0.9):
@@ -156,7 +156,7 @@ def _build_tile_case():
     ]
 
     ref_full = []
-    for (r0, r1, c0, c1), payload in zip(bounds, payloads):
+    for (r0, _r1, c0, _c1), payload in zip(bounds, payloads):
         for det in payload["detections"]:
             fm = np.zeros((H, W), dtype=bool)
             pr0, pc0, pr1, pc1 = det["pixel_bbox_rcrc"]

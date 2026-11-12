@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 
 from benchmarks.citynav.adapter import parse_episode
-from benchmarks.run_record.config import load_config
 from benchmarks.citynav.run_benchmark.episode_runner import start_altitude_m
+from benchmarks.run_record.config import load_config
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 
 MAP = "birmingham_block_1"

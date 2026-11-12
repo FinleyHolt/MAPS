@@ -10,8 +10,8 @@ import logging
 
 import numpy as np
 
-from maps.perception.ortho.prior_overlay import build_prior_polys_ortho
 from maps.perception.color import m6_attributes
+from maps.perception.ortho.prior_overlay import build_prior_polys_ortho
 
 log = logging.getLogger("run_benchmark")
 
@@ -58,7 +58,7 @@ def prior_percepts(obs, h, step_idx: int):
             view_corners_xy=view_corners,
             fids_to_render=enrich_fids,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("catalog prior overlay build failed step=%d: %s", step_idx, exc)
         return
     for pfid, pmask in prior_polys:

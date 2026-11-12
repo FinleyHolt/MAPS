@@ -6,8 +6,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from maps.library.op_compiler import CodeError, row_token
 from maps.mission.acks import Rejections, add_note, summarise_exc
@@ -106,7 +106,7 @@ class Pictures:
                     }
                 ]
             )
-        except Exception as exc:  # noqa: BLE001 - never crash a flight
+        except Exception as exc:
             log.warning(
                 "%s flight view render failed: %s", self.progress.rid_tag, summarise_exc(exc)
             )
@@ -160,7 +160,7 @@ class Pictures:
             return ack
         try:
             crops = self.look_renderer(reqs)
-        except Exception as exc:  # noqa: BLE001 - render never crashes the mission
+        except Exception as exc:
             log.warning("%s SAY crops render failed: %s", self.progress.rid_tag, summarise_exc(exc))
             return {"error": f"crop render failed: {summarise_exc(exc)}"}
         jpegs = [c["jpeg"] for c in crops if c.get("jpeg")]
@@ -238,7 +238,7 @@ class Pictures:
                     grid_shape=tuple(self.surface.ctx.grid_shape),
                 )
                 maps = [rendered] if rendered is not None else []
-            except Exception as exc:  # noqa: BLE001 - render never crashes the mission
+            except Exception as exc:
                 log.warning(
                     "%s SAY map render failed: %s", self.progress.rid_tag, summarise_exc(exc)
                 )

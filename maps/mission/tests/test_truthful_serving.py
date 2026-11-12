@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 
 from maps.query import text_match as T
-from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS, BROAD_HEAD_ROWS, compact_results
 from maps.query.program import run_program
+from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS, BROAD_HEAD_ROWS, compact_results
 
 
 def _prior(fid, x, y, name=None, tags=None):

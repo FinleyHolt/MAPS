@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from maps.query.result_tables import compact_results
 from maps.query.program import run_program
+from maps.query.result_tables import compact_results
 
 
 def _prior(fid, x, y, name=None, tags=None):

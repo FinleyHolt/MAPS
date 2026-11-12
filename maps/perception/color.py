@@ -6,6 +6,7 @@ rather than its edges or its shadow.
 """
 
 from __future__ import annotations
+
 import functools
 import logging
 import math
@@ -136,7 +137,7 @@ def _median_lab(surv):
     return L, (a * a + b * b) ** 0.5
 
 
-def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
+def m6_attributes(rgb_crop, region) -> dict[str, str] | None:
     """The M6 colour read of ``region`` (a ``MaskRegion``) as node attributes:
     ``color`` ("<word> <frac> / ..."), ``color_conf`` (3 dp), ``color_shade``
     (dk | mid | lt) and ``color_flag`` ("look" for the uncertain chroma band,

@@ -530,8 +530,8 @@ def test_a_fid_off_the_surface_is_refused_as_naming_no_row(op):
 
 
 def _ends_block(code):
-    from maps.query.surface import build_surface_from_graph
     from maps.mission.tests.fakes import ROADS, drive, priors, run, tool_results
+    from maps.query.surface import build_surface_from_graph
 
     cands, anchors = build_surface_from_graph({**priors(), **ROADS}.items(), (0.0, 0.0), 1.0)
     _r, fr, _f, _d = drive(

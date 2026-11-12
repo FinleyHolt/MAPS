@@ -4,7 +4,6 @@ columns a result serves."""
 
 from __future__ import annotations
 
-
 # Colour matches by FAMILY: perception's usual slip stays inside one (gray
 # reads silver under glare, red reads maroon).
 # Palette word -> family; key order is the order a label's colour is read in
@@ -41,7 +40,7 @@ def _color_word_raw(a: str, b: str) -> float:
     return 1.0 if (a in b or b in a) else 0.0  # unknown words: substring fallback
 
 
-def _parse_color_mixture(s: str) -> "list[tuple[str, float]] | None":
+def _parse_color_mixture(s: str) -> list[tuple[str, float]] | None:
     """``[(word, fraction), ...]`` of a mixture ("red 0.45 / black 0.30",
     ``|`` also separates), or ``None`` when ``s`` is not one."""
     parts = [p.strip() for p in (s or "").replace("|", "/").split("/")]
@@ -137,7 +136,7 @@ def normalize_color(word: str) -> str:
 COLOR_COLUMNS = frozenset("color_" + w for w in COLOR_ENUM)
 
 
-def compact_color_cell(color_str: str, *, shade: "str | None", uncertain: bool, rich: bool) -> str:
+def compact_color_cell(color_str: str, *, shade: str | None, uncertain: bool, rich: bool) -> str:
     """The rendered colour cell ``[dk|lt ]word[/word2][?]`` of a mixture
     (``shade`` is ``dk``, ``lt`` or None): ``word2`` when ``rich`` and the
     second component crosses a family, ``?`` on an uncertain read."""

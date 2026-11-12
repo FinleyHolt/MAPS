@@ -21,8 +21,8 @@ from pathlib import Path
 
 import numpy as np
 
-from benchmarks.run_record import rows as _rows
 from benchmarks.citynav.analysis.run_report import criterion_label, run_criterion
+from benchmarks.run_record import rows as _rows
 
 #: (json key, header, format). An absent metric prints ``--``, never 0.
 COLUMNS = (

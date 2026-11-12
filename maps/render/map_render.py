@@ -12,14 +12,15 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import cv2
 import numpy as np
 
 from maps.query.row_geometry import cells_of
 from maps.query.spatial_math import cell_centre_xy
+from maps.render import mark_overlay
 from maps.render.look_render import (
     frame_arcs,
     frame_echo,
@@ -28,7 +29,6 @@ from maps.render.look_render import (
     view_rotation,
     xy_list,
 )
-from maps.render import mark_overlay
 from maps.render.osm_palette import paint_color, paint_word
 
 log = logging.getLogger(__name__)
@@ -533,7 +533,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m, grid_sh
             draw_digits=False,
             outline_marks=False,
         )
-    except Exception as exc:  # noqa: BLE001 -- a render fail skips one map
+    except Exception as exc:
         log.warning("map: overlay failed at %s: %s", (cx, cy), exc)
         return None
     # label -> the colour word painted, biggest class first

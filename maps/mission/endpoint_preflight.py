@@ -46,7 +46,7 @@ from maps.settings import Settings, from_process
 def _picture() -> bytes:
     """A 512 px JPEG: grey ground with one red square, so the reply can say
     whether the model saw it."""
-    from PIL import Image, ImageDraw  # noqa: PLC0415
+    from PIL import Image, ImageDraw
 
     im = Image.new("RGB", (512, 512), (110, 110, 110))
     ImageDraw.Draw(im).rectangle((192, 192, 320, 320), fill=(200, 30, 30))
@@ -71,8 +71,8 @@ def _conversation(
     settings: Settings = Settings(),
 ) -> dict:
     # The mission stack loads transformers: not at --help.
-    from maps.llm.flight_summary import summarize  # noqa: PLC0415
-    from maps.mission.reasoner import Reasoner  # noqa: PLC0415
+    from maps.llm.flight_summary import summarize
+    from maps.mission.reasoner import Reasoner
 
     # one prompt-cache key per conversation, as one per episode
     reasoner = Reasoner(
@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
                 if asked is not None:
                     check_effort(spec.model_id, asked)
                 result = _conversation(spec, asked, Path(tmp), settings)
-            except Exception as exc:  # noqa: BLE001 — a refusal is the finding
+            except Exception as exc:
                 failed += 1
                 print(f"effort {asked!r}: REFUSED {type(exc).__name__}: {exc}", file=sys.stderr)
                 continue

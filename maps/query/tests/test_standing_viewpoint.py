@@ -37,7 +37,7 @@ def test_attach_signs_are_the_cw_handedness_law():
 def test_attach_copies_rows_never_mutates_the_surface():
     before = [dict(c) for c in _CANDS]
     _attach_standing_columns(_CANDS, _V1)
-    assert _CANDS == before
+    assert before == _CANDS
 
 
 def test_standing_columns_ride_every_find_result():

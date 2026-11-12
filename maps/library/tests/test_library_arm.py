@@ -9,12 +9,12 @@ from maps.mission.tests.fakes import (
     CANDS,
     START,
     STOPS,
-    drive,
-    explore_drive,
-    grow_drive,
     acts_of_block,
     calls_of_block,
+    drive,
+    explore_drive,
     grounded_in_block,
+    grow_drive,
     ops_of_block,
     raising_ops_of_block,
     run,
@@ -829,8 +829,8 @@ def test_stand_adopts_the_viewpoint_and_its_columns_ride_the_rows():
 
     import pytest
 
-    from maps.library.op_compiler import CodeError
     from maps.library.block_scan import scan_block
+    from maps.library.op_compiler import CodeError
 
     assert calls_of_block('stand(at="the church", facing="the gate")\n') == [
         ("ground", {"the church": "stage", "the gate": "facing"}),
@@ -1041,10 +1041,10 @@ def test_the_legend_documents_every_call_the_surface_serves():
     way to learn it has."""
     import inspect
 
-    from maps.mission.served_text import CODE_DOC
+    from maps.library.block_scan import _LIBRARY_CALLS
     from maps.library.calls import Library
     from maps.library.rows import Rows
-    from maps.library.block_scan import _LIBRARY_CALLS
+    from maps.mission.served_text import CODE_DOC
 
     names = _LIBRARY_CALLS
     assert len(names) >= 9, names  # vacuity floor
@@ -1323,8 +1323,8 @@ def test_an_explore_of_a_LIST_of_rows_covers_their_union():
 def test_an_explore_of_ends_of_flies_each_terminus_as_its_point(move, want):
     """A terminus is nowhere on the surface; the pass flies its point, as
     go_to(e[0]) does, and so does its fid typed."""
-    from maps.query.surface import build_surface_from_graph
     from maps.mission.tests.fakes import ROADS, priors
+    from maps.query.surface import build_surface_from_graph
 
     cands, anchors = build_surface_from_graph({**priors(), **ROADS}.items(), (0.0, 0.0), 1.0)
     reply, out, flights, _a, _rend = explore_drive(

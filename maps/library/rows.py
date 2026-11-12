@@ -21,12 +21,12 @@ from maps.library.op_compiler import (
     refuse_metres_in_within,
     split_diagonal,
 )
+from maps.query.op_io import empty_window_refusal, sanitize_token, window_span
 from maps.query.result_tables import (
     AUTOATTACH_PREFIXES,
     MODEL_UNSERVED_COLUMNS,
     STANDING_SIDE_PREFIXES,
 )
-from maps.query.op_io import empty_window_refusal, sanitize_token, window_span
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.xy_token import is_xy
 
@@ -224,7 +224,7 @@ class _Cuts:
     def _in_hand(self):
         return self
 
-    def _sorted(self, key, reverse: bool) -> "RowList":
+    def _sorted(self, key, reverse: bool) -> RowList:
         return RowList(sorted(self._in_hand(), key=key, reverse=reverse))
 
     @_said
@@ -359,7 +359,7 @@ class Row(_Cuts):
     def _in_hand(self):
         return (self,)
 
-    def _sorted(self, key, reverse: bool) -> "RowList":
+    def _sorted(self, key, reverse: bool) -> RowList:
         return RowList([self])  # one row is already in order
 
     def _target(self):
@@ -562,7 +562,7 @@ class Rows(_Cuts):
 
     __slots__ = ("_ref", "_spec", "_mp", "_label")
 
-    def __init__(self, ref: str, mp: "Library", spec: str = "", label: str = ""):
+    def __init__(self, ref: str, mp: Library, spec: str = "", label: str = ""):
         self._ref = ref
         self._spec = spec
         self._mp = mp
@@ -640,21 +640,21 @@ class Rows(_Cuts):
     # holding it -- r1.exact, explore(r1.exact + r1.tagged). Live views; the
     # full set stays behind this handle.
     @property
-    def exact(self) -> "Rows":
+    def exact(self) -> Rows:
         """The rows that ARE the queried thing -- the top match tier."""
         return self._stratum("exact")
 
     @property
-    def tagged(self) -> "Rows":
+    def tagged(self) -> Rows:
         """The tag-carriers -- rows matched through a key=value tag."""
         return self._stratum("tagged")
 
     @property
-    def fuzzy(self) -> "Rows":
+    def fuzzy(self) -> Rows:
         """The word-sharers -- the fuzz band below the exact tiers."""
         return self._stratum("fuzzy")
 
-    def _stratum(self, tier: str) -> "Rows":
+    def _stratum(self, tier: str) -> Rows:
         src = self if not self._spec else self._mp._materialize(self)
         p = self._mp._program(src._ref)
         name = self._mp.names.spelling(self)

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
+from maps.library.block_scan import scan_block
 from maps.library.op_compiler import CodeError
 from maps.library.rows import Row
-from maps.library.block_scan import scan_block
 from maps.mission.tests.fakes import (
-    quiet_env,
     drive,
     explore_drive,
     grow_drive,
+    quiet_env,
     run,
     tool_results,
 )
@@ -471,8 +471,8 @@ def test_row_get_resolves_aliases_instead_of_defaulting():
 def test_a_ref_column_is_spelled_by_its_places_real_name():
     """The model spells a column with the name the CUE gave it; the producer spells it
     with the name it sanitized."""
-    from maps.query.op_io import sanitize_token
     from maps.library.rows import Row
+    from maps.query.op_io import sanitize_token
 
     lbl = sanitize_token("Poppy Boulevard")
     assert lbl == "poppy_boulevard", lbl  # the producer's own rule

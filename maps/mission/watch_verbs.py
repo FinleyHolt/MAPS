@@ -4,12 +4,11 @@ targeted boost."""
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from maps.mission.acks import Rejections
 from maps.mission.spec import MissionSpec
 from maps.mission.surface_state import Progress, Surface
-
 
 log = logging.getLogger(__name__)
 

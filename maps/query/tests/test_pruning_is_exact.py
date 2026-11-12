@@ -4,8 +4,8 @@ value and witness alike."""
 import numpy as np
 import pytest
 
-from maps.query import spatial_math as G
 from maps.mission.tests.fakes import ring
+from maps.query import spatial_math as G
 
 
 def _shapes(seed, n, span=600):

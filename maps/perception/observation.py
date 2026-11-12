@@ -52,7 +52,7 @@ def crop_ortho_observation(
     altitude_m: float,
     ground_z: float,
     rgbd_dir: Path | str | None = None,
-    sensor: "SensorSpec | None" = None,
+    sensor: SensorSpec | None = None,
     ortho: dict | None = None,
 ) -> dict:
     """Crop the ortho over the view rectangle (:func:`ground_sides_m`,
@@ -70,7 +70,7 @@ def crop_ortho_observation(
     out-of-raster pixels have ``validity`` 0 and ``depth`` 0, which the
     projection drops.
     """
-    import cv2  # noqa: PLC0415
+    import cv2
 
     if ortho is None:
         ortho = camera_model.load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir)

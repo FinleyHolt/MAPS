@@ -3,9 +3,8 @@
 import inspect
 import threading
 
-
-from maps.mission import contract
 from maps.library.calls import Library
+from maps.mission import contract
 
 
 def test_the_surface_serves_keyword_only_calls_as_keyword_only():
@@ -90,6 +89,7 @@ def test_a_five_digit_detection_fid_is_a_row_like_a_four_digit_one():
     detected_<count>): the bare name is the row, and a quoted one is a fid,
     not a name to ground."""
     import json
+
     from maps.mission.tests.fakes import drive, run, tool_results
 
     cands = [

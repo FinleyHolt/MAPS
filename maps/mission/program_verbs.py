@@ -12,9 +12,10 @@ from maps.mission.surface_state import Progress, Surface
 from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS
 from maps.query.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR,
+)
+from maps.query.text_match import (
     unmatched_query_tokens as _unmatched_query_tokens,
 )
-
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
 # re-render of an identical result is loop fuel). Every path that can mint a

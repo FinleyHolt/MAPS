@@ -3,6 +3,7 @@ per graph node, detections as ``cands`` and priors as ``anchors``."""
 
 from __future__ import annotations
 
+import contextlib
 import re
 
 import numpy as np
@@ -65,10 +66,8 @@ def _color_fields(n) -> dict:
     fields = {"color": color if color is not None else _color_of(str(n.class_name or ""))}
     conf = _modal_attr(n, "color_conf")
     if conf is not None:
-        try:
+        with contextlib.suppress(ValueError):
             fields["color_conf"] = round(float(conf), 3)
-        except ValueError:
-            pass
     shade = _modal_attr(n, "color_shade")
     if shade is not None:
         fields["color_shade"] = shade
@@ -233,7 +232,7 @@ def _anchor_row(f, n, frame):
 # geometry, so rows are cached by content (_content_key over the node's whole
 # __dict__, so a new MapObject field cannot be invisible to the key): ingest
 # returns fresh node objects. The cache is dropped whole at its cap.
-_ROW_CACHE: "dict[tuple, dict | None]" = {}
+_ROW_CACHE: dict[tuple, dict | None] = {}
 _ROW_CACHE_MAX = 50_000
 
 

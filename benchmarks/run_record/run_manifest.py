@@ -17,9 +17,8 @@ from pathlib import Path
 
 import yaml
 
-from benchmarks.run_record.config import repo_provenance
 from benchmarks.bench import Bench
-from benchmarks.run_record.config import resolve_config
+from benchmarks.run_record.config import repo_provenance, resolve_config
 from benchmarks.run_record.episodes import (
     EPISODES_JSONL,
     MANIFEST_NAME,

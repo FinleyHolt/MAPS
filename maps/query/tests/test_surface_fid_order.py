@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from maps.query.surface import build_surface_from_graph
 from maps.mission.tests.fakes import acts_of_block
+from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 
 
@@ -33,8 +33,8 @@ def test_detected_2_serves_before_detected_100():
 def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     """A street's initial reply is what it IS, not an arbitrary prefix."""
     from maps.query.op_find import _NAME_SET_SHAPE_ROWS
-    from maps.query.result_tables import compact_results
     from maps.query.program import run_program
+    from maps.query.result_tables import compact_results
 
     def _way(name, cells):
         cells = np.asarray(cells, dtype=int).reshape(-1, 2)

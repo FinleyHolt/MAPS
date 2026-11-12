@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from maps.query.result_tables import compact_results
 from maps.query.program import run_program
+from maps.query.result_tables import compact_results
 
 _ANCHORS = [
     {

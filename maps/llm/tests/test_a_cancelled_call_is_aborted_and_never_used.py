@@ -120,7 +120,7 @@ def test_a_cancel_during_a_connect_that_never_completes_ends_the_call(monkeypatc
     def call():
         try:
             send(lis.getsockname()[1], cancel)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             got.append(e)
 
     t = threading.Thread(target=call, daemon=True)

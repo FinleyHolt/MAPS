@@ -7,9 +7,9 @@ import pytest
 
 pytest.importorskip("sam3", reason="the FAIR sam3 stack is not in every env")
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from serving.sam_engine import _build_datapoint  # noqa: E402
+from serving.sam_engine import _build_datapoint
 
 
 @pytest.mark.parametrize("h,w", [(1536, 2048), (2048, 1536)])

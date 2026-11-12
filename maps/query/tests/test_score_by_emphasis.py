@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from maps.query.program import run_program
-from maps.query.op_io import ProgramError
-from maps.query import spatial_math as G
 from maps.library.result_handles import run_ops
+from maps.query import spatial_math as G
+from maps.query.op_io import ProgramError
+from maps.query.program import run_program
 
 # Four cars at distinct positions; three white (color_white high), one gray. A
 # compare against two point refs — the bare literal attaches the documented

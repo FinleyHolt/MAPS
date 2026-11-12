@@ -32,7 +32,7 @@ def transport(monkeypatch):
                 result = http_mod.chat_completions_raw(
                     f"{serve.url}/v1", "key", model="m", messages=_MESSAGES, timeout=60.0, **kwargs
                 )
-            except Exception as exc:  # noqa: BLE001 - the test inspects it
+            except Exception as exc:
                 result = exc
         return result, serve.bodies, sleeps
 
@@ -58,7 +58,7 @@ def test_rate_limit_budget_is_separate_from_transient_budget(transport) -> None:
     assert isinstance(result, httpx.HTTPStatusError)
     assert result.response.status_code == 429
     assert len(calls) == len(sleeps) + 1 > 20
-    assert http_mod._RATE_LIMIT_BUDGET_S - http_mod._RATE_LIMIT_MAX_BACKOFF_S < sum(sleeps)
+    assert sum(sleeps) > http_mod._RATE_LIMIT_BUDGET_S - http_mod._RATE_LIMIT_MAX_BACKOFF_S
     assert sum(sleeps) <= http_mod._RATE_LIMIT_BUDGET_S
 
 
@@ -150,7 +150,7 @@ class _RaisingClient:
         self._calls = calls
         self.is_closed = False
 
-    def __enter__(self) -> "_RaisingClient":
+    def __enter__(self) -> _RaisingClient:
         return self
 
     def __exit__(self, *_exc: object) -> bool:

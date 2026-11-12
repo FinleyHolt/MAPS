@@ -19,7 +19,6 @@ import urllib.error
 import pytest
 
 from maps.llm import endpoint_spec as E
-from maps.settings import Settings, from_environ
 from maps.llm.endpoint_spec import (
     EndpointDiscoveryError,
     EndpointOverride,
@@ -27,6 +26,7 @@ from maps.llm.endpoint_spec import (
     discover,
     parse_override,
 )
+from maps.settings import Settings, from_environ
 
 _URL_A = "http://a:8001/v1"
 _URL_B = "http://b:8001/v1"

@@ -14,15 +14,15 @@ import logging
 import time
 from pathlib import Path
 
+from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, ConversationLog
 from benchmarks.run_record.episodes import DEADLINE_ENV, TOUR_CURSOR, atomic_write_json
-from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from maps.llm.endpoint_spec import spec as endpoint_spec
-from maps.perception.ortho.sensor_frame import served_description
+from maps.mission.loop import run_mission
+from maps.mission.spec import MissionSpec
 from maps.perception.observation import ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
-from maps.mission.spec import MissionSpec
-from maps.mission.loop import run_mission
+from maps.perception.ortho.sensor_frame import served_description
 from maps.xy_token import parse_xy_token
 
 log = logging.getLogger("run_benchmark")
@@ -231,7 +231,7 @@ class MissionSession:
         # Queued boosts segment on THIS flight.
         try:
             world.start_flight()
-        except Exception:  # noqa: BLE001 - perception direction never kills a flight
+        except Exception:
             log.exception("boost start failed; flight proceeds un-boosted")
 
         step_idx = len(self.flights)
@@ -261,7 +261,7 @@ class MissionSession:
         try:
             for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
                 world.upsert_prior_percept(pfid, pattrs, px=ppx)
-        except Exception as exc:  # noqa: BLE001 - colour enrichment never kills a flight
+        except Exception as exc:
             self.prior_enrich_fails += 1
             if self.prior_enrich_fails == 1 or self.prior_enrich_fails % 50 == 0:
                 log.warning(
@@ -287,7 +287,7 @@ class MissionSession:
                     "target_fids": [token] if token else [],
                 }
             )
-        except Exception:  # noqa: BLE001 - perception direction never kills a flight
+        except Exception:
             log.exception("flown-stop record failed (non-fatal)")
 
         self.flights.append(

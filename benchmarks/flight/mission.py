@@ -267,7 +267,7 @@ class Mission:
 
     def _downlink(self, obs) -> str | None:
         """The observation as ``observations/<sha256>.jpg``, its sha; None (logged) when it could not be written."""
-        from PIL import Image  # noqa: PLC0415
+        from PIL import Image
 
         out = BytesIO()
         Image.fromarray(np.ascontiguousarray(obs.rgb)).save(
@@ -340,7 +340,7 @@ class Mission:
         self._thread.start()
 
     def _run(self) -> None:
-        from maps.mission.loop import continue_mission  # noqa: PLC0415  (the mission stack, with its tokenizer)
+        from maps.mission.loop import continue_mission
 
         engine = self.bench.engine
         try:
@@ -430,7 +430,7 @@ class Mission:
             # Stop, pressed while the reasoner call was in flight.
             with self._lock:
                 self._stopped()
-        except Exception as exc:  # noqa: BLE001 -- the operator must see why
+        except Exception as exc:
             if self._cancel.is_set():
                 log.info("mission %s: %s after the stop", self.episode_id, type(exc).__name__)
                 with self._lock:
@@ -480,7 +480,7 @@ class Mission:
                 ),
                 log=log.info,
             )
-        except Exception:  # noqa: BLE001 -- a mission without a manifest still flies
+        except Exception:
             log.exception("run_manifest not written for %s", self.workdir)
 
     def _mission_stamp(self) -> dict[str, Any]:
@@ -592,7 +592,7 @@ class Mission:
             write_episode_json(self.workdir, row)
             upsert_row(sortie, {**row, "workdir": str(self.workdir.relative_to(sortie))})
             self._record_track()
-        except Exception:  # noqa: BLE001 -- a mission is not failed by its paperwork
+        except Exception:
             log.exception("the row for %s did not land", self.episode_id)
 
     def _record_track(self) -> None:

@@ -9,8 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from maps.mission import endpoint_preflight
 from maps.llm import endpoint_spec
+from maps.mission import endpoint_preflight
 
 ENCRYPTED = "gAAAAB-opaque-reasoning-turn-1"
 

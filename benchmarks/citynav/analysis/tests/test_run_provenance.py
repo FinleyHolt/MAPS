@@ -8,7 +8,6 @@ rather than being guessed from anything else.
 
 from __future__ import annotations
 
-
 from benchmarks.citynav.analysis.ab_report import _run_provenance
 from benchmarks.run_record.tests.ledger import write_ledger
 

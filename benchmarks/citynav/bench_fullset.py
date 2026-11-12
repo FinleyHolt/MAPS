@@ -553,7 +553,7 @@ class Driver:
             try:
                 if self._wait_for_reasoner() and self._wait_for_sam():
                     self.run_one(worker_id, eid)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")
                 try:
                     self._append_result(

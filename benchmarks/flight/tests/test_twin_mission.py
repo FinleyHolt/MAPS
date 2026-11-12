@@ -12,7 +12,6 @@ import pytest
 
 from benchmarks.flight.tests import world
 
-
 TARGET = (1000.0, 1000.0)
 START = (1000.0, 300.0)
 
@@ -107,8 +106,8 @@ def serves(monkeypatch):
     from huggingface_hub import constants as hub
 
     from maps.llm import endpoint_spec, flight_summary, http
-    from maps.mission import compactor
     from maps.llm.endpoint_spec import EndpointSpec
+    from maps.mission import compactor
 
     # No test loads a tokenizer off the hub: prompt sizing and reasoning-token counts read this one.
     monkeypatch.setattr(hub, "HF_HUB_OFFLINE", True)
@@ -148,7 +147,6 @@ def serves(monkeypatch):
     monkeypatch.setattr(http, "stream_chat_completions", reply)
 
     from benchmarks.citynav.run_benchmark import episode_runner
-
     from maps.perception.sam.detect_client import SamDetectClient
 
     seen = SamDetectClient()

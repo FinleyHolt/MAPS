@@ -62,7 +62,7 @@ class Tie:
 
 def floor_homography(pose: Pose, sensor, floor: float) -> np.ndarray:
     """The 3x3 map from the frame's pixels (array indices) to bake-local metres on the floor at ``pose``."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     intr = sensor.intrinsics
     corners = ground_corners_xy(
@@ -92,7 +92,7 @@ def floor_homography(pose: Pose, sensor, floor: float) -> np.ndarray:
 
 def ground_of_pixels(homography: np.ndarray, uv) -> np.ndarray:
     """``(N, 2)`` points through a 3x3 map from ``(N, 2)`` points."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     pts = np.asarray(uv, dtype=np.float64).reshape(-1, 1, 2)
     return cv2.perspectiveTransform(pts, homography).reshape(-1, 2)
@@ -112,7 +112,7 @@ def candidates(
 ) -> list[tuple[float, float]]:
     """Template centres on frame i's work grid: a :data:`TIE_PITCH_PX` grid inside the
     search border and inside the partner's warped footprint eroded by :data:`ERODE_PX`."""
-    import cv2  # noqa: PLC0415
+    import cv2
 
     wj, hj = size_j
     wi, hi = size_i
@@ -172,7 +172,7 @@ class TieMatcher:
 
     def _frame(self, key, gray: np.ndarray, agl_m: float):
         """``(w, h, S, future)``: the frame binned to its work grid and its edge maps."""
-        import cv2  # noqa: PLC0415
+        import cv2
 
         w, h, s = work_grid(self.sensor, agl_m)
 
@@ -190,7 +190,7 @@ class TieMatcher:
         self, key_i, pose_i: Pose, gray_i: np.ndarray, pose_j: Pose, gray_j: np.ndarray
     ) -> list[Tie]:
         """The ties between frame i (cached under ``key_i``) and frame j, in the frames' own pixels."""
-        import cv2  # noqa: PLC0415
+        import cv2
 
         g_i, g_j = self.ground(tuple(pose_i.pose_xy)), self.ground(tuple(pose_j.pose_xy))
         w, h, s_i = work_grid(self.sensor, pose_i.alt_msl_m - g_i)

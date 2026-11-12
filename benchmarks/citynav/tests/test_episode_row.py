@@ -5,12 +5,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from benchmarks.citynav.adapter import parse_episode
 from benchmarks.calcity.paths import calcity_bench
+from benchmarks.citynav.adapter import parse_episode
 from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark import episode_runner as er
-from maps.settings import Settings
 from maps.mission.spec import MissionReply
+from maps.settings import Settings
 
 _ROW = {
     "area": "b",

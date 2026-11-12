@@ -98,8 +98,8 @@ def test_the_pose_echo_follows_a_flight_and_ignores_an_error():
 def test_the_mission_deadline_is_read_per_call_and_optional(monkeypatch):
     """Unset means NO clock, which is the flight mission's case and the
     default."""
-    from benchmarks.run_record.episodes import DEADLINE_ENV
     from benchmarks.citynav.run_benchmark.mission_engine import _mission_deadline_epoch
+    from benchmarks.run_record.episodes import DEADLINE_ENV
 
     assert _mission_deadline_epoch({}) is None
     assert _mission_deadline_epoch({DEADLINE_ENV: "1788050346.5"}) == 1788050346.5

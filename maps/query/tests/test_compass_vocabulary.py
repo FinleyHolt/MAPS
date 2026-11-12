@@ -7,9 +7,9 @@ import math
 import pytest
 
 from maps.query.spatial_math import (
+    _COMPASS8,
     CARDINALS,
     COMPASS_UNIT,
-    _COMPASS8,
     _compass8,
     cardinal,
     cardinal_offset,
@@ -23,7 +23,7 @@ def test_the_table_is_eight_winds_and_the_subset_is_four():
     assert len(COMPASS_UNIT) == 8, sorted(COMPASS_UNIT)
     assert set(COMPASS_UNIT) == _EIGHT, sorted(COMPASS_UNIT)
     assert len(CARDINALS) == 4, sorted(CARDINALS)
-    assert CARDINALS < set(COMPASS_UNIT), "the subset must be PROPER"
+    assert set(COMPASS_UNIT) > CARDINALS, "the subset must be PROPER"
 
 
 def test_every_unit_vector_round_trips_through_its_own_word():

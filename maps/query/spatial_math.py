@@ -14,7 +14,6 @@ import numpy as np
 from maps.query.color_words import COLOR_COLUMNS
 from maps.query.polyline import clip_t
 
-
 # 8-point compass wedges over compass bearing (0=N, clockwise).
 _COMPASS8 = (
     (22.5, "north"),

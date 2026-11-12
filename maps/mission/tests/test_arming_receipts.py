@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
+from maps.mission.tests.fakes import drive, episode_world, run, tool_results
 from maps.mission.watch_verbs import _named_feature_note
-from maps.mission.tests.fakes import drive, run, episode_world, tool_results
 
 
 def test_named_feature_note_fires_on_a_world_state_name():

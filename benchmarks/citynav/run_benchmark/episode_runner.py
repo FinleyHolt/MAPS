@@ -10,33 +10,33 @@ import functools
 import hashlib
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any
 
 from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import CityNavEpisode
 from benchmarks.citynav.eval import score_arrival
-from benchmarks.run_record.episode_workdir import LiveRecorder
 from benchmarks.citynav.run_benchmark.assets import BlockAssets, load_episode_assets
-from benchmarks.run_record.config import RunConfig
 from benchmarks.citynav.run_benchmark.mission_engine import (
     MissionSession,
     perceive,
     run_mission_episode,
 )
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
+from benchmarks.run_record.config import RunConfig
+from benchmarks.run_record.episode_workdir import LiveRecorder
 from maps.llm import flight_summary
+from maps.mission.episode_world import EpisodeWorld
 from maps.perception.geometry.geolocate import TileFrame
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.observation import crop_observation
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.sam.detect_client import SamDetectClient
-from maps.mission.episode_world import EpisodeWorld
 from maps.settings import Settings
-from maps.world_state.prior_graph import build_object_graph
 from maps.world_state.graph import GridDomain
+from maps.world_state.prior_graph import build_object_graph
 
 log = logging.getLogger("run_benchmark")
 
@@ -237,18 +237,18 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
     alt = float(flown_entry["alt_m"])
     try:
         obs = h.crop((px, py), alt)
-    except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
+    except Exception as exc:
         log.exception("retro re-render failed")
         return {"error": f"re-render failed: {type(exc).__name__}: {exc}"}
     try:
         dets = h.perception.segment(obs, list(concepts))
-    except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
+    except Exception as exc:
         log.exception("retro segment failed")
         return {"error": f"segment failed: {type(exc).__name__}: {exc}"}
     before = _detected_fids(h.world)
     try:
         perceive(h, obs, dets)
-    except Exception as exc:  # noqa: BLE001 - surfaced as a tool fact
+    except Exception as exc:
         log.exception("retro ingest failed")
         return {"error": f"ingest failed: {type(exc).__name__}: {exc}"}
     new = sorted(_detected_fids(h.world) - before)

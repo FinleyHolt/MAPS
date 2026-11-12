@@ -37,13 +37,13 @@ from pathlib import Path
 
 import numpy as np
 
-from benchmarks.calcity.paths import calcity_bench
 from benchmarks.calcity.data_prep.aoi import (
     AOI_BBOX,
     GROUND_LEVEL_M,
     build_local_frame,
 )
 from benchmarks.calcity.data_prep.bundle import grid_shape
+from benchmarks.calcity.paths import calcity_bench
 
 log = logging.getLogger("build_rgbd_ortho")
 
@@ -64,7 +64,7 @@ def build_block(root: Path, map_name: str, bbox, raster: Path) -> tuple[Path, Pa
             )
     lf = build_local_frame(bbox)
     want_h, want_w = grid_shape(lf, px)
-    if (W, H) != (want_w, want_h):
+    if (want_w, want_h) != (W, H):
         raise ValueError(
             f"{raster} is {W}x{H} at {px} m; the block's frame at that cell is {want_w}x{want_h}"
         )

@@ -3,11 +3,11 @@ pixels, through the mission loop."""
 
 from __future__ import annotations
 
+from maps.mission.tests.fakes import cars, look_drive, run
 from maps.render.look_render import (
     LOOK_MAX_BADGES,
     look_window_bounds_m,
 )
-from maps.mission.tests.fakes import cars, look_drive, run
 
 # The bounds are pixel counts; the fixture ortho below is 0.1 m/px.
 _MIN_M, _BUDGET_M = look_window_bounds_m(0.1)

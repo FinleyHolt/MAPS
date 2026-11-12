@@ -34,7 +34,7 @@ def map_bounds(tiles_dir: str | Path, map_name: str) -> Bounds:
 @lru_cache(maxsize=8)
 def _transformers(tiles_dir: str, map_name: str):
     """``(to_lonlat, to_utm, origin_e, origin_n)`` for the bake, or None without a georef."""
-    from pyproj import Transformer  # noqa: PLC0415
+    from pyproj import Transformer
 
     path = Path(tiles_dir) / f"{map_name}_meta.json"
     try:
