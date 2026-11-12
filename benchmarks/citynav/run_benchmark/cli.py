@@ -69,21 +69,7 @@ def _emit_run_manifest(args, *, bench: Bench, out_root: Path, indexed_rows: list
     )
 
 
-def main(bench: Bench | None = None) -> int:
-    """The runner's CLI, for ``bench``; unset, for the bench the environment
-    selects (``paths.selected_bench``), which is how an attempt child of
-    either driver learns its bench."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)-5s %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    if bench is None:
-        bench = selected_bench(os.environ)
-    # A direct run records the bench it flew by name.
-    if "SEARCH_BENCHMARK_NAME" not in bench.environ:
-        bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})
-
+def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Run the {bench.name} navigation benchmark.")
     parser.add_argument("--split", default=bench.default_split)
     parser.add_argument("--config", default=None, help="Path to YAML under configs/")
@@ -119,6 +105,25 @@ def main(bench: Bench | None = None) -> int:
             "the ledger and the manifest."
         ),
     )
+    return parser
+
+
+def main(bench: Bench | None = None) -> int:
+    """The runner's CLI, for ``bench``; unset, for the bench the environment
+    selects (``paths.selected_bench``), which is how an attempt child of
+    either driver learns its bench."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-5s %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    if bench is None:
+        bench = selected_bench(os.environ)
+    # A direct run records the bench it flew by name.
+    if "SEARCH_BENCHMARK_NAME" not in bench.environ:
+        bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})
+
+    parser = _build_parser(bench)
     args = parser.parse_args()
     if args.attempt_root:
         if not args.episode_id:
