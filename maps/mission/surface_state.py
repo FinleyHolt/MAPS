@@ -1,17 +1,36 @@
 """The surface one mission reads: the ``{cands, anchors, cell_m}`` rows of
-its world-state graph, the place a token names, and the viewpoint
-``stand`` adopts."""
+its world-state graph, the result handles over them, the place a token
+names, and the viewpoint ``stand`` adopts."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from maps.library.op_compiler import END_RE
+from maps.library.result_handles import Carry
+from maps.mission.acks import Rejections
 from maps.mission.picture_requests import map_features, rounded_xy
+from maps.query.result_tables import MODEL_UNSERVED_COLUMNS
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.query.surface import build_surface_from_graph
 from maps.render.look_render import look_xy, up_bearing_deg
 
 
-def _surface_from_ctx(ctx) -> dict:
+@dataclass
+class Progress:
+    """Where the conversation stands, shared by the loop and its verbs."""
+
+    #: The log tag of the operator turn (``m0``, ``m1``, ...).
+    rid_tag: str = "h?"
+    #: The reasoner turn within the operator turn.
+    turn_idx: int = 0
+    #: The mission's flights so far, over every operator turn.
+    flights: int = 0
+    #: The operator turn's flights: the backstop's count.
+    turn_flights: int = 0
+
+
+def surface_from_ctx(ctx) -> dict:
     """The ``{cands, anchors, cell_m}`` surface of a :class:`QueryContext`'s
     graph."""
     cell_m = float(ctx.cell_size_m)
@@ -21,55 +40,143 @@ def _surface_from_ctx(ctx) -> dict:
     return {"cands": cands, "anchors": anchors, "cell_m": cell_m}
 
 
-class _SurfaceState:
+class Surface:
     """The surface a mission reads: its rows by fid, re-derived when the world
-    steps, the place a token names and the standing viewpoint."""
+    steps, the result handles over them, the place a token names and the
+    standing viewpoint."""
 
-    def _world_moved(self) -> None:
+    def __init__(self, ctx, namespace: dict, name_of_ref, *, preflight: bool = False):
+        self.ctx = ctx
+        #: ``{cands, anchors, cell_m}``, plus ``staged`` and ``standing``
+        #: once a stance is adopted: what the op program runs over.
+        self.ns = namespace
+        #: Surface rows by fid, rebuilt in place after every flight and boost.
+        self.rows: dict[str, dict] = {}
+        self._rebuild_rows()
+        #: Each fid's latest result-enriched row, for the rejection census.
+        self.row_latest: dict[str, dict] = {}
+        #: The result handles; ``carry.version`` is the surface version, bumped
+        #: by a flight, a boost and a stance.
+        self.carry = Carry(namespace, name=name_of_ref)
+        #: True until the first flight: before it no row carries a seen colour.
+        self.preflight = preflight
+        #: The mission's flown stops, ``{stop_id: [x, y]}``: each a sayable place.
+        self.stops: dict[str, list] = {}
+        #: The staged viewpoints by vN handle; the latest is STANDING (its side
+        #: columns ride every find row, its facing orients what renders).
+        self.viewpoints: dict[str, dict] = {}
+        self.standing: str | None = None
+        # The map's flattened features, built once per surface version.
+        self._map_feats_version = None
+        self._map_feats: list[dict] = []
+
+    def world_moved(self) -> None:
         """The world stepped: refresh both surface views and bump the
         version."""
-        self.ns.update(_surface_from_ctx(self.ctx))
-        self._rebuild_ns_rows()
+        self.ns.update(surface_from_ctx(self.ctx))
+        self._rebuild_rows()
         self.carry.version += 1
 
-    def _rebuild_ns_rows(self) -> None:
+    def _rebuild_rows(self) -> None:
         # cands win on fid collision.
-        self._ns_rows.clear()
+        self.rows.clear()
         for key in ("cands", "anchors"):
             for r in self.ns.get(key) or []:
-                self._ns_rows.setdefault(str(r["fid"]), r)
+                self.rows.setdefault(str(r["fid"]), r)
 
-    def _stop_xy(self, tok: str):
+    def census(self, cap: int) -> tuple[int, int, list[str], str]:
+        """Live counts: detections, priors, the first ``cap`` computed
+        columns and the " (+N more)" past them."""
+        c_n = len(self.ns.get("cands") or [])
+        a_n = len(self.ns.get("anchors") or [])
+        cols = sorted({k for row in self.row_latest.values()
+                       for k, v in row.items()
+                       if k not in MODEL_UNSERVED_COLUMNS
+                       and v not in (None, "")})
+        more = f" (+{len(cols) - cap} more)" if len(cols) > cap else ""
+        return c_n, a_n, cols[:cap], more
+
+    def stop_xy(self, tok: str):
         """A flown stop id's recorded point, or None."""
-        return self._plan_stops.get(tok.strip().lower())
+        return self.stops.get(tok.strip().lower())
 
-    def _point(self, tok) -> list[float] | None:
+    def point(self, tok) -> list[float] | None:
         """THE place a token names, as [x, y] at 2 dp: a live surface fid, a
         flown stop id, a staged handle, or the canonical '[x, y]' token; None
         otherwise."""
         if isinstance(tok, str):
-            row = self._ns_rows.get(tok.strip())
+            row = self.rows.get(tok.strip())
             if row is not None:
                 return look_xy(row)
-            sp = self._stop_xy(tok)
+            sp = self.stop_xy(tok)
             if sp is not None:
                 return rounded_xy(sp)
-            end = self._terminus(tok)
+            end = self.terminus(tok)
             if end is not None:
                 return look_xy(end)
-            sv = self.staged_viewpoints.get(tok.strip().lower())
+            sv = self.viewpoints.get(tok.strip().lower())
             if sv is not None:
                 return rounded_xy(sv["from_xy"])
             return rounded_xy(tok)
         return None
 
-    def _stand(self, at_tok: str, facing_tok: str) -> dict:
-        """stand(): mint a vN handle that becomes STANDING and bump the
-        surface version (a program can answer differently under it)."""
-        def refuse(why: str) -> dict:
-            return self._plan_err({}, f"the stance did not bind: {why}")
+    def adopt_viewpoint(self, at_xy: list, up: list) -> dict:
+        """Stage a viewpoint at ``at_xy`` whose image-up is the unit vector
+        ``up``: it becomes STANDING and the surface version bumps (a program
+        can answer differently under it)."""
+        h = f"v{len(self.viewpoints) + 1}"
+        self.viewpoints[h] = {
+            "handle": h,
+            "from_xy": at_xy,
+            "up_unit": [round(up[0], 4), round(up[1], 4)],
+            "bearing_deg": round(up_bearing_deg(up)) % 360,
+        }
+        self.standing = h
+        self.ns["staged"] = self.viewpoints
+        self.ns["standing"] = h
+        self.carry.version += 1
+        return self.viewpoints[h]
 
-        at_xy = self._point(at_tok)
+    def standing_frame(self) -> tuple[list | None, str]:
+        """The STANDING viewpoint's image-up and the caption note stating it
+        (never a silent rotation); ``(None, "")`` with no stance."""
+        if self.standing is None:
+            return None, ""
+        sv = self.viewpoints[self.standing]
+        return (list(sv["up_unit"]),
+                f"image-up = {sv['handle']}'s facing "
+                f"(bearing {sv['bearing_deg']})")
+
+    def map_features(self) -> list[dict]:
+        if self._map_feats_version != self.carry.version:
+            self._map_feats_version = self.carry.version
+            self._map_feats = map_features(self.ctx)
+        return self._map_feats
+
+    def terminus(self, tok: str) -> dict | None:
+        """The carried row a typed terminus fid (``end_N``) names, or None."""
+        if not END_RE.fullmatch(tok.strip()):
+            return None
+        # ponytail: end_N restarts per ends_of call, so the newest carried
+        # row holding it wins; unique terminus fids if two ends_of sets must
+        # be named by fid.
+        return next((r for rows in reversed(self.carry.rows.values())
+                     for r in rows or () if r.get("fid") == tok.strip()), None)
+
+
+class Stance:
+    """The verb behind ``stand``: a viewpoint the surface adopts."""
+
+    def __init__(self, surface: Surface, rejections: Rejections):
+        self.surface = surface
+        self.rejections = rejections
+
+    def stand(self, at_tok: str, facing_tok: str) -> dict:
+        """stand(): mint a vN handle that becomes STANDING."""
+        def refuse(why: str) -> dict:
+            return self.rejections.error({}, f"the stance did not bind: {why}")
+
+        at_xy = self.surface.point(at_tok)
         if at_xy is None:
             return refuse(f"at {at_tok!r} is not a live surface fid or an "
                           f"[x, y] world point")
@@ -77,7 +184,7 @@ class _SurfaceState:
         if compass in COMPASS_UNIT:
             up = list(COMPASS_UNIT[compass])
         else:
-            f_xy = self._point(facing_tok)
+            f_xy = self.surface.point(facing_tok)
             if f_xy is None:
                 return refuse(f"facing {facing_tok!r} is not a live surface "
                               f"fid, an [x, y] point, or one of "
@@ -88,49 +195,13 @@ class _SurfaceState:
             if n < 1e-6:
                 return refuse("at and facing coincide -- no look direction")
             up = [dx / n, dy / n]
-        h = f"v{len(self.staged_viewpoints) + 1}"
-        brg = round(up_bearing_deg(up)) % 360
-        self.staged_viewpoints[h] = {
-            "handle": h,
-            "from_xy": at_xy,
-            "up_unit": [round(up[0], 4), round(up[1], 4)],
-            "bearing_deg": brg,
-        }
-        self.standing_handle = h
-        self.ns["staged"] = self.staged_viewpoints
-        self.ns["standing"] = h
-        self.carry.version += 1
+        staged = self.surface.adopt_viewpoint(at_xy, up)
+        h = staged["handle"]
         return {"stance": {
             "staged": [{"handle": h, "at_xy": at_xy,
-                        "facing_bearing_deg": brg}],
+                        "facing_bearing_deg": staged["bearing_deg"]}],
             "note": (f"standing viewpoint = {h}: 'left of {h}'/'right of "
                      f"{h}'/'ahead of {h}'/'behind {h}' ride every find "
                      f"row; {h} is a point ref ('distance to {h}'); "
                      "crops and maps render its facing up."),
         }}
-
-    def _standing_frame(self) -> tuple[list | None, str]:
-        """The STANDING viewpoint's image-up and the caption note stating it
-        (never a silent rotation); ``(None, "")`` with no stance."""
-        if self.standing_handle is None:
-            return None, ""
-        sv = self.staged_viewpoints[self.standing_handle]
-        return (list(sv["up_unit"]),
-                f"image-up = {sv['handle']}'s facing "
-                f"(bearing {sv['bearing_deg']})")
-
-    def _map_features_cached(self) -> list[dict]:
-        if self._map_feats_version != self.carry.version:
-            self._map_feats_version = self.carry.version
-            self._map_feats = map_features(self.ctx)
-        return self._map_feats
-
-    def _terminus(self, tok: str) -> dict | None:
-        """The carried row a typed terminus fid (``end_N``) names, or None."""
-        if not END_RE.fullmatch(tok.strip()):
-            return None
-        # ponytail: end_N restarts per ends_of call, so the newest carried
-        # row holding it wins; unique terminus fids if two ends_of sets must
-        # be named by fid.
-        return next((r for rows in reversed(self.carry.rows.values())
-                     for r in rows or () if r.get("fid") == tok.strip()), None)

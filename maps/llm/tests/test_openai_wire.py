@@ -130,7 +130,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
     """A provider caches the longest prefix it has seen byte for byte: under the image
     cap and the budget, each turn's tools serialize as the last turn's did and its
     messages array opens with the last turn's bytes."""
-    from maps.mission.served_text import served_tools
+    from maps.mission.served_text import SERVED_TOOLS
 
     sent: list[dict] = []
 
@@ -144,7 +144,7 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
     r.append_vision_user("look 0", [jpeg(64)] * 4)
     for k in range(1, 5):
-        r.step_tool_call(served_tools())
+        r.step_tool_call(SERVED_TOOLS)
         r.append_tool_result(f"c{k}", "run", {"printed": f"turn {k}"})
         r.append_vision_user(f"look {k}", [jpeg(64)] * 4)
     assert len(sent) == 4, "VACUITY FLOOR"
@@ -156,9 +156,9 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
 def test_the_run_tool_s_documentation_rides_the_system_turn(monkeypatch) -> None:
     """OpenAI refuses a function description over 1,024 characters; the run tool's is far
     longer, so it moves verbatim into the system turn and the tool points at it."""
-    from maps.mission.served_text import served_tools
+    from maps.mission.served_text import SERVED_TOOLS
 
-    tools = served_tools()
+    tools = SERVED_TOOLS
     doc = tools[0]["function"]["description"]
     assert len(doc) > openai_wire.DESCRIPTION_MAX_CHARS, "VACUITY FLOOR: nothing to move"
     sent = _serve(monkeypatch)

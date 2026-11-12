@@ -9,7 +9,7 @@ from maps.mission import served_text
 def test_the_dump_is_the_code_arm_the_flight_path_serves():
     c = contract.assemble()
     assert c["system"] == served_text.CODE_SYSTEM_PROMPT
-    assert c["tools"] == served_text.served_tools()
+    assert c["tools"] == served_text.SERVED_TOOLS
     assert [t["function"]["name"] for t in c["tools"]] == ["run"]
     for t in c["tools"]:
         assert len(t["function"]["description"]) > 300

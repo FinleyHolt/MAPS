@@ -115,9 +115,9 @@ def test_a_followup_turn_keeps_the_missions_names_stops_and_watchlist():
 def test_a_followup_after_a_turn_that_flew_nowhere_is_still_preflight():
     _, fr, _, _ = drive(["nothing."] * 3, preflight=True)
     drive(["still nothing."] * 3, reasoner=fr)
-    assert fr.mission[0].preflight
+    assert fr.mission[0].surface.preflight
     drive([[run('go_to("prior_7")')], "report"], reasoner=fr)
-    assert not fr.mission[0].preflight
+    assert not fr.mission[0].surface.preflight
 
 
 def test_look_and_its_marks_take_every_point_a_stance_takes():

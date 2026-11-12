@@ -7,7 +7,8 @@ import difflib
 
 from maps.library.op_compiler import CodeError
 from maps.library.result_handles import program_dedup_key, program_reads, run_ops
-from maps.mission.acks import _add_note, _live_counts
+from maps.mission.acks import Rejections, add_note, live_counts
+from maps.mission.surface_state import Progress, Surface
 from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS
 from maps.query.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR, unmatched_query_tokens as
@@ -48,14 +49,34 @@ _WHY_VERB = {"stage": "standing at", "move": "flying",
              "boost": "looking around", "facing": "facing"}
 
 
-class _ProgramVerbs:
+class Programs:
     """The verbs that open, run and close a library call: grounding its names,
     running its op program (once per surface version) and finishing its
     ack."""
 
-    def _dispatch_program(self, ops, *, answer_ref=""):
+    def __init__(self, surface: Surface, rejections: Rejections, progress: Progress):
+        self.surface = surface
+        self.carry = surface.carry
+        self.rejections = rejections
+        self.progress = progress
+        # Successful self-contained programs by ``program_dedup_key`` ->
+        # ``(surface_version, turn, ops)``: a repeat under the same version gets
+        # the dedup note. A flight, a boost or a stance bumps the version.
+        self._seen: dict[str, tuple] = {}
+        # The call in flight: what ground noted and analyze answered, read
+        # by finish.
+        self._call: dict = {}
+        self.new_turn()
+
+    def new_turn(self) -> None:
+        """An operator turn starts its dedup streak afresh."""
+        self._dedup_key, self._dedup_n = None, 0
+
+    def _run(self, ops, *, answer_ref=""):
+        """Run ``ops`` once per surface version: a repeat of a program that
+        already ran under this version serves a note, never its rows again."""
         key = program_dedup_key(ops)
-        prev = self._programs_seen.get(key) if key is not None else None
+        prev = self._seen.get(key) if key is not None else None
         if prev is not None and prev[0] == self.carry.version:
             # A one-line reference, never a payload; the emission's own
             # labels alias the stored handles so nothing downstream can tell
@@ -66,12 +87,12 @@ class _ProgramVerbs:
             else:
                 self._dedup_key, self._dedup_n = key, 1
             if self._dedup_n >= 2:
-                c_n, a_n, dcols, _ = self._census(12)
+                c_n, a_n, dcols, _ = self.surface.census(12)
                 cols_s = ("; columns live: " + ", ".join(dcols)
                            if dcols else "")
                 return {"note": _DEDUP_REPEAT_NOTE.format(
                     n=_ordinal(self._dedup_n),
-                    counts=_live_counts(c_n, a_n), cols=cols_s)}
+                    counts=live_counts(c_n, a_n), cols=cols_s)}
             return {"note": _DEDUP_NOTE.format(turn=prev[1])}
         raw_sink: dict = {}
         try:
@@ -79,35 +100,35 @@ class _ProgramVerbs:
         except CodeError as exc:
             out = {"error": str(exc)}
         else:
-            out = run_ops(ops, namespace=self.ns,
+            out = run_ops(ops, namespace=self.surface.ns,
                           raw_sink=raw_sink,
                           seed_results=self.carry.rows,
-                          preflight=self.preflight,
+                          preflight=self.surface.preflight,
                           answer_ref=answer_ref)
         if "error" in out:
             # The failing op keeps one op's errors their own class.
             err = str(out["error"])
-            out = {**out, "error": self._loop_broken_error(
+            out = {**out, "error": self.rejections.escalated(
                 err, sig_of=f"{err}|{raw_sink.get('error_op', '')}")}
         else:
             # A successful program ends both streaks: the next same-class
             # error serves its full text again.
-            self._err_sig, self._err_n = None, 0
+            self.rejections.end_streak()
             self._dedup_key, self._dedup_n = None, 0
             if key is not None:
-                self._programs_seen[key] = (self.carry.version, self.turn_idx,
-                                             ops)
+                self._seen[key] = (self.carry.version, self.progress.turn_idx,
+                                   ops)
             self.carry.record(ops, raw_sink["results"])
             for rows in raw_sink["results"].values():
                 for row in rows:
                     if row.get("fid"):
-                        self.row_latest[str(row["fid"])] = row
+                        self.surface.row_latest[str(row["fid"])] = row
         return out
 
     def _closest_names(self, what: str) -> str:
         """The 3 nearest named rows to a name that matched nothing."""
         names: dict[str, tuple] = {}
-        for f, r in self._ns_rows.items():
+        for f, r in self.surface.rows.items():
             nm = str(r.get("name") or "").strip()
             if nm:
                 names.setdefault(nm.lower(), (f, nm))
@@ -120,15 +141,15 @@ class _ProgramVerbs:
 
     def _call_minted(self):
         """The handle this call's last flight minted, or None."""
-        return (self._code_minted[self._call.get("minted", 0):] or [None])[-1]
+        return (self.carry.minted[self._call.get("minted", 0):] or [None])[-1]
 
-    def _ground_names(self, names: dict) -> dict:
+    def ground(self, names: dict) -> dict:
         """Open a call and ground its names (``{name: why}``) under the
         name-match floor: ``{"ties": {name: top-tie fids}}``, or the first
         refusal."""
         self._call.clear()
         self._call["notes"] = notes = []
-        self._call["minted"] = len(self._code_minted)   # this call's flights mint past it
+        self._call["minted"] = len(self.carry.minted)   # this call's flights mint past it
         ties: dict = {}
         if not names:
             return {"ties": ties}
@@ -136,10 +157,10 @@ class _ProgramVerbs:
         g_out = run_ops(
             [{"ref": f"r{i}", "op": "find", "args": {"query": q.lower()}}
              for i, q in enumerate(names)],
-            namespace=self.ns,
-            raw_sink=sink, preflight=self.preflight)
+            namespace=self.surface.ns,
+            raw_sink=sink, preflight=self.surface.preflight)
         if "error" in g_out:
-            return self._plan_err({}, str(g_out["error"]))
+            return self.rejections.error({}, str(g_out["error"]))
         g_res = sink.get("results") or {}
         for i, (q, why) in enumerate(names.items()):
             rows = [r for r in (g_res.get(f"r{i}") or [])
@@ -149,7 +170,7 @@ class _ProgramVerbs:
                     or float(r["name_match"]) >= _FUZZY_FLOOR]
             what = q.lower()
             if not rows:
-                return self._plan_err({}, (
+                return self.rejections.error({}, (
                     f"nothing named \"{what}\" is on "
                     f"this surface{self._closest_names(what)}; say it "
                     "differently, say a fid off a served row, or "
@@ -161,7 +182,7 @@ class _ProgramVerbs:
                 or [str(rows[0]["fid"])]
             if why == "stage" and len(ties[q]) > 1:
                 f = ", ".join(ties[q][:4])
-                return self._plan_err({}, (
+                return self.rejections.error({}, (
                     f"a viewpoint is one point; "
                     f"\"{what}\" has {len(ties[q])} equally good "
                     f"name matches ({f}); say which one — a fid "
@@ -182,7 +203,7 @@ class _ProgramVerbs:
                     "choose precisely")
         return {"ties": ties}
 
-    def _analyze(self, ops: list, rn_end: int, answer, page) -> dict:
+    def analyze(self, ops: list, rn_end: int, answer, page) -> dict:
         """Run one compiled program; ``answer`` names the ref whose envelope
         is served, ``page`` the ``(ref, start, the model's name for it)`` a
         more_of window pages."""
@@ -191,22 +212,22 @@ class _ProgramVerbs:
             ref, lo, h = page
             held = len(self.carry.read(ref) or [])
             if held and held <= BROAD_DUMP_SOFT_ROWS:
-                return self._plan_err({}, (
+                return self.rejections.error({}, (
                     f"{h} holds {held} row(s), one block: show it with a "
                     f"bare `{h}` line."))
             if held and lo >= held:
-                return self._plan_err({}, (
+                return self.rejections.error({}, (
                     f"all {held} row(s) of {h} are already served -- there "
                     f"is no further block to serve. Narrow it "
                     f"({h}.order(color=\"<colour>\"), "
                     f"{h}.order(nearest=\"<fid>\"), "
                     f"{h}.filter(within=\"<place>\"))"
                     f" or look({h})."))
-        out = self._dispatch_program(ops, answer_ref=str(answer or ""))
+        out = self._run(ops, answer_ref=str(answer or ""))
         if "error" in out:
             return {"error": out["error"]}
-        self.plan_rn[0] = max(self.plan_rn[0], int(rn_end or 0))
-        # The columns this call ordered by, so _finish can say when the
+        self.carry.next_rn[0] = max(self.carry.next_rn[0], int(rn_end or 0))
+        # The columns this call ordered by, so finish can say when the
         # ordering separated nothing.
         sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
         self._call.update(answer=answer, page=page,
@@ -215,7 +236,7 @@ class _ProgramVerbs:
                           if sb else None)
         return {"result": out}
 
-    def _finish(self, ack: dict) -> dict:
+    def finish(self, ack: dict) -> dict:
         """Close a call nothing refused: the tie note, the grounding notes,
         the streak reset, the scope and paging writes."""
         # An ordering that separated nothing says how many rows tie on
@@ -232,18 +253,18 @@ class _ProgramVerbs:
             else:
                 on = ("on every ordering column ("
                       + ", ".join(f"'{k}'" for k in keys) + ")")
-            _add_note(ack, f"{len(tied)} of {len(rows)} rows tie {on} -- "
+            add_note(ack, f"{len(tied)} of {len(rows)} rows tie {on} -- "
                       "this ordering does not separate them, so its rank 0 "
                       "is arbitrary among the tie", "\n")
         if self._call.get("notes"):
-            _add_note(ack, "; ".join(self._call["notes"]), "\n")
-        self._err_sig, self._err_n = None, 0
+            add_note(ack, "; ".join(self._call["notes"]), "\n")
+        self.rejections.end_streak()
         if self._call.get("page"):
-            self._widened.update([self._call["page"][:2]])
+            self.carry.paged.update([self._call["page"][:2]])
         # The set in scope: the call's non-empty answer, or what its last
         # flight added.
         if self._call.get("answer") and self._call.get("rows"):
-            self._those = self._call["answer"]
+            self.carry.in_scope = self._call["answer"]
         if self._call_minted():
-            self._those = self._call_minted()
+            self.carry.in_scope = self._call_minted()
         return ack

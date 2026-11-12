@@ -115,6 +115,19 @@ class Carry:
         # A flight-minted handle records an event (the rows one flight added)
         # and never re-derives.
         self._events: set = set()
+        # The handles' names. ``next_rn`` is the mission-global rN counter,
+        # shared with the library's compiler; ``in_play`` holds every rN
+        # bound or spelled by the running block, which a flight's mint
+        # skips; ``minted`` the handles flights minted during the running
+        # block, for the block to bind.
+        self.next_rn: list = [0]
+        self.in_play: set = set()
+        self.minted: list = []
+        # The set in scope: the last non-empty result, or what the last
+        # flight added.
+        self.in_scope: str | None = None
+        # How far past its head each handle has been paged.
+        self.paged: dict = {}
 
     def _closure(self, ref) -> set:
         """``ref`` and every handle its ops read that is not fresh under the
@@ -178,11 +191,20 @@ class Carry:
             self._history.append(op)
             self._reads.append(_refs_read(op))
 
-    def mint(self, handle: str, rows: list) -> None:
-        """An event handle: rows a flight added, never re-derived."""
+    def mint(self, rows: list) -> str:
+        """An event handle over ``rows`` (the rows a flight added), never
+        re-derived: the next free rN, now the set in scope."""
+        while f"r{self.next_rn[0]}" in self.in_play:
+            self.next_rn[0] += 1
+        handle = f"r{self.next_rn[0]}"
+        self.next_rn[0] += 1
+        self.in_play.add(handle)
+        self.minted.append(handle)
         self.rows[handle] = rows
         self._events.add(handle)
         self._fresh.add(handle)
+        self.in_scope = handle
+        return handle
 
     def alias(self, prev_ops, cur_ops) -> None:
         """A deduped emission: its refs take the rows the first run's refs

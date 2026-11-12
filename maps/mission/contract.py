@@ -43,7 +43,7 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
         except ValueError as exc:
             raise SystemExit(f"contract: {exc} (pass --agl-m)") from exc
     system = served_text.served_system_prompt(description)
-    return {"system": system, "tools": served_text.served_tools()}
+    return {"system": system, "tools": served_text.SERVED_TOOLS}
 
 
 def surface_lines() -> list[str]:

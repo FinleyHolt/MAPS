@@ -104,11 +104,11 @@ def test_a_line_prefixed_error_counts_with_its_unprefixed_class():
 
 
 def test_a_column_list_of_another_length_is_the_same_class():
-    from maps.mission.loop import _Mission
+    from maps.mission.acks import error_class_signature
 
     def sig(cols):
-        return _Mission._err_class_sig(
-            None, f"line 5: AttributeError: row prior_1 carries no 'a'; "
+        return error_class_signature(
+            f"line 5: AttributeError: row prior_1 carries no 'a'; "
                   f"its columns are {cols}")
     assert sig(["c", "d", "e", "f", "g", "h", "i"]) == sig(list("cdefghijklm"))
 
