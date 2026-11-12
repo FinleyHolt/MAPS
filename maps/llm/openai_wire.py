@@ -66,14 +66,24 @@ def fit_tool_descriptions(
             continue
         heading = f"# The `{fn['name']}` tool"
         sections.append(f"{heading}\n\n{doc}")
-        fitted.append({**tool, "function": {**fn, "description": f"Documented in the system message under \"{heading}\"."}})
+        fitted.append(
+            {
+                **tool,
+                "function": {
+                    **fn,
+                    "description": f'Documented in the system message under "{heading}".',
+                },
+            }
+        )
     if not sections:
         return tools, sent
     docs = "\n\n".join(sections)
     if sent and sent[0].get("role") == "system":
         system = sent[0]["content"]
         if not isinstance(system, str):
-            raise ValueError("the system turn is not text, so a tool's documentation cannot join it")
+            raise ValueError(
+                "the system turn is not text, so a tool's documentation cannot join it"
+            )
         return fitted, [{**sent[0], "content": f"{system}\n\n{docs}"}, *sent[1:]]
     return fitted, [{"role": "system", "content": docs}, *sent]
 
@@ -97,7 +107,9 @@ def fit_tool_descriptions(
 RESPONSES_PATH = "/responses"
 
 #: The chat body keys the Responses body carries under another name, or not at all.
-_CHAT_ONLY_KEYS = frozenset({"messages", "max_completion_tokens", "reasoning_effort", "stream_options", "tools"})
+_CHAT_ONLY_KEYS = frozenset(
+    {"messages", "max_completion_tokens", "reasoning_effort", "stream_options", "tools"}
+)
 
 
 def _input_content(content: Any, role: str) -> Any:
@@ -112,8 +124,13 @@ def _input_content(content: Any, role: str) -> Any:
             out.append({"type": text_type, "text": part.get("text") or ""})
         elif kind == "image_url":
             image = part.get("image_url") or {}
-            out.append({"type": "input_image", "image_url": image.get("url"),
-                        **({"detail": image["detail"]} if image.get("detail") else {})})
+            out.append(
+                {
+                    "type": "input_image",
+                    "image_url": image.get("url"),
+                    **({"detail": image["detail"]} if image.get("detail") else {}),
+                }
+            )
         else:
             raise ValueError(f"no Responses content part for {kind!r}")
     return out
@@ -126,24 +143,45 @@ def _input_items(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for m in messages:
         role = m.get("role")
         if role == "tool":
-            items.append({"type": "function_call_output", "call_id": m["tool_call_id"],
-                          "output": m.get("content") if isinstance(m.get("content"), str) else json.dumps(m.get("content"))})
+            items.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": m["tool_call_id"],
+                    "output": m.get("content")
+                    if isinstance(m.get("content"), str)
+                    else json.dumps(m.get("content")),
+                }
+            )
             continue
         if role == "assistant":
             items.extend(m.get("reasoning_items") or [])
             text = m.get("content") or ""
             if text:
-                items.append({"type": "message", "role": "assistant",
-                              "content": [{"type": "output_text", "text": text}]})
+                items.append(
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": text}],
+                    }
+                )
             for tc in m.get("tool_calls") or []:
                 fn = tc.get("function") or {}
-                items.append({"type": "function_call", "call_id": tc["id"], "name": fn.get("name", ""),
-                              "arguments": fn.get("arguments") if isinstance(fn.get("arguments"), str)
-                              else json.dumps(fn.get("arguments") or {})})
+                items.append(
+                    {
+                        "type": "function_call",
+                        "call_id": tc["id"],
+                        "name": fn.get("name", ""),
+                        "arguments": fn.get("arguments")
+                        if isinstance(fn.get("arguments"), str)
+                        else json.dumps(fn.get("arguments") or {}),
+                    }
+                )
             continue
         if role not in ("system", "user", "developer"):
             raise ValueError(f"no Responses input item for role {role!r}")
-        items.append({"type": "message", "role": role, "content": _input_content(m.get("content"), role)})
+        items.append(
+            {"type": "message", "role": role, "content": _input_content(m.get("content"), role)}
+        )
     return items
 
 
@@ -154,10 +192,16 @@ def to_responses(body: dict[str, Any]) -> dict[str, Any]:
     out = {k: v for k, v in body.items() if k not in _CHAT_ONLY_KEYS}
     out["input"] = _input_items(body.get("messages") or [])
     if "tools" in body:
-        out["tools"] = [{"type": "function", "name": t["function"]["name"],
-                         "description": t["function"].get("description", ""),
-                         "parameters": t["function"].get("parameters") or {"type": "object", "properties": {}}}
-                        for t in body["tools"]]
+        out["tools"] = [
+            {
+                "type": "function",
+                "name": t["function"]["name"],
+                "description": t["function"].get("description", ""),
+                "parameters": t["function"].get("parameters")
+                or {"type": "object", "properties": {}},
+            }
+            for t in body["tools"]
+        ]
     if "max_completion_tokens" in body:
         out["max_output_tokens"] = body["max_completion_tokens"]
     if body.get("reasoning_effort"):
@@ -171,11 +215,17 @@ def _usage(usage: dict[str, Any]) -> dict[str, Any]:
     """Responses usage under the chat-completions names the meters read."""
     inp = usage.get("input_tokens_details") or {}
     outp = usage.get("output_tokens_details") or {}
-    return {"prompt_tokens": usage.get("input_tokens", 0),
-            "completion_tokens": usage.get("output_tokens", 0),
-            "total_tokens": usage.get("total_tokens", usage.get("input_tokens", 0) + usage.get("output_tokens", 0)),
-            "prompt_tokens_details": {k: inp[k] for k in ("cached_tokens", "cache_write_tokens") if k in inp},
-            "completion_tokens_details": {k: outp[k] for k in ("reasoning_tokens",) if k in outp}}
+    return {
+        "prompt_tokens": usage.get("input_tokens", 0),
+        "completion_tokens": usage.get("output_tokens", 0),
+        "total_tokens": usage.get(
+            "total_tokens", usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+        ),
+        "prompt_tokens_details": {
+            k: inp[k] for k in ("cached_tokens", "cache_write_tokens") if k in inp
+        },
+        "completion_tokens_details": {k: outp[k] for k in ("reasoning_tokens",) if k in outp},
+    }
 
 
 def from_responses(resp: dict[str, Any]) -> dict[str, Any]:
@@ -188,24 +238,48 @@ def from_responses(resp: dict[str, Any]) -> dict[str, Any]:
     for item in resp.get("output") or []:
         kind = item.get("type")
         if kind == "reasoning":
-            reasoning.append({k: item[k] for k in ("type", "id", "summary", "encrypted_content") if k in item})
+            reasoning.append(
+                {k: item[k] for k in ("type", "id", "summary", "encrypted_content") if k in item}
+            )
         elif kind == "message":
-            text += [p.get("text") or "" for p in item.get("content") or [] if p.get("type") == "output_text"]
+            text += [
+                p.get("text") or ""
+                for p in item.get("content") or []
+                if p.get("type") == "output_text"
+            ]
         elif kind == "function_call":
-            calls.append({"id": item["call_id"], "type": "function",
-                          "function": {"name": item.get("name", ""), "arguments": item.get("arguments") or ""}})
+            calls.append(
+                {
+                    "id": item["call_id"],
+                    "type": "function",
+                    "function": {
+                        "name": item.get("name", ""),
+                        "arguments": item.get("arguments") or "",
+                    },
+                }
+            )
     status = resp.get("status")
     reason = (resp.get("incomplete_details") or {}).get("reason")
-    finish = ("length" if status == "incomplete" and reason == "max_output_tokens"
-              else "content_filter" if status == "incomplete" and reason == "content_filter"
-              else "tool_calls" if calls else "stop")
+    finish = (
+        "length"
+        if status == "incomplete" and reason == "max_output_tokens"
+        else "content_filter"
+        if status == "incomplete" and reason == "content_filter"
+        else "tool_calls"
+        if calls
+        else "stop"
+    )
     message: dict[str, Any] = {"role": "assistant", "content": "".join(text)}
     if calls:
         message["tool_calls"] = calls
     if reasoning:
         message["reasoning_items"] = reasoning
-    out = {"id": resp.get("id"), "model": resp.get("model"), "status": status,
-           "choices": [{"index": 0, "message": message, "finish_reason": finish}]}
+    out = {
+        "id": resp.get("id"),
+        "model": resp.get("model"),
+        "status": status,
+        "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+    }
     if isinstance(resp.get("usage"), dict):
         out["usage"] = _usage(resp["usage"])
     return out

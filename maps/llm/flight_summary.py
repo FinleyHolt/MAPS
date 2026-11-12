@@ -20,6 +20,7 @@ from .tokenizer import load_tokenizer
 
 log = logging.getLogger(__name__)
 
+
 def _as_dict(v: Any) -> dict:
     """``v`` if it is a dict, else ``{}``: model-emitted JSON is untrusted in
     shape (an object field can arrive as a string)."""
@@ -43,7 +44,9 @@ def blank() -> dict:
     }
 
 
-def reasoning_tokens_of(response_json: dict, *, model: str | None = None, tokenizer_name: str = "") -> int:
+def reasoning_tokens_of(
+    response_json: dict, *, model: str | None = None, tokenizer_name: str = ""
+) -> int:
     """The reasoning-span token count of one response, a slice of
     ``usage.completion_tokens``.
 
@@ -57,7 +60,9 @@ def reasoning_tokens_of(response_json: dict, *, model: str | None = None, tokeni
     """
     usage = _as_dict(response_json.get("usage"))
     wire = speaks_openai(model)
-    meter = (_as_dict(usage.get("completion_tokens_details")) if wire else usage).get("reasoning_tokens")
+    meter = (_as_dict(usage.get("completion_tokens_details")) if wire else usage).get(
+        "reasoning_tokens"
+    )
     direct = int(meter) if isinstance(meter, (int, float)) else 0
     if wire:
         return direct
@@ -132,7 +137,9 @@ def _scan_transcript(path: Path, out: dict, tokenizer_name: str = "") -> None:
                 out["latency_s_sum"] += float(t1) - t0
 
             body = _as_dict(rec.get("response"))
-            out["reasoning_tokens"] += reasoning_tokens_of(body, model=model, tokenizer_name=tokenizer_name)
+            out["reasoning_tokens"] += reasoning_tokens_of(
+                body, model=model, tokenizer_name=tokenizer_name
+            )
             usage = _as_dict(body.get("usage"))
             for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
                 v = usage.get(key)

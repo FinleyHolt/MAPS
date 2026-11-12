@@ -21,14 +21,27 @@ def test_default_release_layout_is_inside_calcity_package():
 
 
 def test_an_override_places_each_root(tmp_path):
-    bench = calcity_bench({"SEARCH_CALCITY_DATA": str(tmp_path / "d"), "SEARCH_CALCITY_SPLITS": str(tmp_path / "s"),
-                           "SEARCH_CALCITY_TILES": str(tmp_path / "t"), "SEARCH_CALCITY_RGBD_DIR": str(tmp_path / "r")})
+    bench = calcity_bench(
+        {
+            "SEARCH_CALCITY_DATA": str(tmp_path / "d"),
+            "SEARCH_CALCITY_SPLITS": str(tmp_path / "s"),
+            "SEARCH_CALCITY_TILES": str(tmp_path / "t"),
+            "SEARCH_CALCITY_RGBD_DIR": str(tmp_path / "r"),
+        }
+    )
     assert (bench.root, bench.splits_dir, bench.tiles_dir, bench.rgbd_dir) == (
-        tmp_path / "d", tmp_path / "s", tmp_path / "t", tmp_path / "r")
+        tmp_path / "d",
+        tmp_path / "s",
+        tmp_path / "t",
+        tmp_path / "r",
+    )
     assert bench.objects_json == tmp_path / "d" / "data" / "cityrefer" / "objects.json"
     # CALCITY_ROOT is the data root's fallback, and the rasters default under the root.
     fallback = calcity_bench({"CALCITY_ROOT": str(tmp_path / "f")})
-    assert fallback.root == tmp_path / "f" and fallback.rgbd_dir == tmp_path / "f" / "data" / "rgbd_upstream"
+    assert (
+        fallback.root == tmp_path / "f"
+        and fallback.rgbd_dir == tmp_path / "f" / "data" / "rgbd_upstream"
+    )
 
 
 def test_citynav_registry_contains_no_calcity_splits():
@@ -41,12 +54,22 @@ def test_the_build_commands_default_to_the_bench_s_own_roots(monkeypatch, tmp_pa
     monkeypatch.setenv("SEARCH_CALCITY_DATA", str(tmp_path / "root"))
     monkeypatch.setenv("SEARCH_CALCITY_TILES", str(tmp_path / "tiles"))
     seen = {}
-    monkeypatch.setattr(build_objects_json, "build", lambda root, bundle: seen.setdefault("objects", root))
-    monkeypatch.setattr(build_rgbd_ortho, "build_block",
-                        lambda root, name, bbox, raster: seen.setdefault("ortho", root) and (None, None))
-    monkeypatch.setattr(bake_tiles, "bake_block",
-                        lambda bundle, tiles, name: seen.setdefault("tiles", tiles) and 0)
+    monkeypatch.setattr(
+        build_objects_json, "build", lambda root, bundle: seen.setdefault("objects", root)
+    )
+    monkeypatch.setattr(
+        build_rgbd_ortho,
+        "build_block",
+        lambda root, name, bbox, raster: seen.setdefault("ortho", root) and (None, None),
+    )
+    monkeypatch.setattr(
+        bake_tiles, "bake_block", lambda bundle, tiles, name: seen.setdefault("tiles", tiles) and 0
+    )
     build_objects_json.main(["--bundle", str(tmp_path)])
     build_rgbd_ortho.main(["--raster", str(tmp_path / "r.tif")])
     bake_tiles.main(["--bundle", str(tmp_path)])
-    assert seen == {"objects": tmp_path / "root", "ortho": tmp_path / "root", "tiles": tmp_path / "tiles"}
+    assert seen == {
+        "objects": tmp_path / "root",
+        "ortho": tmp_path / "root",
+        "tiles": tmp_path / "tiles",
+    }

@@ -61,7 +61,9 @@ def _r_bc(sensor: SensorSpec, airframe_roll_deg: float, airframe_pitch_deg: floa
     <- body) @ (body <- camera)``. The heading rotation assumes a level body,
     so the tilt carries the ray into the level frame first; the mount alone
     when both tilt angles are 0."""
-    r = mount_rotation_matrix(float(sensor.mount_pitch_deg), sensor.mount_roll_deg, float(sensor.mount_yaw_deg))
+    r = mount_rotation_matrix(
+        float(sensor.mount_pitch_deg), sensor.mount_roll_deg, float(sensor.mount_yaw_deg)
+    )
     if airframe_roll_deg or airframe_pitch_deg:
         r = body_tilt_matrix(airframe_roll_deg, airframe_pitch_deg) @ r
     return r
@@ -251,7 +253,9 @@ def world_contour_from_region(
 
     # cv2 contour points are (x=col, y=row), crop-relative until shifted.
     r0, c0 = region.bbox[0], region.bbox[1]
-    _u, _v, xs, ys = frame_world_xy(view_corners_xy, approx[:, 1] + r0, approx[:, 0] + c0, region.frame_shape)
+    _u, _v, xs, ys = frame_world_xy(
+        view_corners_xy, approx[:, 1] + r0, approx[:, 0] + c0, region.frame_shape
+    )
     ring = [[round(float(x), 2), round(float(y), 2)] for x, y in zip(xs, ys)]
     return ring + [list(ring[0])]
 

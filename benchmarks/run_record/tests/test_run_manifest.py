@@ -4,6 +4,7 @@ the measured-identity fields exist under their exact names, secrets never
 appear, and re-entry semantics hold — an identical re-entry appends a resume,
 an identity drift refuses.
 """
+
 from __future__ import annotations
 
 import json
@@ -60,7 +61,12 @@ def stub_run(monkeypatch, tmp_path, bake):
 
 def test_the_selection_records_what_the_driver_applies(stub_run):
     assert set(stub_run["selection"]) == {
-        "sample_seed", "limit", "allowlist", "episodes_n", "selection_sha"}
+        "sample_seed",
+        "limit",
+        "allowlist",
+        "episodes_n",
+        "selection_sha",
+    }
 
 
 def test_required_fields_nonempty(stub_run):
@@ -88,7 +94,9 @@ def test_required_fields_nonempty(stub_run):
     assert m["selection"]["episodes_n"] == 3
 
 
-@pytest.mark.skipif(not (REPO_ROOT / ".git").exists(), reason="a tree with no git checkout has no commit")
+@pytest.mark.skipif(
+    not (REPO_ROOT / ".git").exists(), reason="a tree with no git checkout has no commit"
+)
 def test_a_checkout_records_its_commit(stub_run):
     assert stub_run["git_commit"]
 
@@ -119,9 +127,7 @@ def test_write_once_resume_and_refusal(stub_run, tmp_path):
         run_manifest.emit_or_verify(tmp_path, other_arm, log=lambda *_: None)
 
 
-def test_a_direct_run_emits_a_manifest_the_reader_finds(
-    stub_run, tmp_path
-):
+def test_a_direct_run_emits_a_manifest_the_reader_finds(stub_run, tmp_path):
     """The bake stamp reaches the reader from a DIRECT run's root.
 
     Every quotable SR needs a bake identity: two bakes of the same blocks
@@ -153,13 +159,26 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
     leaves no ``mission`` key."""
     monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
-    common = dict(bench=_bench(), out_root=tmp_path, config_path=REPO_ROOT / "configs/citynav.yaml", split="calcity_tmp",
-                  sample_seed=None, limit=None, allowlist_path=None,
-                  episodes=["calcity::1#1"])
-    stamp = {"episode_id": "calcity::1#1", "run_id": "20260917T160207Z", "run_no": 3,
-             "reasoning_effort": "0.3"}
+    common = dict(
+        bench=_bench(),
+        out_root=tmp_path,
+        config_path=REPO_ROOT / "configs/citynav.yaml",
+        split="calcity_tmp",
+        sample_seed=None,
+        limit=None,
+        allowlist_path=None,
+        episodes=["calcity::1#1"],
+    )
+    stamp = {
+        "episode_id": "calcity::1#1",
+        "run_id": "20260917T160207Z",
+        "run_no": 3,
+        "reasoning_effort": "0.3",
+    }
     m = run_manifest.build_manifest(**common, mission=stamp)
-    assert m["mission"] == stamp and m["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.3"
+    assert (
+        m["mission"] == stamp and m["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.3"
+    )
     m = run_manifest.build_manifest(**common, mission={**stamp, "reasoning_effort": None})
     assert m["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] == "0.99"
     assert "mission" not in run_manifest.build_manifest(**common)
@@ -168,6 +187,7 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
 def test_a_resume_is_refused_under_another_window_or_bake_but_not_another_path(stub_run):
     """The served window and the bake's content are identity; the path the
     bake sits at is the host's (``perception.bake_sha256`` names the bake)."""
+
     def drift(edit):
         m = json.loads(json.dumps(stub_run))
         edit(m)
@@ -175,8 +195,9 @@ def test_a_resume_is_refused_under_another_window_or_bake_but_not_another_path(s
 
     assert drift(lambda m: m["endpoints"].update(max_model_len=8192))
     assert drift(lambda m: m["perception"].update(bake_sha256="0" * 64))
-    assert not drift(lambda m: m["search_env_flags"].update(
-        SEARCH_CITYNAV_TILES="/elsewhere/tiles"))
+    assert not drift(
+        lambda m: m["search_env_flags"].update(SEARCH_CITYNAV_TILES="/elsewhere/tiles")
+    )
 
 
 @pytest.mark.parametrize("raw, flown", [(" 0.9 ", "0.9"), ("high\n", "high"), ("  ", None)])
@@ -231,7 +252,10 @@ def test_the_arm_stamp_records_the_resolved_bake(monkeypatch):
     monkeypatch.delenv("SEARCH_CITYNAV_TILES", raising=False)
     assert run_manifest.arm_env_stamp(_bench())["SEARCH_CITYNAV_TILES"] == str(_bench().tiles_dir)
     monkeypatch.setenv("SEARCH_CITYNAV_TILES", "/data/tiles/citynav_2m_osmv3")
-    assert run_manifest.arm_env_stamp(_bench())["SEARCH_CITYNAV_TILES"] == "/data/tiles/citynav_2m_osmv3"
+    assert (
+        run_manifest.arm_env_stamp(_bench())["SEARCH_CITYNAV_TILES"]
+        == "/data/tiles/citynav_2m_osmv3"
+    )
 
 
 def test_an_unset_effort_is_not_stamped(monkeypatch):
@@ -243,5 +267,6 @@ def test_an_unset_effort_is_not_stamped(monkeypatch):
 def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
     # The wait bounds a turn, so a run that sets it says so.
     from benchmarks.run_record import run_manifest as RM
+
     monkeypatch.setenv("SEARCH_REASONER_TIMEOUT_S", "240")
     assert RM._audited_env(_bench())["SEARCH_REASONER_TIMEOUT_S"] == "240"

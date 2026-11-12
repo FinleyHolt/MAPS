@@ -13,18 +13,28 @@ GRID = (32, 32)
 
 
 def _seed_graph():
-    feats = {"buildings": [{"name": "bldg_0", "cells": [[r, c] for r in range(5, 9) for c in range(5, 9)],
-                            "centroid_row": 7, "centroid_col": 7}]}
+    feats = {
+        "buildings": [
+            {
+                "name": "bldg_0",
+                "cells": [[r, c] for r in range(5, 9) for c in range(5, 9)],
+                "centroid_row": 7,
+                "centroid_col": 7,
+            }
+        ]
+    }
     return build_object_graph(feats, cell_size_m=2.0)
 
 
 def _node(class_name: str = "car") -> MapObject:
-    return MapObject(class_name=class_name, name=None, tags={}, centroid=(0, 0), provenance="detected")
+    return MapObject(
+        class_name=class_name, name=None, tags={}, centroid=(0, 0), provenance="detected"
+    )
 
 
 def _square_mask(r0, c0, side):
     m = np.zeros(GRID, dtype=bool)
-    m[r0:r0 + side, c0:c0 + side] = True
+    m[r0 : r0 + side, c0 : c0 + side] = True
     return m
 
 
@@ -39,7 +49,9 @@ def _sparse(mask):
 
 
 def _upsert(g, track_id, mask, *, class_name="car"):
-    return upsert_tracked_detected(g, track_id=track_id, base_node=_node(class_name), **_sparse(mask))
+    return upsert_tracked_detected(
+        g, track_id=track_id, base_node=_node(class_name), **_sparse(mask)
+    )
 
 
 def test_fresh_detection_stores_cells_matching_projection():
@@ -70,14 +82,19 @@ def test_car_and_gray_car_stay_separate_layers():
     assert (fid_car, fid_gray) == ("detected_0", "detected_1")
     assert g.nodes[fid_car].class_name == "car"
     assert g.nodes[fid_gray].class_name == "gray car"
-    assert sorted(n.class_name for n in g.nodes.values() if n.provenance == "detected") == ["car", "gray car"]
+    assert sorted(n.class_name for n in g.nodes.values() if n.provenance == "detected") == [
+        "car",
+        "gray car",
+    ]
 
 
 def test_a_repeat_with_no_cells_returns_its_own_id():
     g = _seed_graph()
 
     def upsert(tid, rows, cols):
-        return upsert_tracked_detected(g, track_id=tid, base_node=_node(), cells=list(zip(rows, cols)))
+        return upsert_tracked_detected(
+            g, track_id=tid, base_node=_node(), cells=list(zip(rows, cols))
+        )
 
     a = upsert("wt_a", [5, 5], [5, 6])
     b = upsert("wt_b", [9, 9], [9, 10])

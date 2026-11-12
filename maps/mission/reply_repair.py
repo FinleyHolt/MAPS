@@ -42,7 +42,8 @@ TRUNCATED_TURN_STREAK = 3
 CODE_REPLY_NUDGE = (
     "Your reply is code, but it arrived as plain text, not through the run "
     "tool, so nothing was executed. Send the block with the tool to run "
-    "it; a plain reply in your own words ends the mission.")
+    "it; a plain reply in your own words ends the mission."
+)
 
 MALFORMED_ENVELOPE_NUDGE = (
     "Your reply contains tool-call markup that did not parse as a native "
@@ -54,7 +55,8 @@ NO_FLIGHT_REPLY_NUDGE = (
     "Your reply ends the mission, and your answer is the row of your LAST "
     "flight -- but you have flown nowhere, so it answers nothing. Naming "
     "the object commits nothing; only flying to it does. "
-    "If you know which one it is, go_to() it first, then reply.")
+    "If you know which one it is, go_to() it first, then reply."
+)
 
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```\s*$")
 

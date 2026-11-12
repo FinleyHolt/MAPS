@@ -156,11 +156,7 @@ def parse_episode(row: dict, row_index: int | None = None) -> CityNavEpisode:
     start_xy = (float(trajectory[0][0]), float(trajectory[0][1]))
 
     _raw_mask = row.get("target_mask")
-    target_mask = (
-        [(float(p[0]), float(p[1])) for p in _raw_mask]
-        if _raw_mask
-        else None
-    )
+    target_mask = [(float(p[0]), float(p[1])) for p in _raw_mask] if _raw_mask else None
 
     return CityNavEpisode(
         map_name=map_name,
@@ -200,4 +196,6 @@ def find_row(rows: list[dict], episode_id: str) -> tuple[int, dict] | None:
         if 0 <= i < len(rows) and parse_episode(rows[i]).episode_id == base:
             return i, rows[i]
         return None
-    return next(((i, r) for i, r in enumerate(rows) if parse_episode(r).episode_id == episode_id), None)
+    return next(
+        ((i, r) for i, r in enumerate(rows) if parse_episode(r).episode_id == episode_id), None
+    )

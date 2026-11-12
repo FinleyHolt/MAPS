@@ -80,7 +80,12 @@ TURN_RADIUS_FALLBACK_M = 1500.0
 
 
 def _utc(t: float | None) -> str:
-    return "" if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-4] + "Z"
+    return (
+        ""
+        if t is None
+        else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-4]
+        + "Z"
+    )
 
 
 def centroid(ring: list[list[float]]) -> tuple[float, float]:
@@ -129,7 +134,9 @@ class Truth:
                 return json.loads((d / f"{sortie}.json").read_text())
         return {}
 
-    def ring(self, entry: dict[str, Any], row: dict[str, Any]) -> tuple[list[list[float]] | None, str | None]:
+    def ring(
+        self, entry: dict[str, Any], row: dict[str, Any]
+    ) -> tuple[list[list[float]] | None, str | None]:
         ring = entry.get("target_mask") or []
         if len(ring) >= 3:
             return [[float(p[0]), float(p[1])] for p in ring], "hand-drawn"
@@ -152,8 +159,14 @@ def judged_xy(row: dict[str, Any]) -> tuple[float, float] | None:
 #: An arc shorter than this is no turn: the aircraft is on heading.
 ARC_EPS_DEG = 1.0
 #: Each Dubins word's three senses, in flying order.
-SENSES = {"LSL": (-1, 0, -1), "RSR": (1, 0, 1), "LSR": (-1, 0, 1), "RSL": (1, 0, -1),
-          "LRL": (-1, 1, -1), "RLR": (1, -1, 1)}
+SENSES = {
+    "LSL": (-1, 0, -1),
+    "RSR": (1, 0, 1),
+    "LSR": (-1, 0, 1),
+    "RSL": (1, 0, -1),
+    "LRL": (-1, 1, -1),
+    "RLR": (1, -1, 1),
+}
 
 
 def turn_centre(p, heading_deg: float, sense: int, r: float) -> tuple[float, float]:
@@ -198,9 +211,14 @@ def solve(p0, h0: float, p1, h1: float, r: float) -> tuple[str, tuple[float, flo
     a0, a1 = math.radians(h0), math.radians(h1)
     rc0, lc0 = turn_centre(p0, h0, 1, r), turn_centre(p0, h0, -1, r)
     rc1, lc1 = turn_centre(p1, h1, 1, r), turn_centre(p1, h1, -1, r)
-    words = {"RSR": _csc(a0, a1, 1, 1, *rc0, *rc1, r), "LSL": _csc(a0, a1, -1, -1, *lc0, *lc1, r),
-             "RSL": _csc(a0, a1, 1, -1, *rc0, *lc1, r), "LSR": _csc(a0, a1, -1, 1, *lc0, *rc1, r),
-             "RLR": _ccc(a0, a1, 1, *rc0, *rc1, r), "LRL": _ccc(a0, a1, -1, *lc0, *lc1, r)}
+    words = {
+        "RSR": _csc(a0, a1, 1, 1, *rc0, *rc1, r),
+        "LSL": _csc(a0, a1, -1, -1, *lc0, *lc1, r),
+        "RSL": _csc(a0, a1, 1, -1, *rc0, *lc1, r),
+        "LSR": _csc(a0, a1, -1, 1, *lc0, *rc1, r),
+        "RLR": _ccc(a0, a1, 1, *rc0, *rc1, r),
+        "LRL": _ccc(a0, a1, -1, *lc0, *lc1, r),
+    }
     kind = min((k for k, v in words.items() if v is not None), key=lambda k: words[k][0])
     return kind, words[kind]
 
@@ -210,7 +228,7 @@ def solve(p0, h0: float, p1, h1: float, r: float) -> tuple[str, tuple[float, flo
 
 def _window(track, t0: float, t1: float):
     ts = [r["t_unix"] for r in track]
-    return track[bisect_left(ts, t0):bisect_left(ts, t1 + 1e-6)]
+    return track[bisect_left(ts, t0) : bisect_left(ts, t1 + 1e-6)]
 
 
 def _at(track, t: float) -> tuple[float, float] | None:
@@ -242,7 +260,9 @@ def closest_approach(path, p) -> tuple[float, dict[str, Any]]:
     if len(pts) == 1:
         return math.dist(pts[0], p), path[0]
     i = min(range(len(pts) - 1), key=lambda k: _seg_dist(p, pts[k], pts[k + 1]))
-    return _seg_dist(p, pts[i], pts[i + 1]), path[i] if math.dist(pts[i], p) <= math.dist(pts[i + 1], p) else path[i + 1]
+    return _seg_dist(p, pts[i], pts[i + 1]), path[i] if math.dist(pts[i], p) <= math.dist(
+        pts[i + 1], p
+    ) else path[i + 1]
 
 
 def nearest_fix(fixes, p) -> tuple[float, dict[str, Any]]:
@@ -272,7 +292,9 @@ def last_pass(track, xy, t0: float, t1: float, within_m: float) -> tuple[float, 
     return best
 
 
-def keyframe_poses(frames: list[dict[str, Any]], t0: float, t1: float, map_name: str) -> list[dict[str, Any]]:
+def keyframe_poses(
+    frames: list[dict[str, Any]], t0: float, t1: float, map_name: str
+) -> list[dict[str, Any]]:
     """The centre of each observation the run fused (``frames.jsonl`` ``pose_xy``) and its camera height
     above ``map_name``'s ground (``altitude_m`` is on the tile frame), as track fixes."""
     out = []
@@ -281,8 +303,15 @@ def keyframe_poses(frames: list[dict[str, Any]], t0: float, t1: float, map_name:
         if xy and utc:
             t = dt.datetime.fromisoformat(str(utc).replace("Z", "+00:00")).timestamp()
             if t0 <= t <= t1:
-                out.append({"t_unix": t, "x": float(xy[0]), "y": float(xy[1]),
-                            "alt_agl_m": frame_agl(f, map_name), "src": "keyframes"})
+                out.append(
+                    {
+                        "t_unix": t,
+                        "x": float(xy[0]),
+                        "y": float(xy[1]),
+                        "alt_agl_m": frame_agl(f, map_name),
+                        "src": "keyframes",
+                    }
+                )
     return sorted(out, key=lambda f: f["t_unix"])
 
 
@@ -292,14 +321,20 @@ def frame_agl(frame: dict[str, Any], map_name: str) -> float | None:
     return None if alt is None else float(alt) - GROUND_LEVEL[map_name]
 
 
-def _agl(fix, frames: list[dict[str, Any]], events, map_name: str) -> tuple[float | None, str | None]:
+def _agl(
+    fix, frames: list[dict[str, Any]], events, map_name: str
+) -> tuple[float | None, str | None]:
     """Height above ground at ``fix``: its own (a GNSS fix or an observation's), else the observations' median, else the waypoints' commanded."""
     if fix.get("alt_agl_m") is not None:
         return float(fix["alt_agl_m"]), fix.get("src", "GNSS track")
     alts = [frame_agl(f, map_name) for f in frames if f.get("altitude_m") is not None]
     if alts:
         return statistics.median(alts), "keyframes (median)"
-    asked = [float(e["altitudeAglMeters"]) for e in events if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")]
+    asked = [
+        float(e["altitudeAglMeters"])
+        for e in events
+        if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")
+    ]
     return (statistics.median(asked), "waypoint altitude") if asked else (None, None)
 
 
@@ -379,8 +414,13 @@ def flown_turn_radius_m(tracks, windows) -> tuple[float | None, int]:
         for a, b, c in zip(track, track[1:], track[2:]):
             dt_s = c["t_unix"] - a["t_unix"]
             v = float(b.get("ground_speed_mps") or 0.0)
-            if (not any(w0 <= b["t_unix"] <= w1 for w0, w1 in wins) or dt_s > 2.5 or v < FLYING_MPS
-                    or a.get("track_deg") is None or c.get("track_deg") is None):
+            if (
+                not any(w0 <= b["t_unix"] <= w1 for w0, w1 in wins)
+                or dt_s > 2.5
+                or v < FLYING_MPS
+                or a.get("track_deg") is None
+                or c.get("track_deg") is None
+            ):
                 flush()
                 continue
             rate = ((c["track_deg"] - a["track_deg"] + 540.0) % 360.0 - 180.0) / dt_s
@@ -403,12 +443,21 @@ def run_bases(root: Path, row: dict[str, Any]) -> list[Path]:
 
 
 def _conversation(bases: list[Path]) -> list[dict[str, Any]]:
-    return next((list(iter_json_rows(b / CONVERSATION_JSONL)) for b in bases if (b / CONVERSATION_JSONL).is_file()), [])
+    return next(
+        (
+            list(iter_json_rows(b / CONVERSATION_JSONL))
+            for b in bases
+            if (b / CONVERSATION_JSONL).is_file()
+        ),
+        [],
+    )
 
 
 def _frames(bases: list[Path]) -> list[dict[str, Any]]:
     """The run's ``frames.jsonl`` off its first copy that holds one (:func:`run_bases`)."""
-    return next((list(iter_json_rows(b / FRAMES_JSONL)) for b in bases if (b / FRAMES_JSONL).is_file()), [])
+    return next(
+        (list(iter_json_rows(b / FRAMES_JSONL)) for b in bases if (b / FRAMES_JSONL).is_file()), []
+    )
 
 
 def ended(row: dict[str, Any]) -> str:
@@ -430,25 +479,44 @@ def tokens(bases: list[Path], tokenizer_name: str = "") -> dict[str, Any]:
     ``tokenizer_name`` is the reader's tokenizer override."""
     from maps.llm.flight_summary import summarize  # noqa: PLC0415  (the tokenizer's transformers)
 
-    flight = next((b / "flight" for b in bases if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None)
+    flight = next(
+        (b / "flight" for b in bases if (b / "flight" / "llm" / TRANSCRIPT_JSONL).is_file()), None
+    )
     llm = summarize(flight, tokenizer_name) if flight else {}
     keys = ("prompt_tokens", "completion_tokens", "reasoning_tokens", "total_tokens")
     if not llm.get("requests"):
         return {k: None for k in (*keys, "reasoner_calls")}
-    return {**{k: int(llm.get(k) or 0) for k in keys},
-            "reasoner_calls": int(llm.get("requests") or 0) - int(llm.get("unanswered") or 0)}
+    return {
+        **{k: int(llm.get(k) or 0) for k in keys},
+        "reasoner_calls": int(llm.get("requests") or 0) - int(llm.get("unanswered") or 0),
+    }
 
 
-def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], truth: Truth, track,
-                 turn_radius_m: float, tokenizer_name: str = "") -> dict[str, Any]:
+def run_measures(
+    root: Path,
+    row: dict[str, Any],
+    *,
+    entry: dict[str, Any],
+    truth: Truth,
+    track,
+    turn_radius_m: float,
+    tokenizer_name: str = "",
+) -> dict[str, Any]:
     bases = run_bases(root, row)
     events = _conversation(bases)
     end = ended(row)
     xy = judged_xy(row)
     determined = end == "reply" and xy is not None
     reason = entry.get("excluded")
-    params = next((r.get("params") or {} for b in bases for r in iter_json_rows(b / "flight" / "llm" / TRANSCRIPT_JSONL)
-                   if r.get("kind") == "params"), {})
+    params = next(
+        (
+            r.get("params") or {}
+            for b in bases
+            for r in iter_json_rows(b / "flight" / "llm" / TRANSCRIPT_JSONL)
+            if r.get("kind") == "params"
+        ),
+        {},
+    )
     ring, truth_source = truth.ring(entry, row)
     target = centroid(ring) if ring else None
     # The end the row stands at (``Mission._record_reply``): the first, or a later plain reply.
@@ -461,21 +529,39 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     t_stop = None if t_start is None or t_end is None else t_start + t_end
     quality = list(entry.get("intel_quality") or [None])
     out: dict[str, Any] = {
-        "sortie": root.name, "run_no": row.get("run_no"), "episode_id": row.get("episode_id"),
+        "sortie": root.name,
+        "run_no": row.get("run_no"),
+        "episode_id": row.get("episode_id"),
         "model": params.get("model"),
-        "reasoning_effort": params.get("reasoning_effort"), "intel_quality": quality[0],
-        "end": end, "excluded": " ".join(str(reason or "").split()) or None,
+        "reasoning_effort": params.get("reasoning_effort"),
+        "intel_quality": quality[0],
+        "end": end,
+        "excluded": " ".join(str(reason or "").split()) or None,
         "infra": is_infra_abort(row),
         "determination": determined,
         "commit_xy": None if xy is None else [round(xy[0], 2), round(xy[1], 2)],
         "truth_xy": None if target is None else [round(target[0], 2), round(target[1], 2)],
-        "truth_source": truth_source, "flights": row.get("flights_flown"), "turns": row.get("turns_used"),
-        "success": None, "ne_ft": None, "oracle_success": None,
-        "closest_approach_ft": None, "hfov_width_ft": None, "agl_ft": None, "agl_source": None,
+        "truth_source": truth_source,
+        "flights": row.get("flights_flown"),
+        "turns": row.get("turns_used"),
+        "success": None,
+        "ne_ft": None,
+        "oracle_success": None,
+        "closest_approach_ft": None,
+        "hfov_width_ft": None,
+        "agl_ft": None,
+        "agl_source": None,
         "track_source": None,
-        "track_coverage": None, "time_to_id_s": round(t_end, 1) if determined and t_stop is not None else None,
-        "spl": None, "spl_note": None, "path_ft": None, "final_leg_ft": None, "shortest_ft": None,
-        "start_utc": _utc(t_start), "stop_utc": _utc(t_stop), **tokens(bases, tokenizer_name),
+        "track_coverage": None,
+        "time_to_id_s": round(t_end, 1) if determined and t_stop is not None else None,
+        "spl": None,
+        "spl_note": None,
+        "path_ft": None,
+        "final_leg_ft": None,
+        "shortest_ft": None,
+        "start_utc": _utc(t_start),
+        "stop_utc": _utc(t_stop),
+        **tokens(bases, tokenizer_name),
     }
     if target is None:
         return out
@@ -498,8 +584,9 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     if success and len(flown) < 2:
         out["spl_note"] = "undefined: the recording does not cover the run"
     # The GNSS track is joined between its fixes; each observation stands alone.
-    cands = ([(closest_approach(flown, target), "GNSS track")] if flown else []) + \
-        ([(nearest_fix(poses, target), "keyframe poses")] if poses else [])
+    cands = ([(closest_approach(flown, target), "GNSS track")] if flown else []) + (
+        [(nearest_fix(poses, target), "keyframe poses")] if poses else []
+    )
     if not cands:
         out["track_source"] = "none"
         return out
@@ -519,7 +606,11 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
         return out
     loiter = row.get("start_xy")
     first = next((t_start + float(e["t_s"]) for e in events if e.get("kind") == "leg"), t_end_run)
-    passed = last_pass(track, (float(loiter[0]), float(loiter[1])), t_start, first, LOITER_PASS_M) if loiter else None
+    passed = (
+        last_pass(track, (float(loiter[0]), float(loiter[1])), t_start, first, LOITER_PASS_M)
+        if loiter
+        else None
+    )
     p0 = passed[0] if passed else t_start
     origin = tuple(map(float, loiter)) if loiter else _at(track, p0)
     leg = 0.0
@@ -533,13 +624,19 @@ def run_measures(root: Path, row: dict[str, Any], *, entry: dict[str, Any], trut
     out["shortest_ft"] = round(shortest * FT_PER_M, 1)
     if success:
         if thin:
-            out["spl_note"] = f"undefined: the recording holds {out['track_coverage']:.0%} of the run"
+            out["spl_note"] = (
+                f"undefined: the recording holds {out['track_coverage']:.0%} of the run"
+            )
         else:
-            out["spl"] = round(shortest / max(p + leg, shortest), 4) if max(p + leg, shortest) > 0 else None
+            out["spl"] = (
+                round(shortest / max(p + leg, shortest), 4) if max(p + leg, shortest) > 0 else None
+            )
     return out
 
 
-def collect(roots: list[Path], truth: Truth, tokenizer_name: str = "") -> tuple[list[dict[str, Any]], float, int]:
+def collect(
+    roots: list[Path], truth: Truth, tokenizer_name: str = ""
+) -> tuple[list[dict[str, Any]], float, int]:
     """Every run under ``roots``, with the crews' turn radius over them all;
     ``tokenizer_name`` is the reader's tokenizer override
     (``SEARCH_COMPACT_TOKENIZER_NAME``), for a reasoning span no serve counted."""
@@ -550,9 +647,17 @@ def collect(roots: list[Path], truth: Truth, tokenizer_name: str = "") -> tuple[
     for root, track in zip(roots, tracks):
         entries = truth.entries(root.name)
         for row in iter_json_rows(root / EPISODES_JSONL):
-            out.append(run_measures(root, row, entry=entries.get(str(row.get("episode_id") or "")) or {},
-                                    truth=truth, track=track, turn_radius_m=radius,
-                                    tokenizer_name=tokenizer_name))
+            out.append(
+                run_measures(
+                    root,
+                    row,
+                    entry=entries.get(str(row.get("episode_id") or "")) or {},
+                    truth=truth,
+                    track=track,
+                    turn_radius_m=radius,
+                    tokenizer_name=tokenizer_name,
+                )
+            )
     out.sort(key=lambda r: (r["sortie"], int(r["run_no"] or 0)))
     return out, radius, turns
 
@@ -576,57 +681,92 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     kept = [r for r in rows if not r["excluded"] and not r["infra"]]
     scored = [r for r in kept if r["truth_xy"] is not None]
     spl = [r["spl"] for r in scored if r["spl"] is not None]
-    return {"runs": len(rows), "kept": len(kept), "scored": len(scored), "infra": infra,
-            "sr": _rate(scored, "success"),
-            "osr": _rate(scored, "oracle_success"),
-            "ne_median_ft": _median(r["ne_ft"] for r in scored),
-            "time_to_id_median_s": _median(r["time_to_id_s"] for r in kept),
-            "spl_pct": round(100.0 * statistics.fmean(spl), 1) if spl else None, "spl_n": len(spl),
-            "total_tokens_median": _median(r["total_tokens"] for r in kept)}
+    return {
+        "runs": len(rows),
+        "kept": len(kept),
+        "scored": len(scored),
+        "infra": infra,
+        "sr": _rate(scored, "success"),
+        "osr": _rate(scored, "oracle_success"),
+        "ne_median_ft": _median(r["ne_ft"] for r in scored),
+        "time_to_id_median_s": _median(r["time_to_id_s"] for r in kept),
+        "spl_pct": round(100.0 * statistics.fmean(spl), 1) if spl else None,
+        "spl_n": len(spl),
+        "total_tokens_median": _median(r["total_tokens"] for r in kept),
+    }
 
 
 def by(rows, *keys: str) -> dict[str, dict[str, Any]]:
     """The summary per value of ``keys`` (joined by a space)."""
+
     def name(r) -> str:
         return " ".join(str(r[k]) for k in keys)
-    return {v: summarize([r for r in rows if name(r) == v]) for v in sorted({name(r) for r in rows})}
+
+    return {
+        v: summarize([r for r in rows if name(r) == v]) for v in sorted({name(r) for r in rows})
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--root", type=Path, nargs="+", required=True, help="flown or twin sortie roots")
-    ap.add_argument("--truth", type=Path, nargs="+", required=True,
-                    help="a directory of <sortie>.json analyst entries, and/or the tasking set's split JSON")
+    ap.add_argument(
+        "--root", type=Path, nargs="+", required=True, help="flown or twin sortie roots"
+    )
+    ap.add_argument(
+        "--truth",
+        type=Path,
+        nargs="+",
+        required=True,
+        help="a directory of <sortie>.json analyst entries, and/or the tasking set's split JSON",
+    )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     roots = sorted(r for r in args.root if (r / EPISODES_JSONL).is_file())
     bench = calcity_bench(os.environ)
-    rows, radius, turns = collect(roots, Truth(args.truth, bench), from_environ(bench.environ).endpoint.tokenizer_name)
-    doc = {"turn_radius_m": radius, "turns_read": turns, "summary": summarize(rows),
-           "by_intel_quality": by(rows, "intel_quality"), "by_effort": by(rows, "model", "reasoning_effort"),
-           "runs": rows}
+    rows, radius, turns = collect(
+        roots, Truth(args.truth, bench), from_environ(bench.environ).endpoint.tokenizer_name
+    )
+    doc = {
+        "turn_radius_m": radius,
+        "turns_read": turns,
+        "summary": summarize(rows),
+        "by_intel_quality": by(rows, "intel_quality"),
+        "by_effort": by(rows, "model", "reasoning_effort"),
+        "runs": rows,
+    }
     if args.json:
         json.dump(doc, sys.stdout, indent=1)
         print()
     else:
+
         def line(name: str, s: dict[str, Any]) -> str:
-            return (f"{name:14s} runs {s['runs']:3d} scored {s['scored']:3d}  SR {s['sr']['k']}/{s['sr']['n']}"
-                    f"  OSR {s['osr']['k']}/{s['osr']['n']}"
-                    f"  NE med {s['ne_median_ft']} ft  time to ID med {s['time_to_id_median_s']} s"
-                    f"  SPL {s['spl_pct']}% (n {s['spl_n']})  tokens med {s['total_tokens_median']}")
+            return (
+                f"{name:14s} runs {s['runs']:3d} scored {s['scored']:3d}  SR {s['sr']['k']}/{s['sr']['n']}"
+                f"  OSR {s['osr']['k']}/{s['osr']['n']}"
+                f"  NE med {s['ne_median_ft']} ft  time to ID med {s['time_to_id_median_s']} s"
+                f"  SPL {s['spl_pct']}% (n {s['spl_n']})  tokens med {s['total_tokens_median']}"
+            )
+
         print(line("all", doc["summary"]))
         if doc["summary"]["infra"]:
-            print(f"out of every rate (the serve failed under them): {', '.join(doc['summary']['infra'])}")
+            print(
+                f"out of every rate (the serve failed under them): {', '.join(doc['summary']['infra'])}"
+            )
         for k, v in doc["by_intel_quality"].items():
             print(line(f"intel {k}", v))
         for k, v in doc["by_effort"].items():
             print(line(f"effort {k}", v))
-        print(f"turn radius flown (median) {radius} m over {turns} turns" if turns
-              else f"turn radius {radius} m (fallback: no turn read)")
+        print(
+            f"turn radius flown (median) {radius} m over {turns} turns"
+            if turns
+            else f"turn radius {radius} m (fallback: no turn read)"
+        )
         for r in rows:
-            print(f"  {r['sortie']} run {r['run_no']}: {r['end']}, SR {r['success']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
-                  f"time to ID {r['time_to_id_s']} s, {r['flights']} flights / {r['turns']} turns, SPL {r['spl']}"
-                  + (f", excluded: {r['excluded']}" if r["excluded"] else ""))
+            print(
+                f"  {r['sortie']} run {r['run_no']}: {r['end']}, SR {r['success']}, OSR {r['oracle_success']}, NE {r['ne_ft']} ft, "
+                f"time to ID {r['time_to_id_s']} s, {r['flights']} flights / {r['turns']} turns, SPL {r['spl']}"
+                + (f", excluded: {r['excluded']}" if r["excluded"] else "")
+            )
     return 0
 
 

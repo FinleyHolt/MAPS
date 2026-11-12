@@ -1,11 +1,17 @@
 """The served-surface diet: what the renderer drops, and what it must not."""
+
 from __future__ import annotations
 
 import pytest
 
 from maps.query.result_tables import (
-    _GRID_COL_DROP, _TAG_RENDER_DROP, _grid_cell, _grid_columns, _model_facing_row,
-    _render_grid_rows)
+    _GRID_COL_DROP,
+    _TAG_RENDER_DROP,
+    _grid_cell,
+    _grid_columns,
+    _model_facing_row,
+    _render_grid_rows,
+)
 from maps.query.op_io import ProgramError
 from maps.query.program import run_program
 
@@ -14,10 +20,14 @@ from maps.query.program import run_program
 ROW = {
     "fid": "prior_52",
     "name": "Willmore Road",
-    "tags": {"addr_city": "Birmingham",
-             "addr_postcode": "B20 3JL", "addr_street": "Willmore Road",
-             "building": "residential", "tiger_cfcc": "A41",
-             "surface": "paved"},
+    "tags": {
+        "addr_city": "Birmingham",
+        "addr_postcode": "B20 3JL",
+        "addr_street": "Willmore Road",
+        "building": "residential",
+        "tiger_cfcc": "A41",
+        "surface": "paved",
+    },
     "xy": [316.25, 473.0],
     "footprint_area_m2": 139.91,
     "axis_length_m": 18.15,
@@ -42,14 +52,12 @@ def test_the_live_header_keeps_and_drops_by_name():
     for col in _GRID_COL_DROP:
         assert col not in header, col
     assert "name_match" not in header and " score " not in header, header
-    for col in ("footprint_area_m2", "end0_xy", "end1_xy", "color",
-                "name", "tags", "xy"):
+    for col in ("footprint_area_m2", "end0_xy", "end1_xy", "color", "name", "tags", "xy"):
         assert col in header, col
 
 
 def test_header_renders_keys_verbatim_with_units_separate():
-    cols = ["distance to new_park_street", "facing new_park_street",
-            "footprint_area_m2"]
+    cols = ["distance to new_park_street", "facing new_park_street", "footprint_area_m2"]
     header = _render_grid_rows([], cols).splitlines()[0]
     for c in cols:
         assert c in header, header
@@ -81,8 +89,8 @@ def test_the_drop_is_a_render_cut_not_a_data_cut():
         tags = dict(ROW["tags"])
 
     text = _anchor_search_text(_Node())
-    assert "b20 3jl" in text                    # a DROPPED key's value
-    assert "addr postcode" in text              # and its key
+    assert "b20 3jl" in text  # a DROPPED key's value
+    assert "addr postcode" in text  # and its key
     assert "willmore road" in text
 
 
@@ -91,23 +99,38 @@ def test_score_by_grid_orders_without_a_score_column():
     from maps.query.program import run_program
 
     def _prior(fid, x, y):
-        return {"fid": fid, "name": None, "xy": [float(x), float(y)],
-                "centerline": None, "tags": {"building": "yes"},
-                "color": "", "search_text": "building yes"}
+        return {
+            "fid": fid,
+            "name": None,
+            "xy": [float(x), float(y)],
+            "centerline": None,
+            "tags": {"building": "yes"},
+            "color": "",
+            "search_text": "building yes",
+        }
 
-    world = [_prior("prior_a", 0, 10), _prior("prior_b", 30, 0),
-             _prior("prior_c", 0, 20)]
-    out = run_program([], world, {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": [[0.0, 0.0]]}},
-        {"ref": "r2", "op": "score_by",
-         "args": {"items": "r1",
-                  "emphasis": [{"key": "center distance to xy", "w": -1}]}},
-    ]})
+    world = [_prior("prior_a", 0, 10), _prior("prior_b", 30, 0), _prior("prior_c", 0, 20)]
+    out = run_program(
+        [],
+        world,
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {}},
+                {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": [[0.0, 0.0]]}},
+                {
+                    "ref": "r2",
+                    "op": "score_by",
+                    "args": {
+                        "items": "r1",
+                        "emphasis": [{"key": "center distance to xy", "w": -1}],
+                    },
+                },
+            ]
+        },
+    )
     rows = out["results"]["r2"]
-    assert len(rows) >= 2                       # vacuity floor
-    assert rows[0]["fid"] == "prior_a"          # rank-0 = nearest
+    assert len(rows) >= 2  # vacuity floor
+    assert rows[0]["fid"] == "prior_a"  # rank-0 = nearest
     assert all("score" in r for r in rows), rows[0].keys()
     header = compact_results(out["results"])["r2"]["rows"].splitlines()[0]
     assert "center distance to xy" in header, header
@@ -124,14 +147,25 @@ def test_a_footprint_carries_its_area_and_no_unserved_shape_column():
     assert contour_shape_features([box[0][:-1]]) is None
 
 
-@pytest.mark.parametrize("op", [
-    {"op": "score_by", "args": {"emphasis": [{"key": "nope", "w": 1}]}},
-    {"op": "filter_items", "args": {"key": "nope", "op": "truthy"}}])
+@pytest.mark.parametrize(
+    "op",
+    [
+        {"op": "score_by", "args": {"emphasis": [{"key": "nope", "w": 1}]}},
+        {"op": "filter_items", "args": {"key": "nope", "op": "truthy"}},
+    ],
+)
 def test_an_absent_key_refusal_names_only_served_columns(op):
     with pytest.raises(ProgramError) as e:
-        run_program([], [dict(ROW)], {"ops": [
-            {"ref": "r0", "op": "find", "args": {"query": "Willmore Road"}},
-            {"ref": "r1", "op": op["op"], "args": {"items": "r0", **op["args"]}}]})
+        run_program(
+            [],
+            [dict(ROW)],
+            {
+                "ops": [
+                    {"ref": "r0", "op": "find", "args": {"query": "Willmore Road"}},
+                    {"ref": "r1", "op": op["op"], "args": {"items": "r0", **op["args"]}},
+                ]
+            },
+        )
     msg = str(e.value)
     assert "footprint_area_m2" in msg, msg
     assert not any(k in msg for k in _GRID_COL_DROP), msg
@@ -142,8 +176,14 @@ def test_bake_bookkeeping_tags_never_reach_a_row():
 
     class _Node:
         name = ""
-        tags = {"building": "yes", "worldkit_layer": "buildings", "osm_id": "way/1",
-                "worldkit_height_m": "6", "source_tag": "bing", "Source": "survey"}
+        tags = {
+            "building": "yes",
+            "worldkit_layer": "buildings",
+            "osm_id": "way/1",
+            "worldkit_height_m": "6",
+            "source_tag": "bing",
+            "Source": "survey",
+        }
 
     assert _row_tags(_Node()) == {"building": "yes"}
     assert _anchor_search_text(_Node()) == "building yes"

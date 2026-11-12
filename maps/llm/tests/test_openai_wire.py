@@ -65,15 +65,26 @@ def test_each_message_carries_only_its_role_s_fields() -> None:
     history = [
         {"role": "system", "content": "s"},
         {"role": "user", "content": [{"type": "text", "text": "u"}]},
-        {"role": "assistant", "content": "", "reasoning_content": "",
-         "tool_calls": [{"id": "c0", "type": "function", "function": {"name": "run", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "",
+            "tool_calls": [
+                {"id": "c0", "type": "function", "function": {"name": "run", "arguments": "{}"}}
+            ],
+        },
         {"role": "tool", "tool_call_id": "c0", "name": "run", "content": "t"},
     ]
     sent = openai_wire.messages(history)
     assert [sorted(m) for m in sent] == [
-        ["content", "role"], ["content", "role"], ["content", "role", "tool_calls"],
-        ["content", "role", "tool_call_id"]]
-    assert "reasoning_content" in history[2] and "name" in history[3], "the history itself is untouched"
+        ["content", "role"],
+        ["content", "role"],
+        ["content", "role", "tool_calls"],
+        ["content", "role", "tool_call_id"],
+    ]
+    assert "reasoning_content" in history[2] and "name" in history[3], (
+        "the history itself is untouched"
+    )
     with pytest.raises(ValueError, match="developer"):
         openai_wire.messages([{"role": "developer", "content": "x"}])
 
@@ -83,9 +94,23 @@ def _serve(monkeypatch) -> list[dict]:
 
     def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.append(kwargs)
-        return {"choices": [{"finish_reason": "tool_calls", "message": {
-            "content": None, "tool_calls": [
-                {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{\"code\": \"x\"}"}}]}}]}
+        return {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "c1",
+                                "type": "function",
+                                "function": {"name": "run", "arguments": '{"code": "x"}'},
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
 
     monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     return sent
@@ -105,7 +130,9 @@ def test_the_reasoner_s_request_is_the_openai_shape(monkeypatch) -> None:
         assert key not in body
     assert body["reasoning_effort"] == "medium"
     assert [sorted(m) for m in body["messages"][-2:]] == [
-        ["content", "role", "tool_calls"], ["content", "role", "tool_call_id"]]
+        ["content", "role", "tool_calls"],
+        ["content", "role", "tool_call_id"],
+    ]
     # The reasoner's own history keeps the fields the wire dropped.
     assert "reasoning_content" in r.messages[-3] and r.messages[-2]["name"] == "run"
 
@@ -136,9 +163,23 @@ def test_each_request_s_bytes_extend_the_last_one_s(monkeypatch) -> None:
 
     def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.append(json.loads(json.dumps(kwargs)))  # the bytes as sent, not a live alias
-        return {"choices": [{"finish_reason": "tool_calls", "message": {"content": None, "tool_calls": [
-            {"id": f"c{len(sent)}", "type": "function",
-             "function": {"name": "run", "arguments": "{ \"code\":  \"look()\" }"}}]}}]}
+        return {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": f"c{len(sent)}",
+                                "type": "function",
+                                "function": {"name": "run", "arguments": '{ "code":  "look()" }'},
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
 
     monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="xhigh")
@@ -166,11 +207,16 @@ def test_the_run_tool_s_documentation_rides_the_system_turn(monkeypatch) -> None
     r.append_user("find the truck")
     r.step_tool_call(tools)
     body = sent[0]
-    assert all(len(t["function"]["description"]) <= openai_wire.DESCRIPTION_MAX_CHARS for t in body["tools"])
+    assert all(
+        len(t["function"]["description"]) <= openai_wire.DESCRIPTION_MAX_CHARS
+        for t in body["tools"]
+    )
     assert body["tools"][0]["function"]["parameters"] == tools[0]["function"]["parameters"]
     system = body["messages"][0]["content"]
     assert system.startswith(r.messages[0]["content"]) and system.endswith(doc)
-    assert tools[0]["function"]["description"] == doc and r.messages[0]["content"] != system, "an input was mutated"
+    assert tools[0]["function"]["description"] == doc and r.messages[0]["content"] != system, (
+        "an input was mutated"
+    )
 
 
 def test_descriptions_that_fit_pass_untouched() -> None:
@@ -179,7 +225,9 @@ def test_descriptions_that_fit_pass_untouched() -> None:
     assert openai_wire.fit_tool_descriptions(tools, sent) == (tools, sent)
     long = [{"type": "function", "function": {"name": "run", "description": "x" * 2000}}]
     fitted, with_system = openai_wire.fit_tool_descriptions(long, sent)
-    assert with_system[0]["role"] == "system" and with_system[1:] == sent, "no system turn: one is added"
+    assert with_system[0]["role"] == "system" and with_system[1:] == sent, (
+        "no system turn: one is added"
+    )
 
 
 def test_a_self_hosted_card_keeps_its_shape(monkeypatch) -> None:
@@ -204,8 +252,13 @@ def test_the_request_never_carries_more_images_than_azure_takes(monkeypatch) -> 
     for k in range(4):
         r.append_vision_user(f"look {k}", [picture] * LOOK_MAX_CROPS)
     r.step_tool_call([])
-    images = [p for m in sent[0]["messages"] if isinstance(m["content"], list)
-              for p in m["content"] if p.get("type") == "image_url"]
+    images = [
+        p
+        for m in sent[0]["messages"]
+        if isinstance(m["content"], list)
+        for p in m["content"]
+        if p.get("type") == "image_url"
+    ]
     # Four full looks (64) are over Azure's 50, so the oldest go down to the low-water mark.
     assert CARDS[GPT]["max_images"] == 50 and len(images) == 30
     crops = [sum(p.get("type") == "image_url" for p in m["content"]) for m in r.messages[1:5]]
@@ -213,8 +266,11 @@ def test_the_request_never_carries_more_images_than_azure_takes(monkeypatch) -> 
 
 
 def test_reasoning_is_metered_from_usage_when_the_span_never_comes_back() -> None:
-    response = {"model": "gpt-5.6-sol-2026-07-09", "choices": [{"message": {"content": "ok"}}],
-                "usage": {"completion_tokens": 900, "completion_tokens_details": {"reasoning_tokens": 812}}}
+    response = {
+        "model": "gpt-5.6-sol-2026-07-09",
+        "choices": [{"message": {"content": "ok"}}],
+        "usage": {"completion_tokens": 900, "completion_tokens_details": {"reasoning_tokens": 812}},
+    }
     assert reasoning_tokens_of(response, model=GPT) == 812
     # Unkeyed, the span rule reads it as no thinking at all: the reason the model is passed.
     assert reasoning_tokens_of(response) == 0
@@ -226,10 +282,20 @@ def test_the_episode_summary_meters_an_openai_turn(tmp_path: Path) -> None:
     records = [
         {"kind": "params", "sha": "p", "params": {"model": GPT, "tools": []}},
         {"kind": "request", "request_id": "r1", "created_at": 1.0},
-        {"kind": "response", "request_id": "r1", "ts": 2.0, "response": {
-            "choices": [{"message": {"content": "ok"}}],
-            "usage": {"prompt_tokens": 5000, "completion_tokens": 900, "total_tokens": 5900,
-                      "completion_tokens_details": {"reasoning_tokens": 812}}}},
+        {
+            "kind": "response",
+            "request_id": "r1",
+            "ts": 2.0,
+            "response": {
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {
+                    "prompt_tokens": 5000,
+                    "completion_tokens": 900,
+                    "total_tokens": 5900,
+                    "completion_tokens_details": {"reasoning_tokens": 812},
+                },
+            },
+        },
     ]
     (llm / "transcript.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
     out = summarize(tmp_path / "flight")
@@ -250,9 +316,17 @@ def test_the_model_list_is_read_where_the_endpoint_keeps_it(monkeypatch) -> None
 
     monkeypatch.setattr(E, "_get_json", _get)
     monkeypatch.setattr(E, "_require_tokenizer", lambda m, override="": f"tok:{m}")
-    spec = E.discover(base, override=E.EndpointOverride("inkling-small", 262144),
-                      settings=from_environ({"SEARCH_REASONER_MODELS_URL": listing}))
-    assert (spec.base_url, spec.model_id, spec.max_model_len, seen) == (base, "inkling-small", 262144, [listing])
+    spec = E.discover(
+        base,
+        override=E.EndpointOverride("inkling-small", 262144),
+        settings=from_environ({"SEARCH_REASONER_MODELS_URL": listing}),
+    )
+    assert (spec.base_url, spec.model_id, spec.max_model_len, seen) == (
+        base,
+        "inkling-small",
+        262144,
+        [listing],
+    )
 
 
 def test_a_deployment_name_the_listing_does_not_carry_passes_discovery(monkeypatch) -> None:
@@ -278,52 +352,132 @@ def test_a_deployment_name_the_listing_does_not_carry_passes_discovery(monkeypat
 
 def test_a_chat_body_becomes_the_responses_request_carrying_the_same_conversation() -> None:
     picture = "data:image/jpeg;base64,AAAA"
-    body = {"model": GPT, "max_completion_tokens": 40000, "reasoning_effort": "xhigh", "prompt_cache_key": "ep",
-            "tool_choice": "auto", "stream": True, "stream_options": {"include_usage": True},
-            "tools": [{"type": "function", "function": {"name": "run", "description": "d",
-                                                        "parameters": {"type": "object"}}}],
-            "messages": [
-                {"role": "system", "content": "s"},
-                {"role": "user", "content": [{"type": "text", "text": "u"},
-                                             {"type": "image_url", "image_url": {"url": picture, "detail": "high"}}]},
-                {"role": "assistant", "content": "thinking aloud", "reasoning_items": [
-                    {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "E1"}],
-                 "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{}"}}]},
-                {"role": "tool", "tool_call_id": "c1", "content": "ok"}]}
+    body = {
+        "model": GPT,
+        "max_completion_tokens": 40000,
+        "reasoning_effort": "xhigh",
+        "prompt_cache_key": "ep",
+        "tool_choice": "auto",
+        "stream": True,
+        "stream_options": {"include_usage": True},
+        "tools": [
+            {
+                "type": "function",
+                "function": {"name": "run", "description": "d", "parameters": {"type": "object"}},
+            }
+        ],
+        "messages": [
+            {"role": "system", "content": "s"},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "u"},
+                    {"type": "image_url", "image_url": {"url": picture, "detail": "high"}},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": "thinking aloud",
+                "reasoning_items": [
+                    {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "E1"}
+                ],
+                "tool_calls": [
+                    {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{}"}}
+                ],
+            },
+            {"role": "tool", "tool_call_id": "c1", "content": "ok"},
+        ],
+    }
     out = openai_wire.to_responses(body)
-    assert {k for k in out} == {"model", "input", "tools", "tool_choice", "max_output_tokens", "reasoning",
-                                "prompt_cache_key", "store", "include", "stream"}
-    assert (out["max_output_tokens"], out["reasoning"], out["store"]) == (40000, {"effort": "xhigh"}, False)
+    assert {k for k in out} == {
+        "model",
+        "input",
+        "tools",
+        "tool_choice",
+        "max_output_tokens",
+        "reasoning",
+        "prompt_cache_key",
+        "store",
+        "include",
+        "stream",
+    }
+    assert (out["max_output_tokens"], out["reasoning"], out["store"]) == (
+        40000,
+        {"effort": "xhigh"},
+        False,
+    )
     assert out["include"] == ["reasoning.encrypted_content"]
-    assert out["tools"] == [{"type": "function", "name": "run", "description": "d", "parameters": {"type": "object"}}]
+    assert out["tools"] == [
+        {"type": "function", "name": "run", "description": "d", "parameters": {"type": "object"}}
+    ]
     assert [i.get("type") for i in out["input"]] == [
-        "message", "message", "reasoning", "message", "function_call", "function_call_output"]
-    assert out["input"][1]["content"][1] == {"type": "input_image", "image_url": picture, "detail": "high"}
+        "message",
+        "message",
+        "reasoning",
+        "message",
+        "function_call",
+        "function_call_output",
+    ]
+    assert out["input"][1]["content"][1] == {
+        "type": "input_image",
+        "image_url": picture,
+        "detail": "high",
+    }
     assert out["input"][2]["encrypted_content"] == "E1"
-    assert out["input"][4] == {"type": "function_call", "call_id": "c1", "name": "run", "arguments": "{}"}
+    assert out["input"][4] == {
+        "type": "function_call",
+        "call_id": "c1",
+        "name": "run",
+        "arguments": "{}",
+    }
     assert out["input"][5] == {"type": "function_call_output", "call_id": "c1", "output": "ok"}
     assert "messages" in body and "reasoning_items" in body["messages"][2], "the input was mutated"
 
 
-@pytest.mark.parametrize("status,reason,finish", [("completed", None, "tool_calls"),
-                                                  ("incomplete", "max_output_tokens", "length"),
-                                                  ("incomplete", "content_filter", "content_filter")])
-def test_a_responses_answer_reads_as_the_chat_answer_the_engine_takes(status, reason, finish) -> None:
-    resp = {"id": "r", "model": "gpt-5.6-sol-2026-07-09", "status": status,
-            **({"incomplete_details": {"reason": reason}} if reason else {}),
-            "output": [{"type": "reasoning", "id": "rs", "summary": [], "encrypted_content": "E"},
-                       {"type": "function_call", "call_id": "c9", "name": "run", "arguments": "{\"code\": \"x\"}"}],
-            "usage": {"input_tokens": 100, "output_tokens": 30, "total_tokens": 130,
-                      "input_tokens_details": {"cached_tokens": 64},
-                      "output_tokens_details": {"reasoning_tokens": 20}}}
+@pytest.mark.parametrize(
+    "status,reason,finish",
+    [
+        ("completed", None, "tool_calls"),
+        ("incomplete", "max_output_tokens", "length"),
+        ("incomplete", "content_filter", "content_filter"),
+    ],
+)
+def test_a_responses_answer_reads_as_the_chat_answer_the_engine_takes(
+    status, reason, finish
+) -> None:
+    resp = {
+        "id": "r",
+        "model": "gpt-5.6-sol-2026-07-09",
+        "status": status,
+        **({"incomplete_details": {"reason": reason}} if reason else {}),
+        "output": [
+            {"type": "reasoning", "id": "rs", "summary": [], "encrypted_content": "E"},
+            {"type": "function_call", "call_id": "c9", "name": "run", "arguments": '{"code": "x"}'},
+        ],
+        "usage": {
+            "input_tokens": 100,
+            "output_tokens": 30,
+            "total_tokens": 130,
+            "input_tokens_details": {"cached_tokens": 64},
+            "output_tokens_details": {"reasoning_tokens": 20},
+        },
+    }
     out = openai_wire.from_responses(resp)
     msg = out["choices"][0]["message"]
     assert out["choices"][0]["finish_reason"] == finish
-    assert msg["tool_calls"] == [{"id": "c9", "type": "function", "function": {"name": "run", "arguments": "{\"code\": \"x\"}"}}]
-    assert msg["reasoning_items"] == [{"type": "reasoning", "id": "rs", "summary": [], "encrypted_content": "E"}]
-    assert out["usage"] == {"prompt_tokens": 100, "completion_tokens": 30, "total_tokens": 130,
-                            "prompt_tokens_details": {"cached_tokens": 64},
-                            "completion_tokens_details": {"reasoning_tokens": 20}}
+    assert msg["tool_calls"] == [
+        {"id": "c9", "type": "function", "function": {"name": "run", "arguments": '{"code": "x"}'}}
+    ]
+    assert msg["reasoning_items"] == [
+        {"type": "reasoning", "id": "rs", "summary": [], "encrypted_content": "E"}
+    ]
+    assert out["usage"] == {
+        "prompt_tokens": 100,
+        "completion_tokens": 30,
+        "total_tokens": 130,
+        "prompt_tokens_details": {"cached_tokens": 64},
+        "completion_tokens_details": {"reasoning_tokens": 20},
+    }
     assert reasoning_tokens_of(out, model=GPT) == 20
 
 
@@ -336,10 +490,27 @@ def test_the_turn_s_encrypted_reasoning_rides_the_next_request(monkeypatch) -> N
 
     def _fake(url, api_key, *, workdir=None, routing_key=None, endpoint=None, **kwargs):
         sent.append(json.loads(json.dumps(kwargs)))
-        return {"choices": [{"finish_reason": "tool_calls", "message": {
-            "content": "", "reasoning_items": [{"type": "reasoning", "id": f"rs{len(sent)}", "encrypted_content": "E"}],
-            "tool_calls": [{"id": f"c{len(sent)}", "type": "function", "function": {"name": "run", "arguments": "{}"}}]}}],
-            "usage": {"completion_tokens_details": {"reasoning_tokens": 5000}}}
+        return {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "content": "",
+                        "reasoning_items": [
+                            {"type": "reasoning", "id": f"rs{len(sent)}", "encrypted_content": "E"}
+                        ],
+                        "tool_calls": [
+                            {
+                                "id": f"c{len(sent)}",
+                                "type": "function",
+                                "function": {"name": "run", "arguments": "{}"},
+                            }
+                        ],
+                    },
+                }
+            ],
+            "usage": {"completion_tokens_details": {"reasoning_tokens": 5000}},
+        }
 
     monkeypatch.setattr(reasoner, "chat_completions_raw", _fake)
     r = Reasoner(endpoint_spec=GPT_SPEC, reasoning_effort="medium")
@@ -351,7 +522,10 @@ def test_the_turn_s_encrypted_reasoning_rides_the_next_request(monkeypatch) -> N
     assert turn["reasoning_items"] == [{"type": "reasoning", "id": "rs1", "encrypted_content": "E"}]
     assert "reasoning_tokens" not in turn, "the price is the compactor's, never sent"
     with_items = compactor._estimate_input_tokens(r.messages, model=GPT)
-    bare = [{k: v for k, v in m.items() if k not in ("reasoning_items", "reasoning_tokens")} for m in r.messages]
+    bare = [
+        {k: v for k, v in m.items() if k not in ("reasoning_items", "reasoning_tokens")}
+        for m in r.messages
+    ]
     assert with_items - compactor._estimate_input_tokens(bare, model=GPT) == 2 * 5000
 
 
@@ -359,8 +533,11 @@ def test_a_bench_worker_s_cache_key_outranks_the_episode_s(monkeypatch) -> None:
     """The bench names one key per worker, shared by the episodes it flies in turn, so each
     after its first reads the common head from the cache."""
     sent = _serve(monkeypatch)
-    r = Reasoner(endpoint_spec=GPT_SPEC, routing_key="calcity::ep-7",
-                 settings=from_environ({"SEARCH_LLM_CACHE_KEY": "gto2_CG-HI_M_89_abc/w3"}))
+    r = Reasoner(
+        endpoint_spec=GPT_SPEC,
+        routing_key="calcity::ep-7",
+        settings=from_environ({"SEARCH_LLM_CACHE_KEY": "gto2_CG-HI_M_89_abc/w3"}),
+    )
     r.append_user("find the truck")
     r.step_tool_call([])
     assert sent[0]["prompt_cache_key"] == "gto2_CG-HI_M_89_abc/w3"

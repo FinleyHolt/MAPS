@@ -17,8 +17,7 @@ def test_families_collapse_on_the_shipped_spelling():
 
 
 def test_longest_prefix_wins_so_no_key_prints_twice():
-    keys = ([f"facing b_{i}" for i in range(5)]
-            + [f"bearing from b_{i}" for i in range(5)])
+    keys = [f"facing b_{i}" for i in range(5)] + [f"bearing from b_{i}" for i in range(5)]
     out = _grouped_keys(keys)
     assert "facing b_* (5 instances" in out
     assert "bearing from b_* (5 instances" in out

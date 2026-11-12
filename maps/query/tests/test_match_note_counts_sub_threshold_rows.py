@@ -6,17 +6,18 @@ from maps.query import program as GP
 
 
 def _row(fid, name, x, text):
-    return {"fid": fid, "name": name, "xy": [x, 0.0], "tags": {},
-            "search_text": text}
+    return {"fid": fid, "name": name, "xy": [x, 0.0], "tags": {}, "search_text": text}
 
 
 def test_band_cut_rows_are_not_also_sub_threshold():
-    rows = [_row("prior_1", "Neuralia Road", 0, "neuralia road"),
-            _row("prior_2", "Mendiburu Road", 10, "mendiburu road")]
-    rows += [_row(f"prior_{9 + i}", f"Lot {i}", 50.0 + i, f"lot {i}")
-             for i in range(10)]
-    out = GP.run_program([], rows, {"ops": [
-        {"ref": "r0", "op": "find", "args": {"query": "Neuralia Road"}}]})
+    rows = [
+        _row("prior_1", "Neuralia Road", 0, "neuralia road"),
+        _row("prior_2", "Mendiburu Road", 10, "mendiburu road"),
+    ]
+    rows += [_row(f"prior_{9 + i}", f"Lot {i}", 50.0 + i, f"lot {i}") for i in range(10)]
+    out = GP.run_program(
+        [], rows, {"ops": [{"ref": "r0", "op": "find", "args": {"query": "Neuralia Road"}}]}
+    )
     notes = out["results"]["r0"].notes
     # 12 rows: 1 matched, 1 cut by the name band ("... Road"), 10 below.
     assert notes[0].startswith("1 of 12 rows matched")

@@ -82,10 +82,10 @@ def test_same_phrases_are_encoded_once(monkeypatch):
 def test_the_key_separates_what_must_be_separate(monkeypatch):
     _, enc = _wrapped(monkeypatch)
     enc.forward(["car"], None, "cuda")
-    enc.forward(["building"], None, "cuda")          # different phrase
-    enc.forward(["building", "car"], None, "cuda")   # different length
-    enc.forward(["car", "building"], None, "cuda")   # different ORDER
-    enc.forward(["car"], None, "cpu")                # different device
+    enc.forward(["building"], None, "cuda")  # different phrase
+    enc.forward(["building", "car"], None, "cuda")  # different length
+    enc.forward(["car", "building"], None, "cuda")  # different ORDER
+    enc.forward(["car"], None, "cpu")  # different device
     assert enc.calls == 5, f"keys collided: {enc.calls} real calls, expected 5"
 
 

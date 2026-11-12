@@ -28,8 +28,14 @@ def rasters(tmp_path):
 
 def _raster(rasters) -> None:
     """A 40 m x 20 m raster at (800, 800)."""
-    write_rasters(rasters, BLOCK, np.full((200, 400, 3), 90, dtype=np.uint8),
-                  np.zeros((200, 400), dtype=np.float32), x_min=800.0, y_min=800.0)
+    write_rasters(
+        rasters,
+        BLOCK,
+        np.full((200, 400, 3), 90, dtype=np.uint8),
+        np.zeros((200, 400), dtype=np.float32),
+        x_min=800.0,
+        y_min=800.0,
+    )
 
 
 def _baked_meta(tiles, rasters) -> dict:
@@ -48,9 +54,15 @@ def test_bounds_and_grid_come_from_the_raster_into_an_empty_tiles_dir(tmp_path, 
 
 def test_a_left_over_sidecar_is_not_read(tmp_path, rasters):
     _raster(rasters)
-    (tmp_path / f"{BLOCK}_meta.json").write_text(json.dumps({
-        "cell_size_m": 5.0, "grid_shape": [60, 70],
-        "bounds": {"x_min": 750.0, "y_min": 750.0, "x_max": 890.0, "y_max": 870.0}}))
+    (tmp_path / f"{BLOCK}_meta.json").write_text(
+        json.dumps(
+            {
+                "cell_size_m": 5.0,
+                "grid_shape": [60, 70],
+                "bounds": {"x_min": 750.0, "y_min": 750.0, "x_max": 890.0, "y_max": 870.0},
+            }
+        )
+    )
     meta = _baked_meta(tmp_path, rasters)
     assert meta["bounds"]["x_min"] == 800.0 and meta["grid_shape"] == [10, 20]
 

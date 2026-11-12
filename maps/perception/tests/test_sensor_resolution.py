@@ -25,7 +25,12 @@ def test_empty_spec_resolves_to_none():
 
 def test_inline_dict_overrides_a_base():
     spec = resolve_sensor(
-        {"base": "nadir_1008_90", "name": "wide", "hfov_deg": 120.0, "description": "custom override"}
+        {
+            "base": "nadir_1008_90",
+            "name": "wide",
+            "hfov_deg": 120.0,
+            "description": "custom override",
+        }
     )
     assert spec.name == "wide"
     assert spec.intrinsics.hfov_deg == pytest.approx(120.0)
@@ -33,7 +38,10 @@ def test_inline_dict_overrides_a_base():
     # Unstated fields keep the base's values.
     base = resolve_sensor("nadir_1008_90")
     assert spec.max_range_m == pytest.approx(base.max_range_m)
-    assert resolve_sensor({"base": "nadir_1008_90", "max_range_m": 50.0}).description == base.description
+    assert (
+        resolve_sensor({"base": "nadir_1008_90", "max_range_m": 50.0}).description
+        == base.description
+    )
 
 
 def test_unknown_name_names_what_is_registered():
@@ -46,7 +54,12 @@ def test_unknown_name_names_what_is_registered():
 
 @pytest.mark.parametrize(
     ("spec", "key"),
-    [({"base": "nadir_1008_9"}, "base"), ({"hfov_deg": [1, 2]}, "hfov_deg"), ({"max_range_m": "far"}, "max_range_m"), ({"name": ["a"]}, "name")],
+    [
+        ({"base": "nadir_1008_9"}, "base"),
+        ({"hfov_deg": [1, 2]}, "hfov_deg"),
+        ({"max_range_m": "far"}, "max_range_m"),
+        ({"name": ["a"]}, "name"),
+    ],
 )
 def test_a_bad_override_value_is_a_value_error_naming_its_key(spec, key):
     """The config loader reports a ValueError as a refused key."""

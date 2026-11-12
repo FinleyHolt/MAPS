@@ -6,6 +6,7 @@ must reproduce a run's spawns exactly, and a different seed must give an
 independent set — silently correlated spawns would make a "new" spawn set
 re-measure the old one.
 """
+
 from __future__ import annotations
 
 from benchmarks.citynav.run_benchmark.episode_runner import uniform_spawn_xy

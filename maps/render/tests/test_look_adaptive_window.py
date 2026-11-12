@@ -26,15 +26,27 @@ GROUND_Z = 10.0
 def _req(center_xy, marks_xy=(), target_xy=None, fid="c0"):
     """One resolved crop spec, marks in the caller's order, target LAST — the same shape
     (and target position) ``views.crop_requests`` emits."""
-    marks = [{"fid": f"m{i}", "xy": list(xy), "boundary": None,
-              "label": f"car m{i}", "is_target": False}
-             for i, xy in enumerate(marks_xy)]
+    marks = [
+        {"fid": f"m{i}", "xy": list(xy), "boundary": None, "label": f"car m{i}", "is_target": False}
+        for i, xy in enumerate(marks_xy)
+    ]
     if target_xy is not None:
-        marks.append({"fid": "tgt", "xy": list(target_xy), "boundary": None,
-                      "label": "TARGET car", "is_target": True})
-    return {"center_fid": fid, "center_xy": list(center_xy),
-            "center_label": f"car {fid}", "center_boundary": None,
-            "marks": marks}
+        marks.append(
+            {
+                "fid": "tgt",
+                "xy": list(target_xy),
+                "boundary": None,
+                "label": "TARGET car",
+                "is_target": True,
+            }
+        )
+    return {
+        "center_fid": fid,
+        "center_xy": list(center_xy),
+        "center_label": f"car {fid}",
+        "center_boundary": None,
+        "marks": marks,
+    }
 
 
 def _render_one(ortho_dir, req):
@@ -52,9 +64,12 @@ def _img_side(rec) -> int:
 
 
 def test_many_ids_fit_one_frame(ortho_dir):
-    rec = _render_one(ortho_dir, _req(
-        (100.0, 100.0),
-        marks_xy=[(70.0, 100.0), (130.0, 100.0), (100.0, 75.0), (100.0, 125.0)]))
+    rec = _render_one(
+        ortho_dir,
+        _req(
+            (100.0, 100.0), marks_xy=[(70.0, 100.0), (130.0, 100.0), (100.0, 75.0), (100.0, 125.0)]
+        ),
+    )
     assert rec["context_m"] == 60.0 + LOOK_CAR_MARGIN_M, rec["context_m"]
     assert rec["marks_out_of_view"] == [], rec
     assert rec["marks_unbadged_in_frame"] == [], rec
@@ -92,8 +107,8 @@ def test_a_window_that_covers_the_hull_frames_every_requested_point(ortho_dir):
     _dy = (max(p[1] for p in grid) + min(p[1] for p in grid)) / 2.0 - grid[0][1]
     _keep = _ctx / 2.0 - LOOK_CAR_MARGIN_M / 2.0
     assert min(_dx, _dy) > 0, (_dx, _dy)
-    assert max(_dx, _dy) <= _keep, (_dx, _dy, _keep)        # legal per axis
-    assert (_dx ** 2 + _dy ** 2) ** 0.5 > _keep, (_dx, _dy)  # illegal by radius
+    assert max(_dx, _dy) <= _keep, (_dx, _dy, _keep)  # legal per axis
+    assert (_dx**2 + _dy**2) ** 0.5 > _keep, (_dx, _dy)  # illegal by radius
     rec = _render_one(ortho_dir, _req(grid[0], marks_xy=grid[1:]))
     assert rec["context_m"] == _ctx, rec["context_m"]
     assert rec["marks_out_of_view"] == [], rec
@@ -111,15 +126,13 @@ def test_single_id_keeps_the_tight_crop(ortho_dir):
     rec = _render_one(ortho_dir, _req((100.0, 100.0)))
     assert rec["context_m"] == _MIN_M, rec["context_m"]
     assert _img_side(rec) == LOOK_TARGET_PX, rec
-    assert rec["legend"] == [{"digit": 1, "label": "car c0",
-                              "role": "center"}], rec["legend"]
+    assert rec["legend"] == [{"digit": 1, "label": "car c0", "role": "center"}], rec["legend"]
 
 
 def test_mid_span_upscale_is_derived_not_moded(ortho_dir):
     # 24 m hull -> 30 m window -> 300 px native -> x2 -> 600 px delivered:
     # the factor follows the span.
-    rec = _render_one(ortho_dir, _req(
-        (100.0, 100.0), marks_xy=[(88.0, 100.0), (112.0, 100.0)]))
+    rec = _render_one(ortho_dir, _req((100.0, 100.0), marks_xy=[(88.0, 100.0), (112.0, 100.0)]))
     assert rec["context_m"] == 30.0, rec["context_m"]
     assert _img_side(rec) == 600, rec
 
@@ -127,8 +140,7 @@ def test_mid_span_upscale_is_derived_not_moded(ortho_dir):
 def test_budget_clamps_and_the_far_anchor_falls_off(ortho_dir):
     # Beyond the serving budget the far anchor is dropped WITH its name in
     # the record; the subject keeps its own window (recenter cap).
-    rec = _render_one(ortho_dir, _req(
-        (30.0, 100.0), marks_xy=[(180.0, 100.0)]))
+    rec = _render_one(ortho_dir, _req((30.0, 100.0), marks_xy=[(180.0, 100.0)]))
     assert rec["context_m"] == _BUDGET_M, rec["context_m"]
     assert rec["marks_out_of_view"] == ["m0"], rec
     assert rec["subject_in_window"] is True, rec
@@ -139,18 +151,17 @@ def test_badge_cap_binds_at_25_never_silently(ortho_dir):
     # 24 requested neighbours + a LAST-positioned target: 23 neighbours draw,
     # the 24th is dropped and counted, the late target still gets its
     # reserved slot — 25 badges total, digits 1..25.
-    grid = [(100.0 + 8.0 * (i % 5 - 2), 100.0 + 8.0 * (i // 5 - 2))
-            for i in range(25) if i != 12]  # 24 spots around the center cell
-    rec = _render_one(ortho_dir, _req(
-        (100.0, 100.0), marks_xy=grid, target_xy=(98.0, 97.0)))
+    grid = [
+        (100.0 + 8.0 * (i % 5 - 2), 100.0 + 8.0 * (i // 5 - 2)) for i in range(25) if i != 12
+    ]  # 24 spots around the center cell
+    rec = _render_one(ortho_dir, _req((100.0, 100.0), marks_xy=grid, target_xy=(98.0, 97.0)))
     legend = rec["legend"]
     assert len(legend) == LOOK_MAX_BADGES, legend
     assert rec["marks_dropped"] == 1, rec
     roles = [e["role"] for e in legend]
     assert roles[0] == "center" and "target" in roles, roles
     # digits are a permutation of 1..25 (the target appends last, digit 2)
-    assert sorted(e["digit"] for e in legend) == list(
-        range(1, LOOK_MAX_BADGES + 1))
+    assert sorted(e["digit"] for e in legend) == list(range(1, LOOK_MAX_BADGES + 1))
 
 
 @pytest.fixture
@@ -164,14 +175,15 @@ def coarse_ortho_dir(tmp_path, monkeypatch):
     rgb[..., 0] = (np.arange(n, dtype=np.uint32)[:, None] % 256).astype(np.uint8)
     rgb[..., 1] = (np.arange(n, dtype=np.uint32)[None, :] % 256).astype(np.uint8)
     rgb[..., 2] = 96
-    write_rasters(tmp_path, MAP, rgb, np.full((n, n), GROUND_Z + 5.0, dtype=np.float32), m_per_px=0.3)
+    write_rasters(
+        tmp_path, MAP, rgb, np.full((n, n), GROUND_Z + 5.0, dtype=np.float32), m_per_px=0.3
+    )
     monkeypatch.setitem(GROUND_LEVEL, MAP, GROUND_Z)
     camera_model._ORTHO_RASTER_CACHE.clear()
     return tmp_path
 
 
-def test_a_coarser_grid_buys_a_wider_window_for_the_same_pixels(
-        coarse_ortho_dir):
+def test_a_coarser_grid_buys_a_wider_window_for_the_same_pixels(coarse_ortho_dir):
     # THE contract of the pixel-denominated bounds, and the only test whose
     # fixture is not 0.1 m/px: the window is a PIXEL budget, so a 3x coarser
     # grid holds 3x the ground at the same delivered size. Writing the
@@ -182,8 +194,7 @@ def test_a_coarser_grid_buys_a_wider_window_for_the_same_pixels(
 
     # Ceiling: a far anchor that overflows the window still clamps to it,
     # and the delivered side matches what the fine grid delivers at 100 m.
-    wide = _render_one(coarse_ortho_dir, _req(
-        (90.0, 100.0), marks_xy=[(540.0, 100.0)]))
+    wide = _render_one(coarse_ortho_dir, _req((90.0, 100.0), marks_xy=[(540.0, 100.0)]))
     assert wide["context_m"] == budget_m, wide["context_m"]
     assert _img_side(wide) == round(_BUDGET_M * 10), wide  # same pixels
     assert wide["subject_in_window"] is True, wide
@@ -202,12 +213,12 @@ def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir, monkeypatch
 
     seen = []
     real = mark_overlay.render_look_overlay
-    monkeypatch.setattr(mark_overlay, "render_look_overlay",
-                        lambda *a, **kw: seen.append(kw) or real(*a, **kw))
+    monkeypatch.setattr(
+        mark_overlay, "render_look_overlay", lambda *a, **kw: seen.append(kw) or real(*a, **kw)
+    )
     # A target whose footprint runs 80 m past the window on every side.
     req = _req((100.0, 100.0), target_xy=(104.0, 100.0))
-    req["marks"][-1]["boundary"] = [[20.0, 20.0], [180.0, 20.0],
-                                    [180.0, 180.0], [20.0, 180.0]]
+    req["marks"][-1]["boundary"] = [[20.0, 20.0], [180.0, 20.0], [180.0, 180.0], [20.0, 180.0]]
     huge = _render_one(ortho_dir, req)
     assert seen.pop()["target_poly_px"] is None
     # ...and it keeps its badge: the model is still told WHICH thing.
@@ -215,7 +226,6 @@ def test_a_shape_too_big_for_the_frame_is_not_drawn_on_it(ortho_dir, monkeypatch
 
     # VACUITY FLOOR: the same request with a footprint that fits IS drawn,
     # or the assertion above passes on a renderer that outlines nothing.
-    req["marks"][-1]["boundary"] = [[102.0, 98.0], [106.0, 98.0],
-                                    [106.0, 102.0], [102.0, 102.0]]
+    req["marks"][-1]["boundary"] = [[102.0, 98.0], [106.0, 98.0], [106.0, 102.0], [102.0, 102.0]]
     _render_one(ortho_dir, req)
     assert seen.pop()["target_poly_px"]

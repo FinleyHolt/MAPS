@@ -1,4 +1,5 @@
 """A re-served rejection carries its repeat count and the live census."""
+
 from __future__ import annotations
 
 import json
@@ -6,19 +7,29 @@ import json
 from maps.mission.tests.fakes import drive, run, tool_results
 
 # Colour never cuts, so this block is refused every time it is served.
-_COLOR_FILTER_BLOCK = ('a = find("car")\n'
-                       'b = a.filter(color="gray")\n'
-                       'b')
+_COLOR_FILTER_BLOCK = 'a = find("car")\nb = a.filter(color="gray")\nb'
 _OK_BLOCK = 'a = find("car")\na'
 # An op-SHAPE error: its own echoed line is the fix material, so it gets the
 # short count line and never the census.
 _SHAPE_BLOCK = 'a = find("car")\nb = a.order(\n'
 
 _CANDS = [
-    {"fid": "detected_0", "xy": [0.0, 0.0], "class": "car",
-     "color": "gray", "color_conf": 0.8, "search_text": "car"},
-    {"fid": "detected_1", "xy": [10.0, 0.0], "class": "car",
-     "color": "blue", "color_conf": 0.7, "search_text": "car"},
+    {
+        "fid": "detected_0",
+        "xy": [0.0, 0.0],
+        "class": "car",
+        "color": "gray",
+        "color_conf": 0.8,
+        "search_text": "car",
+    },
+    {
+        "fid": "detected_1",
+        "xy": [10.0, 0.0],
+        "class": "car",
+        "color": "blue",
+        "color_conf": 0.7,
+        "search_text": "car",
+    },
 ]
 
 
@@ -44,8 +55,7 @@ def test_each_repeat_counts_up_with_the_census_and_no_fid_inventory():
 
 
 def test_a_successful_block_does_not_reset_the_class_count():
-    served = drive_blocks(
-        [_COLOR_FILTER_BLOCK] * 2 + [_OK_BLOCK] + [_COLOR_FILTER_BLOCK])
+    served = drive_blocks([_COLOR_FILTER_BLOCK] * 2 + [_OK_BLOCK] + [_COLOR_FILTER_BLOCK])
     assert "error" not in served[2], served[2]
     err4 = served[3]["error"]
     assert "colour never CUTS" in err4
@@ -91,7 +101,7 @@ def test_a_repeat_census_counts_the_prior_rows():
 
 
 def test_an_escalation_after_an_unpunctuated_error_starts_a_new_sentence():
-    served = drive_blocks(['print(r9)\n'] * 2)
+    served = drive_blocks(["print(r9)\n"] * 2)
     assert served[0]["error"].endswith("is not defined"), served[0]
     assert "is not defined. This error class has now occurred 2x." in served[1]["error"], served[1]
 
@@ -108,21 +118,23 @@ def test_a_column_list_of_another_length_is_the_same_class():
 
     def sig(cols):
         return error_class_signature(
-            f"line 5: AttributeError: row prior_1 carries no 'a'; "
-                  f"its columns are {cols}")
+            f"line 5: AttributeError: row prior_1 carries no 'a'; its columns are {cols}"
+        )
+
     assert sig(["c", "d", "e", "f", "g", "h", "i"]) == sig(list("cdefghijklm"))
 
 
 def test_a_look_whose_program_succeeded_restarts_the_consecutive_streak():
     # look(slice) runs its window program before the crop: that success
     # ends the streak even when the crop is then refused.
-    served = drive_blocks(['a = find("car")\na\n']
-                          + [f"look(a[{w}])\n" for w in ("0:1", "1:2", "0:2")])
+    served = drive_blocks(
+        ['a = find("car")\na\n'] + [f"look(a[{w}])\n" for w in ("0:1", "1:2", "0:2")]
+    )
     assert all("crop" in p["error"] for p in served[1:]), served
     assert "rejected again" not in served[3]["error"], served[3]
 
 
 def test_a_repeated_question_is_not_punctuated_twice():
-    served = drive_blocks(['cars = find("car")\n'] + ['carz[0]\n'] * 3)
+    served = drive_blocks(['cars = find("car")\n'] + ["carz[0]\n"] * 3)
     err = served[3]["error"]
     assert "did you mean cars? The full rejection text" in err, err

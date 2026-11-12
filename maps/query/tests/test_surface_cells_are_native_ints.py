@@ -13,16 +13,19 @@ def _node(cells, provenance="prebaked"):
     import numpy as np
 
     return MapObject(
-        class_name="building", name=None, tags={},
-        centroid=(int(cells[0][0]), int(cells[0][1])), provenance=provenance,
+        class_name="building",
+        name=None,
+        tags={},
+        centroid=(int(cells[0][0]), int(cells[0][1])),
+        provenance=provenance,
         cells=np.asarray(cells, dtype=np.int32),
-        world_xy=[float(cells[0][1]) * 2.0, float(cells[0][0]) * 2.0])
+        world_xy=[float(cells[0][1]) * 2.0, float(cells[0][0]) * 2.0],
+    )
 
 
 def _graph():
     return {
-        f"building_{i}": _node([[r, c] for r in range(i, i + 4)
-                                for c in range(i, i + 5)])
+        f"building_{i}": _node([[r, c] for r in range(i, i + 4) for c in range(i, i + 5)])
         for i in range(1, 12)
     }
 
@@ -64,7 +67,6 @@ def test_a_node_with_no_cells_stays_bare():
 
     node = _node([[1, 1]])
     node.cells = np.zeros((0, 2), dtype=np.int32)
-    cands, anchors = build_surface_from_graph(
-        {"building_1": node}.items(), (0.0, 0.0), 2.0)
+    cands, anchors = build_surface_from_graph({"building_1": node}.items(), (0.0, 0.0), 2.0)
     (row,) = list(cands) + list(anchors)
     assert not row.get("cells"), row.get("cells")

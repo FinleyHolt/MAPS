@@ -56,6 +56,10 @@ def test_replaying_the_actions_reproduces_the_reached_pose():
     pose = Pose(5.0, 10.0, 52.0, 30.0)
     for a in actions:
         pose = apply_action(pose, a)
-    assert all(math.isclose(p, r, abs_tol=1e-9) for p, r in zip(
-        (pose.x, pose.y, pose.altitude_m, pose.heading_deg),
-        (reached.x, reached.y, reached.altitude_m, reached.heading_deg)))
+    assert all(
+        math.isclose(p, r, abs_tol=1e-9)
+        for p, r in zip(
+            (pose.x, pose.y, pose.altitude_m, pose.heading_deg),
+            (reached.x, reached.y, reached.altitude_m, reached.heading_deg),
+        )
+    )

@@ -79,9 +79,7 @@ def _next_detected_id(graph: ObjectGraph) -> str:
 def upsert_detected_centroid_only(graph: ObjectGraph, node: MapObject) -> str:
     """Mint a node for a detection without a ``track_id``; its new id."""
     if node.provenance != "detected":
-        raise ValueError(
-            "upsert_detected_centroid_only only accepts provenance='detected' nodes"
-        )
+        raise ValueError("upsert_detected_centroid_only only accepts provenance='detected' nodes")
     fid = _next_detected_id(graph)
     graph.nodes[fid] = node
     return fid
@@ -116,9 +114,7 @@ def upsert_tracked_detected(
     ``base_node`` with its geometry set from the cells; a repeat updates the
     node carrying that ``track_id`` in place. Returns the fid."""
     if base_node.provenance != "detected":
-        raise ValueError(
-            "upsert_tracked_detected only accepts provenance='detected' nodes"
-        )
+        raise ValueError("upsert_tracked_detected only accepts provenance='detected' nodes")
 
     cells = np.asarray(cells, dtype=np.int32)
 
@@ -151,7 +147,9 @@ def upsert_tracked_detected(
     # base_node carries this frame's mask pixel count and color read, one
     # value per bucket.
     apply_best_view_color(
-        node, {k: next(iter(v)) for k, v in base_node.semantic_attributes.items() if v}, base_node.best_view_px
+        node,
+        {k: next(iter(v)) for k, v in base_node.semantic_attributes.items() if v},
+        base_node.best_view_px,
     )
     return existing_fid
 

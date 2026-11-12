@@ -62,8 +62,12 @@ def bake_block(bundle: Path, tiles_dir: Path, map_name: str) -> int:
         raise ValueError(f"{bundle} carries no OSM features over {map_name!r}")
     frame = build_local_frame(AOI_BBOX)
     return city.bake_block(
-        map_name, records, tiles_dir,
-        bounds=WorldBounds(x_min=0.0, y_min=0.0, x_max=round(frame.width_m, 4), y_max=round(frame.height_m, 4)),
+        map_name,
+        records,
+        tiles_dir,
+        bounds=WorldBounds(
+            x_min=0.0, y_min=0.0, x_max=round(frame.width_m, 4), y_max=round(frame.height_m, 4)
+        ),
         meta={
             "coordinate_frame": {"y_axis": "north"},
             "georef": {
@@ -81,7 +85,9 @@ def main(argv: list[str] | None = None) -> int:
     bench = calcity_bench(os.environ)
     parser.add_argument("--tiles-dir", type=Path, default=bench.tiles_dir)
     args = parser.parse_args(argv)
-    count = bake_block(args.bundle or bundle_root(bench.root, os.environ), args.tiles_dir, "calcity")
+    count = bake_block(
+        args.bundle or bundle_root(bench.root, os.environ), args.tiles_dir, "calcity"
+    )
     print(f"[calcity-bake] calcity: {count} priors")
     return 0
 

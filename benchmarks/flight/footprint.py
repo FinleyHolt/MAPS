@@ -13,8 +13,17 @@ import math
 M_PER_DEG_LAT = 111_320.0
 
 
-def off_nadir_deg(east_m: float, north_m: float, agl_m: float, heading_deg: float, roll_deg: float,
-                  pitch_deg: float, *, hfov_deg: float, vfov_deg: float) -> float | None:
+def off_nadir_deg(
+    east_m: float,
+    north_m: float,
+    agl_m: float,
+    heading_deg: float,
+    roll_deg: float,
+    pitch_deg: float,
+    *,
+    hfov_deg: float,
+    vfov_deg: float,
+) -> float | None:
     """The angle, degrees, between the optical axis and the ray to the ground
     point ``east_m, north_m`` from the camera's ground position, for a nadir
     camera ``agl_m`` up on ``heading_deg`` (0 north, clockwise), banked
@@ -45,22 +54,63 @@ def off_nadir_deg(east_m: float, north_m: float, agl_m: float, heading_deg: floa
     if cam_z <= 0.0:
         return None
     x, y = cam_x / cam_z, cam_y / cam_z
-    if abs(x) > math.tan(math.radians(hfov_deg) / 2.0) or abs(y) > math.tan(math.radians(vfov_deg) / 2.0):
+    if abs(x) > math.tan(math.radians(hfov_deg) / 2.0) or abs(y) > math.tan(
+        math.radians(vfov_deg) / 2.0
+    ):
         return None
     return math.degrees(math.atan(math.hypot(x, y)))
 
 
-def in_frame_xy(pose_xy, agl_m: float, heading_deg: float, roll_deg: float, pitch_deg: float, target_xy,
-                *, hfov_deg: float, vfov_deg: float) -> bool:
+def in_frame_xy(
+    pose_xy,
+    agl_m: float,
+    heading_deg: float,
+    roll_deg: float,
+    pitch_deg: float,
+    target_xy,
+    *,
+    hfov_deg: float,
+    vfov_deg: float,
+) -> bool:
     """Whether a camera over ``pose_xy`` holds ``target_xy``, both in local metres (x east, y north)."""
-    return off_nadir_deg(float(target_xy[0]) - float(pose_xy[0]), float(target_xy[1]) - float(pose_xy[1]),
-                         agl_m, heading_deg, roll_deg, pitch_deg, hfov_deg=hfov_deg, vfov_deg=vfov_deg) is not None
+    return (
+        off_nadir_deg(
+            float(target_xy[0]) - float(pose_xy[0]),
+            float(target_xy[1]) - float(pose_xy[1]),
+            agl_m,
+            heading_deg,
+            roll_deg,
+            pitch_deg,
+            hfov_deg=hfov_deg,
+            vfov_deg=vfov_deg,
+        )
+        is not None
+    )
 
 
-def off_nadir_lonlat(lat: float, lon: float, agl_m: float, heading_deg: float, roll_deg: float, pitch_deg: float,
-                     point_lat: float, point_lon: float, *, hfov_deg: float, vfov_deg: float) -> float | None:
+def off_nadir_lonlat(
+    lat: float,
+    lon: float,
+    agl_m: float,
+    heading_deg: float,
+    roll_deg: float,
+    pitch_deg: float,
+    point_lat: float,
+    point_lon: float,
+    *,
+    hfov_deg: float,
+    vfov_deg: float,
+) -> float | None:
     """:func:`off_nadir_deg` for a camera over ``lat, lon`` and a point
     ``point_lat, point_lon``: equirectangular offsets, a centimetre over a frame's reach."""
     scale = M_PER_DEG_LAT * math.cos(math.radians(lat))
-    return off_nadir_deg((float(point_lon) - float(lon)) * scale, (float(point_lat) - float(lat)) * M_PER_DEG_LAT,
-                         agl_m, heading_deg, roll_deg, pitch_deg, hfov_deg=hfov_deg, vfov_deg=vfov_deg)
+    return off_nadir_deg(
+        (float(point_lon) - float(lon)) * scale,
+        (float(point_lat) - float(lat)) * M_PER_DEG_LAT,
+        agl_m,
+        heading_deg,
+        roll_deg,
+        pitch_deg,
+        hfov_deg=hfov_deg,
+        vfov_deg=vfov_deg,
+    )

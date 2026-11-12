@@ -26,7 +26,11 @@ BAKE_OUTPUT_SUFFIXES = ("_meta.json", "_features.json")
 def _bake_content(f: Path) -> bytes:
     """``f``'s bytes; a block meta's as canonical JSON (sorted keys)."""
     data = f.read_bytes()
-    return json.dumps(json.loads(data), sort_keys=True).encode() if f.name.endswith("_meta.json") else data
+    return (
+        json.dumps(json.loads(data), sort_keys=True).encode()
+        if f.name.endswith("_meta.json")
+        else data
+    )
 
 
 def bake_sha256(tiles_dir: Path) -> str | None:
@@ -40,8 +44,9 @@ def bake_sha256(tiles_dir: Path) -> str | None:
     if not root.is_dir():
         return None
     h = hashlib.sha256()
-    for f in sorted(p for p in root.iterdir()
-                    if p.is_file() and p.name.endswith(BAKE_OUTPUT_SUFFIXES)):
+    for f in sorted(
+        p for p in root.iterdir() if p.is_file() and p.name.endswith(BAKE_OUTPUT_SUFFIXES)
+    ):
         h.update(f.name.encode())
         h.update(b"\0")
         h.update(hashlib.sha256(_bake_content(f)).digest())
@@ -50,8 +55,11 @@ def bake_sha256(tiles_dir: Path) -> str | None:
 
 def missing_bake(stem: str) -> str | None:
     """What the bake at ``stem`` lacks for an episode to load, or None."""
-    recipe = ("python -m benchmarks.calcity.data_prep.bake_tiles" if Path(stem).name == "calcity"
-              else "benchmarks/citynav/data_prep/bake_tiles.sh")
+    recipe = (
+        "python -m benchmarks.calcity.data_prep.bake_tiles"
+        if Path(stem).name == "calcity"
+        else "benchmarks/citynav/data_prep/bake_tiles.sh"
+    )
     for path in (Path(f"{stem}{s}") for s in BAKE_OUTPUT_SUFFIXES):
         if not path.exists():
             return f"Missing {path}: bake this block first ({recipe})."
@@ -75,10 +83,21 @@ class EpisodeEngine(Protocol):
 
     def load_assets(self, bench: Bench, map_name: str) -> Any: ...
 
-    def start_altitude_m(self, cfg: Any, map_name: str, start_z: float | None) -> tuple[float, float]: ...
+    def start_altitude_m(
+        self, cfg: Any, map_name: str, start_z: float | None
+    ) -> tuple[float, float]: ...
 
-    def build_episode(self, cfg: Any, episode: Any, assets: Any, bench: Bench, *,
-                      settings: Any, workdir: Path | None = None, routing_key: str | None = None) -> Any:
+    def build_episode(
+        self,
+        cfg: Any,
+        episode: Any,
+        assets: Any,
+        bench: Bench,
+        *,
+        settings: Any,
+        workdir: Path | None = None,
+        routing_key: str | None = None,
+    ) -> Any:
         """The hydrated search stack for ``episode`` under ``settings`` (the
         engine's, ``maps.settings.Settings``), recording under ``workdir``."""
 

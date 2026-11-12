@@ -4,6 +4,7 @@ filter. The w2c lattice lives in ``data/w2c.txt``. Body pixels are selected by
 an erode plus a luminance drop, so the colour comes from the object's interior
 rather than its edges or its shadow.
 """
+
 from __future__ import annotations
 import functools
 import logging
@@ -20,10 +21,32 @@ _M6_FAIL_N = 0  # systematic-failure counter for the rate-limited warn below
 _W2C_PATH = os.path.join(os.path.dirname(__file__), "data", "w2c.txt")
 
 # van de Weijer 11 basic color terms (canonical order) + map onto our scorer vocabulary
-W2C_NAMES = ["black", "blue", "brown", "gray", "green", "orange", "pink", "purple", "red", "white", "yellow"]
-_VDW_TO_VOCAB = {"black": "black", "blue": "blue", "brown": "brown", "gray": "gray", "green": "green",
-                 "orange": "orange", "pink": "red", "purple": "purple", "red": "red",
-                 "white": "white", "yellow": "yellow"}
+W2C_NAMES = [
+    "black",
+    "blue",
+    "brown",
+    "gray",
+    "green",
+    "orange",
+    "pink",
+    "purple",
+    "red",
+    "white",
+    "yellow",
+]
+_VDW_TO_VOCAB = {
+    "black": "black",
+    "blue": "blue",
+    "brown": "brown",
+    "gray": "gray",
+    "green": "green",
+    "orange": "orange",
+    "pink": "red",
+    "purple": "purple",
+    "red": "red",
+    "white": "white",
+    "yellow": "yellow",
+}
 
 # erode / luminance-drop: the body-pixel selection
 _MIX_ERODE_PX_SMALL = 2
@@ -91,17 +114,22 @@ def _survivors(rgb, region):
     eroded_box = eroded_sub[1:-1, 1:-1].astype(bool)
     px = region.window(rgb)[eroded_box][:, :3].astype(np.float32)
     lum = px @ np.asarray([0.299, 0.587, 0.114], dtype=np.float32)
-    keep = ((lum >= np.percentile(lum, _MIX_DARK_PCTL))
-            & (lum <= np.percentile(lum, _MIX_BRIGHT_PCTL))
-            & (lum >= _MIX_DARK_ABS_LUM))
+    keep = (
+        (lum >= np.percentile(lum, _MIX_DARK_PCTL))
+        & (lum <= np.percentile(lum, _MIX_BRIGHT_PCTL))
+        & (lum >= _MIX_DARK_ABS_LUM)
+    )
     return px[keep]
 
 
 def _median_lab(surv):
     import cv2
 
-    lab = cv2.cvtColor(surv.astype(np.uint8).reshape(-1, 1, 3),
-                       cv2.COLOR_RGB2LAB).reshape(-1, 3).astype(np.float32)
+    lab = (
+        cv2.cvtColor(surv.astype(np.uint8).reshape(-1, 1, 3), cv2.COLOR_RGB2LAB)
+        .reshape(-1, 3)
+        .astype(np.float32)
+    )
     L = float(np.median(lab[:, 0])) * 100.0 / 255.0
     a = float(np.median(lab[:, 1])) - 128.0
     b = float(np.median(lab[:, 2])) - 128.0
@@ -116,9 +144,7 @@ def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
     raises; any other failure is logged rate-limited and reads as ``None``, so
     colour never crashes a flight."""
     if region is not None and not isinstance(region, MaskRegion):
-        raise TypeError(
-            f"m6_attributes takes a MaskRegion, got {type(region).__name__}"
-        )
+        raise TypeError(f"m6_attributes takes a MaskRegion, got {type(region).__name__}")
     try:
         surv = _survivors(rgb_crop, region)
         if surv is None or len(surv) == 0:
@@ -148,7 +174,12 @@ def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
         shade = "dk" if L < 50.0 else ("lt" if L > 75.0 else "mid")
         flag = "look" if _CLO <= C <= _CHI else ""
         color = " / ".join(f"{w} {frac:.2f}" for w, frac in comps)
-        return {"color": color, "color_conf": f"{conf:.3f}", "color_shade": shade, "color_flag": flag}
+        return {
+            "color": color,
+            "color_conf": f"{conf:.3f}",
+            "color_shade": shade,
+            "color_flag": flag,
+        }
     except Exception:
         # Past the degenerate-mask return above a failure is systematic
         # (missing data/w2c.txt, a cv2/numpy break): visible, never raised.
@@ -158,6 +189,7 @@ def m6_attributes(rgb_crop, region) -> "dict[str, str] | None":
             _log.warning(
                 "m6_attributes failed (n=%d) — color extraction may be "
                 "systematically broken (check perception/data/w2c.txt, cv2)",
-                _M6_FAIL_N, exc_info=True,
+                _M6_FAIL_N,
+                exc_info=True,
             )
         return None

@@ -78,7 +78,9 @@ class PoseGraph:
         est = self.estimate(f.t)
         if est is None:
             return f.pose
-        return replace(f.pose, pose_xy=(f.pose.pose_xy[0] + est["e_m"], f.pose.pose_xy[1] + est["n_m"]))
+        return replace(
+            f.pose, pose_xy=(f.pose.pose_xy[0] + est["e_m"], f.pose.pose_xy[1] + est["n_m"])
+        )
 
     def _forget(self, now: float) -> None:
         old = [seq for seq, f in self.frames.items() if now - f.t > WINDOW_S]
@@ -91,17 +93,33 @@ class PoseGraph:
         for seq in [seq for seq, n in self.nodes.items() if now - n["t"] > NODE_AGE_S]:
             del self.nodes[seq]
 
-    def offer(self, seq: int, t: float, pose: frame_ties.Pose, gray: np.ndarray,
-              measurement: tuple[float, float, float] | None) -> None:
+    def offer(
+        self,
+        seq: int,
+        t: float,
+        pose: frame_ties.Pose,
+        gray: np.ndarray,
+        measurement: tuple[float, float, float] | None,
+    ) -> None:
         """Add a frame (its chain pose, its luma, its own registration
         ``(east, north, response)`` or None) and re-solve the window once it
         holds :data:`MIN_ANCHORS` anchors. A measurement past the cap
         (:func:`innovation_past_cap`) is refused."""
         self._forget(t)
-        frame = _Frame(seq, t, pose, gray, frame_ties.FrameGeometry(pose, self.sensor, self.ground(tuple(pose.pose_xy))))
-        before = sorted((f for f in self.frames.values() if f.t <= t), key=lambda f: f.t)[-TIE_NEIGHBOURS:]
+        frame = _Frame(
+            seq,
+            t,
+            pose,
+            gray,
+            frame_ties.FrameGeometry(pose, self.sensor, self.ground(tuple(pose.pose_xy))),
+        )
+        before = sorted((f for f in self.frames.values() if f.t <= t), key=lambda f: f.t)[
+            -TIE_NEIGHBOURS:
+        ]
         for prev in before:
-            for tie in self.matcher.ties(prev.seq, self._placed(prev), prev.gray, self._placed(frame), gray):
+            for tie in self.matcher.ties(
+                prev.seq, self._placed(prev), prev.gray, self._placed(frame), gray
+            ):
                 self.ties.append((prev.seq, seq, tie.uv_i, tie.uv_j))
         self.frames[seq] = frame
         if measurement is not None:

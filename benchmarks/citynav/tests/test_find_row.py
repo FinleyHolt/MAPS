@@ -5,8 +5,14 @@ from benchmarks.citynav.adapter import find_row
 
 
 def _row(block, desc):
-    return {"area": "birmingham", "block": block, "ann_ids": [0], "descriptions": [desc],
-            "target_positions": [[1.0, 2.0, 0.0]], "trajectory": [[0.0, 0.0, 50.0]]}
+    return {
+        "area": "birmingham",
+        "block": block,
+        "ann_ids": [0],
+        "descriptions": [desc],
+        "target_positions": [[1.0, 2.0, 0.0]],
+        "trajectory": [[0.0, 0.0, 50.0]],
+    }
 
 
 ROWS = [_row(1, "a"), _row(1, "b"), _row(2, "c")]

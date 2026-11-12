@@ -14,10 +14,18 @@ from typing import TYPE_CHECKING
 
 from maps.library.block_scan import _LIBRARY_CALLS, _shadows
 from maps.library.op_compiler import (
-    CARDINAL_ORDER, CodeError, bind_row, fid_like, refuse_metres_in_within,
-    split_diagonal)
+    CARDINAL_ORDER,
+    CodeError,
+    bind_row,
+    fid_like,
+    refuse_metres_in_within,
+    split_diagonal,
+)
 from maps.query.result_tables import (
-    AUTOATTACH_PREFIXES, MODEL_UNSERVED_COLUMNS, STANDING_SIDE_PREFIXES)
+    AUTOATTACH_PREFIXES,
+    MODEL_UNSERVED_COLUMNS,
+    STANDING_SIDE_PREFIXES,
+)
 from maps.query.op_io import empty_window_refusal, sanitize_token, window_span
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.xy_token import is_xy
@@ -43,7 +51,8 @@ def _direction_key(word):
         raise CodeError(
             f"{word!r} is not a compass word: {'|'.join(COMPASS_UNIT)}. "
             f"To order by a PLACE instead of a direction, that is "
-            f"order(nearest=<place>).")
+            f"order(nearest=<place>)."
+        )
     ux, uy = COMPASS_UNIT[w]
 
     def _key(r):
@@ -64,7 +73,8 @@ def _refuse_reversed_direction(direction, reverse) -> None:
     flip = "".join(opp.get(p, p) for p in (split_diagonal(w) or (w,)))
     raise CodeError(
         f'order(direction="{w}", reverse=True) is '
-        f'order(direction="{flip}") -- say the direction you mean.')
+        f'order(direction="{flip}") -- say the direction you mean.'
+    )
 
 
 def _kwarg_remedy(names) -> str:
@@ -72,22 +82,27 @@ def _kwarg_remedy(names) -> str:
     the order it names; a ``<diag>_of=`` is the conjunction of its two
     cardinal cuts against the same place."""
     if "nearest" in names:
-        return (" nearest= ORDERS and drops nothing: rows.order(nearest=<place>);"
-                " to keep only what is close, rows.filter(near=<place>,"
-                " dwithin=<metres>).")
+        return (
+            " nearest= ORDERS and drops nothing: rows.order(nearest=<place>);"
+            " to keep only what is close, rows.filter(near=<place>,"
+            " dwithin=<metres>)."
+        )
     for n in names:
         n = str(n)
         pair = split_diagonal(n[:-3]) if n.endswith("_of") else None
         if pair:
-            return (f" A diagonal is TWO cuts against the same place: "
-                    f"{pair[0]}_of=<place>, {pair[1]}_of=<place> -- which is "
-                    f"how you say a corner.")
+            return (
+                f" A diagonal is TWO cuts against the same place: "
+                f"{pair[0]}_of=<place>, {pair[1]}_of=<place> -- which is "
+                f"how you say a corner."
+            )
     return ""
 
 
 _FILTER_KWARGS = _CARDINAL_KWARGS | {"near", "within", "dwithin", "facing", "direction"}
-_FILTER_SAY = ("near=/within=/dwithin=/facing= with direction=, "
-               + "/".join(f"{k}=" for k in sorted(_CARDINAL_KWARGS)))
+_FILTER_SAY = "near=/within=/dwithin=/facing= with direction=, " + "/".join(
+    f"{k}=" for k in sorted(_CARDINAL_KWARGS)
+)
 
 _MISSING = object()
 
@@ -99,13 +114,15 @@ def _said(fn, name: str | None = None):
     TypeError raised inside it rides as it is. The signature stays
     ``fn``'s; it prints as ``name``, with no class."""
     name = name or fn.__name__
-    params = [p for n, p in inspect.signature(fn).parameters.items()
-              if n != "self"]
-    kws = ", ".join(f"{p.name}=" for p in params
-                    if p.kind is p.KEYWORD_ONLY or p.default is not p.empty) or "none"
+    params = [p for n, p in inspect.signature(fn).parameters.items() if n != "self"]
+    kws = (
+        ", ".join(
+            f"{p.name}=" for p in params if p.kind is p.KEYWORD_ONLY or p.default is not p.empty
+        )
+        or "none"
+    )
     n_pos = sum(p.kind is p.POSITIONAL_OR_KEYWORD for p in params)
-    takes = (f"{name}() takes {n_pos or 'no'} positional "
-             f"argument{'' if n_pos == 1 else 's'}")
+    takes = f"{name}() takes {n_pos or 'no'} positional argument{'' if n_pos == 1 else 's'}"
 
     @functools.wraps(fn)
     def call(*args, **kwargs):
@@ -113,11 +130,12 @@ def _said(fn, name: str | None = None):
             return fn(*args, **kwargs)
         except TypeError as e:
             if e.__traceback__.tb_next is not None:
-                raise               # raised inside fn, not binding to it
+                raise  # raised inside fn, not binding to it
             msg = str(e).replace(f"{fn.__qualname__}()", f"{name}()")
             if re.search(r"takes .*positional arguments? but \d+", msg):
                 msg = takes
             raise CodeError(f"{msg}. {name} keywords: {kws}") from None
+
     call.__name__ = call.__qualname__ = name
     return call
 
@@ -134,11 +152,9 @@ class _Cuts:
         # Reached only when no method or slot has the name: a SET read as a
         # row (``r1.xy``) or a keyword spelled as a method (``r1.nearest``).
         if k.startswith("_"):
-            raise AttributeError(
-                f"{type(self).__name__!r} object has no attribute {k!r}")
+            raise AttributeError(f"{type(self).__name__!r} object has no attribute {k!r}")
         if k in _LIBRARY_CALLS:
-            raise AttributeError(
-                f"{k}() is a call, not a method: call it on its own, {k}(...)")
+            raise AttributeError(f"{k}() is a call, not a method: call it on its own, {k}(...)")
         if isinstance(self, Rows):
             name = self._mp.names.spelling(self)
         else:
@@ -146,28 +162,31 @@ class _Cuts:
             name = mp and mp.names.name_of(self)
         # A remedy names the set as the model does, else binds it first.
         said, then = (name, "") if name else ("s", "bind it first (s = ...); ")
-        kw = ("order" if k in ("nearest", "color", "direction")
-              else "filter" if k in _FILTER_KWARGS else None)
+        kw = (
+            "order"
+            if k in ("nearest", "color", "direction")
+            else "filter"
+            if k in _FILTER_KWARGS
+            else None
+        )
         if kw:
-            raise AttributeError(
-                f"{k} is a keyword, not a method: {then}{said}.{kw}({k}=...)")
+            raise AttributeError(f"{k} is a keyword, not a method: {then}{said}.{kw}({k}=...)")
         one = _one_row(self, said)
         if one is None:
             whose = "there is no row to read it off."
         elif k in ("keys", "get"):
-            whose = (f"{then}{k}() is a row's own: {one}.{k}"
-                     f"({'<column>' if k == 'get' else ''})")
+            whose = f"{then}{k}() is a row's own: {one}.{k}({'<column>' if k == 'get' else ''})"
         else:
-            whose = _column_read(self, k, f"{then}a column is read off one "
-                                          f"row: {one}.{k}")
+            whose = _column_read(self, k, f"{then}a column is read off one row: {one}.{k}")
         raise AttributeError(
-            f"{name or 'that'} is a set of {len(self)} row(s) and carries no "
-            f"{k!r}; {whose}")
+            f"{name or 'that'} is a set of {len(self)} row(s) and carries no {k!r}; {whose}"
+        )
 
     def _not_set_algebra(self, other):
         raise CodeError(
             "rows are not a python set: a + b adds two sets into a list of rows, and "
-            "a.filter(lambda r: r in b) keeps the rows of a that b holds")
+            "a.filter(lambda r: r in b) keeps the rows of a that b holds"
+        )
 
     __or__ = __ror__ = __and__ = __rand__ = __sub__ = __rsub__ = _not_set_algebra
 
@@ -180,21 +199,27 @@ class _Cuts:
         f = node.func if isinstance(node, ast.Call) else None
         # A subscript is the set's own spelling only when called bare: a
         # builtin reached through one passes its arguments.
-        name = ((ast.get_source_segment(mp.names.code, f) or ast.unparse(f))
-                if isinstance(f, ast.Subscript) and not node.args and not node.keywords
-                else f.id if isinstance(f, ast.Name) and dict.get(mp.ns, f.id) is self else
-                (mp.names.spelling(self) if isinstance(self, Rows)
-                 else mp and mp.names.name_of(self)) or UNNAMED)
+        name = (
+            (ast.get_source_segment(mp.names.code, f) or ast.unparse(f))
+            if isinstance(f, ast.Subscript) and not node.args and not node.keywords
+            else f.id
+            if isinstance(f, ast.Name) and dict.get(mp.ns, f.id) is self
+            else (
+                mp.names.spelling(self) if isinstance(self, Rows) else mp and mp.names.name_of(self)
+            )
+            or UNNAMED
+        )
         what = "a row" if isinstance(self, Row) else f"a set of {len(self)} row(s)"
-        raise TypeError(f"{name} is {what}, not a call"
-                        + (f": {_shadows(name)}" if name in _LIBRARY_CALLS else "."))
+        raise TypeError(
+            f"{name} is {what}, not a call"
+            + (f": {_shadows(name)}" if name in _LIBRARY_CALLS else ".")
+        )
 
     def _mission(self):
         """The library of the mission the rows came from; rows that carry
         none (an empty list) are read by a block (two frames up) running in
         the mission's namespace."""
-        return (self._target()[0]
-                or getattr(sys._getframe(2).f_globals, "mp", None))
+        return self._target()[0] or getattr(sys._getframe(2).f_globals, "mp", None)
 
     def _in_hand(self):
         return self
@@ -203,9 +228,21 @@ class _Cuts:
         return RowList(sorted(self._in_hand(), key=key, reverse=reverse))
 
     @_said
-    def filter(self, pred=None, *, near=None, within=None, dwithin=None,
-               north_of=None, south_of=None, east_of=None, west_of=None,
-               facing=None, direction=None, **kw):
+    def filter(
+        self,
+        pred=None,
+        *,
+        near=None,
+        within=None,
+        dwithin=None,
+        north_of=None,
+        south_of=None,
+        east_of=None,
+        west_of=None,
+        facing=None,
+        direction=None,
+        **kw,
+    ):
         """Keep the rows that hold; filters compose, and every cut is a
         relation to its anchor (one place or a set)."""
         # A kwarg outside the set is refused, never ignored, and a colour cut
@@ -215,34 +252,45 @@ class _Cuts:
                 "colour never CUTS -- it orders. The same car reads red "
                 "0.63 through a tight mask and 0.38 through its full one, "
                 "so a colour threshold drops the right row on the width of "
-                "its mask. Say rows.order(color=\"red\") and let the "
-                "spatial cuts do the dropping.")
+                'its mask. Say rows.order(color="red") and let the '
+                "spatial cuts do the dropping."
+            )
         if kw:
             bad = sorted(kw)
             raise CodeError(
                 f"filter takes {_FILTER_SAY} or a predicate; "
-                f"{'=, '.join(bad)}= is none of them."
-                + _kwarg_remedy(bad))
+                f"{'=, '.join(bad)}= is none of them." + _kwarg_remedy(bad)
+            )
         refuse_metres_in_within(within)
-        kw = {k: v for k, v in dict(
-            near=near, within=within, dwithin=dwithin, north_of=north_of,
-            south_of=south_of, east_of=east_of, west_of=west_of,
-            facing=facing, direction=direction).items() if v is not None}
+        kw = {
+            k: v
+            for k, v in dict(
+                near=near,
+                within=within,
+                dwithin=dwithin,
+                north_of=north_of,
+                south_of=south_of,
+                east_of=east_of,
+                west_of=west_of,
+                facing=facing,
+                direction=direction,
+            ).items()
+            if v is not None
+        }
         if pred is None:
             mp, src = self._target()
             return RowList() if mp is None else mp.rows_filter(src, **kw)
         if kw:
-            raise CodeError(
-                f"filter takes a predicate OR {_FILTER_SAY}, not both")
+            raise CodeError(f"filter takes a predicate OR {_FILTER_SAY}, not both")
         if isinstance(pred, _Cuts) or not callable(pred):
             raise CodeError(
                 f"filter's first argument is a predicate and {pred!r} "
-                "is not callable: rows.filter(lambda r: r.distance(x) <= 25)")
+                "is not callable: rows.filter(lambda r: r.distance(x) <= 25)"
+            )
         return RowList(r for r in self._in_hand() if pred(r))
 
     @_said
-    def order(self, key=None, *, nearest=None, color=None, direction=None,
-              reverse=False, **kw):
+    def order(self, key=None, *, nearest=None, color=None, direction=None, reverse=False, **kw):
         """Put the rows in one order; a table sorts by one column.
         ``direction=`` and ``key=`` sort the rows in hand (``reverse=`` flips a
         key sort, as ``sorted()`` does); ``nearest=`` and ``color=`` re-rank
@@ -251,21 +299,22 @@ class _Cuts:
         if kw:
             raise CodeError(
                 "order takes key=/nearest=/color=/direction=/reverse=; "
-                f"{'=, '.join(sorted(kw))}= is none of them.")
+                f"{'=, '.join(sorted(kw))}= is none of them."
+            )
         if key is None and direction is None:
             if reverse and (nearest is not None or color is not None):
                 raise CodeError(
                     "reverse= flips a key sort; nearest= and color= are "
                     "served orders with one direction. Farthest first is a "
                     "key sort: rows.order(lambda r: r.distance(<place>), "
-                    "reverse=True).")
+                    "reverse=True)."
+                )
             mp, src = self._target()
-            return (RowList() if mp is None
-                    else mp.rows_order(src, nearest=nearest, color=color))
+            return RowList() if mp is None else mp.rows_order(src, nearest=nearest, color=color)
         if key is not None and direction is not None:
             raise CodeError(
-                'order takes a key OR direction=, not both: '
-                'direction="north" IS the key.')
+                'order takes a key OR direction=, not both: direction="north" IS the key.'
+            )
         if nearest is not None or color is not None:
             raise CodeError("order takes a key OR nearest=/color=, not both")
         if direction is not None:
@@ -274,7 +323,8 @@ class _Cuts:
         if isinstance(key, _Cuts) or not callable(key):
             raise CodeError(
                 f"order's first argument is a key function and {key!r} "
-                "is not callable: rows.order(lambda r: r.distance(x))")
+                "is not callable: rows.order(lambda r: r.distance(x))"
+            )
         return self._sorted(key, bool(reverse))
 
 
@@ -295,7 +345,7 @@ class Row(_Cuts):
         self._bind = bind_row(row)
         self.fid = row.get("fid")
         self.name = row.get("name")
-        self._src = src                       # (ref, index) or None
+        self._src = src  # (ref, index) or None
 
     @_said
     def distance(self, other) -> float:
@@ -310,7 +360,7 @@ class Row(_Cuts):
         return (self,)
 
     def _sorted(self, key, reverse: bool) -> "RowList":
-        return RowList([self])          # one row is already in order
+        return RowList([self])  # one row is already in order
 
     def _target(self):
         return object.__getattribute__(self, "_mp"), self
@@ -326,17 +376,18 @@ class Row(_Cuts):
             return None
         if k in row:
             return k
-        hit = [rk for rk in row
-               if rk not in MODEL_UNSERVED_COLUMNS
-               and sanitize_token(rk) == sanitize_token(k)]
+        hit = [
+            rk
+            for rk in row
+            if rk not in MODEL_UNSERVED_COLUMNS and sanitize_token(rk) == sanitize_token(k)
+        ]
         return hit[0] if len(hit) == 1 else None
 
     def _derived(self, k):
         """r.x / r.y off the xy the row already serves."""
         row = object.__getattribute__(self, "_row")
         xy = row.get("xy")
-        if k in ("x", "y") and isinstance(xy, (list, tuple)) \
-                and len(xy) == 2:
+        if k in ("x", "y") and isinstance(xy, (list, tuple)) and len(xy) == 2:
             return xy[0 if k == "x" else 1]
         return None
 
@@ -356,28 +407,31 @@ class Row(_Cuts):
         (``AUTOATTACH_PREFIXES``), so the remedy is the relate.
         """
         row = object.__getattribute__(self, "_row")
-        pre = next((p for p in AUTOATTACH_PREFIXES
-                    if isinstance(k, str) and k.startswith(p)), None)
-        generic = (f"row {row.get('fid')} carries no {k!r}; its columns "
-                   f"are {sorted(self.keys())[:12]}")
+        pre = next((p for p in AUTOATTACH_PREFIXES if isinstance(k, str) and k.startswith(p)), None)
+        generic = (
+            f"row {row.get('fid')} carries no {k!r}; its columns are {sorted(self.keys())[:12]}"
+        )
         if pre is None or pre == "color_":
             # a colour column is a PALETTE word, not a relate; the
             # off-palette word has its own loud error at the op layer
             return generic
-        place = k[len(pre):]
+        place = k[len(pre) :]
         if pre in STANDING_SIDE_PREFIXES:
             # a side of the VIEWER, so the remedy is a viewpoint
-            return (f"row {row.get('fid')} carries no {k!r}: "
-                    f"'{pre.strip()}' is a side of a VIEWPOINT, and none "
-                    f"is standing here. stand(at=<place>, "
-                    f"facing=<place-or-compass-word>) writes it.")
+            return (
+                f"row {row.get('fid')} carries no {k!r}: "
+                f"'{pre.strip()}' is a side of a VIEWPOINT, and none "
+                f"is standing here. stand(at=<place>, "
+                f"facing=<place-or-compass-word>) writes it."
+            )
         return (
             f"row {row.get('fid')} carries no {k!r}: these rows were "
             f"never related to {place!r}. RELATE them and the column rides "
             f"the result -- rows.order(nearest={place!r}), or "
             f"find(<class>, near={place!r}). One relate writes "
             f"'distance to {place}' and 'facing {place}'; '<dir> of "
-            f"{place}' rides a cardinal cut on the same place.")
+            f"{place}' rides a cardinal cut on the same place."
+        )
 
     def __getattr__(self, k: str):
         v = self._column(k)
@@ -387,7 +441,7 @@ class Row(_Cuts):
 
     def __getitem__(self, k):
         if isinstance(k, int) and k in (0, -1):
-            return self                  # one row indexes as itself
+            return self  # one row indexes as itself
         if isinstance(k, slice):
             return RowList([self][k])
         v = self._column(k)
@@ -404,19 +458,18 @@ class Row(_Cuts):
         # per block.
         mp = object.__getattribute__(self, "_mp")
         if mp is not None and isinstance(k, str):
-            close = difflib.get_close_matches(
-                k.replace("_", " "), self.keys(), n=1, cutoff=0.6)
+            close = difflib.get_close_matches(k.replace("_", " "), self.keys(), n=1, cutoff=0.6)
             if close and k not in mp._get_noted:
                 mp._get_noted.add(k)
                 mp.note(
                     f".get({k!r}) matched no column and returned the "
-                    f"default; the near column is {close[0]!r}")
+                    f"default; the near column is {close[0]!r}"
+                )
         return default
 
     def keys(self) -> list:
         row = object.__getattribute__(self, "_row")
-        return [k for k in row if k not in MODEL_UNSERVED_COLUMNS
-                and not k.startswith("_")]
+        return [k for k in row if k not in MODEL_UNSERVED_COLUMNS and not k.startswith("_")]
 
     # Value equality: a bare fid name mints a FRESH Row view per reference,
     # and two views of the same bind are the same place. A Row also equals
@@ -440,9 +493,12 @@ class Row(_Cuts):
 
     def __repr__(self):
         row = object.__getattribute__(self, "_row")
-        cols = {k: row[k] for k in self.keys()
-                if isinstance(row[k], (str, int, float, bool))
-                or (isinstance(row[k], (list, tuple)) and len(row[k]) <= 4)}
+        cols = {
+            k: row[k]
+            for k in self.keys()
+            if isinstance(row[k], (str, int, float, bool))
+            or (isinstance(row[k], (list, tuple)) and len(row[k]) <= 4)
+        }
         body = ", ".join(f"{k}={v!r}" for k, v in list(cols.items())[:10])
         return f"<row {body}>"
 
@@ -454,8 +510,9 @@ class _Tags(dict):
     def __getitem__(self, k):
         if isinstance(k, slice):
             raise CodeError(
-                "tags is a dict of OSM tags, not text: r.tags[\"building\"], "
-                "r.tags.get(\"amenity\"), or str(r.tags) for its text.")
+                'tags is a dict of OSM tags, not text: r.tags["building"], '
+                'r.tags.get("amenity"), or str(r.tags) for its text.'
+            )
         return dict.__getitem__(self, k)
 
 
@@ -492,9 +549,10 @@ class RowList(_Cuts, list):
         mp = self._mission()
         name = (mp and (mp.names.name_of(self) or mp.names.call_arg(None))) or UNNAMED
         if past_end:
-            raise CodeError(f"{name}[{i}] did not bind: {name} holds "
-                            f"{len(self)} row(s)."
-                            + ("" if self else " There is no row to index."))
+            raise CodeError(
+                f"{name}[{i}] did not bind: {name} holds "
+                f"{len(self)} row(s)." + ("" if self else " There is no row to index.")
+            )
         raise _not_an_int(name, i, self)
 
 
@@ -504,12 +562,11 @@ class Rows(_Cuts):
 
     __slots__ = ("_ref", "_spec", "_mp", "_label")
 
-    def __init__(self, ref: str, mp: "Library", spec: str = "",
-                 label: str = ""):
+    def __init__(self, ref: str, mp: "Library", spec: str = "", label: str = ""):
         self._ref = ref
         self._spec = spec
         self._mp = mp
-        self._label = label          # the call that made it, for refusals
+        self._label = label  # the call that made it, for refusals
 
     def _rows(self) -> list[dict]:
         rows = self._mp.env.rows_of_ref(self._ref)
@@ -540,15 +597,15 @@ class Rows(_Cuts):
             "they all match equally, so no row is its first and no span is "
             f"its middle. {name}.order(nearest=<place>) ranks them so [0] is "
             f"the nearest way, a slot like near={name} relates to it as one "
-            f"place, and explore({name}) covers the whole set.")
+            f"place, and explore({name}) covers the whole set."
+        )
 
     def __getitem__(self, i):
         # A TIED VIEW IS NOT SUBSCRIPTABLE, the way ``dict.keys()`` is not:
         # every row ties, so an index would read as a choice and be a coin
         # flip.
         if self._tied():
-            self._refuse_tied(self._mp.names.said_name(self, None),
-                              "is not subscriptable")
+            self._refuse_tied(self._mp.names.said_name(self, None), "is not subscriptable")
         if isinstance(i, slice):
             lo = int(i.start or 0)
             if i.stop is None or i.step not in (None, 1) or lo < 0:
@@ -560,8 +617,7 @@ class Rows(_Cuts):
                 held = range(len(self._mp.env.rows_of_ref(self._ref)))[p_lo:p_hi]
                 s = held[lo:hi]
                 if held and not s:
-                    raise CodeError(
-                        empty_window_refusal(f"[{lo}:{hi}]", len(held)))
+                    raise CodeError(empty_window_refusal(f"[{lo}:{hi}]", len(held)))
                 lo, hi = s.start, s.stop
             return Rows(self._ref, self._mp, f"[{lo}:{hi}]")
         if not isinstance(i, int):
@@ -571,15 +627,14 @@ class Rows(_Cuts):
             name = self._mp.names.said_name(self, None)
             raise CodeError(
                 f"{name}[{i}] did not bind: {name} served {len(rows)} "
-                "row(s) here. " + ("Show it first, then index it." if rows
-                                   else "There is no row to index."))
-        return Row(rows[i], src=(self._ref, self._lo() + i % len(rows)),
-                   mp=self._mp)
+                "row(s) here. "
+                + ("Show it first, then index it." if rows else "There is no row to index.")
+            )
+        return Row(rows[i], src=(self._ref, self._lo() + i % len(rows)), mp=self._mp)
 
     def __iter__(self):
         lo = self._lo()
-        return (Row(r, src=(self._ref, lo + i), mp=self._mp)
-                for i, r in enumerate(self._rows()))
+        return (Row(r, src=(self._ref, lo + i), mp=self._mp) for i, r in enumerate(self._rows()))
 
     # THE MATCH TIERS AS ATTRIBUTES: the agent chooses a find's stratum by
     # holding it -- r1.exact, explore(r1.exact + r1.tagged). Live views; the
@@ -603,9 +658,14 @@ class Rows(_Cuts):
         src = self if not self._spec else self._mp._materialize(self)
         p = self._mp._program(src._ref)
         name = self._mp.names.spelling(self)
-        return Rows(self._mp._analyze(
-            p, p.add("stratum", {"items": src._ref, "tier": tier}),
-            shown=name and f"{name}.{tier}"), self._mp)
+        return Rows(
+            self._mp._analyze(
+                p,
+                p.add("stratum", {"items": src._ref, "tier": tier}),
+                shown=name and f"{name}.{tier}",
+            ),
+            self._mp,
+        )
 
     # -- cut and order: many filters, ONE ordering ------------------------
     def _target(self):
@@ -683,9 +743,13 @@ def _not_an_int(name: str, i, x) -> CodeError:
     column, read off one row."""
     return CodeError(
         f"{name}[{i!r}] did not bind: {name} is a set of rows, indexed by an "
-        "int position" + ("; " + _column_read(
-            x, i, f"a column is read off one row: {name}[0][{i!r}].")
-            if isinstance(i, str) and len(x) else "."))
+        "int position"
+        + (
+            "; " + _column_read(x, i, f"a column is read off one row: {name}[0][{i!r}].")
+            if isinstance(i, str) and len(x)
+            else "."
+        )
+    )
 
 
 def _one_row(x, said: str) -> str | None:
@@ -701,8 +765,7 @@ def _one_row(x, said: str) -> str | None:
 
 def _set_as_list(v) -> list:
     """A Python SET of things is the list of them, in a fixed order."""
-    return sorted(v, key=lambda x: str(x._bind) if isinstance(x, Row)
-                  else repr(x))
+    return sorted(v, key=lambda x: str(x._bind) if isinstance(x, Row) else repr(x))
 
 
 def _places(v, who: str) -> tuple:
@@ -712,11 +775,9 @@ def _places(v, who: str) -> tuple:
     if isinstance(v, Row):
         return ((v.fid, _tuple_xy(v.get("xy"))),)
     if isinstance(v, (Rows, list, tuple, set, frozenset)) and not v:
-        raise CodeError(f"{who}() got an empty list -- there is "
-                        "nothing there to measure.")
+        raise CodeError(f"{who}() got an empty list -- there is nothing there to measure.")
     if isinstance(v, Rows):
-        return tuple((r.get("fid"), _tuple_xy(r.get("xy")))
-                     for r in v._rows())
+        return tuple((r.get("fid"), _tuple_xy(r.get("xy"))) for r in v._rows())
     if is_xy(v):
         return ((None, (float(v[0]), float(v[1]))),)
     if isinstance(v, (list, tuple, set, frozenset)):
@@ -728,7 +789,9 @@ def _places(v, who: str) -> tuple:
         raise CodeError(
             f"{who}() measures between things on the surface, and {v!r} is "
             f"a name. find({v!r}) first, then measure against the rows it "
-            "serves -- a set is one place and means its nearest member.")
+            "serves -- a set is one place and means its nearest member."
+        )
     raise CodeError(
         f"{who}() takes a row, a result set, a fid or an [x, y] point; got "
-        f"{type(v).__name__} ({v!r}).")
+        f"{type(v).__name__} ({v!r})."
+    )

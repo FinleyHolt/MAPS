@@ -36,7 +36,11 @@ def _cached_run_provenance(search_flags: dict, *, config_path: str | None, split
     the discovered served model, the flag set), computed once per process for
     each run context: a bench process has one, a station flies several."""
     spec = endpoint_spec_module.spec()
-    key = json.dumps([search_flags, config_path, split, spec.model_id, spec.tokenizer_name], sort_keys=True, default=str)
+    key = json.dumps(
+        [search_flags, config_path, split, spec.model_id, spec.tokenizer_name],
+        sort_keys=True,
+        default=str,
+    )
     if key not in _RUN_PROVENANCE:
         _RUN_PROVENANCE[key] = repo_provenance(
             config_path=config_path,
@@ -87,9 +91,7 @@ def _exc_is_transient_infra(exc: BaseException) -> bool:
             continue
         status = getattr(getattr(cur, "response", None), "status_code", None)
         return not (
-            isinstance(status, int)
-            and status < 500
-            and status not in TRANSIENT_CLIENT_STATUS
+            isinstance(status, int) and status < 500 and status not in TRANSIENT_CLIENT_STATUS
         )
     return False
 
@@ -98,9 +100,14 @@ def is_infra_fault(exc: BaseException) -> bool:
     """The infra rule for a raised attempt: a SAM outage, a transient
     shared-server fault, an image-store refusal or a reasoner that did not
     answer discovery. Any other exception is the method's own, a scored miss."""
-    return (_exc_is_sam_infra(exc) or _exc_is_transient_infra(exc)
-            or any(isinstance(cur, (ImageStoreError, endpoint_spec_module.EndpointUnreachable))
-                   for cur in _chain(exc)))
+    return (
+        _exc_is_sam_infra(exc)
+        or _exc_is_transient_infra(exc)
+        or any(
+            isinstance(cur, (ImageStoreError, endpoint_spec_module.EndpointUnreachable))
+            for cur in _chain(exc)
+        )
+    )
 
 
 def dispatch_one(
@@ -134,8 +141,17 @@ def dispatch_one(
         return {**rec, "provenance": _prov, "elapsed_s": round(time.monotonic() - t0, 1)}
 
     try:
-        rec = run_episode(episode, objects_by_map, cfg, bench, recorder=recorder, settings=settings,
-                          workdir=episode_dir, routing_key=routing_key, converse=converse)
+        rec = run_episode(
+            episode,
+            objects_by_map,
+            cfg,
+            bench,
+            recorder=recorder,
+            settings=settings,
+            workdir=episode_dir,
+            routing_key=routing_key,
+            converse=converse,
+        )
     except Exception as e:
         # exc_info lands the traceback in run.log through the root
         # handler; a bare print_exc reaches only stderr.
@@ -144,23 +160,27 @@ def dispatch_one(
         # raised is its own failure: a scored miss (no metrics reads SR 0)
         # carrying its traceback.
         infra = is_infra_fault(e)
-        out = _stamp({
-            "episode_id": episode.episode_id,
-            "status": STATUS_INFRA if infra else STATUS_OK,
-            "error": f"{type(e).__name__}: {e}",
-            **({} if infra else {"traceback": traceback.format_exc()}),
-        })
+        out = _stamp(
+            {
+                "episode_id": episode.episode_id,
+                "status": STATUS_INFRA if infra else STATUS_OK,
+                "error": f"{type(e).__name__}: {e}",
+                **({} if infra else {"traceback": traceback.format_exc()}),
+            }
+        )
         write_episode_json(episode_dir, out)
         return out
     m = rec["metrics"]
     # A mission the serve failed out from under is the cluster's weather,
     # not the model's skill: excluded from SR and re-queued.
     serve_failed = _rows.is_infra_abort(rec)
-    out = _stamp({
-        **rec,
-        "status": STATUS_INFRA if serve_failed else STATUS_OK,
-        "error": f"mission ended_by={_rows.ended_by(rec)}" if serve_failed else None,
-    })
+    out = _stamp(
+        {
+            **rec,
+            "status": STATUS_INFRA if serve_failed else STATUS_OK,
+            "error": f"mission ended_by={_rows.ended_by(rec)}" if serve_failed else None,
+        }
+    )
     write_episode_json(episode_dir, out)
     log.info(
         # ``%s`` on the verdict: a null SR must not raise outside the try.

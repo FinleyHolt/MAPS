@@ -33,8 +33,7 @@ def _shown_fids(result: dict) -> list[str]:
 
 
 def test_the_flight_names_the_rows_it_added(_n=3):
-    results, _graph, added = grow_drive(
-        [[run('go_to("prior_7")')], "done"], per_flight=_n)
+    results, _graph, added = grow_drive([[run('go_to("prior_7")')], "done"], per_flight=_n)
     rep = _flown(results[0])
     assert added[0] and len(added[0]) == _n, added
     # the report carries the count AND the handle that addresses the rows
@@ -44,8 +43,9 @@ def test_the_flight_names_the_rows_it_added(_n=3):
     assert f"the {_n} rows this flight added" in rep["new_rows"], rep
     # a fact and a capability, never an imperative sequence -- and in the
     # register of the surface being served, which is the code arm's
-    assert (f"the handle is bound, so {handle}, {handle}[0] and "
-            f"{handle}.order(...) all reach them") in rep["new_rows"], rep
+    assert (
+        f"the handle is bound, so {handle}, {handle}[0] and {handle}.order(...) all reach them"
+    ) in rep["new_rows"], rep
 
 
 def test_the_minted_handle_is_bound_for_the_next_block():
@@ -53,9 +53,8 @@ def test_the_minted_handle_is_bound_for_the_next_block():
     # with no intervening find — the thing the model could not do before.
     handle = _minted_handle([[run('go_to("prior_7")')]])
     results, _graph, added = grow_drive(
-        [[run('go_to("prior_7")')],
-         [run(f'b = {handle}.order(color="black")\nb')],
-         "done"])
+        [[run('go_to("prior_7")')], [run(f'b = {handle}.order(color="black")\nb')], "done"]
+    )
     rep = _flown(results[0])
     assert rep["new_rows"].split(" ")[0] == handle, rep
 
@@ -68,12 +67,12 @@ def test_the_minted_handle_is_bound_for_the_next_block():
 
 def test_the_minted_handle_gets_a_crop_per_row(_n=4):
     results, _graph, added = grow_drive(
-        [[run('go_to("prior_7")')], [run("look(r0)")], "done"],
-        per_flight=_n)
+        [[run('go_to("prior_7")')], [run("look(r0)")], "done"], per_flight=_n
+    )
     crop = results[1]["crop"]
     assert "error" not in crop, crop
     assert crop["delivered"] == crop["looked"] >= 1, crop
-    assert "badged" not in crop, crop      # per-row crops, no frame badges
+    assert "badged" not in crop, crop  # per-row crops, no frame badges
     assert crop["delivered"] == _n, crop
 
 
@@ -82,8 +81,8 @@ def test_a_flight_that_adds_nothing_mints_nothing():
     # the scope moves only to a non-empty set: a zero-detection flight leaves
     # the scope exactly where it was.
     results, _graph, added = grow_drive(
-        [[run('go_to("prior_7")')], [run("look(r0)")], "done"],
-        flights_add=False)
+        [[run('go_to("prior_7")')], [run("look(r0)")], "done"], flights_add=False
+    )
     rep = _flown(results[0])
     assert added == [[]], added
     assert "new_rows" not in rep, rep
@@ -99,9 +98,9 @@ def test_a_row_gone_from_the_surface_is_not_reported_as_out_of_frame():
     # it, and it may be metres from the subject. A requested-minus-drawn
     # residual would report it as "outside the frame".
     results, _graph, added = grow_drive(
-        [[run('go_to("prior_7")')], [run('go_to("prior_1")')],
-         [run("look(r0)")], "done"],
-        evict_on_flight={1: ["detected_3"]})   # rank 1 of r0, evicted
+        [[run('go_to("prior_7")')], [run('go_to("prior_1")')], [run("look(r0)")], "done"],
+        evict_on_flight={1: ["detected_3"]},
+    )  # rank 1 of r0, evicted
     crop = results[2]["crop"]
     # VACUITY FLOOR: the eviction must actually have reached the crop path.
     assert crop["skipped"] == ["detected_3"], crop
@@ -111,8 +110,7 @@ def test_a_row_gone_from_the_surface_is_not_reported_as_out_of_frame():
     assert "sit outside the frame" not in crop["note"], crop["note"]
 
 
-_XING_BLOCK = ('x = intersection(find("Long Road"), find("Cross Street"))\n'
-               'go_to(x[0])')
+_XING_BLOCK = 'x = intersection(find("Long Road"), find("Cross Street"))\ngo_to(x[0])'
 
 
 def test_a_block_that_both_builds_a_set_and_flies_ends_on_the_flight():
@@ -124,10 +122,9 @@ def test_a_block_that_both_builds_a_set_and_flies_ends_on_the_flight():
     # which carry no colour, and refuses.
     handle = _minted_handle([[run(_XING_BLOCK)]], extra_priors=ROADS)
     results, _graph, added = grow_drive(
-        [[run(_XING_BLOCK)],
-         [run(f'b = {handle}.order(color="black")\nb')],
-         "done"],
-        extra_priors=ROADS)
+        [[run(_XING_BLOCK)], [run(f'b = {handle}.order(color="black")\nb')], "done"],
+        extra_priors=ROADS,
+    )
     # VACUITY FLOOR: the sentence must really have built a set AND flown,
     # or the re-apply is not on this path at all.
     assert "result" in results[0] and "flown" in results[0], results[0]
@@ -144,8 +141,8 @@ def test_a_block_that_both_builds_a_set_and_flies_ends_on_the_flight():
     assert _shown_fids(out) == added[0], (out, added[0])
     # the crossings set is not lost -- it keeps its own handle
     results2, _g2, _a2 = grow_drive(
-        [[run(_XING_BLOCK)], [run("look(x)")], "done"],
-        extra_priors=ROADS)
+        [[run(_XING_BLOCK)], [run("look(x)")], "done"], extra_priors=ROADS
+    )
     assert "error" not in results2[1], results2[1]
     assert results2[1]["crop"]["delivered"] == 1, results2[1]
 
@@ -154,12 +151,11 @@ def test_the_latest_flight_owns_the_scope():
     # The flight is the most recent thing that happened, so it takes
     # "those" from whatever held it — an earlier find over the whole world,
     # or an earlier flight. Both older sets keep their own handles.
-    _prefix = [[run('go_to("prior_7")')], [run('find("car")')],
-               [run('go_to("prior_1")')]]
+    _prefix = [[run('go_to("prior_7")')], [run('find("car")')], [run('go_to("prior_1")')]]
     second_handle = _minted_handle(_prefix, nth=1)
     results, _graph, added = grow_drive(
-        _prefix + [[run(f'b = {second_handle}.order(color="black")\nb')],
-                   "done"])
+        _prefix + [[run(f'b = {second_handle}.order(color="black")\nb')], "done"]
+    )
     first, second = added[0], added[1]
     # vacuity floor: two DISTINCT flight sets, and the find in between held
     # "those" over the first of them — so the second flight really moved it.
@@ -172,9 +168,14 @@ def test_the_latest_flight_owns_the_scope():
     # flight added are in them.
     find_handle = list(results[1]["result"]["results"])[-1]
     results2, _g2, added2 = grow_drive(
-        [[run('go_to("prior_7")')], [run('find("car")')],
-         [run('go_to("prior_1")')],
-         [run(f'b = {find_handle}.order(color="black")\nb')], "done"])
+        [
+            [run('go_to("prior_7")')],
+            [run('find("car")')],
+            [run('go_to("prior_1")')],
+            [run(f'b = {find_handle}.order(color="black")\nb')],
+            "done",
+        ]
+    )
     got = set(_fids(results2[3]))
     assert got >= set(added2[0]), (got, added2[0])
     # ...and it reaches the SECOND flight's rows, which the snapshot could

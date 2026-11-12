@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 # full 1024 px budget (1 image token per 1024 px).
 MAP_MAX_PX = 1024
 
-_BG_BGR = (28, 28, 28)          # unrecorded space
+_BG_BGR = (28, 28, 28)  # unrecorded space
 # chip glyphs at the badge floor, ~24 px delivered
 _CHIP_FS = 0.9
 _CHIP_TH = 2
@@ -52,8 +52,7 @@ def _n_cells(f) -> int:
 
 def _pill(txt, thick=_CHIP_TH):
     """``(pw, ph, th)``: a chip's pill size and its text height."""
-    (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX,
-                                  _CHIP_FS, thick)
+    (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, _CHIP_FS, thick)
     return tw + 8, th + 8, th
 
 
@@ -71,11 +70,17 @@ def _label(rgb, txt, bx, by, pw, ph, th, fill, thick):
     """Text on its pill; ``fill`` None draws no pill."""
     if fill is not None:
         cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), fill, -1)
-        cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), (0, 0, 0), 1,
-                      cv2.LINE_AA)
-    cv2.putText(rgb, txt, (bx + 4, by + th + 4),
-                cv2.FONT_HERSHEY_SIMPLEX, _CHIP_FS, (0, 0, 0), thick,
-                cv2.LINE_AA)
+        cv2.rectangle(rgb, (bx, by), (bx + pw, by + ph), (0, 0, 0), 1, cv2.LINE_AA)
+    cv2.putText(
+        rgb,
+        txt,
+        (bx + 4, by + th + 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        _CHIP_FS,
+        (0, 0, 0),
+        thick,
+        cv2.LINE_AA,
+    )
 
 
 def _prior_chips(rgb, cands, det_entries, marked, tan):
@@ -90,18 +95,23 @@ def _prior_chips(rgb, cands, det_entries, marked, tan):
         cands = [t for t in cands if t[5] in marked]
     glyphs: list = []
     n_chips = n_unchipped = 0
-    cands = sorted(cands,
-                   key=lambda t: (t[0] - W / 2.0) ** 2 + (t[1] - H / 2.0) ** 2)
+    cands = sorted(cands, key=lambda t: (t[0] - W / 2.0) ** 2 + (t[1] - H / 2.0) ** 2)
     for cx_, cy_, digits, bw, bh, pfid in cands:
         pw, ph, th = _pill(digits)
         if n_chips >= _MAX_PRIOR_CHIPS:
             n_unchipped += 1
             continue
-        de = next((d for d in det_entries
-                   if cx_ - pw / 2.0 < d["bbox"][2]
-                   and d["bbox"][0] < cx_ + pw / 2.0
-                   and cy_ - ph / 2.0 < d["bbox"][3]
-                   and d["bbox"][1] < cy_ + ph / 2.0), None)
+        de = next(
+            (
+                d
+                for d in det_entries
+                if cx_ - pw / 2.0 < d["bbox"][2]
+                and d["bbox"][0] < cx_ + pw / 2.0
+                and cy_ - ph / 2.0 < d["bbox"][3]
+                and d["bbox"][1] < cy_ + ph / 2.0
+            ),
+            None,
+        )
         if de is not None:
             if de["stacked"]:
                 n_unchipped += 1  # one stack slot per detection
@@ -136,18 +146,24 @@ def _place_glyphs(rgb, glyphs) -> tuple[list, set]:
     for gx, gy, pw, ph, txt, th, fill, pfid in glyphs:
         ax_, ay_ = float(gx + pw / 2.0), float(gy + ph / 2.0)
         cands = [(gx, gy)] + [
-            (ax_ + sx_ * 6 + (0 if sx_ > 0 else -pw),
-             ay_ + sy_ * 6 + (0 if sy_ > 0 else -ph))
-            for sx_, sy_ in ((1, -1), (1, 1), (-1, -1), (-1, 1))]
+            (ax_ + sx_ * 6 + (0 if sx_ > 0 else -pw), ay_ + sy_ * 6 + (0 if sy_ > 0 else -ph))
+            for sx_, sy_ in ((1, -1), (1, 1), (-1, -1), (-1, 1))
+        ]
         scored = []
         for qx, qy in cands:
             qx = int(min(max(qx, 1), W - pw - 1))
             qy = int(min(max(qy, 1), H - ph - 1))
             bb = (qx, qy, qx + pw, qy + ph)
-            scored.append((sum(
-                max(0, min(bb[2], ob[2]) - max(bb[0], ob[0]))
-                * max(0, min(bb[3], ob[3]) - max(bb[1], ob[1]))
-                for ob in placed), bb))
+            scored.append(
+                (
+                    sum(
+                        max(0, min(bb[2], ob[2]) - max(bb[0], ob[0]))
+                        * max(0, min(bb[3], ob[3]) - max(bb[1], ob[1]))
+                        for ob in placed
+                    ),
+                    bb,
+                )
+            )
         crowd, box = min(scored, key=lambda c: c[0])
         if crowd > 0:
             if pfid is not None:
@@ -156,18 +172,14 @@ def _place_glyphs(rgb, glyphs) -> tuple[list, set]:
         gx, gy = box[0], box[1]
         placed.append(box)
         if ((gx + pw / 2.0 - ax_) ** 2 + (gy + ph / 2.0 - ay_) ** 2) ** 0.5 > 12.0:
-            _leader(rgb, (int(gx + pw / 2.0), int(gy + ph / 2.0)),
-                    (int(ax_), int(ay_)), fill, 3)
-        under = rgb[int(min(max(gy + ph // 2, 0), H - 1)),
-                    int(min(max(gx + pw // 2, 0), W - 1))]
+            _leader(rgb, (int(gx + pw / 2.0), int(gy + ph / 2.0)), (int(ax_), int(ay_)), fill, 3)
+        under = rgb[int(min(max(gy + ph // 2, 0), H - 1)), int(min(max(gx + pw // 2, 0), W - 1))]
         on_own_ink = sum(abs(int(under[i]) - fill[i]) for i in range(3)) <= 24
-        _label(rgb, txt, gx, gy, pw, ph, th, None if on_own_ink else fill,
-               _CHIP_TH)
+        _label(rgb, txt, gx, gy, pw, ph, th, None if on_own_ink else fill, _CHIP_TH)
     return placed, undrawn
 
 
-def features_window_paint(features, *, tile_origin_xy, cell_size_m,
-                          grid_shape, window):
+def features_window_paint(features, *, tile_origin_xy, cell_size_m, grid_shape, window):
     """``(rgb, counts)`` for the world square ``window``: the north-up cell
     raster painted from feature cells (grid row 0 = south), largest prior
     first so the smallest claim wins a cell, detections last; and label ->
@@ -209,8 +221,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
     for f in priors:
         label = str(f.get("label") or "prior")
         kind = str(f.get("kind") or "area")
-        n = _paint(f, paint_color(label, kind=kind),
-                   count_only=(kind == "road"))
+        n = _paint(f, paint_color(label, kind=kind), count_only=(kind == "road"))
         if n:
             _count(label, kind, n)
     for f in dets:
@@ -225,9 +236,9 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m,
 class _View:
     """One map's window on the world and the pixels it is drawn in."""
 
-    window: tuple[float, float, float, float]   # x0, y0, x1, y1, world metres
-    size: tuple[int, int]                       # W, H, pixels
-    to_px: Callable                             # world (x, y) -> pixel (x, y)
+    window: tuple[float, float, float, float]  # x0, y0, x1, y1, world metres
+    size: tuple[int, int]  # W, H, pixels
+    to_px: Callable  # world (x, y) -> pixel (x, y)
     tile_origin_xy: tuple[float, float]
     cell_size_m: float
 
@@ -243,8 +254,9 @@ class _View:
         cs_ = float(self.cell_size_m)
         wx0 = float(self.tile_origin_xy[0]) + int(c) * cs_
         wy0 = float(self.tile_origin_xy[1]) + int(r) * cs_
-        return self.px_ring([(wx0, wy0), (wx0 + cs_, wy0),
-                             (wx0 + cs_, wy0 + cs_), (wx0, wy0 + cs_)])
+        return self.px_ring(
+            [(wx0, wy0), (wx0 + cs_, wy0), (wx0 + cs_, wy0 + cs_), (wx0, wy0 + cs_)]
+        )
 
 
 def _draw_priors(rgb, features, view: _View, span: float, _tan):
@@ -272,13 +284,20 @@ def _draw_priors(rgb, features, view: _View, span: float, _tan):
                 P = np.asarray(f.get("centerline") or [], dtype=float)
             except (TypeError, ValueError):
                 continue
-            if (P.ndim == 2 and P.shape[1] == 2 and len(P) >= 2 and (
-                    (P[:, 0] >= x0 - win_pad) & (P[:, 0] <= x1 + win_pad)
+            if (
+                P.ndim == 2
+                and P.shape[1] == 2
+                and len(P) >= 2
+                and (
+                    (P[:, 0] >= x0 - win_pad)
+                    & (P[:, 0] <= x1 + win_pad)
                     & (P[:, 1] >= y0 - win_pad)
-                    & (P[:, 1] <= y1 + win_pad)).any()):
-                cv2.polylines(rgb, [_px_ring(P)], False,
-                              paint_color("", kind="road"), road_w,
-                              cv2.LINE_AA)
+                    & (P[:, 1] <= y1 + win_pad)
+                ).any()
+            ):
+                cv2.polylines(
+                    rgb, [_px_ring(P)], False, paint_color("", kind="road"), road_w, cv2.LINE_AA
+                )
         elif kind == "building":
             pts = xy_list(f.get("contour"))
             if len(pts) >= 3:
@@ -295,8 +314,15 @@ def _draw_priors(rgb, features, view: _View, span: float, _tan):
             if ppx and m:
                 xs, ys = [p[0] for p in ppx], [p[1] for p in ppx]
                 prior_chip_cands.append(
-                    (sum(xs) / len(ppx), sum(ys) / len(ppx), m.group(1),
-                     max(xs) - min(xs), max(ys) - min(ys), str(f.get("fid"))))
+                    (
+                        sum(xs) / len(ppx),
+                        sum(ys) / len(ppx),
+                        m.group(1),
+                        max(xs) - min(xs),
+                        max(ys) - min(ys),
+                        str(f.get("fid")),
+                    )
+                )
     return bmask, prior_chip_cands
 
 
@@ -309,26 +335,33 @@ def _detections_in_view(features, view: _View) -> list[dict]:
     for f in features:
         if str(f.get("provenance") or "") != "detected":
             continue
-        cells_inw = [(r, c) for r, c in cells_of(f)
-                     if _in_window(cell_centre_xy(r, c, tile_origin_xy, cell_size_m))]
+        cells_inw = [
+            (r, c)
+            for r, c in cells_of(f)
+            if _in_window(cell_centre_xy(r, c, tile_origin_xy, cell_size_m))
+        ]
         if not cells_inw:
             continue
         quads = [_cell_quad(r, c) for r, c in cells_inw]
         allpts = np.concatenate(quads)
         centres = [cell_centre_xy(r, c, tile_origin_xy, cell_size_m) for r, c in cells_inw]
-        det_entries.append({
-            "label": str(f.get("label") or "detection"),
-            "quads": quads,
-            # graph fids end in their index: detected_17 chips as d17
-            "chip": "d" + re.search(r"(\d+)$", str(f.get("fid"))).group(1),
-            "cx": float(sum(p[0] for p in centres) / len(centres)),
-            "cy": float(sum(p[1] for p in centres) / len(centres)),
-            "bbox": (float(allpts[:, 0, 0].min()),
-                     float(allpts[:, 0, 1].min()),
-                     float(allpts[:, 0, 0].max()),
-                     float(allpts[:, 0, 1].max())),
-            "stacked": None,
-        })
+        det_entries.append(
+            {
+                "label": str(f.get("label") or "detection"),
+                "quads": quads,
+                # graph fids end in their index: detected_17 chips as d17
+                "chip": "d" + re.search(r"(\d+)$", str(f.get("fid"))).group(1),
+                "cx": float(sum(p[0] for p in centres) / len(centres)),
+                "cy": float(sum(p[1] for p in centres) / len(centres)),
+                "bbox": (
+                    float(allpts[:, 0, 0].min()),
+                    float(allpts[:, 0, 1].min()),
+                    float(allpts[:, 0, 0].max()),
+                    float(allpts[:, 0, 1].max()),
+                ),
+                "stacked": None,
+            }
+        )
     return det_entries
 
 
@@ -338,7 +371,7 @@ def _draw_detections(rgb, det_entries, bmask, view: _View, _tan, glyphs) -> None
     and any stacked prior chip."""
     W, H = view.size
     _w2p = view.to_px
-    stripe = ((np.add.outer(np.arange(H), np.arange(W)) // 4) % 3 == 0)
+    stripe = (np.add.outer(np.arange(H), np.arange(W)) // 4) % 3 == 0
     for de in det_entries:
         det_color = paint_color(de["label"], detected=True)
         cv2.fillPoly(rgb, de["quads"], det_color)
@@ -350,14 +383,22 @@ def _draw_detections(rgb, det_entries, bmask, view: _View, _tan, glyphs) -> None
         cpx, cpy = _w2p(de["cx"], de["cy"])
         pw, ph, th = _pill(de["chip"])
         by0 = _fit(cpy - ph / 2.0, ph, H)
-        glyphs.append((_fit(cpx - pw / 2.0, pw, W), by0, pw, ph, de["chip"],
-                       th, det_color, None))
+        glyphs.append((_fit(cpx - pw / 2.0, pw, W), by0, pw, ph, de["chip"], th, det_color, None))
         if de["stacked"]:
             digits, sfid = de["stacked"]
             pw2, ph2, th2 = _pill(digits)
-            glyphs.append((_fit(cpx - pw2 / 2.0, pw2, W),
-                           _fit(by0 + th + 10, ph2, H), pw2, ph2, digits,
-                           th2, _tan, sfid))
+            glyphs.append(
+                (
+                    _fit(cpx - pw2 / 2.0, pw2, W),
+                    _fit(by0 + th + 10, ph2, H),
+                    pw2,
+                    ph2,
+                    digits,
+                    th2,
+                    _tan,
+                    sfid,
+                )
+            )
 
 
 def _road_names_in_view(features, view: _View) -> list:
@@ -368,14 +409,20 @@ def _road_names_in_view(features, view: _View) -> list:
     for _f in features:
         if _f.get("kind") != "road" or not _f.get("name"):
             continue
-        _inw = [(float(p_[0]), float(p_[1]))
-                for p_ in _f.get("centerline") or []
-                if _in_window((float(p_[0]), float(p_[1])))]
+        _inw = [
+            (float(p_[0]), float(p_[1]))
+            for p_ in _f.get("centerline") or []
+            if _in_window((float(p_[0]), float(p_[1])))
+        ]
         if _inw:
-            _name_cands.append((
-                *_w2p(sum(p_[0] for p_ in _inw) / len(_inw),
-                      sum(p_[1] for p_ in _inw) / len(_inw)),
-                str(_f["name"])))
+            _name_cands.append(
+                (
+                    *_w2p(
+                        sum(p_[0] for p_ in _inw) / len(_inw), sum(p_[1] for p_ in _inw) / len(_inw)
+                    ),
+                    str(_f["name"]),
+                )
+            )
     return _name_cands
 
 
@@ -392,16 +439,16 @@ def _draw_names(rgb, _name_cands, placed, view: _View) -> None:
         _pw, _ph, _th = _pill(_txt, 1)
         _x0, _y0 = _fit(_px - _pw / 2.0, _pw, W), _fit(_py + 10, _ph, H)
         _box = (_x0, _y0, _x0 + _pw, _y0 + _ph)
-        if any(not (_box[2] < q[0] or q[2] < _box[0]
-                    or _box[3] < q[1] or q[3] < _box[1])
-               for q in placed):
-            continue          # overlapping label: drop rather than stack
+        if any(
+            not (_box[2] < q[0] or q[2] < _box[0] or _box[3] < q[1] or q[3] < _box[1])
+            for q in placed
+        ):
+            continue  # overlapping label: drop rather than stack
         placed.append(_box)
         _label(rgb, _txt, _x0, _y0, _pw, _ph, _th, (250, 250, 250), 1)
 
 
-def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
-                         grid_shape) -> dict | None:
+def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m, grid_shape) -> dict | None:
     """Render one map from its spec (``center_xy, context_m, center_fid?,
     center_label, center_boundary?, marks, frame_up?, frame_note?``, the
     look request's vocabulary): the record with its ``jpeg``, or None."""
@@ -417,10 +464,13 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     x0, y0 = cx - span / 2.0, cy - span / 2.0
     x1, y1 = cx + span / 2.0, cy + span / 2.0
     cell_rgb, counts = features_window_paint(
-        features, tile_origin_xy=tile_origin_xy, cell_size_m=cell_size_m,
-        grid_shape=grid_shape, window=(x0, y0, x1, y1))
-    rgb = cv2.resize(cell_rgb, (MAP_MAX_PX, MAP_MAX_PX),
-                     interpolation=cv2.INTER_NEAREST)
+        features,
+        tile_origin_xy=tile_origin_xy,
+        cell_size_m=cell_size_m,
+        grid_shape=grid_shape,
+        window=(x0, y0, x1, y1),
+    )
+    rgb = cv2.resize(cell_rgb, (MAP_MAX_PX, MAP_MAX_PX), interpolation=cv2.INTER_NEAREST)
     H, W = rgb.shape[:2]
 
     _rotM, band_text = view_rotation(spec.get("frame_up"), W, H)
@@ -437,12 +487,12 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
 
     # Chips queue as (x, y, pw, ph, text, th, fill, prior fid or None) and
     # draw after all ink.
-    _marked_fids = {str(mk.get("fid")) for mk in (spec.get("marks") or [])
-                    if mk.get("fid")}
+    _marked_fids = {str(mk.get("fid")) for mk in (spec.get("marks") or []) if mk.get("fid")}
     if spec.get("center_fid"):
         _marked_fids.add(str(spec.get("center_fid")))
     glyphs, n_prior_chips, n_prior_unchipped = _prior_chips(
-        rgb, prior_chip_cands, det_entries, _marked_fids, _tan)
+        rgb, prior_chip_cands, det_entries, _marked_fids, _tan
+    )
 
     # Detections last, over the building fills.
     _draw_detections(rgb, det_entries, bmask, view, _tan, glyphs)
@@ -453,8 +503,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
     neighbor_px: list = []
     neighbor_polys: list = []
     _name_cands: list = []
-    shown, marks_out_of_view, _ = frame_marks(
-        spec.get("marks"), center_fid, _w2p, W, H)
+    shown, marks_out_of_view, _ = frame_marks(spec.get("marks"), center_fid, _w2p, W, H)
     for mk, mfid, px, py in shown:
         _mlab = str(mk.get("label") or "").strip()
         if _mlab and _mlab != mfid:
@@ -488,11 +537,10 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m,
         log.warning("map: overlay failed at %s: %s", (cx, cy), exc)
         return None
     # label -> the colour word painted, biggest class first
-    classes = [{"label": k,
-                "color": paint_word(k, kind=e["kind"],
-                                    detected=(e["kind"] == "detection"))}
-               for k, e in sorted(counts.items(),
-                                  key=lambda kv: -kv[1]["cells"])]
+    classes = [
+        {"label": k, "color": paint_word(k, kind=e["kind"], detected=(e["kind"] == "detection"))}
+        for k, e in sorted(counts.items(), key=lambda kv: -kv[1]["cells"])
+    ]
     rec = {
         "jpeg": bytes(jp),
         "features_painted": int(sum(e["cells"] for e in counts.values())),

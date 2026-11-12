@@ -26,8 +26,8 @@ def test_the_first_started_attempt_wins_not_the_last_written(tmp_path):
     duplicate ahead of the slow attempt that was claimed first."""
     root = write_ledger(
         tmp_path / "run",
-        ledger_row("e::1#1", "20260725_111500", 0),   # started second, wrote first
-        ledger_row("e::1#1", "20260725_110958", 1),   # started FIRST, wrote second
+        ledger_row("e::1#1", "20260725_111500", 0),  # started second, wrote first
+        ledger_row("e::1#1", "20260725_110958", 1),  # started FIRST, wrote second
     )
     picked, _ = rows.load_attempts(root)
     assert picked["e::1#1"].stamp == "20260725_110958"
@@ -72,9 +72,7 @@ def test_status_is_the_one_verdict():
         ("20260725_113000", "20260725_112000"),  # stamps swapped
     ],
 )
-def test_a_reclaimed_retry_supersedes_its_earlier_failure(
-    tmp_path, crash_stamp, good_stamp
-):
+def test_a_reclaimed_retry_supersedes_its_earlier_failure(tmp_path, crash_stamp, good_stamp):
     """Run BOTH orderings: the retry wins either way, which proves
     supersession comes from the status and not from the ordering."""
     crash = ledger_row("e::4#4", crash_stamp, status="infra", error="killed_midrun")
@@ -89,8 +87,10 @@ def test_an_infra_abort_never_represents_its_episode(tmp_path):
     """A lost reasoner is not a fair run. It is audit-counted, but it must
     not occupy the episode's slot even as a last resort -- otherwise an
     infra casualty lands in the coverage denominator as a false zero."""
-    root = write_ledger(tmp_path / "run", ledger_row(
-        "e::5#5", "20260725_110000", status="infra", error="reasoner_down_midrun"))
+    root = write_ledger(
+        tmp_path / "run",
+        ledger_row("e::5#5", "20260725_110000", status="infra", error="reasoner_down_midrun"),
+    )
     picked, stats = rows.load_attempts(root)
     assert "e::5#5" not in picked
     assert stats.infra == 1
@@ -98,8 +98,9 @@ def test_an_infra_abort_never_represents_its_episode(tmp_path):
 
 
 def _ended(eid: str, ended_by: str, status: str = "ok") -> dict:
-    return ledger_row(eid, "20260827_100000", status=status,
-                      metrics={"SR": 0, "mission": {"ended_by": ended_by}})
+    return ledger_row(
+        eid, "20260827_100000", status=status, metrics={"SR": 0, "mission": {"ended_by": ended_by}}
+    )
 
 
 def test_one_rule_reads_the_infra_stamp_or_the_serve_ending():
@@ -114,9 +115,15 @@ def test_one_rule_reads_the_infra_stamp_or_the_serve_ending():
 def test_the_algorithm_s_own_budget_still_scores(tmp_path):
     """turn_cap, compaction_infeasible and oversize_rejection are the agent
     spending what it was given. Excluding those would launder real misses."""
-    root = write_ledger(tmp_path / "run", *(
-        _ended(f"c::{i}#0", ended_by)
-        for i, ended_by in enumerate(("turn_cap", "compaction_infeasible", "oversize_rejection"))))
+    root = write_ledger(
+        tmp_path / "run",
+        *(
+            _ended(f"c::{i}#0", ended_by)
+            for i, ended_by in enumerate(
+                ("turn_cap", "compaction_infeasible", "oversize_rejection")
+            )
+        ),
+    )
     picked, stats = rows.load_attempts(root)
     assert len(picked) == 3, "an algorithm miss was excluded from SR"
     assert stats.infra == 0
@@ -154,8 +161,12 @@ def test_a_no_commit_miss_keeps_its_coverage_slot(tmp_path):
 def test_a_crash_row_with_no_workdir_is_counted_and_never_wins(tmp_path):
     """The driver's spawn-failure row carries no ``workdir`` at all. A
     naive ``Path(row["workdir"]).name`` explodes on it."""
-    naked = {"episode_id": "e::8#8", "worker_id": "w0", "status": "infra",
-             "error": "attempt spawn: OSError: [Errno 24] Too many open files"}
+    naked = {
+        "episode_id": "e::8#8",
+        "worker_id": "w0",
+        "status": "infra",
+        "error": "attempt spawn: OSError: [Errno 24] Too many open files",
+    }
     assert rows.attempt_stamp(naked) == ""
     root = write_ledger(tmp_path / "run", naked, ledger_row("e::8#8", "20260725_120000", 1))
     picked, stats = rows.load_attempts(root)
@@ -172,8 +183,10 @@ def test_a_run_root_name_is_not_an_attempt_stamp():
     """A run-root name ``<benchmark>_<split>_<Y-m-d>_<H-M-S>`` is no attempt
     stamp: matching it would give every row of a run the same stamp."""
     assert rows.attempt_stamp({"workdir": "citynav_val_seen_2026-07-25_10-41-14"}) == ""
-    assert rows.attempt_stamp(
-        {"workdir": "w0/maps_20260725_110000_citynav_e__1_1"}) == "20260725_110000"
+    assert (
+        rows.attempt_stamp({"workdir": "w0/maps_20260725_110000_citynav_e__1_1"})
+        == "20260725_110000"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -197,7 +210,8 @@ def test_a_truncated_last_line_does_not_break_the_read(tmp_path):
     root = tmp_path / "live"
     root.mkdir()
     (root / rows.EPISODES_JSONL).write_text(
-        json.dumps(ledger_row("e::10#10", "20260725_110000", 1)) + "\n"
+        json.dumps(ledger_row("e::10#10", "20260725_110000", 1))
+        + "\n"
         + '{"episode_id": "e::11#11", "status": "o'
     )
     picked, stats = rows.load_attempts(root)
@@ -239,8 +253,9 @@ def test_every_shared_fixture_case():
         scored = load_run(root)
         assert set(scored) == set(want["picks"]) | set(want["unscored"]), run_name
         for eid in want["unscored"]:
-            assert scored[eid]["SR"] == 0 and scored[eid].get("OSR", 0) == 0, \
+            assert scored[eid]["SR"] == 0 and scored[eid].get("OSR", 0) == 0, (
                 f"{run_name}: {eid} keeps its slot and scores a miss"
+            )
         for eid in want["never_landed"]:
             assert eid not in picked, f"{run_name}: {eid} has no ledger row"
 
@@ -305,8 +320,10 @@ def test_a_sortie_root_selecting_no_episodes_reads_whole(tmp_path):
 def test_a_metricless_pick_is_an_osr_and_spl_miss_on_a_ring_run():
     """A crash or an unrecorded timeout is a miss in OSR's and spl_pos's
     denominators as in SR's, so all three are rates over the same episodes."""
+
     def pick(metrics):
         return rows.Attempt("e", {}, metrics, "20260725_110000", 0, True)
+
     picked = {"a": pick({"SR": 1, "OSR": 1, "spl_pos": 0.5}), "b": pick({})}
     assert rows.scored_metrics(picked)["b"] == {"SR": 0, "OSR": 0, "spl_pos": 0.0}
     shape = {"a": pick({"SR": 1}), "b": pick({})}

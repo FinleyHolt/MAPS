@@ -1,5 +1,6 @@
 """Anti-spiral program identity: identical SELF-CONTAINED programs dedup, with ref
 LABELS normalized out of the key."""
+
 from __future__ import annotations
 
 from maps.library.result_handles import program_dedup_key
@@ -31,21 +32,26 @@ def test_wiring_and_emission_order_stay_distinct():
     assert program_dedup_key(a) != program_dedup_key(b)
 
     def _cut(items):
-        return {"ref": "r2", "op": "filter_items",
-                "args": {"items": items, "key": "xy", "op": "truthy"}}
-    assert program_dedup_key(a + [_cut("r0")]) \
-        != program_dedup_key(a + [_cut("r1")])
+        return {
+            "ref": "r2",
+            "op": "filter_items",
+            "args": {"items": items, "key": "xy", "op": "truthy"},
+        }
+
+    assert program_dedup_key(a + [_cut("r0")]) != program_dedup_key(a + [_cut("r1")])
 
 
 def test_a_deduped_reissue_answers_under_its_own_labels():
     """The re-run is not re-rendered, and the handle it names still reaches the
     first run's rows."""
-    reply, fr, flights, _d = drive([
-        [run('a = find("car")\n')],
-        [run('b = find("car")\n')],
-        [run("go_to(b[0])\n")],
-        "done",
-    ])
+    reply, fr, flights, _d = drive(
+        [
+            [run('a = find("car")\n')],
+            [run('b = find("car")\n')],
+            [run("go_to(b[0])\n")],
+            "done",
+        ]
+    )
     out = tool_results(fr)
     assert "no new information since turn" in out[1]["result"]["note"], out[1]
     assert flights == [{"target_fid": "car_1"}], flights
@@ -54,8 +60,9 @@ def test_a_deduped_reissue_answers_under_its_own_labels():
 def test_the_dedup_note_after_a_plain_look_for_names_only_the_placed_form():
     """A plain look_for arms a class and adds no row, so the note may fire
     after one; it names the placed form, the one that changes the world."""
-    _, fr, _, _ = drive([[run('a = find("car")\n')], [run('look_for("car")\n')],
-                         [run('b = find("car")\n')], "done"])
+    _, fr, _, _ = drive(
+        [[run('a = find("car")\n')], [run('look_for("car")\n')], [run('b = find("car")\n')], "done"]
+    )
     note = tool_results(fr)[2]["result"]["note"]
     assert "no flight, no look_for(..., at=) --" in note, note
     assert "(fly, look_for(..., at=))" in note, note
@@ -64,14 +71,16 @@ def test_the_dedup_note_after_a_plain_look_for_names_only_the_placed_form():
 def test_a_deduped_handle_re_derives_after_a_flight_like_its_original():
     """The alias carries the producing ops, so after the world moves both
     handles read the same live rows."""
-    res, _graph, _added = grow_drive([
-        [run('go_to("prior_7")')],
-        [run('a = find("car")')],
-        [run('b = find("car")')],
-        [run('go_to("prior_1")')],
-        [run('print(len(a), len(b))')],
-        "done",
-    ])
+    res, _graph, _added = grow_drive(
+        [
+            [run('go_to("prior_7")')],
+            [run('a = find("car")')],
+            [run('b = find("car")')],
+            [run('go_to("prior_1")')],
+            [run("print(len(a), len(b))")],
+            "done",
+        ]
+    )
     n_a, n_b = res[4]["printed"].split()
     assert n_a == n_b, res[4]
 
@@ -79,8 +88,7 @@ def test_a_deduped_handle_re_derives_after_a_flight_like_its_original():
 def test_a_deduped_bare_line_serves_the_note_and_no_table():
     """The note says the reissue is not re-rendered, so its bare line shows
     no table."""
-    _, fr, _, _ = drive([[run('find("car")\n')], [run('find("car")\n')],
-                         "done"])
+    _, fr, _, _ = drive([[run('find("car")\n')], [run('find("car")\n')], "done"])
     again = tool_results(fr)[1]["result"]
     assert "not re-rendered" in again["note"], again
     assert "results" not in again, again
@@ -89,15 +97,17 @@ def test_a_deduped_bare_line_serves_the_note_and_no_table():
 def test_a_deduped_handle_shown_after_a_flight_in_its_block_renders():
     """The note covers the surface it was served on: once a flight in the
     same block moves the world, a bare line of the handle shows its table."""
-    _, fr, _, _ = drive([[run('cars = find("car")\n')],
-                         [run('cars = find("car")\ngo_to(cars[0])\ncars\n')], "done"])
+    _, fr, _, _ = drive(
+        [[run('cars = find("car")\n')], [run('cars = find("car")\ngo_to(cars[0])\ncars\n')], "done"]
+    )
     again = tool_results(fr)[1]
     assert "cars" in again["result"].get("results", {}), again
 
 
 def test_two_deduped_calls_in_a_block_serve_no_empty_results():
-    _, fr, _, _ = drive([[run('find("car")\n')],
-                         [run('a = find("car")\nb = find("car")\n')], "done"])
+    _, fr, _, _ = drive(
+        [[run('find("car")\n')], [run('a = find("car")\nb = find("car")\n')], "done"]
+    )
     again = tool_results(fr)[1]["result"]
     assert "results" not in again, again
 
@@ -105,8 +115,9 @@ def test_two_deduped_calls_in_a_block_serve_no_empty_results():
 def test_the_dedup_note_holds_for_a_block_that_flies_after_it():
     """The note speaks for the moment its call ran, so a flight later in the
     same block does not make it false."""
-    _, fr, _, _ = drive([[run('cars = find("car")\n')],
-                         [run('cars = find("car")\ngo_to(cars[0])\n')], "done"])
+    _, fr, _, _ = drive(
+        [[run('cars = find("car")\n')], [run('cars = find("car")\ngo_to(cars[0])\n')], "done"]
+    )
     again = tool_results(fr)[1]
     assert "flown" in again, again
     note = again["result"]["note"]

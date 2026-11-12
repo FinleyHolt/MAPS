@@ -1,4 +1,5 @@
 """The crop window shifts inside the raster but keeps its subject in frame."""
+
 from __future__ import annotations
 
 from maps.render.look_render import (
@@ -18,8 +19,10 @@ _KEEP = _HALF - LOOK_CAR_MARGIN_M / 2.0
 def test_the_edge_shift_trims_the_border_up_to_the_cap():
     mid = (250.0, 1700.0)
     assert resolve_window_center(mid, mid, _BOUNDS, _HALF, LOOK_CAR_MARGIN_M) == mid
-    assert resolve_window_center(
-        (1.0, 2.0), (3.0, 4.0), None, _HALF, LOOK_CAR_MARGIN_M) == (3.0, 4.0)
+    assert resolve_window_center((1.0, 2.0), (3.0, 4.0), None, _HALF, LOOK_CAR_MARGIN_M) == (
+        3.0,
+        4.0,
+    )
     # within the cap of the right edge: shifted fully in-bounds
     near = (396.0, 1700.0)
     cx, cy = resolve_window_center(near, near, _BOUNDS, _HALF, LOOK_CAR_MARGIN_M)

@@ -11,15 +11,21 @@ from maps.library.interpreter import MissionPython
 from maps.library.rows import Row, Rows, _places
 from maps.mission.tests.fakes import quiet_env
 
-ROAD = {"fid": "prior_1", "name": "Poppy Boulevard", "class": "road",
-        "mask": [[[0.0, 0.0], [0.0, 1198.0]]], "xy": [0.0, 599.0]}
+ROAD = {
+    "fid": "prior_1",
+    "name": "Poppy Boulevard",
+    "class": "road",
+    "mask": [[[0.0, 0.0], [0.0, 1198.0]]],
+    "xy": [0.0, 599.0],
+}
 CAR = {"fid": "detected_1", "class": "car", "xy": [7.0, 0.0]}
 
 
 def _mp(surface: dict, refs: dict | None = None) -> MissionPython:
     refs = refs or {}
-    return MissionPython(quiet_env(rows_of_ref=lambda ref: refs.get(ref, []),
-                                   row_of_fid=surface.get))
+    return MissionPython(
+        quiet_env(rows_of_ref=lambda ref: refs.get(ref, []), row_of_fid=surface.get)
+    )
 
 
 def _served(row: dict) -> dict:
@@ -53,16 +59,17 @@ def test_a_set_is_its_nearest_member():
     mean_x = (7.0 + 400.0) / 2
     assert abs(mp.library.distance(pools, "prior_1") - mean_x) > 190.0
     # a plain list of Rows/Row unions the same way
-    assert mp.library.distance([pools, Row(far, mp=mp.library)], ROAD["fid"]) \
-        == pytest.approx(7.0)
+    assert mp.library.distance([pools, Row(far, mp=mp.library)], ROAD["fid"]) == pytest.approx(7.0)
 
 
 def test_a_point_inside_overlapping_members_is_inside_the_set():
     """A set is its nearest member: inside either of two overlapping squares
     is 0 m from the set, as the executor's ``distance to`` a union reads."""
     sq = lambda x0: [[x0, 0.0], [x0 + 10, 0.0], [x0 + 10, 10.0], [x0, 10.0], [x0, 0.0]]
-    surface = {"prior_1": {"fid": "prior_1", "mask": [sq(0.0)]},
-               "prior_2": {"fid": "prior_2", "mask": [sq(5.0)]}}
+    surface = {
+        "prior_1": {"fid": "prior_1", "mask": [sq(0.0)]},
+        "prior_2": {"fid": "prior_2", "mask": [sq(5.0)]},
+    }
     mp = _mp(surface)
     assert mp.library.distance([7.0, 5.0], ["prior_1", "prior_2"]) == 0.0
     assert mp.library.distance([7.0, 5.0], "prior_2") == 0.0
@@ -70,9 +77,18 @@ def test_a_point_inside_overlapping_members_is_inside_the_set():
 
 def test_distance_matches_the_executor_column():
     out = run_program(
-        [dict(CAR)], [dict(ROAD)],
-        {"ops": [{"ref": "r0", "op": "compare",
-                  "args": {"items": [dict(CAR)], "refs": [ROAD["fid"]]}}]})
+        [dict(CAR)],
+        [dict(ROAD)],
+        {
+            "ops": [
+                {
+                    "ref": "r0",
+                    "op": "compare",
+                    "args": {"items": [dict(CAR)], "refs": [ROAD["fid"]]},
+                }
+            ]
+        },
+    )
     row = out["results"]["r0"][0]
     column = row[f"distance to {ROAD['fid']}"]
     mp = _mp({"prior_1": ROAD, "detected_1": CAR})
@@ -84,13 +100,23 @@ def test_distance_matches_the_executor_column():
 
 
 def test_each_place_geometry_is_built_once(monkeypatch):
-    ways = {f"prior_{i}": {"fid": f"prior_{i}", "name": "Neuralia Road",
-                           "mask": [[[0.0, i * 20.0], [0.0, i * 20.0 + 20.0]]],
-                           "xy": [0.0, i * 20.0 + 10.0]}
-            for i in range(64)}
-    houses = {f"detected_{i}": {"fid": f"detected_{i}", "class": "house",
-                                "xy": [50.0 + i, i * 20.0 + 10.0]}
-              for i in range(64)}
+    ways = {
+        f"prior_{i}": {
+            "fid": f"prior_{i}",
+            "name": "Neuralia Road",
+            "mask": [[[0.0, i * 20.0], [0.0, i * 20.0 + 20.0]]],
+            "xy": [0.0, i * 20.0 + 10.0],
+        }
+        for i in range(64)
+    }
+    houses = {
+        f"detected_{i}": {
+            "fid": f"detected_{i}",
+            "class": "house",
+            "xy": [50.0 + i, i * 20.0 + 10.0],
+        }
+        for i in range(64)
+    }
     surface = {**ways, **houses}
     mp = _mp(surface)
 
@@ -127,8 +153,7 @@ def test_a_bare_name_is_refused_rather_than_grounded():
 
 
 def test_the_measuring_ceiling_names_the_pairwise_scan(monkeypatch):
-    monkeypatch.setattr(
-        "maps.library.calls.MEASURE_CALL_CEILING", 3)
+    monkeypatch.setattr("maps.library.calls.MEASURE_CALL_CEILING", 3)
     mp = _mp({"prior_1": ROAD, "detected_1": CAR})
     for _ in range(3):
         mp.library.distance("detected_1", "prior_1")

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """``Reasoner.append_tool_result`` byte-format."""
+
 from __future__ import annotations
 
 import json

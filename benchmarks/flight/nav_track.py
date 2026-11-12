@@ -37,27 +37,48 @@ class Pose:
 
 def pose_tag(pose: Pose) -> dict[str, Any]:
     """The pose as the tag a frame carries."""
-    return {"lat": pose.lat, "lon": pose.lon, "alt_msl_m": pose.alt_msl_m,
-            "heading_deg": pose.heading_deg, "roll_deg": pose.roll_deg, "pitch_deg": pose.pitch_deg,
-            "attitude": pose.attitude, "track_deg": pose.track_deg, "speed_mps": pose.speed_mps, "utc": pose.utc}
+    return {
+        "lat": pose.lat,
+        "lon": pose.lon,
+        "alt_msl_m": pose.alt_msl_m,
+        "heading_deg": pose.heading_deg,
+        "roll_deg": pose.roll_deg,
+        "pitch_deg": pose.pitch_deg,
+        "attitude": pose.attitude,
+        "track_deg": pose.track_deg,
+        "speed_mps": pose.speed_mps,
+        "utc": pose.utc,
+    }
 
 
 def tag_pose(tag: dict[str, Any] | None) -> Pose | None:
     """The pose a frame's tag states; None when the tag names no position or
     no heading. A tag that names no attitude is read as the recorder's fused word."""
-    if not tag or tag.get("lat") is None or tag.get("lon") is None or tag.get("heading_deg") is None:
+    if (
+        not tag
+        or tag.get("lat") is None
+        or tag.get("lon") is None
+        or tag.get("heading_deg") is None
+    ):
         return None
     heading = float(tag["heading_deg"])
-    return Pose(lat=float(tag["lat"]), lon=float(tag["lon"]), alt_msl_m=float(tag["alt_msl_m"]),
-                track_deg=float(tag["track_deg"]) if tag.get("track_deg") is not None else heading,
-                speed_mps=float(tag.get("speed_mps") or 0.0),
-                utc=str(tag.get("utc") or ""), heading_deg=heading,
-                roll_deg=float(tag.get("roll_deg") or 0.0), pitch_deg=float(tag.get("pitch_deg") or 0.0),
-                attitude=str(tag.get("attitude") or "fusion"))
+    return Pose(
+        lat=float(tag["lat"]),
+        lon=float(tag["lon"]),
+        alt_msl_m=float(tag["alt_msl_m"]),
+        track_deg=float(tag["track_deg"]) if tag.get("track_deg") is not None else heading,
+        speed_mps=float(tag.get("speed_mps") or 0.0),
+        utc=str(tag.get("utc") or ""),
+        heading_deg=heading,
+        roll_deg=float(tag.get("roll_deg") or 0.0),
+        pitch_deg=float(tag.get("pitch_deg") or 0.0),
+        attitude=str(tag.get("attitude") or "fusion"),
+    )
 
 
-def camera_pose_local(pose: Pose, tiles_dir, map_name: str, *, lever: tuple[float, float, float]
-                      ) -> tuple[tuple[float, float], float, float]:
+def camera_pose_local(
+    pose: Pose, tiles_dir, map_name: str, *, lever: tuple[float, float, float]
+) -> tuple[tuple[float, float], float, float]:
     """``(pose_xy, alt_msl_m, yaw_deg)`` of the CAMERA in the tile frame.
 
     ``lever`` is the antenna-to-camera arm ``(fwd, right, down)`` in body
@@ -67,14 +88,18 @@ def camera_pose_local(pose: Pose, tiles_dir, map_name: str, *, lever: tuple[floa
     """
     local = lonlat_to_local(tiles_dir, map_name, pose.lon, pose.lat)
     if local is None:
-        raise ValueError(f"{map_name} carries no georef under {tiles_dir}; a fix cannot be placed in the tile frame")
-    east, north, down = body_to_ned(tuple(lever), roll_deg=pose.roll_deg, pitch_deg=pose.pitch_deg,
-                                    heading_deg=pose.heading_deg)
+        raise ValueError(
+            f"{map_name} carries no georef under {tiles_dir}; a fix cannot be placed in the tile frame"
+        )
+    east, north, down = body_to_ned(
+        tuple(lever), roll_deg=pose.roll_deg, pitch_deg=pose.pitch_deg, heading_deg=pose.heading_deg
+    )
     return (local[0] + east, local[1] + north), pose.alt_msl_m - down, pose.heading_deg
 
 
-def body_to_ned(arm: tuple[float, float, float], *, roll_deg: float, pitch_deg: float,
-                heading_deg: float) -> tuple[float, float, float]:
+def body_to_ned(
+    arm: tuple[float, float, float], *, roll_deg: float, pitch_deg: float, heading_deg: float
+) -> tuple[float, float, float]:
     """A body vector ``(fwd, right, down)`` as ``(east, north, down)``:
     ``Rz(psi) Ry(theta) Rx(phi)``, roll right wing down and pitch nose up positive."""
     fwd, right, down = (float(v) for v in arm)
@@ -82,7 +107,15 @@ def body_to_ned(arm: tuple[float, float, float], *, roll_deg: float, pitch_deg: 
     cphi, sphi = math.cos(phi), math.sin(phi)
     cth, sth = math.cos(theta), math.sin(theta)
     cps, sps = math.cos(psi), math.sin(psi)
-    north = fwd * cth * cps + right * (sphi * sth * cps - cphi * sps) + down * (cphi * sth * cps + sphi * sps)
-    east = fwd * cth * sps + right * (sphi * sth * sps + cphi * cps) + down * (cphi * sth * sps - sphi * cps)
+    north = (
+        fwd * cth * cps
+        + right * (sphi * sth * cps - cphi * sps)
+        + down * (cphi * sth * cps + sphi * sps)
+    )
+    east = (
+        fwd * cth * sps
+        + right * (sphi * sth * sps + cphi * cps)
+        + down * (cphi * sth * sps - sphi * cps)
+    )
     ned_down = -fwd * sth + right * sphi * cth + down * cphi * cth
     return east, north, ned_down

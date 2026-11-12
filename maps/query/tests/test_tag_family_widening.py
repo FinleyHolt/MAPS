@@ -1,4 +1,5 @@
 """``find <noun>`` reaches the noun's own tag FAMILY, exact hits first."""
+
 from __future__ import annotations
 
 from maps.query import text_match as T
@@ -8,22 +9,43 @@ from maps.query.program import run_program
 # is a value of `highway`. A row keyed `highway` must therefore stay OUT of
 # the `house` family -- the widening reaches one key, not the surface.
 _ANCHORS = [
-    {"fid": "p_house", "name": "", "xy": [0.0, 0.0],
-     "tags": {"building": "house"}, "search_text": "building house"},
-    {"fid": "p_yes_a", "name": "", "xy": [30.0, 0.0],
-     "tags": {"building": "yes"}, "search_text": "building yes"},
-    {"fid": "p_yes_b", "name": "", "xy": [60.0, 0.0],
-     "tags": {"building": "yes"}, "search_text": "building yes"},
-    {"fid": "p_road", "name": "Earl Street", "xy": [0.0, 40.0],
-     "tags": {"highway": "residential"},
-     "search_text": "earl street highway residential"},
+    {
+        "fid": "p_house",
+        "name": "",
+        "xy": [0.0, 0.0],
+        "tags": {"building": "house"},
+        "search_text": "building house",
+    },
+    {
+        "fid": "p_yes_a",
+        "name": "",
+        "xy": [30.0, 0.0],
+        "tags": {"building": "yes"},
+        "search_text": "building yes",
+    },
+    {
+        "fid": "p_yes_b",
+        "name": "",
+        "xy": [60.0, 0.0],
+        "tags": {"building": "yes"},
+        "search_text": "building yes",
+    },
+    {
+        "fid": "p_road",
+        "name": "Earl Street",
+        "xy": [0.0, 40.0],
+        "tags": {"highway": "residential"},
+        "search_text": "earl street highway residential",
+    },
 ]
 
 
 def _find(query, anchors=None):
-    out = run_program([], [dict(a) for a in (anchors or _ANCHORS)],
-                      {"ops": [{"ref": "r0", "op": "find",
-                                "args": {"query": query}}]})
+    out = run_program(
+        [],
+        [dict(a) for a in (anchors or _ANCHORS)],
+        {"ops": [{"ref": "r0", "op": "find", "args": {"query": query}}]},
+    )
     return out["results"]["r0"]
 
 
@@ -32,24 +54,25 @@ def _narrow(query, anchors=None):
     rows = anchors or _ANCHORS
     q = T.fuzzy_prepare_query(query)
     idf = T.token_idf(rows)
-    return {r["fid"] for r in rows
-            if T.find_score(q, r.get("search_text") or "", r.get("name"),
-                            r.get("tags"), idf=idf) >= T.FUZZY_THRESHOLD}
+    return {
+        r["fid"]
+        for r in rows
+        if T.find_score(q, r.get("search_text") or "", r.get("name"), r.get("tags"), idf=idf)
+        >= T.FUZZY_THRESHOLD
+    }
 
 
 def test_tag_family_keys_reads_values_and_not_keys():
-    assert T.tag_family_keys(T.fuzzy_prepare_query("house"),
-                             _ANCHORS) == frozenset({"building"})
-    assert T.tag_family_keys(T.fuzzy_prepare_query("residential"),
-                             _ANCHORS) == frozenset({"highway"})
+    assert T.tag_family_keys(T.fuzzy_prepare_query("house"), _ANCHORS) == frozenset({"building"})
+    assert T.tag_family_keys(T.fuzzy_prepare_query("residential"), _ANCHORS) == frozenset(
+        {"highway"}
+    )
     # A tag KEY is not a value of anything -- `find building.` already
     # retrieves the family through the exact-tag tier and must not widen
     # twice.
-    assert T.tag_family_keys(T.fuzzy_prepare_query("building"),
-                             _ANCHORS) == frozenset()
+    assert T.tag_family_keys(T.fuzzy_prepare_query("building"), _ANCHORS) == frozenset()
     # A word the surface does not spell reaches nothing.
-    assert T.tag_family_keys(T.fuzzy_prepare_query("helipad"),
-                             _ANCHORS) == frozenset()
+    assert T.tag_family_keys(T.fuzzy_prepare_query("helipad"), _ANCHORS) == frozenset()
     assert T.tag_family_keys((), _ANCHORS) == frozenset()
 
 

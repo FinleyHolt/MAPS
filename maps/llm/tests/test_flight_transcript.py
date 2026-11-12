@@ -18,6 +18,7 @@ from pathlib import Path
 
 from maps.llm import http as llm_http
 
+
 def _records(directory: Path) -> list[dict]:
     text = (directory / "transcript.jsonl").read_text()
     return [json.loads(line) for line in text.splitlines() if line.strip()]
@@ -50,9 +51,11 @@ def test_sequential_calls_store_only_the_delta_and_round_trip(tmp_path):
         {"role": "system", "content": "You fly."},
         {"role": "user", "content": "stop 0"},
     ]
-    msgs2 = [*msgs1,
-             {"role": "assistant", "content": "looking"},
-             {"role": "user", "content": "stop 1"}]
+    msgs2 = [
+        *msgs1,
+        {"role": "assistant", "content": "looking"},
+        {"role": "user", "content": "stop 1"},
+    ]
     llm_http._flight_request_record(tmp_path, "rid1", _body(msgs1))
     llm_http._flight_request_record(tmp_path, "rid2", _body(msgs2))
 
@@ -72,10 +75,13 @@ def test_image_parts_become_sha_refs_and_no_data_urls_survive(tmp_path):
     raw = b"\xff\xd8\xff\xe0 jpeg bytes for the scrub test"
     data_url = "data:image/jpeg;base64," + base64.b64encode(raw).decode()
     msgs = [
-        {"role": "user", "content": [
-            {"type": "text", "text": "Overhead crops"},
-            {"type": "image_url", "image_url": {"url": data_url}},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Overhead crops"},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        },
     ]
     body = _body(msgs)
     # Vacuity floor: the input really carries an image_url data part —
@@ -96,13 +102,11 @@ def test_image_parts_become_sha_refs_and_no_data_urls_survive(tmp_path):
 
 
 def test_params_are_written_once_per_distinct_body(tmp_path):
+    llm_http._flight_request_record(tmp_path, "rid1", _body([{"role": "user", "content": "a"}]))
+    llm_http._flight_request_record(tmp_path, "rid2", _body([{"role": "user", "content": "b"}]))
     llm_http._flight_request_record(
-        tmp_path, "rid1", _body([{"role": "user", "content": "a"}]))
-    llm_http._flight_request_record(
-        tmp_path, "rid2", _body([{"role": "user", "content": "b"}]))
-    llm_http._flight_request_record(
-        tmp_path, "rid3",
-        _body([{"role": "user", "content": "c"}], response_format={"x": 1}))
+        tmp_path, "rid3", _body([{"role": "user", "content": "c"}], response_format={"x": 1})
+    )
 
     recs = _records(tmp_path)
     params = [r for r in recs if r["kind"] == "params"]
@@ -116,13 +120,13 @@ def test_params_are_written_once_per_distinct_body(tmp_path):
 
 
 def test_a_request_precedes_its_response_and_pending_is_readable(tmp_path):
-    llm_http._flight_request_record(
-        tmp_path, "rid1", _body([{"role": "user", "content": "a"}]))
+    llm_http._flight_request_record(tmp_path, "rid1", _body([{"role": "user", "content": "a"}]))
     recs = _records(tmp_path)
     assert [r["kind"] for r in recs] == ["params", "request"]  # pending round
 
     llm_http._flight_response_record(
-        tmp_path, "rid1", {"choices": [], "usage": {"total_tokens": 7}})
+        tmp_path, "rid1", {"choices": [], "usage": {"total_tokens": 7}}
+    )
     recs = _records(tmp_path)
     assert recs[-1]["kind"] == "response"
     assert recs[-1]["request_id"] == "rid1"

@@ -6,16 +6,17 @@ import math
 
 from maps.query.polyline import clip_ring_to_box, simplify_ring
 
+
 # A 2 m-quantized staircase ring around a 40 x 20 m block: the shape every
 # prior footprint arrives as (cells_boundary_loops output).
 def _staircase(w_m: float, h_m: float, cell: float = 2.0) -> list:
     ring = []
     x = 0.0
-    while x < w_m:                       # south edge, stepping east
+    while x < w_m:  # south edge, stepping east
         ring += [[x, 0.0], [x + cell, 0.0]]
         x += cell
     y = 0.0
-    while y < h_m:                       # east edge, stepping north
+    while y < h_m:  # east edge, stepping north
         ring += [[w_m, y], [w_m, y + cell]]
         y += cell
     x = w_m
@@ -31,7 +32,7 @@ def _staircase(w_m: float, h_m: float, cell: float = 2.0) -> list:
 
 def test_a_rectangle_costs_four_vertices_not_ninety_six():
     ring = _staircase(200.0, 100.0)
-    assert len(ring) > 96, len(ring)          # vacuity: the input is dense
+    assert len(ring) > 96, len(ring)  # vacuity: the input is dense
     out = simplify_ring(ring, tolerance=0.5, max_points=256)
     # Collinear runs collapse; only the corners survive.
     assert len(out) <= 8, out
@@ -43,8 +44,10 @@ def test_a_rectangle_costs_four_vertices_not_ninety_six():
 def test_the_budget_tightens_the_tolerance_and_never_subsamples():
     # A circle at 1 m sampling: 600 vertices, no collinear runs to collapse,
     # so the budget can only be met by raising the tolerance.
-    ring = [[300.0 * math.cos(t / 600.0 * 2 * math.pi),
-             300.0 * math.sin(t / 600.0 * 2 * math.pi)] for t in range(600)]
+    ring = [
+        [300.0 * math.cos(t / 600.0 * 2 * math.pi), 300.0 * math.sin(t / 600.0 * 2 * math.pi)]
+        for t in range(600)
+    ]
     out = simplify_ring(ring, tolerance=0.05, max_points=64)
     assert len(out) <= 64, len(out)
     # Every survivor is a REAL vertex of the input, and the ring still
@@ -53,7 +56,7 @@ def test_the_budget_tightens_the_tolerance_and_never_subsamples():
     # vertices are not uniformly informative.
     radii = [math.hypot(*p) for p in out]
     assert max(abs(r - 300.0) for r in radii) < 1e-6, max(radii)
-    assert len(out) >= 8, out                 # vacuity: it did not collapse
+    assert len(out) >= 8, out  # vacuity: it did not collapse
 
 
 def test_a_ring_inside_the_box_survives_whole_and_closed():
@@ -87,7 +90,7 @@ def test_a_partly_visible_ring_draws_its_in_frame_arc_only():
     arcs = clip_ring_to_box(ring, (0.0, 0.0, 100.0, 100.0))
     assert arcs, arcs
     drawn = [tuple(p) for a in arcs for p in a]
-    assert any(abs(x - 100.0) < 1e-9 for x, _ in drawn), drawn   # it reaches
+    assert any(abs(x - 100.0) < 1e-9 for x, _ in drawn), drawn  # it reaches
     # no drawn EDGE lies along the cut
     for a in arcs:
         for (x0, y0), (x1, y1) in zip(a, a[1:]):

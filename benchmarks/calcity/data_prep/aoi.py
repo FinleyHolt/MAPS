@@ -57,6 +57,7 @@ BUNDLE_BBOX_WGS84: tuple[float, float, float, float] = (
 # ``GROUND_LEVEL["calcity"]`` carries the same value.
 GROUND_LEVEL_M = 0.0
 
+
 def bundle_root(root: Path, environ: Mapping[str, str]) -> Path:
     """The world bundle directory (``CALCITY_BUNDLE`` in ``environ``), else
     ``bundle/`` under the Cal City data ``root``."""
@@ -129,7 +130,16 @@ def build_local_frame(bbox: tuple[float, float, float, float]) -> LocalFrame:
 # (the airport corner).
 
 _LEISURE_WATER = {"swimming_pool"}
-_LEISURE_GROUND = {"pitch", "track", "garden", "stadium", "bleachers", "park", "golf_course", "sports_center"}
+_LEISURE_GROUND = {
+    "pitch",
+    "track",
+    "garden",
+    "stadium",
+    "bleachers",
+    "park",
+    "golf_course",
+    "sports_center",
+}
 _AEROWAY_BUILDING = {"hangar", "terminal"}
 _AEROWAY_GROUND = {"runway", "taxiway", "apron", "helipad", "runway_link"}
 _HIGHWAY_DRIVE = {
@@ -192,9 +202,11 @@ def classify_object_type(tags: dict) -> str | None:
     # Business/civic POIs (nodes or areas): what the imagery shows at a
     # restaurant / bank / market / motel is a building, so they class as
     # Building and stay targetable by name.
-    if amenity is not None or tag_value(tags, "shop") is not None or tag_value(
-        tags, "tourism"
-    ) is not None:
+    if (
+        amenity is not None
+        or tag_value(tags, "shop") is not None
+        or tag_value(tags, "tourism") is not None
+    ):
         return "Building"
     # Named plazas / commercial lots are open targetable areas.
     if landuse in ("retail", "commercial") and name:

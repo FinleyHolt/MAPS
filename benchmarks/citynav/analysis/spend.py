@@ -42,8 +42,12 @@ def attempt_cost(llm: dict, prices: dict = PRICES) -> float:
     cached = llm.get("cached_tokens") or 0
     write = llm.get("cache_write_tokens") or 0
     plain = max(0, llm["prompt_tokens"] - cached - write)
-    return (plain * prices["in"] + cached * prices["cached"] + write * prices["write"]
-            + llm["completion_tokens"] * prices["out"]) / 1e6
+    return (
+        plain * prices["in"]
+        + cached * prices["cached"]
+        + write * prices["write"]
+        + llm["completion_tokens"] * prices["out"]
+    ) / 1e6
 
 
 def spend(out_root: Path, prices: dict = PRICES, tokenizer_name: str = "") -> dict:
@@ -54,8 +58,13 @@ def spend(out_root: Path, prices: dict = PRICES, tokenizer_name: str = "") -> di
     out_root = Path(out_root)
     ledger = {r.get("workdir"): r for r in _rows.iter_json_rows(out_root / EPISODES_JSONL)}
     # A cache meter stays None until an attempt reports it.
-    totals: dict = {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0,
-                    "cached_tokens": None, "cache_write_tokens": None}
+    totals: dict = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "reasoning_tokens": 0,
+        "cached_tokens": None,
+        "cache_write_tokens": None,
+    }
     usd = {"scored": 0.0, "infra": 0.0, "flying": 0.0}
     served: Counter = Counter()
     scored_ids: set[str] = set()
@@ -73,8 +82,10 @@ def spend(out_root: Path, prices: dict = PRICES, tokenizer_name: str = "") -> di
             scored_ids.add(row["episode_id"])
     named = [w for w in ledger if w]
     if named and not any((out_root / str(w)).is_dir() for w in named):
-        raise SystemExit(f"{out_root}: the ledger names {len(named)} attempt(s) but none of their "
-                         f"workdirs is here; spend reads each attempt's transcript")
+        raise SystemExit(
+            f"{out_root}: the ledger names {len(named)} attempt(s) but none of their "
+            f"workdirs is here; spend reads each attempt's transcript"
+        )
     try:
         selected = json.loads((out_root / MANIFEST_NAME).read_text())["selection"]["episodes_n"]
     except (OSError, ValueError, KeyError):
@@ -83,15 +94,19 @@ def spend(out_root: Path, prices: dict = PRICES, tokenizer_name: str = "") -> di
     remaining = None if selected is None else max(0, selected - len(scored_ids))
     return {
         "tokens": totals,
-        "cache_hit": (totals["cached_tokens"] / totals["prompt_tokens"]
-                      if totals["cached_tokens"] is not None and totals["prompt_tokens"] else None),
+        "cache_hit": (
+            totals["cached_tokens"] / totals["prompt_tokens"]
+            if totals["cached_tokens"] is not None and totals["prompt_tokens"]
+            else None
+        ),
         "usd": {k: round(v, 2) for k, v in usd.items()},
         "usd_total": round(sum(usd.values()), 2),
         "scored_episodes": len(scored_ids),
         "usd_per_scored_episode": None if per_episode is None else round(per_episode, 3),
         "selected": selected,
-        "usd_projected_remaining": (None if per_episode is None or remaining is None
-                                    else round(per_episode * remaining, 2)),
+        "usd_projected_remaining": (
+            None if per_episode is None or remaining is None else round(per_episode * remaining, 2)
+        ),
         "served_models": dict(served),
     }
 
@@ -100,11 +115,19 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out_root", type=Path)
     for key, value in PRICES.items():
-        ap.add_argument(f"--price-{key}", type=float, default=value,
-                        help=f"USD per million tokens (default {value})")
+        ap.add_argument(
+            f"--price-{key}",
+            type=float,
+            default=value,
+            help=f"USD per million tokens (default {value})",
+        )
     args = ap.parse_args(argv)
     prices = {k: getattr(args, f"price_{k}") for k in PRICES}
-    print(json.dumps(spend(args.out_root, prices, from_environ(os.environ).endpoint.tokenizer_name), indent=2))
+    print(
+        json.dumps(
+            spend(args.out_root, prices, from_environ(os.environ).endpoint.tokenizer_name), indent=2
+        )
+    )
     return 0
 
 

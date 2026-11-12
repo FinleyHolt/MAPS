@@ -38,9 +38,18 @@ def structure(gray: np.ndarray, down: int = DOWN) -> np.ndarray:
     already at that size."""
     import cv2  # noqa: PLC0415
 
-    small = np.asarray(gray) if down == 1 else cv2.resize(
-        np.asarray(gray), (gray.shape[1] // down, gray.shape[0] // down), interpolation=cv2.INTER_AREA)
-    return np.stack(locator.edge_maps(small, template_half=locator.TEMPLATE_HALF)).astype(np.float32)
+    small = (
+        np.asarray(gray)
+        if down == 1
+        else cv2.resize(
+            np.asarray(gray),
+            (gray.shape[1] // down, gray.shape[0] // down),
+            interpolation=cv2.INTER_AREA,
+        )
+    )
+    return np.stack(locator.edge_maps(small, template_half=locator.TEMPLATE_HALF)).astype(
+        np.float32
+    )
 
 
 def offset(frame_rgb: np.ndarray, render_rgb: np.ndarray) -> tuple[float, float, float]:
@@ -55,22 +64,25 @@ def offset(frame_rgb: np.ndarray, render_rgb: np.ndarray) -> tuple[float, float,
     fh, rh = np.asarray(frame_rgb).shape[0], np.asarray(render_rgb).shape[0]
     render_down = DOWN if rh == fh else 1 if rh == fh // DOWN else None
     if render_down is None:
-        raise ValueError(f"the render is {rh} rows against a frame of {fh}: the frame's size or 1/{DOWN} of it")
+        raise ValueError(
+            f"the render is {rh} rows against a frame of {fh}: the frame's size or 1/{DOWN} of it"
+        )
     fa = _POOL.submit(structure, locator.gray(render_rgb), render_down)
     fb = _POOL.submit(structure, locator.gray(frame_rgb))
     a, b = fa.result(), fb.result()
     _c, h, w = a.shape
     th, tw = int(h * TEMPLATE_FRACTION), int(w * TEMPLATE_FRACTION)
     y0, x0 = (h - th) // 2, (w - tw) // 2
-    score = locator.joint_ncc(b, a[:, y0:y0 + th, x0:x0 + tw])
+    score = locator.joint_ncc(b, a[:, y0 : y0 + th, x0 : x0 + tw])
     if score is None:
         return 0.0, 0.0, 0.0
     at, peak, _margin = locator.unique_peak(score, max(1, locator.UNIQUE_RADIUS // DOWN))
     return float(at[0] - x0) * DOWN, float(at[1] - y0) * DOWN, float(peak)
 
 
-def similarity(frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: float
-               ) -> tuple[float, float, float, float]:
+def similarity(
+    frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: float
+) -> tuple[float, float, float, float]:
     """``(du, dv, yaw_deg, response)``: :func:`offset` with the frame's content turned as well.
 
     The yaw is the turn of the content about its centre against the render,
@@ -86,20 +98,27 @@ def similarity(frame_rgb: np.ndarray, render_rgb: np.ndarray, *, yaw_reach_deg: 
     def read(yaw: float) -> tuple[float, float, float, float]:
         # cv2's positive angle turns the picture counter-clockwise on screen; a
         # heading-sense turn is clockwise there, so turning BACK by yaw is -yaw.
-        turned = cv2.warpAffine(np.asarray(frame_rgb), cv2.getRotationMatrix2D(centre, -yaw, 1.0), (w, h),
-                                flags=cv2.INTER_LINEAR)
+        turned = cv2.warpAffine(
+            np.asarray(frame_rgb),
+            cv2.getRotationMatrix2D(centre, -yaw, 1.0),
+            (w, h),
+            flags=cv2.INTER_LINEAR,
+        )
         du, dv, response = offset(turned, render_rgb)
         return response, du, dv, yaw
 
-    best = max(read(float(y)) for y in np.arange(-yaw_reach_deg, yaw_reach_deg + 1e-9, YAW_STEP_DEG))
+    best = max(
+        read(float(y)) for y in np.arange(-yaw_reach_deg, yaw_reach_deg + 1e-9, YAW_STEP_DEG)
+    )
     fine = np.arange(best[3] - YAW_STEP_DEG, best[3] + YAW_STEP_DEG + 1e-9, YAW_STEP_DEG / 4.0)
     best = max([best] + [read(float(y)) for y in fine if abs(y - best[3]) > 1e-9])
     response, du, dv, yaw = best
     return du, dv, yaw, response
 
 
-def _jacobian(pose, sensor, *, altitude_m: float, ground_z: float, at_xy: tuple[float, float]
-              ) -> np.ndarray | None:
+def _jacobian(
+    pose, sensor, *, altitude_m: float, ground_z: float, at_xy: tuple[float, float]
+) -> np.ndarray | None:
     """``d pixel / d (east, north)`` at ``at_xy`` through the projector at ``pose``, or None off it.
 
     ``pose`` carries ``pose_xy``, ``yaw_deg``, ``roll_deg`` and ``pitch_deg``
@@ -108,18 +127,29 @@ def _jacobian(pose, sensor, *, altitude_m: float, ground_z: float, at_xy: tuple[
     from maps.perception.geometry.geolocate import project_world_to_pixels  # noqa: PLC0415
 
     x, y = at_xy
-    world = np.asarray([(x, y, ground_z), (x + 1.0, y, ground_z), (x, y + 1.0, ground_z)], dtype=np.float64)
-    uv = np.asarray(project_world_to_pixels(
-        world, pose_xy=tuple(pose.pose_xy), altitude_m=float(altitude_m), yaw_deg=float(pose.yaw_deg),
-        sensor=sensor, airframe_roll_deg=float(pose.roll_deg), airframe_pitch_deg=-float(pose.pitch_deg)),
-        dtype=np.float64).reshape(-1, 2)
+    world = np.asarray(
+        [(x, y, ground_z), (x + 1.0, y, ground_z), (x, y + 1.0, ground_z)], dtype=np.float64
+    )
+    uv = np.asarray(
+        project_world_to_pixels(
+            world,
+            pose_xy=tuple(pose.pose_xy),
+            altitude_m=float(altitude_m),
+            yaw_deg=float(pose.yaw_deg),
+            sensor=sensor,
+            airframe_roll_deg=float(pose.roll_deg),
+            airframe_pitch_deg=-float(pose.pitch_deg),
+        ),
+        dtype=np.float64,
+    ).reshape(-1, 2)
     if not np.all(np.isfinite(uv)):
         return None
     return np.column_stack([uv[1] - uv[0], uv[2] - uv[0]])
 
 
-def ground_correction(pose, sensor, *, altitude_m: float, ground_z: float, d_px: tuple[float, float]
-                      ) -> tuple[float, float]:
+def ground_correction(
+    pose, sensor, *, altitude_m: float, ground_z: float, d_px: tuple[float, float]
+) -> tuple[float, float]:
     """The east and north metres to ADD to the pose so the render lands on the frame.
 
     A feature at world W is at render pixel ``q = J (W - N) + c`` under the

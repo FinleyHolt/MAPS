@@ -13,10 +13,16 @@ from maps.perception.mask_codec import encode_mask_record
 from tests.serves import SegmentServe
 
 
-def _build_segment_payload(*, masks: list[np.ndarray], scores: list[float], concepts: list[str]) -> dict:
+def _build_segment_payload(
+    *, masks: list[np.ndarray], scores: list[float], concepts: list[str]
+) -> dict:
     """A ``POST /segment`` answer built with the server's own mask encoder."""
-    return {"detections": [{"label": label, "score": float(score), **encode_mask_record(mask)}
-                           for mask, score, label in zip(masks, scores, concepts)]}
+    return {
+        "detections": [
+            {"label": label, "score": float(score), **encode_mask_record(mask)}
+            for mask, score, label in zip(masks, scores, concepts)
+        ]
+    }
 
 
 def _build_observation(rgb: np.ndarray) -> Observation:
@@ -56,7 +62,9 @@ def adapter(monkeypatch, serve):
     from maps.settings import from_environ
 
     monkeypatch.setattr(dc, "MIN_AREA_PX", 1)
-    return SamDetectClient(concepts=["building"], endpoint=from_environ({"SAM_SERVER_URL": serve.url}).endpoint)
+    return SamDetectClient(
+        concepts=["building"], endpoint=from_environ({"SAM_SERVER_URL": serve.url}).endpoint
+    )
 
 
 def test_detect_posts_segment_and_maps_wire_to_metadata(adapter, serve):
@@ -110,11 +118,20 @@ def test_a_frame_under_a_tile_is_padded_not_resampled(adapter, serve):
     from PIL import Image
 
     rgb = np.random.default_rng(0).integers(0, 256, (600, 800, 3), dtype=np.uint8)
-    serve.answers = [(200, _build_segment_payload(
-        masks=[_block_mask(500, 700, 700, 900)], scores=[0.9], concepts=["building"]), {})]
+    serve.answers = [
+        (
+            200,
+            _build_segment_payload(
+                masks=[_block_mask(500, 700, 700, 900)], scores=[0.9], concepts=["building"]
+            ),
+            {},
+        )
+    ]
     dets = adapter.detect(_build_observation(rgb))
 
-    posted = np.asarray(Image.open(io.BytesIO(base64.b64decode(serve.bodies[0]["image_b64"]))).convert("RGB"))
+    posted = np.asarray(
+        Image.open(io.BytesIO(base64.b64decode(serve.bodies[0]["image_b64"]))).convert("RGB")
+    )
     assert posted.shape == (_SAM_INPUT_SIZE, _SAM_INPUT_SIZE, 3)
     assert np.array_equal(posted[:600, :800], rgb)
     assert not posted[600:].any() and not posted[:, 800:].any()
@@ -148,18 +165,20 @@ def test_pick_url_is_round_robin():
     assert all(a != b for a, b in zip(picks, picks[1:]))
 
 
-
-
 @pytest.mark.parametrize("n_masks,cap_hit", [(2, False), (3, True)])
-def test_cap_hit_says_whether_detections_were_dropped(adapter, monkeypatch, capsys, n_masks, cap_hit):
+def test_cap_hit_says_whether_detections_were_dropped(
+    adapter, monkeypatch, capsys, n_masks, cap_hit
+):
     """A frame filling the cap exactly drops nothing, so ``cap_hit`` is False; one past it is True."""
     from maps.perception.sam import detect_client as dc
     from maps.perception.mask_region import MaskRegion
 
     monkeypatch.setattr(dc, "MAX_PER_STEP", 2)
     obs = _build_observation(_square_frame())
-    blocks = [MaskRegion(np.ones((10, 10), dtype=bool), (100 * i, 0, 100 * i + 9, 9), obs.rgb.shape[:2])
-              for i in range(n_masks)]
+    blocks = [
+        MaskRegion(np.ones((10, 10), dtype=bool), (100 * i, 0, 100 * i + 9, 9), obs.rgb.shape[:2])
+        for i in range(n_masks)
+    ]
     dets = adapter.detections(obs, [(b, "building", i, 0.9) for i, b in enumerate(blocks)])
     assert len(dets) == 2
     assert ("cap_hit=True" in capsys.readouterr().out) is cap_hit

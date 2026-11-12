@@ -11,8 +11,9 @@ from maps.mission.acks import Rejections, add_note, live_counts
 from maps.mission.surface_state import Progress, Surface
 from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS
 from maps.query.text_match import (
-    FUZZY_THRESHOLD as _FUZZY_FLOOR, unmatched_query_tokens as
-    _unmatched_query_tokens)
+    FUZZY_THRESHOLD as _FUZZY_FLOOR,
+    unmatched_query_tokens as _unmatched_query_tokens,
+)
 
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
@@ -44,9 +45,14 @@ def _ordinal(n: int) -> str:
 
 # How a grounding note says what the call does at a name's best match, by
 # the name's why.
-_WHY_VERB = {"stage": "standing at", "move": "flying",
-             "map": "mapping around", "crops": "looking at",
-             "boost": "looking around", "facing": "facing"}
+_WHY_VERB = {
+    "stage": "standing at",
+    "move": "flying",
+    "map": "mapping around",
+    "crops": "looking at",
+    "boost": "looking around",
+    "facing": "facing",
+}
 
 
 class Programs:
@@ -88,11 +94,12 @@ class Programs:
                 self._dedup_key, self._dedup_n = key, 1
             if self._dedup_n >= 2:
                 c_n, a_n, dcols, _ = self.surface.census(12)
-                cols_s = ("; columns live: " + ", ".join(dcols)
-                           if dcols else "")
-                return {"note": _DEDUP_REPEAT_NOTE.format(
-                    n=_ordinal(self._dedup_n),
-                    counts=live_counts(c_n, a_n), cols=cols_s)}
+                cols_s = "; columns live: " + ", ".join(dcols) if dcols else ""
+                return {
+                    "note": _DEDUP_REPEAT_NOTE.format(
+                        n=_ordinal(self._dedup_n), counts=live_counts(c_n, a_n), cols=cols_s
+                    )
+                }
             return {"note": _DEDUP_NOTE.format(turn=prev[1])}
         raw_sink: dict = {}
         try:
@@ -100,24 +107,30 @@ class Programs:
         except CodeError as exc:
             out = {"error": str(exc)}
         else:
-            out = run_ops(ops, namespace=self.surface.ns,
-                          raw_sink=raw_sink,
-                          seed_results=self.carry.rows,
-                          preflight=self.surface.preflight,
-                          answer_ref=answer_ref)
+            out = run_ops(
+                ops,
+                namespace=self.surface.ns,
+                raw_sink=raw_sink,
+                seed_results=self.carry.rows,
+                preflight=self.surface.preflight,
+                answer_ref=answer_ref,
+            )
         if "error" in out:
             # The failing op keeps one op's errors their own class.
             err = str(out["error"])
-            out = {**out, "error": self.rejections.escalated(
-                err, sig_of=f"{err}|{raw_sink.get('error_op', '')}")}
+            out = {
+                **out,
+                "error": self.rejections.escalated(
+                    err, sig_of=f"{err}|{raw_sink.get('error_op', '')}"
+                ),
+            }
         else:
             # A successful program ends both streaks: the next same-class
             # error serves its full text again.
             self.rejections.end_streak()
             self._dedup_key, self._dedup_n = None, 0
             if key is not None:
-                self._seen[key] = (self.carry.version, self.progress.turn_idx,
-                                   ops)
+                self._seen[key] = (self.carry.version, self.progress.turn_idx, ops)
             self.carry.record(ops, raw_sink["results"])
             for rows in raw_sink["results"].values():
                 for row in rows:
@@ -132,16 +145,16 @@ class Programs:
             nm = str(r.get("name") or "").strip()
             if nm:
                 names.setdefault(nm.lower(), (f, nm))
-        close = difflib.get_close_matches(
-            (what or "").lower(), list(names), n=3, cutoff=0.55)
+        close = difflib.get_close_matches((what or "").lower(), list(names), n=3, cutoff=0.55)
         if not close:
             return ""
         return "; closest named rows: " + ", ".join(
-            f"\"{names[c][1]}\" ({names[c][0]})" for c in close)
+            f'"{names[c][1]}" ({names[c][0]})' for c in close
+        )
 
     def _call_minted(self):
         """The handle this call's last flight minted, or None."""
-        return (self.carry.minted[self._call.get("minted", 0):] or [None])[-1]
+        return (self.carry.minted[self._call.get("minted", 0) :] or [None])[-1]
 
     def ground(self, names: dict) -> dict:
         """Open a call and ground its names (``{name: why}``) under the
@@ -149,58 +162,73 @@ class Programs:
         refusal."""
         self._call.clear()
         self._call["notes"] = notes = []
-        self._call["minted"] = len(self.carry.minted)   # this call's flights mint past it
+        self._call["minted"] = len(self.carry.minted)  # this call's flights mint past it
         ties: dict = {}
         if not names:
             return {"ties": ties}
         sink: dict = {}
         g_out = run_ops(
-            [{"ref": f"r{i}", "op": "find", "args": {"query": q.lower()}}
-             for i, q in enumerate(names)],
+            [
+                {"ref": f"r{i}", "op": "find", "args": {"query": q.lower()}}
+                for i, q in enumerate(names)
+            ],
             namespace=self.surface.ns,
-            raw_sink=sink, preflight=self.surface.preflight)
+            raw_sink=sink,
+            preflight=self.surface.preflight,
+        )
         if "error" in g_out:
             return self.rejections.error({}, str(g_out["error"]))
         g_res = sink.get("results") or {}
         for i, (q, why) in enumerate(names.items()):
-            rows = [r for r in (g_res.get(f"r{i}") or [])
-                    if r.get("fid")]
-            rows = [r for r in rows
-                    if r.get("name_match") is None
-                    or float(r["name_match"]) >= _FUZZY_FLOOR]
+            rows = [r for r in (g_res.get(f"r{i}") or []) if r.get("fid")]
+            rows = [
+                r
+                for r in rows
+                if r.get("name_match") is None or float(r["name_match"]) >= _FUZZY_FLOOR
+            ]
             what = q.lower()
             if not rows:
-                return self.rejections.error({}, (
-                    f"nothing named \"{what}\" is on "
-                    f"this surface{self._closest_names(what)}; say it "
-                    "differently, say a fid off a served row, or "
-                    "look_for + fly more first"))
+                return self.rejections.error(
+                    {},
+                    (
+                        f'nothing named "{what}" is on '
+                        f"this surface{self._closest_names(what)}; say it "
+                        "differently, say a fid off a served row, or "
+                        "look_for + fly more first"
+                    ),
+                )
             # every name keeps only its top name_match tie group
             top = rows[0].get("name_match")
-            ties[q] = [str(r["fid"]) for r in rows
-                       if r.get("name_match") == top] \
-                or [str(rows[0]["fid"])]
+            ties[q] = [str(r["fid"]) for r in rows if r.get("name_match") == top] or [
+                str(rows[0]["fid"])
+            ]
             if why == "stage" and len(ties[q]) > 1:
                 f = ", ".join(ties[q][:4])
-                return self.rejections.error({}, (
-                    f"a viewpoint is one point; "
-                    f"\"{what}\" has {len(ties[q])} equally good "
-                    f"name matches ({f}); say which one — a fid "
-                    "works"))
+                return self.rejections.error(
+                    {},
+                    (
+                        f"a viewpoint is one point; "
+                        f'"{what}" has {len(ties[q])} equally good '
+                        f"name matches ({f}); say which one — a fid "
+                        "works"
+                    ),
+                )
             # A token no matched row carries gets a note, never a refusal.
             dead = _unmatched_query_tokens(q.lower(), rows)
             if dead:
                 notes.append(
-                    f"no row matching \"{what}\" carries "
+                    f'no row matching "{what}" carries '
                     + ", ".join(repr(t) for t in dead[:4])
-                    + " -- those words did not narrow anything")
+                    + " -- those words did not narrow anything"
+                )
             # a covered name skips this note: the pass flies every top tie
             if why not in ("anchor", "cover") and len(rows) > 1:
                 notes.append(
-                    f"{len(rows)} rows match \"{what}\"; "
+                    f'{len(rows)} rows match "{what}"; '
                     f"{_WHY_VERB.get(why, 'using')} the best "
                     f"name match, {rows[0]['fid']} — say a fid to "
-                    "choose precisely")
+                    "choose precisely"
+                )
         return {"ties": ties}
 
     def analyze(self, ops: list, rn_end: int, answer, page) -> dict:
@@ -212,17 +240,21 @@ class Programs:
             ref, lo, h = page
             held = len(self.carry.read(ref) or [])
             if held and held <= BROAD_DUMP_SOFT_ROWS:
-                return self.rejections.error({}, (
-                    f"{h} holds {held} row(s), one block: show it with a "
-                    f"bare `{h}` line."))
+                return self.rejections.error(
+                    {}, (f"{h} holds {held} row(s), one block: show it with a bare `{h}` line.")
+                )
             if held and lo >= held:
-                return self.rejections.error({}, (
-                    f"all {held} row(s) of {h} are already served -- there "
-                    f"is no further block to serve. Narrow it "
-                    f"({h}.order(color=\"<colour>\"), "
-                    f"{h}.order(nearest=\"<fid>\"), "
-                    f"{h}.filter(within=\"<place>\"))"
-                    f" or look({h})."))
+                return self.rejections.error(
+                    {},
+                    (
+                        f"all {held} row(s) of {h} are already served -- there "
+                        f"is no further block to serve. Narrow it "
+                        f'({h}.order(color="<colour>"), '
+                        f'{h}.order(nearest="<fid>"), '
+                        f'{h}.filter(within="<place>"))'
+                        f" or look({h})."
+                    ),
+                )
         out = self._run(ops, answer_ref=str(answer or ""))
         if "error" in out:
             return {"error": out["error"]}
@@ -230,10 +262,12 @@ class Programs:
         # The columns this call ordered by, so finish can say when the
         # ordering separated nothing.
         sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)
-        self._call.update(answer=answer, page=page,
-                          rows=self.carry.rows.get(answer),
-                          order=[str(e["key"]) for e in sb["args"]["emphasis"]]
-                          if sb else None)
+        self._call.update(
+            answer=answer,
+            page=page,
+            rows=self.carry.rows.get(answer),
+            order=[str(e["key"]) for e in sb["args"]["emphasis"]] if sb else None,
+        )
         return {"result": out}
 
     def finish(self, ack: dict) -> dict:
@@ -242,8 +276,11 @@ class Programs:
         # An ordering that separated nothing says how many rows tie on
         # every column it ordered by.
         rows = self._call.get("rows") or []
-        keys = [k for k in dict.fromkeys(self._call.get("order") or [])
-                if len(rows) >= 2 and rows[0].get(k) is not None]
+        keys = [
+            k
+            for k in dict.fromkeys(self._call.get("order") or [])
+            if len(rows) >= 2 and rows[0].get(k) is not None
+        ]
         tied = [r for r in rows if all(r.get(k) == rows[0][k] for k in keys)]
         if keys and len(tied) >= 2:
             if len(keys) == 1:
@@ -251,11 +288,14 @@ class Programs:
                 t = f"{v0:g}" if isinstance(v0, (int, float)) else str(v0)
                 on = f"at {t} on '{keys[0]}'"
             else:
-                on = ("on every ordering column ("
-                      + ", ".join(f"'{k}'" for k in keys) + ")")
-            add_note(ack, f"{len(tied)} of {len(rows)} rows tie {on} -- "
-                      "this ordering does not separate them, so its rank 0 "
-                      "is arbitrary among the tie", "\n")
+                on = "on every ordering column (" + ", ".join(f"'{k}'" for k in keys) + ")"
+            add_note(
+                ack,
+                f"{len(tied)} of {len(rows)} rows tie {on} -- "
+                "this ordering does not separate them, so its rank 0 "
+                "is arbitrary among the tie",
+                "\n",
+            )
         if self._call.get("notes"):
             add_note(ack, "; ".join(self._call["notes"]), "\n")
         self.rejections.end_streak()

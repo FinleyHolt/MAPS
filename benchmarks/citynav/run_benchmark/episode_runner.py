@@ -66,9 +66,7 @@ def uniform_spawn_xy(
     deterministic per ``(spawn_seed, episode_id)`` from a hash fraction, so
     workers share no RNG state."""
     x_min, y_min, x_max, y_max = (float(v) for v in bounds_xyxy)
-    digest = hashlib.sha256(
-        f"spawn:{int(spawn_seed)}:{episode_id}".encode()
-    ).hexdigest()
+    digest = hashlib.sha256(f"spawn:{int(spawn_seed)}:{episode_id}".encode()).hexdigest()
     fx = int(digest[:16], 16) / float(0xFFFFFFFFFFFFFFFF)
     fy = int(digest[16:32], 16) / float(0xFFFFFFFFFFFFFFFF)
     return (x_min + fx * (x_max - x_min), y_min + fy * (y_max - y_min))
@@ -102,8 +100,7 @@ def start_altitude_m(cfg, map_name: str, start_z: float | None) -> tuple[float, 
         alt = ground + float(cfg.start_altitude_agl_m)
     elif start_z is None:
         raise ValueError(
-            f"{map_name}: the episode has no start z and the config sets no "
-            "start_altitude_agl_m"
+            f"{map_name}: the episode has no start z and the config sets no start_altitude_agl_m"
         )
     else:
         alt = float(start_z)
@@ -124,7 +121,9 @@ def success_shape(episode, objects_by_map: dict):
     if not episode.target_object_ids:
         return episode.target_mask
     tids = set(episode.target_object_ids)
-    return next((o.contour for o in objects_by_map.get(episode.map_name) or [] if o.id in tids), None)
+    return next(
+        (o.contour for o in objects_by_map.get(episode.map_name) or [] if o.id in tids), None
+    )
 
 
 @dataclass
@@ -163,8 +162,16 @@ class Hydrated:
         )
 
 
-def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, bench: Bench, *,
-                  settings: Settings, workdir: Path | None = None, routing_key: str | None = None) -> Hydrated:
+def build_episode(
+    cfg: RunConfig,
+    episode: CityNavEpisode,
+    assets: BlockAssets,
+    bench: Bench,
+    *,
+    settings: Settings,
+    workdir: Path | None = None,
+    routing_key: str | None = None,
+) -> Hydrated:
     """The engine for one episode on ``bench`` under ``settings``: its graph,
     the start pose, the segmenter wired to the director's watchlist (the
     declared classes plus the boosts riding a flight), and the started
@@ -188,18 +195,33 @@ def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, 
     # separates them from the prebaked nodes.
     world.start(graph)
     return Hydrated(
-        cfg=cfg, state=state, assets=assets, episode=episode,
+        cfg=cfg,
+        state=state,
+        assets=assets,
+        episode=episode,
         sensor=resolve_sensor(cfg.sensor),
-        tile_frame=TileFrame(x_min=float(assets.bounds.x_min), y_min=float(assets.bounds.y_min),
-                             cell_size_m=float(assets.cell_size_m), grid_shape=tuple(assets.grid_shape)),
-        ground_z_m=ground, perception=perception, world=world, bench=bench,
-        settings=settings, workdir=workdir, routing_key=routing_key,
+        tile_frame=TileFrame(
+            x_min=float(assets.bounds.x_min),
+            y_min=float(assets.bounds.y_min),
+            cell_size_m=float(assets.cell_size_m),
+            grid_shape=tuple(assets.grid_shape),
+        ),
+        ground_z_m=ground,
+        perception=perception,
+        world=world,
+        bench=bench,
+        settings=settings,
+        workdir=workdir,
+        routing_key=routing_key,
     )
 
 
 def _detected_fids(world) -> set[str]:
-    return {nid for nid, node in world.state.runtime_graph.nodes.items()
-            if node.provenance == "detected"}
+    return {
+        nid
+        for nid, node in world.state.runtime_graph.nodes.items()
+        if node.provenance == "detected"
+    }
 
 
 def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
@@ -269,31 +291,53 @@ def run_episode(
         # The FLOWN start replaces the dataset's on the episode itself, so
         # every downstream reader sees it.
         b = assets.bounds
-        episode = dataclasses.replace(episode, start_xy=uniform_spawn_xy(
-            (float(b.x_min), float(b.y_min), float(b.x_max), float(b.y_max)),
-            cfg.spawn_seed, episode.episode_id))
-        log.info("  uniform spawn: (%.1f, %.1f) (spawn_seed=%d, episode=%s)",
-                 *episode.start_xy, int(cfg.spawn_seed), episode.episode_id)
-    h = build_episode(cfg, episode, assets, bench, settings=settings, workdir=workdir, routing_key=routing_key)
+        episode = dataclasses.replace(
+            episode,
+            start_xy=uniform_spawn_xy(
+                (float(b.x_min), float(b.y_min), float(b.x_max), float(b.y_max)),
+                cfg.spawn_seed,
+                episode.episode_id,
+            ),
+        )
+        log.info(
+            "  uniform spawn: (%.1f, %.1f) (spawn_seed=%d, episode=%s)",
+            *episode.start_xy,
+            int(cfg.spawn_seed),
+            episode.episode_id,
+        )
+    h = build_episode(
+        cfg, episode, assets, bench, settings=settings, workdir=workdir, routing_key=routing_key
+    )
     state = h.state
     ground = h.ground_z_m
     agl = cfg.start_altitude_agl_m
-    log.info("  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, episode=%s)",
-             state.altitude_m, f"AGL {agl:.0f} m" if agl is not None else f"row z={episode.start_z:.2f}",
-             ground, float(cfg.altitude_cap_m), episode.episode_id)
+    log.info(
+        "  ortho start altitude: %.2f m (%s, ground=%.2f, cap=%.0f, episode=%s)",
+        state.altitude_m,
+        f"AGL {agl:.0f} m" if agl is not None else f"row z={episode.start_z:.2f}",
+        ground,
+        float(cfg.altitude_cap_m),
+        episode.episode_id,
+    )
     h.world.set_retro_perceiver(functools.partial(retro_perceive, h))
 
     # The takeoff pose, before the mission moves the drone: the replay flies
     # from exactly here, facing upstream's start heading.
-    start_pose_xyh = (float(state.pose_xy[0]), float(state.pose_xy[1]),
-                      float(episode.start_heading_deg))
+    start_pose_xyh = (
+        float(state.pose_xy[0]),
+        float(state.pose_xy[1]),
+        float(episode.start_heading_deg),
+    )
     start_alt = float(state.altitude_m)
     session = MissionSession(h, recorder=recorder)
     reply = (converse or run_mission_episode)(session)
     flights = session.flights
     if flights:
         visited = synthesize_compliant_trajectory(
-            cfg=cfg, flights=flights, start_pose_xyh=start_pose_xyh, start_alt=start_alt,
+            cfg=cfg,
+            flights=flights,
+            start_pose_xyh=start_pose_xyh,
+            start_alt=start_alt,
         )
         steps_taken = len(visited)
         final_xy = visited[-1] if visited else start_pose_xyh[:2]
@@ -323,8 +367,11 @@ def run_episode(
     scores["steps_taken"] = steps_taken
     # What the episode spent on the LLM, at row size, read after the mission
     # from its transcript; a mission that never flew spent turns too.
-    scores["llm"] = (flight_summary.summarize(Path(workdir) / "flight", settings.endpoint.tokenizer_name)
-                     if workdir else flight_summary.blank())
+    scores["llm"] = (
+        flight_summary.summarize(Path(workdir) / "flight", settings.endpoint.tokenizer_name)
+        if workdir
+        else flight_summary.blank()
+    )
     scores["committed_provenance"] = last.get("provenance")
     scores["mission"] = {"ended_by": reply.ended_by}
     # SAHI tiles the segmenter could not answer: their objects are missing

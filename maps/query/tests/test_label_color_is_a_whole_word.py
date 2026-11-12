@@ -1,4 +1,5 @@
 """A class label names a color only as a whole word."""
+
 from __future__ import annotations
 
 from maps.query.surface import _color_of

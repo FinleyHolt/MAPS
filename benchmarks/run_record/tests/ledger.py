@@ -8,13 +8,18 @@ from pathlib import Path
 from benchmarks.run_record.rows import EPISODES_JSONL
 
 
-def ledger_row(eid: str, stamp: str, sr: int | None = None, *, status: str = "ok",
-               worker: str = "w0", **extra) -> dict:
+def ledger_row(
+    eid: str, stamp: str, sr: int | None = None, *, status: str = "ok", worker: str = "w0", **extra
+) -> dict:
     """One attempt of ``eid`` started at ``stamp``; ``extra`` keys replace the defaults."""
     slug = eid.replace("::", "__").replace("#", "_")
     row: dict = {
-        "episode_id": eid, "worker_id": worker, "status": status, "error": None,
-        "elapsed_s": 1.0, "workdir": f"{worker}/maps_{stamp}_citynav_{slug}",
+        "episode_id": eid,
+        "worker_id": worker,
+        "status": status,
+        "error": None,
+        "elapsed_s": 1.0,
+        "workdir": f"{worker}/maps_{stamp}_citynav_{slug}",
     }
     if sr is not None:
         row["metrics"] = {"episode_id": eid, "SR": sr, "OSR": sr, "NE": 10.0}

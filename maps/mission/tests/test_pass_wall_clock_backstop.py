@@ -17,8 +17,15 @@ def test_a_pass_already_past_its_deadline_flies_nothing():
     assert "could be flown" in str(out[0].get("error") or ""), out[0]
     # the model never hears a budget fact or a clock
     blob = repr(out[0])
-    for word in ("deadline", "budget", "wall-clock", "wall clock",
-                 "seconds left", "time left", "flights remaining"):
+    for word in (
+        "deadline",
+        "budget",
+        "wall-clock",
+        "wall clock",
+        "seconds left",
+        "time left",
+        "flights remaining",
+    ):
         assert word not in blob.lower(), (word, blob)
     assert not re.search(r"1[6-9]\d{8}", blob), blob
 

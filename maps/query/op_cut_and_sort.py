@@ -6,8 +6,15 @@ from __future__ import annotations
 from maps.query import color_words
 from maps.query import spatial_math as G
 from maps.query.op_io import (
-    ProgramError, Result, _as_rows, _contact_fact, _ordered, _present_keys_hint,
-    _quote, _relate_ran)
+    ProgramError,
+    Result,
+    _as_rows,
+    _contact_fact,
+    _ordered,
+    _present_keys_hint,
+    _quote,
+    _relate_ran,
+)
 from maps.query.result_tables import _num
 
 
@@ -27,10 +34,14 @@ def _resolve_color_word(word: str) -> "tuple[str, str | None]":
             f"{_quote(w)} is not a color on the closed palette; color columns "
             f"are color_<word> with word one of: "
             f"{', '.join(color_words.COLOR_ENUM)} (an open word that maps onto the "
-            f"palette is accepted, e.g. navy -> blue).")
-    note = (None if canon == w else
-            f"color {_quote(w)} maps onto the closed palette as {_quote(canon)}; "
-            f"the column is color_{canon}.")
+            f"palette is accepted, e.g. navy -> blue)."
+        )
+    note = (
+        None
+        if canon == w
+        else f"color {_quote(w)} maps onto the closed palette as {_quote(canon)}; "
+        f"the column is color_{canon}."
+    )
     return canon, note
 
 
@@ -42,8 +53,9 @@ def _attach_color_column(items, canon):
     for it in items:
         c = it.get("color") if isinstance(it, dict) else None
         if isinstance(c, str) and c.strip():
-            out.append({**it, col: round(
-                color_words.color_match(c, canon, it.get("color_conf")), 3)})
+            out.append(
+                {**it, col: round(color_words.color_match(c, canon, it.get("color_conf")), 3)}
+            )
         else:
             out.append(it)
     return out
@@ -59,21 +71,19 @@ def _score_by(cx, a):
         key = el["key"]
         if is_color_column_key(key):
             # color_navy weights color_blue, noted.
-            canon, cnote = _resolve_color_word(key[len("color_"):])
+            canon, cnote = _resolve_color_word(key[len("color_") :])
             if cnote is not None:
                 notes.append(cnote)
             key = "color_" + canon
         emphasis[key] = float(el["w"])
     for key in emphasis:
         # Naming a color column attaches it.
-        if is_color_column_key(key) and not any(
-                it.get(key) is not None for it in items):
-            items = _attach_color_column(items, key[len("color_"):])
+        if is_color_column_key(key) and not any(it.get(key) is not None for it in items):
+            items = _attach_color_column(items, key[len("color_") :])
     # A key no row carries would be a silent constant term.
     dropped_color: list = []
     for key in list(emphasis):
-        if items and not any(isinstance(it.get(key), (int, float))
-                             for it in items):
+        if items and not any(isinstance(it.get(key), (int, float)) for it in items):
             if is_color_column_key(key):
                 # Nothing has a perceived colour before a flight sees it: the
                 # term drops, unless it is the only one.
@@ -85,20 +95,28 @@ def _score_by(cx, a):
                     f"nothing orders by {_quote(key)} here: no row carries a "
                     f"perceived color, so no color column attaches (rows "
                     f"without a color read omit color_<word> columns). "
-                    f"{_present_keys_hint(items, True)}")
+                    f"{_present_keys_hint(items, True)}"
+                )
             raise ProgramError(
                 f"nothing orders by {_quote(key)} here: no row carries a "
                 f"numeric {_quote(key)}. "
                 f"{_contact_fact(cx, key)}"
-                f"{_present_keys_hint(items, True)}")
+                f"{_present_keys_hint(items, True)}"
+            )
     for key in dropped_color:
         notes.append(
             f"{_quote(key)} ranked nothing here: no row in this set carries "
             "a perceived colour yet (a row gets one once a flight has "
-            "passed over it); the other keys still rank.")
+            "passed over it); the other keys still rank."
+        )
     keys = sorted(emphasis)  # deterministic; the sum is order-independent
-    return Result(G.score_by(items, keys, [emphasis[k] for k in keys]),
-                  "sorted", ordered=True, op_cols=keys, notes=notes)
+    return Result(
+        G.score_by(items, keys, [emphasis[k] for k in keys]),
+        "sorted",
+        ordered=True,
+        op_cols=keys,
+        notes=notes,
+    )
 
 
 def _filter_items(cx, a):
@@ -113,7 +131,8 @@ def _filter_items(cx, a):
             raise ProgramError(
                 f"no item carries a numeric {_quote(key)}. "
                 f"{_contact_fact(cx, key)}"
-                f"{_present_keys_hint(items, True)}")
+                f"{_present_keys_hint(items, True)}"
+            )
         # The nearest excluded row, the bound that would admit it and how
         # many rows that bound admits.
         kept: list = []
@@ -123,8 +142,7 @@ def _filter_items(cx, a):
             (kept if v is not None and v <= val else excluded).append(it)
 
         stats = {"cut": f"{len(items)}->{len(kept)}"}
-        excl_vals = [(e, it) for it in excluded
-                      if (e := _num(it.get(key))) is not None]
+        excl_vals = [(e, it) for it in excluded if (e := _num(it.get(key))) is not None]
         if excl_vals:
             ne_v, ne_it = min(excl_vals, key=lambda t: t[0])
             stats["nearest_excluded"] = {
@@ -133,16 +151,15 @@ def _filter_items(cx, a):
             }
             stats["admit_at"] = round(float(ne_v), 3)
             stats["n_at_admit"] = sum(
-                1 for it in items
-                if (v := _num(it.get(key))) is not None and v <= ne_v)
-        return Result(kept, "cut", ordered=_ordered(items), op_cols=[key],
-                      cut_stats=stats)
-    if (items and not any(key in it for it in items)
-            and not _relate_ran(key, items)):
+                1 for it in items if (v := _num(it.get(key))) is not None and v <= ne_v
+            )
+        return Result(kept, "cut", ordered=_ordered(items), op_cols=[key], cut_stats=stats)
+    if items and not any(key in it for it in items) and not _relate_ran(key, items):
         raise ProgramError(
             f"no item carries {_quote(key)}. "
             f"{_contact_fact(cx, key)}"
-            f"{_present_keys_hint(items, False)}")
+            f"{_present_keys_hint(items, False)}"
+        )
     if opr == "in_or_blank":
         # The caller passes every word that counts (south: southeast,
         # southwest too).
@@ -163,10 +180,10 @@ def _filter_items(cx, a):
                 f"the rows kept are the ones the geometry never "
                 f"measured (a row TOUCHING the reference has no "
                 f"facing word). Widen, or read the column and "
-                f"see which words are actually there.")
+                f"see which words are actually there."
+            )
     elif opr == "on_side":
-        on = [it for it in items if it.get(key) is None
-               or (_num(it.get(key)) or 0) > 0]
+        on = [it for it in items if it.get(key) is None or (_num(it.get(key)) or 0) > 0]
         blank = sum(1 for it in on if it.get(key) is None)
         stats = {
             "cut": f"{len(items)}->{len(on)}",
@@ -179,11 +196,16 @@ def _filter_items(cx, a):
                 "the prior map holds nothing on that side"
                 " -- what is there has to be SEEN"
                 ": look_for the class, then explore the place to "
-                "segment it")
+                "segment it"
+            )
     else:  # truthy
         on, stats = [it for it in items if it.get(key)], None
     # A cut that keeps every way of a name's tied set is still that set.
-    return Result(on, "cut", ordered=_ordered(items), op_cols=[key],
-                  cut_stats=stats,
-                  name_set=getattr(items, "name_set", False)
-                  and len(on) == len(items))
+    return Result(
+        on,
+        "cut",
+        ordered=_ordered(items),
+        op_cols=[key],
+        cut_stats=stats,
+        name_set=getattr(items, "name_set", False) and len(on) == len(items),
+    )

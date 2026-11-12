@@ -1,6 +1,5 @@
 """The contract dump serves the real surfaces, not a drifted copy."""
 
-
 from maps.perception.geometry.sensor_spec import list_sensors
 from maps.mission import contract
 from maps.mission import served_text
@@ -51,6 +50,7 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
 
     from maps.library.block_scan import _LIBRARY_CALLS
     from maps.library.calls import Library
+
     text = contract.dump_text()
     assert "=== SURFACE" in text
     section = text.split("=== SURFACE", 1)[1].split("=== USER TURN", 1)[0]
@@ -58,8 +58,7 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
     assert len(_LIBRARY_CALLS) >= 11, _LIBRARY_CALLS
     kws = 0
     for call in _LIBRARY_CALLS:
-        line = next((ln for ln in section.splitlines()
-                     if ln.strip().startswith(f"{call}(")), None)
+        line = next((ln for ln in section.splitlines() if ln.strip().startswith(f"{call}(")), None)
         assert line, call
         sig = inspect.signature(getattr(Library, call))
         for n, p in sig.parameters.items():
@@ -69,7 +68,7 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
             # every argument the call accepts is named on its own row
             assert n in line, (call, n)
             kws += p.kind is p.KEYWORD_ONLY or p.default is not p.empty
-    assert kws >= 9, kws                              # vacuity floor
+    assert kws >= 9, kws  # vacuity floor
 
 
 def test_a_footprint_rig_dumps_at_the_cal_city_height_by_default(capsys):

@@ -54,7 +54,9 @@ def look_window_bounds_m(gsd_m: float) -> tuple[float, float]:
 
 
 def subject_window_containment(
-    world_window, subject_xy, boundary=None,
+    world_window,
+    subject_xy,
+    boundary=None,
 ) -> tuple[bool, bool]:
     """``(subject_in_window, centroid_in_window)``: the centroid is in the
     window, else any part of the footprint is (Sutherland-Hodgman clip)."""
@@ -93,7 +95,11 @@ def subject_window_containment(
 
 
 def resolve_window_center(
-    true_xy, ctr_xy, bounds, half_ctx: float, car_margin_m: float,
+    true_xy,
+    ctr_xy,
+    bounds,
+    half_ctx: float,
+    car_margin_m: float,
 ) -> tuple[float, float]:
     """The window centre: ``ctr_xy`` shifted inside the raster ``bounds``
     (None: unshifted), with its total offset from the subject ``true_xy``
@@ -128,8 +134,7 @@ def _isect_y(a, b, y):
 
 def up_bearing_deg(up_unit) -> float:
     """Compass bearing (0 = N, clockwise) of a world up-unit."""
-    return math.degrees(math.atan2(float(up_unit[0]),
-                                   float(up_unit[1]))) % 360.0
+    return math.degrees(math.atan2(float(up_unit[0]), float(up_unit[1]))) % 360.0
 
 
 def frame_up_angle_deg(ux: float, uy: float) -> float:
@@ -142,33 +147,45 @@ def frame_up_angle_deg(ux: float, uy: float) -> float:
 
 def xy_list(pts) -> list[tuple[float, float]]:
     """The well-formed ``[x, y]`` pairs of ``pts`` as float tuples."""
-    return [(float(p[0]), float(p[1])) for p in (pts or [])
-            if isinstance(p, (list, tuple)) and len(p) == 2]
+    return [
+        (float(p[0]), float(p[1]))
+        for p in (pts or [])
+        if isinstance(p, (list, tuple)) and len(p) == 2
+    ]
 
 
 def view_rotation(frame_up, w: int, h: int):
     """``(matrix, band_text)`` for a declared view-up on a w x h image: the
     cv2 matrix that turns ``frame_up`` to image-up (None when it is absent
     or north) and the orientation stamp the margin band prints."""
-    if (isinstance(frame_up, (list, tuple)) and len(frame_up) == 2
-            and (float(frame_up[0]) or float(frame_up[1]))):
+    if (
+        isinstance(frame_up, (list, tuple))
+        and len(frame_up) == 2
+        and (float(frame_up[0]) or float(frame_up[1]))
+    ):
         a = frame_up_angle_deg(float(frame_up[0]), float(frame_up[1]))
         if abs(a) > 1e-9:
-            return (cv2.getRotationMatrix2D((w / 2.0, h / 2.0), a, 1.0),
-                    f"up {round(up_bearing_deg(frame_up)) % 360} deg")
+            return (
+                cv2.getRotationMatrix2D((w / 2.0, h / 2.0), a, 1.0),
+                f"up {round(up_bearing_deg(frame_up)) % 360} deg",
+            )
     return None, "N up"
 
 
 def pixel_mapper(x0, y1, sx, sy, w, h, rot):
     """World -> delivered pixel for a north-up window (row 0 = max world y)
     of ``sx`` x ``sy`` metres on a w x h image, then the view rotation."""
+
     def w2p(wx, wy):
         px = (float(wx) - x0) / sx * w
         py = (y1 - float(wy)) / sy * h
         if rot is not None:
-            px, py = (rot[0, 0] * px + rot[0, 1] * py + rot[0, 2],
-                      rot[1, 0] * px + rot[1, 1] * py + rot[1, 2])
+            px, py = (
+                rot[0, 0] * px + rot[0, 1] * py + rot[0, 2],
+                rot[1, 0] * px + rot[1, 1] * py + rot[1, 2],
+            )
         return px, py
+
     return w2p
 
 
@@ -206,8 +223,10 @@ def frame_marks(marks, center_fid: str, w2p, w: int, h: int, window=None):
         if 0.0 <= px <= w and 0.0 <= py <= h:
             shown.append((mk, mfid, px, py))
         elif mfid:
-            if window is not None and subject_window_containment(
-                    window, mxy, mk.get("boundary"))[0]:
+            if (
+                window is not None
+                and subject_window_containment(window, mxy, mk.get("boundary"))[0]
+            ):
                 unbadged.append(mfid)
             else:
                 out_of_view.append(mfid)
@@ -219,8 +238,10 @@ def frame_echo(spec: dict) -> dict:
     fu = spec.get("frame_up")
     if fu is None:
         return {}
-    return {"frame_up": [round(float(fu[0]), 4), round(float(fu[1]), 4)],
-            "frame_note": str(spec.get("frame_note") or "")}
+    return {
+        "frame_up": [round(float(fu[0]), 4), round(float(fu[1]), 4)],
+        "frame_note": str(spec.get("frame_note") or ""),
+    }
 
 
 LOOK_OUTLINE_TOL_M: float = 1.0
@@ -268,9 +289,9 @@ def look_outline(row: object) -> list | None:
             s += x1 * y2 - x2 * y1
         return abs(s)
 
-    loop = simplify_ring(max(m, key=_area2),
-                         tolerance=LOOK_OUTLINE_TOL_M,
-                         max_points=LOOK_OUTLINE_MAX_VERTS)
+    loop = simplify_ring(
+        max(m, key=_area2), tolerance=LOOK_OUTLINE_TOL_M, max_points=LOOK_OUTLINE_MAX_VERTS
+    )
     return [[round(float(p[0]), 2), round(float(p[1]), 2)] for p in loop]
 
 
@@ -300,14 +321,12 @@ def render_candidate_crops(
         try:
             _wb = ortho_world_bounds(map_name, rgbd_dir=rgbd_dir)
         except Exception as exc:  # noqa: BLE001
-            log.debug("look: no raster bounds for %s (%s); no edge-shift",
-                      map_name, exc)
+            log.debug("look: no raster bounds for %s (%s); no edge-shift", map_name, exc)
         try:
             _gsd = ortho_gsd_m(map_name, rgbd_dir=rgbd_dir)
         except Exception as exc:  # noqa: BLE001
             _gsd = 0.10
-            log.debug("look: no ortho gsd for %s (%s); sizing at 0.1 m/px",
-                      map_name, exc)
+            log.debug("look: no ortho gsd for %s (%s); sizing at 0.1 m/px", map_name, exc)
     _min_m, _budget_m = look_window_bounds_m(_gsd)
 
     out: list[dict] = []
@@ -317,7 +336,7 @@ def render_candidate_crops(
             continue
         true_x, true_y = float(cxy[0]), float(cxy[1])
         pts = [(true_x, true_y)]
-        for _m in (req.get("marks") or []):
+        for _m in req.get("marks") or []:
             _mxy = _m.get("xy") if isinstance(_m, dict) else None
             if isinstance(_mxy, (list, tuple)) and len(_mxy) == 2:
                 pts.append((float(_mxy[0]), float(_mxy[1])))
@@ -345,20 +364,28 @@ def render_candidate_crops(
         pose_x, pose_y = resolve_window_center(
             (true_x, true_y),
             ((max(_xs) + min(_xs)) / 2.0, (max(_ys) + min(_ys)) / 2.0),
-            _wb, half_ctx, LOOK_CAR_MARGIN_M)
+            _wb,
+            half_ctx,
+            LOOK_CAR_MARGIN_M,
+        )
         # the window is placed off the 2 dp values the record states
         rec = _crop_record(
-            req, map_name=map_name,
+            req,
+            map_name=map_name,
             true_xy=(round(true_x, 2), round(true_y, 2)),
-            pose_xy=(round(pose_x, 2), round(pose_y, 2)), ctx=_ctx,
-            rgbd_dir=rgbd_dir, imagery=imagery)
+            pose_xy=(round(pose_x, 2), round(pose_y, 2)),
+            ctx=_ctx,
+            rgbd_dir=rgbd_dir,
+            imagery=imagery,
+        )
         if rec is not None:
             out.append(rec)
     return out
 
 
-def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
-                 rgbd_dir: str, imagery) -> dict | None:
+def _crop_record(
+    req: dict, *, map_name: str, true_xy, pose_xy, ctx: float, rgbd_dir: str, imagery
+) -> dict | None:
     """Render one crop of the ``ctx`` m square at ``pose_xy`` around the
     subject at ``true_xy``: ``{"jpeg": bytes, ...}`` with the caption's
     facts, or None (logged) on a failed render."""
@@ -379,16 +406,16 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
             ortho=imagery.ortho(_window) if imagery is not None else None,
         )
     except Exception as exc:  # noqa: BLE001
-        log.warning("look: crop render failed at %s: %s", (true_x, true_y),
-                    exc)
+        log.warning("look: crop render failed at %s: %s", (true_x, true_y), exc)
         return None
     # north-up: row 0 is the window's max world y
     rgb = np.ascontiguousarray(oc["rgb"])
     validity = np.ascontiguousarray(oc["validity"])
     _up = max(1, min(3, round(LOOK_TARGET_PX / max(1, rgb.shape[1]))))
     if _up > 1:
-        rgb = cv2.resize(rgb, (rgb.shape[1] * _up, rgb.shape[0] * _up),
-                         interpolation=cv2.INTER_LANCZOS4)
+        rgb = cv2.resize(
+            rgb, (rgb.shape[1] * _up, rgb.shape[0] * _up), interpolation=cv2.INTER_LANCZOS4
+        )
     H, W = rgb.shape[:2]
     # A declared view (``frame_up``) rotates pixels and ink together; the
     # unrotated validity is the window's own data for the caption facts.
@@ -405,8 +432,11 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
         "gsd_m_per_px": round((x1 - x0) / max(W, 1), 4),
         "side_px": int(W),
         # what the camera resolved: the live imager's, or the raster's cell
-        "source_gsd_m": (round(float(imagery.gsd_m), 4) if imagery is not None
-                         else raster_source_gsd_m(str(rgbd_dir), map_name)),
+        "source_gsd_m": (
+            round(float(imagery.gsd_m), 4)
+            if imagery is not None
+            else raster_source_gsd_m(str(rgbd_dir), map_name)
+        ),
         "source": "run" if imagery is not None else "bake",
         "world_window": [round(float(v), 2) for v in (x0, y0, x1, y1)],
     }
@@ -427,7 +457,8 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     legend: list[dict] = [{"digit": 1, "label": center_label, "role": "center"}]
     _dropped_marks = 0
     shown, _marks_out_of_view, _marks_unbadged_in_frame = frame_marks(
-        marks, center_fid, _w2p, W, H, window=meta["world_window"])
+        marks, center_fid, _w2p, W, H, window=meta["world_window"]
+    )
     for mk, mfid, px, py in shown:
         if bool(mk.get("is_target")) and target_px is None:
             target_px = (px, py)
@@ -439,9 +470,13 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
         else:
             neighbor_px.append((px, py))
             neighbor_polys_px.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
-            legend.append({"digit": 2 + len(neighbor_px),
-                           "label": str(mk.get("label") or mfid),
-                           "role": "context"})
+            legend.append(
+                {
+                    "digit": 2 + len(neighbor_px),
+                    "label": str(mk.get("label") or mfid),
+                    "role": "context",
+                }
+            )
 
     try:
         jp = mark_overlay.render_look_overlay(
@@ -456,14 +491,15 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
         )
     except Exception as exc:  # noqa: BLE001
         # a crop whose subject cannot be marked is worse than none
-        log.warning("look: identification overlay failed, skipping crop "
-                    "at %s: %s", (true_x, true_y), exc)
+        log.warning(
+            "look: identification overlay failed, skipping crop at %s: %s", (true_x, true_y), exc
+        )
         return None
     # the caption's facts: is the subject in frame, how big, cut by the
     # frame, and on raster data (validity 0 renders black)
     _sin, _cin = subject_window_containment(
-        meta["world_window"], (true_x, true_y),
-        req.get("center_boundary"))
+        meta["world_window"], (true_x, true_y), req.get("center_boundary")
+    )
     meta["subject_in_window"] = _sin
     meta["subject_centroid_in_window"] = _cin
     _cb = xy_list(req.get("center_boundary"))
@@ -471,19 +507,15 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
         _bx0, _bx1 = min(p[0] for p in _cb), max(p[0] for p in _cb)
         _by0, _by1 = min(p[1] for p in _cb), max(p[1] for p in _cb)
         meta["subject_extent_m"] = [round(_bx1 - _bx0, 1), round(_by1 - _by0, 1)]
-        meta["subject_outline_cut"] = bool(
-            _bx0 < x0 or _bx1 > x1 or _by0 < y0 or _by1 > y1)
+        meta["subject_outline_cut"] = bool(_bx0 < x0 or _bx1 > x1 or _by0 < y0 or _by1 > y1)
     else:
         meta["subject_extent_m"] = None
         meta["subject_outline_cut"] = False
     _Hv, _Wv = validity.shape[:2]
-    meta["window_valid_frac"] = round(
-        float((validity > 0).mean()), 3) if validity.size else 0.0
+    meta["window_valid_frac"] = round(float((validity > 0).mean()), 3) if validity.size else 0.0
     _spx = int(min(max((true_x - x0) / sx * _Wv, 0.0), _Wv - 1))
     _spy = int(min(max((y1 - true_y) / sy * _Hv, 0.0), _Hv - 1))
-    meta["subject_on_data"] = (
-        bool(validity[_spy, _spx] > 0) if (_cin and validity.size)
-        else None)
+    meta["subject_on_data"] = bool(validity[_spy, _spx] > 0) if (_cin and validity.size) else None
     meta["legend"] = legend
     meta["marks_dropped"] = _dropped_marks
     meta["marks_out_of_view"] = _marks_out_of_view

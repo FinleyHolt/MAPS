@@ -38,9 +38,7 @@ def test_cells_partly_outside_the_tile_are_clipped():
     pixel_mask = np.ones((16, 16), dtype=bool)
     # Straddles the tile's south-west corner: half the view square is negative.
     tp = project_mask_to_tile_cells_ortho(
-        region_of(pixel_mask),
-        view_corners_xy=_corners(-20.0, -20.0, 40.0),
-        tile=_TILE
+        region_of(pixel_mask), view_corners_xy=_corners(-20.0, -20.0, 40.0), tile=_TILE
     )
     assert tp is not None
     H, W = _TILE.grid_shape
@@ -52,9 +50,7 @@ def test_cells_partly_outside_the_tile_are_clipped():
 def test_fully_outside_the_tile_drops():
     pixel_mask = np.ones((16, 16), dtype=bool)
     tp = project_mask_to_tile_cells_ortho(
-        region_of(pixel_mask),
-        view_corners_xy=_corners(-500.0, -500.0, 40.0),
-        tile=_TILE
+        region_of(pixel_mask), view_corners_xy=_corners(-500.0, -500.0, 40.0), tile=_TILE
     )
     assert tp is None
 

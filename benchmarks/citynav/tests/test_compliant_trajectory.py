@@ -9,11 +9,16 @@ def _replay(commit_xy, max_steps=60):
 
     from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 
-    flights = [{"target": "far", "resolved_xy": [0.0, 200.0], "altitude_m": 50.0},
-               {"target": "commit", "resolved_xy": list(commit_xy), "altitude_m": 50.0}]
+    flights = [
+        {"target": "far", "resolved_xy": [0.0, 200.0], "altitude_m": 50.0},
+        {"target": "commit", "resolved_xy": list(commit_xy), "altitude_m": 50.0},
+    ]
     return synthesize_compliant_trajectory(
         cfg=SimpleNamespace(max_steps=max_steps),
-        flights=flights, start_pose_xyh=(0.0, 0.0, 0.0), start_alt=50.0)
+        flights=flights,
+        start_pose_xyh=(0.0, 0.0, 0.0),
+        start_alt=50.0,
+    )
 
 
 def test_a_commit_the_tour_starves_is_reached_by_dropping_the_tour() -> None:

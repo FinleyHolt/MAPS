@@ -15,16 +15,22 @@ from maps.world_state.graph import MapObject
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
-_TILES = Path(os.environ.get("SEARCH_CALCITY_TILES")
-              or os.path.join(_REPO, "benchmarks", "calcity", "tiles"))
+_TILES = Path(
+    os.environ.get("SEARCH_CALCITY_TILES") or os.path.join(_REPO, "benchmarks", "calcity", "tiles")
+)
 _HAS_BAKE = (_TILES / "calcity_features.json").is_file()
 
 
 def _way(name, cells, contour=None):
     cells = np.asarray(cells, dtype=int).reshape(-1, 2)
-    return MapObject(class_name="", name=name, tags={},
-                     centroid=(float(cells[:, 0].mean()), float(cells[:, 1].mean())),
-                     cells=cells, world_contour=contour)
+    return MapObject(
+        class_name="",
+        name=name,
+        tags={},
+        centroid=(float(cells[:, 0].mean()), float(cells[:, 1].mean())),
+        cells=cells,
+        world_contour=contour,
+    )
 
 
 def _row(cells_cols, row=10):
@@ -36,9 +42,13 @@ def _row(cells_cols, row=10):
 
 def test_two_places_under_one_name_are_two_rows():
     _c, anchors = build_surface_from_graph(
-        [("prior_1", _way("85th Street", _row(range(0, 10)))),
-         ("prior_2", _way("85th Street", _row(range(400, 410))))],
-        (0.0, 0.0), 2.0)
+        [
+            ("prior_1", _way("85th Street", _row(range(0, 10)))),
+            ("prior_2", _way("85th Street", _row(range(400, 410)))),
+        ],
+        (0.0, 0.0),
+        2.0,
+    )
     assert len(anchors) == 2, [a["fid"] for a in anchors]
     assert {a["name"] for a in anchors} == {"85th Street"}
 
@@ -46,8 +56,8 @@ def test_two_places_under_one_name_are_two_rows():
 def test_unnamed_features_are_never_folded_together():
     """There is nothing to fold them ON."""
     _c, anchors = build_surface_from_graph(
-        [("prior_1", _way(None, [[0, 0]])),
-         ("prior_2", _way("", [[0, 1]]))], (0.0, 0.0), 2.0)
+        [("prior_1", _way(None, [[0, 0]])), ("prior_2", _way("", [[0, 1]]))], (0.0, 0.0), 2.0
+    )
     assert len(anchors) == 2, [a["fid"] for a in anchors]
 
 
@@ -56,12 +66,12 @@ def test_unnamed_features_are_never_folded_together():
 
 def test_geometry_is_cut_at_the_edge_of_what_the_tile_covers():
     """A way whose contour runs off the tile keeps only its in-tile half."""
-    contour = [[1.0, 21.0], [1.0, 4000.0]]          # runs far north
+    contour = [[1.0, 21.0], [1.0, 4000.0]]  # runs far north
     way = _way("Neuralia Road", _row(range(0, 1), row=10), contour=contour)
     way.cells = np.asarray([[r, 0] for r in range(0, 20)], dtype=int)
     _c, anchors = build_surface_from_graph([("prior_1", way)], (0.0, 0.0), 2.0)
     ys = [p[1] for ch in anchors[0]["mask"] for p in ch]
-    assert max(ys) <= 44.0, ys        # 20 cells * 2 m + one cell of margin
+    assert max(ys) <= 44.0, ys  # 20 cells * 2 m + one cell of margin
     assert anchors[0]["xy"][1] <= 44.0, anchors[0]["xy"]
 
 
@@ -88,12 +98,15 @@ def test_clipping_preserves_exact_vertex_identity():
 
 def test_the_served_point_is_on_the_row_it_belongs_to():
     _c, anchors = build_surface_from_graph(
-        [("prior_1", _way("85th Street", _row(range(0, 10)))),
-         ("prior_2", _way("85th Street", _row(range(400, 410))))],
-        (0.0, 0.0), 2.0)
+        [
+            ("prior_1", _way("85th Street", _row(range(0, 10)))),
+            ("prior_2", _way("85th Street", _row(range(400, 410)))),
+        ],
+        (0.0, 0.0),
+        2.0,
+    )
     for r in anchors:
-        gap, _a, _b = G.gap_witness(G.mask_geom(r["mask"]),
-                                    G.mask_geom([[list(r["xy"])]]))
+        gap, _a, _b = G.gap_witness(G.mask_geom(r["mask"]), G.mask_geom([[list(r["xy"])]]))
         assert gap <= 0.01, (r["fid"], r["xy"], gap)
 
 
@@ -108,19 +121,22 @@ def test_the_real_bake_lands_every_row_on_the_map():
     b = meta["bounds"]
     cell = float(meta["cell_size_m"])
     graph = build_object_graph(
-        json.loads((_TILES / "calcity_features.json").read_text()),
-        cell_size_m=cell)
+        json.loads((_TILES / "calcity_features.json").read_text()), cell_size_m=cell
+    )
     _c, anchors = build_surface_from_graph(
-        graph.nodes.items(), (float(b["x_min"]), float(b["y_min"])), cell)
+        graph.nodes.items(), (float(b["x_min"]), float(b["y_min"])), cell
+    )
 
     assert len(anchors) > 4000, f"implausibly few rows: {len(anchors)}"
 
     # EVERY SERVED POINT IS INSIDE THE DECLARED BOUNDS, exactly -- no
     # tolerance, because this is the number the model reasons on and the
     # drone flies to.
-    out = [r for r in anchors
-           if not (b["x_min"] <= r["xy"][0] <= b["x_max"]
-                   and b["y_min"] <= r["xy"][1] <= b["y_max"])]
+    out = [
+        r
+        for r in anchors
+        if not (b["x_min"] <= r["xy"][0] <= b["x_max"] and b["y_min"] <= r["xy"][1] <= b["y_max"])
+    ]
     assert not out, [(r["fid"], r.get("name"), r["xy"]) for r in out[:5]]
 
     # And every VERTEX is within one cell of the tile GRID -- the weaker
@@ -129,9 +145,15 @@ def test_the_real_bake_lands_every_row_on_the_map():
     # a cell.
     gx = float(meta["grid_shape"][1]) * cell + cell
     gy = float(meta["grid_shape"][0]) * cell + cell
-    far = [r for r in anchors
-           if any(not (-cell <= p[0] <= gx and -cell <= p[1] <= gy)
-                  for ch in (r.get("mask") or []) for p in ch)]
+    far = [
+        r
+        for r in anchors
+        if any(
+            not (-cell <= p[0] <= gx and -cell <= p[1] <= gy)
+            for ch in (r.get("mask") or [])
+            for p in ch
+        )
+    ]
     assert not far, [(r["fid"], r.get("name")) for r in far[:5]]
 
     by_name: dict = {}
@@ -163,13 +185,16 @@ def test_the_real_bake_lands_every_row_on_the_map():
 def test_the_flown_pose_is_the_row_s_served_xy():
     from maps.mission.tests.fakes import episode_world
 
-    ways = [("prior_1", _way("Lime Avenue", _row(range(0, 10)))),
-            ("prior_2", _way("Lime Avenue", _row(range(10, 20)))),
-            # A bent way: its cell mean is off its own geometry, which is
-            # what made the two rules disagree in the first place.
-            ("prior_3", _way("Bent Road",
-                             [[r, 40] for r in range(0, 20)]
-                             + [[19, c] for c in range(40, 60)]))]
+    ways = [
+        ("prior_1", _way("Lime Avenue", _row(range(0, 10)))),
+        ("prior_2", _way("Lime Avenue", _row(range(10, 20)))),
+        # A bent way: its cell mean is off its own geometry, which is
+        # what made the two rules disagree in the first place.
+        (
+            "prior_3",
+            _way("Bent Road", [[r, 40] for r in range(0, 20)] + [[19, c] for c in range(40, 60)]),
+        ),
+    ]
 
     loop = episode_world(dict(ways), cell_size_m=2.0)
 
@@ -178,7 +203,9 @@ def test_the_flown_pose_is_the_row_s_served_xy():
     for r in anchors:
         flown = loop.node_xy(r["fid"])[0]
         assert (round(flown[0], 2), round(flown[1], 2)) == (
-            round(r["xy"][0], 2), round(r["xy"][1], 2)), (r["fid"], flown, r["xy"])
+            round(r["xy"][0], 2),
+            round(r["xy"][1], 2),
+        ), (r["fid"], flown, r["xy"])
 
     bent = next(r for r in anchors if r["name"] == "Bent Road")
     node = dict(ways)[bent["fid"]]

@@ -22,12 +22,18 @@ def _mask(n: int = 4):
 
 
 def _obs():
-    return SimpleNamespace(rgb=np.zeros((8, 8, 3), dtype=np.uint8),
-                           ortho_view_corners_xy=((0, 1), (1, 1), (1, 0), (0, 0)))
+    return SimpleNamespace(
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        ortho_view_corners_xy=((0, 1), (1, 1), (1, 0), (0, 0)),
+    )
 
 
-_ASSETS = SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=1.0,
-                          grid_shape=(8, 8), base_features={})
+_ASSETS = SimpleNamespace(
+    bounds=SimpleNamespace(x_min=0.0, y_min=0.0),
+    cell_size_m=1.0,
+    grid_shape=(8, 8),
+    base_features={},
+)
 
 
 def _build(monkeypatch, polys):
@@ -39,8 +45,9 @@ def _build(monkeypatch, polys):
 def test_build_items_filters(monkeypatch):
     m_ok, m_empty_mix = _mask(4), _mask(6)
     attrs = {"color": "red", "color_conf": "0.500", "color_shade": "dark", "color_flag": "ok"}
-    monkeypatch.setattr(osm_prior, "m6_attributes",
-                        lambda rgb, region: None if region is m_empty_mix else attrs)
+    monkeypatch.setattr(
+        osm_prior, "m6_attributes", lambda rgb, region: None if region is m_empty_mix else attrs
+    )
     out = _build(monkeypatch, [("building_3", m_ok), ("f3", m_empty_mix)])
     assert list(out) == [("building_3", attrs, _mask(4).area)]
 

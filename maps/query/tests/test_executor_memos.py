@@ -18,18 +18,21 @@ from maps.world_state.graph import MapObject
 
 def _node(r, c, name=None, provenance="prebaked", cls="building", w=4, h=3):
     return MapObject(
-        class_name=cls, name=name,
+        class_name=cls,
+        name=name,
         tags={"building": "yes"} if provenance == "prebaked" else {},
-        centroid=(int(r), int(c)), provenance=provenance,
-        cells=np.asarray([[r + i, c + j] for i in range(h) for j in range(w)],
-                         dtype=np.int32))
+        centroid=(int(r), int(c)),
+        provenance=provenance,
+        cells=np.asarray([[r + i, c + j] for i in range(h) for j in range(w)], dtype=np.int32),
+    )
 
 
 def _surface(n=40):
     rng = np.random.default_rng(3)
-    nodes = {f"prior_{i}": _node(int(rng.integers(0, 400)),
-                                 int(rng.integers(0, 400)), name=f"b{i}")
-             for i in range(n)}
+    nodes = {
+        f"prior_{i}": _node(int(rng.integers(0, 400)), int(rng.integers(0, 400)), name=f"b{i}")
+        for i in range(n)
+    }
     nodes["detected_1"] = _node(200, 200, provenance="detected", cls="car")
     nodes["detected_2"] = _node(210, 215, provenance="detected", cls="car")
     return build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
@@ -38,28 +41,38 @@ def _surface(n=40):
 def _served(cands, anchors, program) -> str:
     """The rows every rN holds and their envelopes."""
     out = run_program(cands, anchors, program)
-    return json.dumps([out["results"], compact_results(out["results"])],
-                      sort_keys=True, default=str)
+    return json.dumps(
+        [out["results"], compact_results(out["results"])], sort_keys=True, default=str
+    )
 
 
-_COMPARE = {"ops": [
-    {"ref": "r0", "op": "find", "args": {"query": "building"}},
-    {"ref": "r1", "op": "compare",
-     "args": {"items": "r0", "refs": [{"ref": "detected_1", "as": "d"}]}},
-    {"ref": "r2", "op": "filter_items",
-     "args": {"items": "r1", "key": "distance to d", "op": "le",
-              "value": 300}},
-    {"ref": "r3", "op": "compare",
-     "args": {"items": "r0",
-              "refs": [{"ref": ["detected_1", "detected_2"], "as": "cars"}]}},
-]}
+_COMPARE = {
+    "ops": [
+        {"ref": "r0", "op": "find", "args": {"query": "building"}},
+        {
+            "ref": "r1",
+            "op": "compare",
+            "args": {"items": "r0", "refs": [{"ref": "detected_1", "as": "d"}]},
+        },
+        {
+            "ref": "r2",
+            "op": "filter_items",
+            "args": {"items": "r1", "key": "distance to d", "op": "le", "value": 300},
+        },
+        {
+            "ref": "r3",
+            "op": "compare",
+            "args": {"items": "r0", "refs": [{"ref": ["detected_1", "detected_2"], "as": "cars"}]},
+        },
+    ]
+}
 
 
 def test_mask_geometry_memo_serves_the_same_bytes_cold_and_warm():
     cands, anchors = _surface()
     RG._MASK_GEOM.clear()
     cold = _served(cands, anchors, _COMPARE)
-    assert len(RG._MASK_GEOM) >= 40, len(RG._MASK_GEOM)    # it was filled
+    assert len(RG._MASK_GEOM) >= 40, len(RG._MASK_GEOM)  # it was filled
     warm = _served(cands, anchors, _COMPARE)
     assert warm == cold
     # a rebuild hands back the same mask lists for unchanged nodes, so the
@@ -70,14 +83,16 @@ def test_mask_geometry_memo_serves_the_same_bytes_cold_and_warm():
     assert '"distance to d"' in cold and "distance to cars" in cold
 
 
-_FINDS = {"ops": [
-    {"ref": "r0", "op": "find", "args": {"query": "building"}},
-    {"ref": "r1", "op": "find", "args": {"query": "b7"}},
-    {"ref": "r2", "op": "find", "args": {"query": "zeppelin hangar"}},
-    {"ref": "r3", "op": "find", "args": {"query": "car", "color": "red"}},
-    {"ref": "r4", "op": "find", "args": {"query": "car"}},
-    {"ref": "r5", "op": "find", "args": {"query": "car withcolor"}},
-]}
+_FINDS = {
+    "ops": [
+        {"ref": "r0", "op": "find", "args": {"query": "building"}},
+        {"ref": "r1", "op": "find", "args": {"query": "b7"}},
+        {"ref": "r2", "op": "find", "args": {"query": "zeppelin hangar"}},
+        {"ref": "r3", "op": "find", "args": {"query": "car", "color": "red"}},
+        {"ref": "r4", "op": "find", "args": {"query": "car"}},
+        {"ref": "r5", "op": "find", "args": {"query": "car withcolor"}},
+    ]
+}
 
 
 def test_the_find_memo_serves_the_same_bytes_cold_and_warm():
@@ -89,8 +104,7 @@ def test_the_find_memo_serves_the_same_bytes_cold_and_warm():
     assert warm == cold
     # the rows a result holds are never the memo's own dicts
     out = run_program(cands, anchors, _FINDS)["results"]
-    memo_ids = {id(r) for rows in _FIND_MEMO.scored.values()
-                for r in rows}
+    memo_ids = {id(r) for rows in _FIND_MEMO.scored.values() for r in rows}
     for rows in out.values():
         for r in rows:
             assert id(r) not in memo_ids

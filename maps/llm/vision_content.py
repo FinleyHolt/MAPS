@@ -35,10 +35,7 @@ def image_tokens_of(part: object) -> int:
             width, height = im.size
     except (ValueError, OSError, binascii.Error, ImportError):
         return 0
-    return (
-        math.ceil(width * height / _PIXELS_PER_VISION_TOKEN)
-        + _VISION_TOKENS_PER_IMAGE
-    )
+    return math.ceil(width * height / _PIXELS_PER_VISION_TOKEN) + _VISION_TOKENS_PER_IMAGE
 
 
 def image_tokens_in(messages: list[dict]) -> int:
@@ -56,7 +53,10 @@ def build_image_part(jpeg_bytes: bytes) -> dict:
     """One JPEG as an OpenAI ``image_url`` part: a ``data:`` URL the serve
     reads directly, with no HTTP fetch."""
     b64 = base64.b64encode(jpeg_bytes).decode("ascii")
-    return {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}}
+    return {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"},
+    }
 
 
 def build_vision_user_content(text: str, jpegs: list[bytes]) -> list[dict]:

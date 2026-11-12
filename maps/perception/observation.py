@@ -72,7 +72,6 @@ def crop_ortho_observation(
     """
     import cv2  # noqa: PLC0415
 
-
     if ortho is None:
         ortho = camera_model.load_ortho_or_rasters(map_name, rgbd_dir=rgbd_dir)
     if ortho is None:
@@ -118,19 +117,33 @@ def crop_ortho_observation(
         height = np.zeros((out_h, out_w), np.float32)
         validity = np.zeros((out_h, out_w), np.uint8)
     else:
-        shift = np.array([[1.0, 0.0, float(x0)], [0.0, 1.0, float(y0)], [0.0, 0.0, 1.0]], dtype=np.float64)
+        shift = np.array(
+            [[1.0, 0.0, float(x0)], [0.0, 1.0, float(y0)], [0.0, 0.0, 1.0]], dtype=np.float64
+        )
         M_box = np.asarray(M, np.float64) @ shift
         rgb = cv2.warpPerspective(
-            np.ascontiguousarray(rgb_map[y0:y1, x0:x1]), M_box, (out_w, out_h), flags=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0),
+            np.ascontiguousarray(rgb_map[y0:y1, x0:x1]),
+            M_box,
+            (out_w, out_h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0),
         )
         height = cv2.warpPerspective(
-            np.ascontiguousarray(height_map[y0:y1, x0:x1], np.float32), M_box, (out_w, out_h),
-            flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0.0,
+            np.ascontiguousarray(height_map[y0:y1, x0:x1], np.float32),
+            M_box,
+            (out_w, out_h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0.0,
         )
         validity = cv2.warpPerspective(
-            np.ascontiguousarray(alpha_map[y0:y1, x0:x1]), M_box, (out_w, out_h), flags=cv2.INTER_NEAREST,
-            borderMode=cv2.BORDER_CONSTANT, borderValue=0,
+            np.ascontiguousarray(alpha_map[y0:y1, x0:x1]),
+            M_box,
+            (out_w, out_h),
+            flags=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
         )
     depth = (float(altitude_m) - height).astype(np.float32)
     # No-data (out-of-raster / boundary): 0.0 sentinel — the ortho projection

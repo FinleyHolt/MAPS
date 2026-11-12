@@ -22,10 +22,15 @@ _SHA = hashlib.sha256(_RAW).hexdigest()
 
 
 def _messages(url: str = "data:image/png;base64," + base64.b64encode(_RAW).decode()) -> list[dict]:
-    return [{"role": "user", "content": [
-        {"type": "text", "text": "look"},
-        {"type": "image_url", "image_url": {"url": url}},
-    ]}]
+    return [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "look"},
+                {"type": "image_url", "image_url": {"url": url}},
+            ],
+        }
+    ]
 
 
 def _store(monkeypatch, url: str = "http://store") -> list[tuple[str, dict]]:
@@ -36,9 +41,11 @@ def _store(monkeypatch, url: str = "http://store") -> list[tuple[str, dict]]:
     monkeypatch.setattr(http_mod, "_IMAGE_STORE_HELD", set())
     puts: list[tuple[str, dict]] = []
     if url == "http://store":
+
         def put(self, url, **kw):
             puts.append((url, kw["headers"]))
             return httpx.Response(200, request=httpx.Request("PUT", url))
+
         monkeypatch.setattr(httpx.Client, "put", put)
     return puts
 
@@ -49,7 +56,14 @@ _RUN: dict = {}
 
 def _send(serve, messages=None, **kw) -> dict:
     return http_mod.chat_completions_raw(
-        f"{serve.url}/v1", "sk-reasoner", model="m", messages=messages or _messages(), timeout=30.0, **_RUN, **kw)
+        f"{serve.url}/v1",
+        "sk-reasoner",
+        model="m",
+        messages=messages or _messages(),
+        timeout=30.0,
+        **_RUN,
+        **kw,
+    )
 
 
 def test_an_image_crosses_the_wire_once_by_its_sha(monkeypatch) -> None:
@@ -59,7 +73,9 @@ def test_an_image_crosses_the_wire_once_by_its_sha(monkeypatch) -> None:
         _send(serve, routing_key="ep-1")
     assert [u for u, _ in puts] == [f"http://store/looks/{_SHA}"]
     assert puts[0][1] == {"Content-Type": "image/png"}
-    assert all(b["messages"][0]["content"][1]["image_url"]["url"] == f"sha256:{_SHA}" for b in serve.bodies)
+    assert all(
+        b["messages"][0]["content"][1]["image_url"]["url"] == f"sha256:{_SHA}" for b in serve.bodies
+    )
 
 
 def test_a_sha_the_store_lost_is_sent_again(monkeypatch) -> None:
@@ -101,7 +117,9 @@ def test_a_cancel_aborts_a_held_store_put(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("fault", [httpx.ConnectTimeout, httpx.ConnectError])
-def test_a_store_put_that_cannot_connect_takes_the_calls_transport_retries(monkeypatch, fault) -> None:
+def test_a_store_put_that_cannot_connect_takes_the_calls_transport_retries(
+    monkeypatch, fault
+) -> None:
     _store(monkeypatch)
     monkeypatch.setattr(http_mod, "_BACKOFF_S", 0.0)
     tries = []
@@ -109,6 +127,7 @@ def test_a_store_put_that_cannot_connect_takes_the_calls_transport_retries(monke
     def put(self, url, **kw):
         tries.append(url)
         raise fault("blackholed", request=httpx.Request("PUT", url))
+
     monkeypatch.setattr(httpx.Client, "put", put)
     with ChatServe() as serve, pytest.raises(http_mod.ImageStoreError, match="image store"):
         _send(serve)

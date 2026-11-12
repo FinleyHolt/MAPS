@@ -44,8 +44,12 @@ def _transformers(tiles_dir: str, map_name: str):
     epsg, e0, n0 = georef.get("crs_utm_epsg"), georef.get("origin_e"), georef.get("origin_n")
     if epsg is None or e0 is None or n0 is None:
         return None
-    return (Transformer.from_crs(f"EPSG:{int(epsg)}", "EPSG:4326", always_xy=True),
-            Transformer.from_crs("EPSG:4326", f"EPSG:{int(epsg)}", always_xy=True), float(e0), float(n0))
+    return (
+        Transformer.from_crs(f"EPSG:{int(epsg)}", "EPSG:4326", always_xy=True),
+        Transformer.from_crs("EPSG:4326", f"EPSG:{int(epsg)}", always_xy=True),
+        float(e0),
+        float(n0),
+    )
 
 
 def local_to_lonlat(tiles_dir, map_name: str, x: float, y: float) -> tuple[float, float] | None:

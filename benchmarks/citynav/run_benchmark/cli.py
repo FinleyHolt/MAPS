@@ -16,7 +16,13 @@ from datetime import datetime
 from pathlib import Path
 
 from benchmarks.bench import Bench
-from benchmarks.citynav.adapter import episode_ids, find_row, load_objects, load_split, parse_episode
+from benchmarks.citynav.adapter import (
+    episode_ids,
+    find_row,
+    load_objects,
+    load_split,
+    parse_episode,
+)
 from benchmarks.citynav.paths import selected_bench
 from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
 from benchmarks.run_record import episodes
@@ -78,9 +84,7 @@ def main(bench: Bench | None = None) -> int:
     if "SEARCH_BENCHMARK_NAME" not in bench.environ:
         bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})
 
-    parser = argparse.ArgumentParser(
-        description=f"Run the {bench.name} navigation benchmark."
-    )
+    parser = argparse.ArgumentParser(description=f"Run the {bench.name} navigation benchmark.")
     parser.add_argument("--split", default=bench.default_split)
     parser.add_argument("--config", default=None, help="Path to YAML under configs/")
     parser.add_argument("--limit", type=int, default=0)
@@ -164,18 +168,26 @@ def main(bench: Bench | None = None) -> int:
         ep = open_episode_dir(args.attempt_root, episode_id=args.episode_id, benchmark=bench.name)
         print(ep.dir, flush=True)
         try:
-            dispatch_one(episode=episode, idx=0, total=1,
-                          objects_by_map=objects_by_map, cfg=cfg, bench=bench, settings=settings,
-                          split=args.split, recorder=ep.recorder, routing_key=args.episode_id,
-                          episode_dir=ep.dir)
+            dispatch_one(
+                episode=episode,
+                idx=0,
+                total=1,
+                objects_by_map=objects_by_map,
+                cfg=cfg,
+                bench=bench,
+                settings=settings,
+                split=args.split,
+                recorder=ep.recorder,
+                routing_key=args.episode_id,
+                episode_dir=ep.dir,
+            )
         finally:
             ep.close()
         return 0
 
     out_root = Path(
         args.out
-        or f"output/{bench.name}/{bench.name}_{args.split}_"
-        f"{datetime.now():%Y-%m-%d_%H-%M-%S}"
+        or f"output/{bench.name}/{bench.name}_{args.split}_{datetime.now():%Y-%m-%d_%H-%M-%S}"
     ).resolve()
     out_root.mkdir(parents=True, exist_ok=True)
     try:

@@ -41,8 +41,9 @@ def test_a_long_leg_ten_degrees_off_heading_turns_once():
 def _random_leg(rng: random.Random) -> tuple[Pose, Pose]:
     heading = rng.uniform(0, 360) if rng.random() < 0.5 else rng.choice([0, 30, 60, 90, 180, 270])
     start = Pose(rng.uniform(-50, 50), rng.uniform(-50, 50), 120.0, heading)
-    end = Pose(rng.uniform(-300, 300), rng.uniform(-300, 300),
-               120.0 + rng.choice([0, 0, 2, -4, 7.3]), 0.0)
+    end = Pose(
+        rng.uniform(-300, 300), rng.uniform(-300, 300), 120.0 + rng.choice([0, 0, 2, -4, 7.3]), 0.0
+    )
     return start, end
 
 

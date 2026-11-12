@@ -76,9 +76,7 @@ def mask_centerline(
     return [[round(float(r), 2), round(float(c), 2)] for r, c in cl], round(length_m, 2)
 
 
-def _build_node(
-    class_name: str, feat: dict, *, cell_size_m: float
-) -> MapObject | None:
+def _build_node(class_name: str, feat: dict, *, cell_size_m: float) -> MapObject | None:
     """Build a MapObject from a baked feature dict. Returns None if no cells."""
     cells = feat["cells"]
     if not cells:

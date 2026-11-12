@@ -12,25 +12,37 @@ from benchmarks.citynav.run_benchmark import episode_runner as er
 from maps.settings import Settings
 from maps.mission.spec import MissionReply
 
-_ROW = {"area": "b", "block": 1, "descriptions": ["the church"], "ann_ids": [0],
-        "target_positions": [[5.0, 5.0, 0.0]], "trajectory": [[0.0, 0.0, 100.0]]}
+_ROW = {
+    "area": "b",
+    "block": 1,
+    "descriptions": ["the church"],
+    "ann_ids": [0],
+    "target_positions": [[5.0, 5.0, 0.0]],
+    "trajectory": [[0.0, 0.0, 100.0]],
+}
 
 
-def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: float = 0.0,
-         bench=None) -> dict:
+def _run(
+    monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: float = 0.0, bench=None
+) -> dict:
     h = SimpleNamespace(
         episode=None,
         state=SimpleNamespace(altitude_m=100.0, pose_xy=(0.0, 0.0)),
-        ground_z_m=0.0, world=SimpleNamespace(set_retro_perceiver=lambda f: None),
-        perception=SimpleNamespace(sahi_tiles_failed=0))
+        ground_z_m=0.0,
+        world=SimpleNamespace(set_retro_perceiver=lambda f: None),
+        perception=SimpleNamespace(sahi_tiles_failed=0),
+    )
 
     def build(cfg, ep, assets, bench, *, settings, workdir, routing_key):
         h.episode, h.workdir = ep, workdir
         return h
 
     def session(h, **kw):
-        return SimpleNamespace(h=h, flights=flights,
-                               run=lambda text, transcript: (MissionReply(ended_by="reply", turns_used=3), None))
+        return SimpleNamespace(
+            h=h,
+            flights=flights,
+            run=lambda text, transcript: (MissionReply(ended_by="reply", turns_used=3), None),
+        )
 
     def fly(*, flights, **kw):
         # Seven actions, the last ending ``snap`` m east of the commit.
@@ -42,11 +54,22 @@ def _run(monkeypatch, tmp_path, flights: list[dict], row: dict = _ROW, snap: flo
     monkeypatch.setattr(er, "MissionSession", session)
     monkeypatch.setattr(er, "synthesize_compliant_trajectory", fly)
     # The attempt's directory is the value the runner is handed: the summary reads its flight log.
-    monkeypatch.setattr(er.flight_summary, "summarize",
-                        lambda d, tokenizer_name="": {"calls": 2} if d == tmp_path / "flight" else {})
-    cfg = SimpleNamespace(spawn="dataset", start_altitude_agl_m=None, altitude_cap_m=1000.0, success_radius_m=20.0)
-    return er.run_episode(parse_episode(row), {"b_block_1": [object()]}, cfg, bench or citynav_bench({}),
-                          settings=Settings(), workdir=tmp_path)
+    monkeypatch.setattr(
+        er.flight_summary,
+        "summarize",
+        lambda d, tokenizer_name="": {"calls": 2} if d == tmp_path / "flight" else {},
+    )
+    cfg = SimpleNamespace(
+        spawn="dataset", start_altitude_agl_m=None, altitude_cap_m=1000.0, success_radius_m=20.0
+    )
+    return er.run_episode(
+        parse_episode(row),
+        {"b_block_1": [object()]},
+        cfg,
+        bench or citynav_bench({}),
+        settings=Settings(),
+        workdir=tmp_path,
+    )
 
 
 def test_a_flying_episode_records_its_commit_and_final_pose(monkeypatch, tmp_path) -> None:
@@ -73,7 +96,14 @@ def test_a_shape_row_scores_the_commit_not_the_snapped_final_pose(monkeypatch, t
     """A commit inside a 2 m strip whose replay ends 3 m east of it, outside the strip, scores SR 1."""
     strip = [[4.0, 5.0], [6.0, 5.0], [6.0, 7.0], [4.0, 7.0]]
     flights = [{"target": "prior_7", "resolved_xy": [5.0, 6.0], "provenance": "prior"}]
-    row = _run(monkeypatch, tmp_path, flights, row={**_ROW, "target_mask": strip}, snap=3.0, bench=calcity_bench({}))
+    row = _run(
+        monkeypatch,
+        tmp_path,
+        flights,
+        row={**_ROW, "target_mask": strip},
+        snap=3.0,
+        bench=calcity_bench({}),
+    )
     assert row["visited_xy"][-1] == [8.0, 6.0]
     assert row["commit_xy"] == [5.0, 6.0]
     assert row["metrics"]["SR"] == 1
@@ -88,8 +118,14 @@ def test_the_bench_resolves_its_sensor_as_the_flight_does(monkeypatch) -> None:
     monkeypatch.setattr(er, "start_altitude_m", lambda cfg, m, z: (100.0, 0.0))
     monkeypatch.setattr(er, "make_perception", lambda settings: SimpleNamespace(set_concepts=None))
     monkeypatch.setattr(er, "EpisodeWorld", lambda *a, **kw: loop)
-    assets = SimpleNamespace(grid_shape=(2, 2), cell_size_m=1.0, map_name="b_block_1",
-                             bounds=SimpleNamespace(x_min=0.0, y_min=0.0))
+    assets = SimpleNamespace(
+        grid_shape=(2, 2),
+        cell_size_m=1.0,
+        map_name="b_block_1",
+        bounds=SimpleNamespace(x_min=0.0, y_min=0.0),
+    )
     episode = SimpleNamespace(map_name="b_block_1", start_z=100.0, start_xy=(0.0, 0.0))
-    h = er.build_episode(SimpleNamespace(sensor={}), episode, assets, citynav_bench({}), settings=Settings())
+    h = er.build_episode(
+        SimpleNamespace(sensor={}), episode, assets, citynav_bench({}), settings=Settings()
+    )
     assert h.sensor == resolve_sensor({})

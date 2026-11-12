@@ -93,8 +93,11 @@ def calcity_bench(environ: Mapping[str, str]) -> Bench:
     variables too (``SEARCH_BENCHMARK_NAME`` and the four ``SEARCH_CITYNAV_*``):
     an attempt child selects Cal City by the first, and every run records all five.
     """
-    root = _env_path(environ, "SEARCH_CALCITY_DATA",
-                     Path(environ.get("CALCITY_ROOT", Path.home() / "datasets" / "calcity")))
+    root = _env_path(
+        environ,
+        "SEARCH_CALCITY_DATA",
+        Path(environ.get("CALCITY_ROOT", Path.home() / "datasets" / "calcity")),
+    )
     data = root / "data"
     splits = _env_path(environ, "SEARCH_CALCITY_SPLITS", PACKAGE_ROOT / "data")
     rgbd = _env_path(environ, "SEARCH_CALCITY_RGBD_DIR", data / "rgbd_upstream")

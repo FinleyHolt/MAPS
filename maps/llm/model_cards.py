@@ -24,16 +24,25 @@ CARDS: dict[str, dict[str, Any]] = {
     # template's `reasoning_effort` ({none:0.0, minimal:0.1, low:0.2,
     # medium:0.7, high:0.9, max:0.99}, or a raw float in [0.0, 0.99])
     # DEFAULTS TO 0.9 when the request omits it — the expensive end.
-    "inkling-small": {"tokenizer": "thinkingmachines/Inkling-Small-NVFP4", "top_p": 0.95, "top_k": 64,
-                      "efforts": ("none", "minimal", "low", "medium", "high", "max"), "effort_numbers": True},
+    "inkling-small": {
+        "tokenizer": "thinkingmachines/Inkling-Small-NVFP4",
+        "top_p": 0.95,
+        "top_k": 64,
+        "efforts": ("none", "minimal", "low", "medium", "high", "max"),
+        "effort_numbers": True,
+    },
     # Qwen3.8-Flash-Next NVFP4, the Qwen4 preview architecture (hybrid
     # GatedDeltaNet + Qwen Sparse Attention, n-gram PLE, one MTP layer). Its
     # generation_config.json states temperature 1.0, top_p 0.95, top_k 20 and
     # nothing else; temperature is the caller's argument. The template's
     # `reasoning_effort` DEFAULTS TO xhigh — the expensive end. The serve's
     # --tool-call-parser qwen3_coder owns enforcement.
-    "qwen38-flash-next-nvfp4": {"tokenizer": "RadixArk/Qwen3.8-Flash-Next-NVFP4", "top_p": 0.95, "top_k": 20,
-                                "efforts": ("xhigh", "medium", "low")},
+    "qwen38-flash-next-nvfp4": {
+        "tokenizer": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
+        "top_p": 0.95,
+        "top_k": 20,
+        "efforts": ("xhigh", "medium", "low"),
+    },
     # Gemma 4, the family envelope (top_p 0.95, top_k 64) on every size,
     # `-it` throughout: the base checkpoints carry no chat template and no
     # tool-call surface. The GGUF alias is the same weights served by
@@ -44,9 +53,13 @@ CARDS: dict[str, dict[str, Any]] = {
     # never `reasoning_effort`: false leaves `<|think|>` out of the system turn
     # and prefills an empty thought channel, so `none` is that switch. The
     # other Gemma templates are unchecked and keep no switch.
-    "gemma4-26b-a4b-nvfp4": {"tokenizer": "nvidia/Gemma-4-26B-A4B-NVFP4", "top_p": 0.95, "top_k": 64,
-                             "presence_penalty": 1.0,
-                             "thinking_off": {"chat_template_kwargs": {"enable_thinking": False}}},
+    "gemma4-26b-a4b-nvfp4": {
+        "tokenizer": "nvidia/Gemma-4-26B-A4B-NVFP4",
+        "top_p": 0.95,
+        "top_k": 64,
+        "presence_penalty": 1.0,
+        "thinking_off": {"chat_template_kwargs": {"enable_thinking": False}},
+    },
     "gemma4-26b-a4b-gguf": {"tokenizer": "google/gemma-4-26B-A4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e4b": {"tokenizer": "google/gemma-4-E4B-it", "top_p": 0.95, "top_k": 64},
     "gemma4-e2b": {"tokenizer": "google/gemma-4-E2B-it", "top_p": 0.95, "top_k": 64},
@@ -55,16 +68,24 @@ CARDS: dict[str, dict[str, Any]] = {
     # off). Effort is the top-level `reasoning_effort` (low, high, max); the
     # release DEFAULTS TO max, the expensive end. Every assistant turn must be
     # passed back whole, reasoning_content included, which the transcript does.
-    "kimi-k3.1-pro": {"tokenizer": "moonshotai/Kimi-K3.1-Pro", "top_p": 0.95, "top_k": -1,
-                      "efforts": ("max", "high", "low")},
+    "kimi-k3.1-pro": {
+        "tokenizer": "moonshotai/Kimi-K3.1-Pro",
+        "top_p": 0.95,
+        "top_k": -1,
+        "efforts": ("max", "high", "low"),
+    },
     # DeepSeek V4.1 Flash 1017, the official release (FP8 dense, FP4 experts).
     # Its README recommends temperature 1.0 and top_p 1.0 and names no top_k
     # (-1, off). Effort is a numeric budget 1-100. The names below are the
     # serving encoder's (sglang: low/high/xhigh/max = 25/50/75/100), and they
     # are NOT DeepSeek's: the release's encoding.py maps low/high/max to
     # 50/75/100 and defaults to high (75). So xhigh here is DeepSeek's default.
-    "deepseek-v4.1-flash-1017": {"tokenizer": "deepseek-ai/DeepSeek-V4.1-Flash-1017", "top_p": 1.0, "top_k": -1,
-                                 "efforts": ("low", "high", "xhigh", "max")},
+    "deepseek-v4.1-flash-1017": {
+        "tokenizer": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "top_p": 1.0,
+        "top_k": -1,
+        "efforts": ("low", "high", "xhigh", "max"),
+    },
     # GPT-5.6 Sol on an Azure (Microsoft Foundry) deployment, keyed by the
     # deployment's name, which is the alias the request carries. OpenAI
     # publishes no tokenizer for it; gpt-oss-120b's o200k_harmony vocabulary
@@ -77,8 +98,13 @@ CARDS: dict[str, dict[str, Any]] = {
     # Azure does.
     # Its chat completions refuse function tools beside any effort but none,
     # so it flies the Responses API (``api: "responses"``, ``openai_wire``).
-    "gpt-5.6-sol": {"tokenizer": "openai/gpt-oss-120b", "wire": "openai", "api": "responses",
-                    "efforts": ("none", "low", "medium", "high", "xhigh", "max"), "max_images": 50},
+    "gpt-5.6-sol": {
+        "tokenizer": "openai/gpt-oss-120b",
+        "wire": "openai",
+        "api": "responses",
+        "efforts": ("none", "low", "medium", "high", "xhigh", "max"),
+        "max_images": 50,
+    },
 }
 
 
@@ -88,8 +114,10 @@ def card_for(model_id: str | None) -> dict[str, Any]:
     alias = (model_id or "").strip().lower()
     hit = CARDS.get(alias)
     if hit is None:
-        raise ValueError(f"no model card for served model {model_id!r}; serve it under one of: "
-                         + ", ".join(sorted(CARDS)))
+        raise ValueError(
+            f"no model card for served model {model_id!r}; serve it under one of: "
+            + ", ".join(sorted(CARDS))
+        )
     return hit
 
 
@@ -146,8 +174,9 @@ def speaks_responses(model_id: str | None) -> bool:
     return CARDS.get((model_id or "").strip().lower(), {}).get("api") == "responses"
 
 
-def sampling_kwargs(model_id: str, reasoning_effort: str | None = None,
-                    sampling: Sampling = Sampling()) -> dict[str, Any]:
+def sampling_kwargs(
+    model_id: str, reasoning_effort: str | None = None, sampling: Sampling = Sampling()
+) -> dict[str, Any]:
     """The request's sampling keys, flat at the top level (a hosted endpoint
     drops an ``extra_body`` object whole). A chat-template card sends
     temperature 1.0, its ``top_p``/``top_k`` (and ``presence_penalty`` where it
@@ -162,8 +191,12 @@ def sampling_kwargs(model_id: str, reasoning_effort: str | None = None,
     if card.get("wire") == "openai":
         kwargs: dict[str, Any] = {}
     else:
-        kwargs = {"temperature": 1.0, "top_p": card["top_p"], "top_k": card["top_k"],
-                  "chat_template_kwargs": {"enable_thinking": True}}
+        kwargs = {
+            "temperature": 1.0,
+            "top_p": card["top_p"],
+            "top_k": card["top_k"],
+            "chat_template_kwargs": {"enable_thinking": True},
+        }
         if "presence_penalty" in card:
             kwargs["presence_penalty"] = card["presence_penalty"]
     chosen = effort(reasoning_effort, sampling)

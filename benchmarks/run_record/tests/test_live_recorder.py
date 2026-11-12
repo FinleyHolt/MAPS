@@ -29,8 +29,7 @@ def test_the_detections_file_exists_before_the_first_step(tmp_path: Path) -> Non
 def test_recorder_writes_no_images(tmp_path: Path) -> None:
     rec = LiveRecorder(tmp_path)
     rec.write_step(step=0, detections=[])
-    rec.write_step(step=1, detections=[{"label": "car", "confidence": 0.5,
-                                        "world_xy": [1.0, 2.0]}])
+    rec.write_step(step=1, detections=[{"label": "car", "confidence": 0.5, "world_xy": [1.0, 2.0]}])
 
     assert sorted(p.name for p in tmp_path.iterdir()) == ["detections.jsonl"]
     assert [d["step"] for d in _rows(tmp_path / "detections.jsonl")] == [1]
@@ -39,8 +38,7 @@ def test_recorder_writes_no_images(tmp_path: Path) -> None:
 def test_masks_ride_in_the_detection_row(tmp_path: Path) -> None:
     mask = np.zeros((64, 64), dtype=bool)
     mask[10:20, 30:36] = True
-    det = {"label": "car", "confidence": 0.9, "world_xy": [3.0, 4.0],
-           **encode_mask_record(mask)}
+    det = {"label": "car", "confidence": 0.9, "world_xy": [3.0, 4.0], **encode_mask_record(mask)}
 
     LiveRecorder(tmp_path).write_step(step=0, detections=[det])
 

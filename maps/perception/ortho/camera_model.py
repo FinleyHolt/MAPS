@@ -74,9 +74,7 @@ def _read_ortho_mmap(d: Path, stamp: dict) -> dict | None:
         meta = json.loads(meta_path.read_text())
         if meta.get("source") != stamp:
             return None
-        bake: dict = {
-            k: np.load(d / f"{k}.npy", mmap_mode="r") for k in _MMAP_ARRAYS
-        }
+        bake: dict = {k: np.load(d / f"{k}.npy", mmap_mode="r") for k in _MMAP_ARRAYS}
     except (OSError, ValueError, KeyError):
         return None
     bake.update(
@@ -155,8 +153,10 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict) -> None:
     tmp = d.with_name(f"{d.name}.tmp{os.getpid()}")
     try:
         tmp.mkdir(parents=True, exist_ok=True)
-        with rasterio.open(rgbd_dir / f"{map_name}_rgb.tif") as rgb_src, \
-                rasterio.open(rgbd_dir / f"{map_name}.tif") as h_src:
+        with (
+            rasterio.open(rgbd_dir / f"{map_name}_rgb.tif") as rgb_src,
+            rasterio.open(rgbd_dir / f"{map_name}.tif") as h_src,
+        ):
             H, W = rgb_src.height, rgb_src.width
             if (h_src.height, h_src.width) != (H, W):
                 raise ValueError(
@@ -164,7 +164,9 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict) -> None:
                     f"{h_src.width}x{h_src.height}; the pair shares one grid"
                 )
             if rgb_src.count < 3:
-                raise ValueError(f"{map_name}_rgb.tif carries {rgb_src.count} band(s); the RGB raster carries three")
+                raise ValueError(
+                    f"{map_name}_rgb.tif carries {rgb_src.count} band(s); the RGB raster carries three"
+                )
             b = h_src.bounds
             meta = {
                 "x_min": float(b.left),
@@ -181,9 +183,9 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict) -> None:
                 covered = band.max(axis=2) > 0
                 h = h_src.read(1, window=win).astype(np.float32)
                 h[~covered] = 0.0
-                rgb[r0:r0 + n] = band
-                height[r0:r0 + n] = h
-                alpha[r0:r0 + n] = covered.astype(np.uint8) * 255
+                rgb[r0 : r0 + n] = band
+                height[r0 : r0 + n] = h
+                alpha[r0 : r0 + n] = covered.astype(np.uint8) * 255
             for m in (rgb, height, alpha):
                 m.flush()
             del rgb, height, alpha
@@ -213,9 +215,7 @@ def bake_ortho_from_rasters(rgbd_dir, map_name: str) -> dict:
         x_min, y_min = float(b.left), float(b.bottom)
     if rgb.shape[:2] != height.shape:
         height = np.asarray(
-            Image.fromarray(height).resize(
-                (rgb.shape[1], rgb.shape[0]), Image.Resampling.NEAREST
-            ),
+            Image.fromarray(height).resize((rgb.shape[1], rgb.shape[0]), Image.Resampling.NEAREST),
             dtype=np.float32,
         )
     # Upstream nodata is literal 0 RGB; coverage = any nonzero channel.
@@ -291,7 +291,9 @@ def load_ortho_or_rasters(map_name: str, *, rgbd_dir=None) -> dict | None:
                     _bake_geotiff_mmap(rgbd_dir, map_name, mm, stamp)
                     bake = _read_ortho_mmap(mm, stamp)
                     if bake is None:
-                        raise RuntimeError(f"{map_name}: the ortho cache at {mm} was written but does not read back")
+                        raise RuntimeError(
+                            f"{map_name}: the ortho cache at {mm} was written but does not read back"
+                        )
                 elif bake is None:
                     bake = bake_ortho_from_rasters(rgbd_dir, map_name)
                     _write_ortho_mmap(mm, bake, stamp)

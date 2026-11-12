@@ -82,8 +82,9 @@ class EpisodeWorld:
     def start(self, graph) -> None:
         """Bind the episode's graph (the prior seed every detection folds
         into) and an empty watchlist."""
-        self._state = _State(runtime_graph=graph,
-                             segmenter_tasking=SegmenterTasking(push=self._sam_setter))
+        self._state = _State(
+            runtime_graph=graph, segmenter_tasking=SegmenterTasking(push=self._sam_setter)
+        )
 
     def _prior_surface_xy_locked(self) -> dict:
         """``{fid: (x, y)}`` for every prior row as the surface serves it,
@@ -91,11 +92,13 @@ class EpisodeWorld:
         if self._prior_xy_cache is not None:
             return self._prior_xy_cache
 
-        priors = [(f, n) for f, n in self.state.runtime_graph.nodes.items()
-                  if n.provenance != "detected"]
+        priors = [
+            (f, n) for f, n in self.state.runtime_graph.nodes.items() if n.provenance != "detected"
+        ]
         _c, anchors = build_surface_from_graph(priors, self._tile_origin_xy, self._cell_size_m)
-        self._prior_xy_cache = {str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1]))
-                                for r in anchors if r.get("xy")}
+        self._prior_xy_cache = {
+            str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1])) for r in anchors if r.get("xy")
+        }
         return self._prior_xy_cache
 
     def node_xy(self, fid: str) -> tuple[tuple[float, float], str] | None:
@@ -112,9 +115,9 @@ class EpisodeWorld:
             if w is not None and len(w) >= 2:
                 xy = (float(w[0]), float(w[1]))
             else:
-                xy = (self._prior_surface_xy_locked().get(str(fid))
-                      or cell_centre_xy(*node.centroid, self._tile_origin_xy,
-                                        self._cell_size_m))
+                xy = self._prior_surface_xy_locked().get(str(fid)) or cell_centre_xy(
+                    *node.centroid, self._tile_origin_xy, self._cell_size_m
+                )
             return xy, ("detected" if node.provenance == "detected" else "prior")
 
     def _cells_xy_locked(self, target_fid: str) -> list[tuple[float, float]] | None:
@@ -136,8 +139,9 @@ class EpisodeWorld:
         with self._lock:
             return self._cells_xy_locked(target_fid)
 
-    def node_coverage_stops(self, target_fid: str, spacing_m: float, *,
-                            max_stops: int, minor_spacing_m: float) -> list | None:
+    def node_coverage_stops(
+        self, target_fid: str, spacing_m: float, *, max_stops: int, minor_spacing_m: float
+    ) -> list | None:
         """This fid's ``explore`` stops: points on its cells in world metres,
         rounded, in shape order; None off the graph or without cells. A shape
         wider than ``minor_spacing_m`` (the footprint's short side) on both
@@ -163,21 +167,19 @@ class EpisodeWorld:
                 lo_min = y0 if x_major else x0
                 rows: dict[int, list] = {}
                 for p in zip(xs, ys):
-                    rows.setdefault(
-                        int((_mnr(p) - lo_min) // pitch), []).append(p)
+                    rows.setdefault(int((_mnr(p) - lo_min) // pitch), []).append(p)
                 picks = []
                 for ri, ridx in enumerate(sorted(rows)):
-                    row = sorted(rows[ridx], key=_maj,
-                                 reverse=bool(ri % 2))
+                    row = sorted(rows[ridx], key=_maj, reverse=bool(ri % 2))
                     r_reach = abs(_maj(row[-1]) - _maj(row[0]))
                     picks.extend(spread(row, min(int(max_stops), int(r_reach // span) + 1)))
                 if len(picks) > int(max_stops):
                     picks = spread(picks, int(max_stops))
             else:
-                along = sorted(zip(xs, ys),
-                               key=(lambda p: p[0])
-                               if (x1 - x0) >= (y1 - y0)
-                               else (lambda p: p[1]))
+                along = sorted(
+                    zip(xs, ys),
+                    key=(lambda p: p[0]) if (x1 - x0) >= (y1 - y0) else (lambda p: p[1]),
+                )
                 reach = max(x1 - x0, y1 - y0)
                 picks = spread(along, min(int(max_stops), int(reach // span) + 1))
             on_it: list = []
@@ -237,11 +239,12 @@ class EpisodeWorld:
             # never a clean receipt over a segmenter that kept its old classes
             err = self.state.segmenter_tasking.set_watchlist(watch)
         if err:
-            return (f"the segmenter did not take this declaration "
-                    f"({err}); say it again")
+            return f"the segmenter did not take this declaration ({err}); say it again"
         return None
 
-    def update_perception(self, detections: list, projected_masks: dict[int, np.ndarray]) -> list[dict]:
+    def update_perception(
+        self, detections: list, projected_masks: dict[int, np.ndarray]
+    ) -> list[dict]:
         """Fold one flight's detections into the runtime graph: tracked ones
         with a projected footprint through the tracked upsert, the rest
         centroid-only. Returns the per-step detection records the recorder
@@ -269,7 +272,8 @@ class EpisodeWorld:
             for i, det in enumerate(detections):
                 if i not in upsert_ids:
                     upsert_detected_centroid_only(
-                        s.runtime_graph, _detection_to_mapobject(det, bounds_min, cell))
+                        s.runtime_graph, _detection_to_mapobject(det, bounds_min, cell)
+                    )
                 det_record = {
                     "world_xy": list(det.world_xy),
                     "label": det.label,
@@ -291,14 +295,17 @@ class EpisodeWorld:
             seen: dict[str, dict] = {}
             for i, fid in sorted(upsert_ids.items()):
                 det = detections[i]
-                seen.setdefault(fid, {
-                    "fid": fid,
-                    "class": str(det.label or ""),
-                    "xy": [round(float(det.world_xy[0]), 1), round(float(det.world_xy[1]), 1)],
-                    # The detector's own score: the report heads each class
-                    # with its best.
-                    "conf": round(float(det.confidence or 0.0), 3),
-                })
+                seen.setdefault(
+                    fid,
+                    {
+                        "fid": fid,
+                        "class": str(det.label or ""),
+                        "xy": [round(float(det.world_xy[0]), 1), round(float(det.world_xy[1]), 1)],
+                        # The detector's own score: the report heads each class
+                        # with its best.
+                        "conf": round(float(det.confidence or 0.0), 3),
+                    },
+                )
             s.last_flight_detections = list(seen.values())
             return step_detections
 

@@ -31,10 +31,10 @@ def test_colour_is_read_through_the_region_and_never_the_frame():
     eroded_seen = fallback_seen = False
 
     for r0, c0, h, w in [
-        (0, 0, 26, 34),          # top-left frame edge
-        (80, 100, 40, 46),       # interior
-        (170, 205, 30, 35),      # bottom-right frame edge
-        (50, 50, 3, 4),          # under _COLOR_INTERIOR_MIN_PX
+        (0, 0, 26, 34),  # top-left frame edge
+        (80, 100, 40, 46),  # interior
+        (170, 205, 30, 35),  # bottom-right frame edge
+        (50, 50, 3, 4),  # under _COLOR_INTERIOR_MIN_PX
     ]:
         region = _blob(r0, c0, h, w, rng)
 
@@ -66,7 +66,7 @@ def test_colour_values_are_pinned():
     """A flat-colour object reads as that colour. Pins the sampling, not just
     the plumbing: reading the wrong pixels would still return a valid dict."""
     rgb = np.zeros((*_SHAPE, 3), dtype=np.uint8)
-    rgb[..., :] = (30, 30, 30)          # dark background
+    rgb[..., :] = (30, 30, 30)  # dark background
     rgb[80:120, 100:140, :] = (235, 235, 235)  # a white object
     m = np.zeros(_SHAPE, dtype=bool)
     m[80:120, 100:140] = True

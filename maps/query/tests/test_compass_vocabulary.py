@@ -1,4 +1,5 @@
 """ONE compass table, and every op declares which subset of it it hears."""
+
 from __future__ import annotations
 
 import math
@@ -6,10 +7,15 @@ import math
 import pytest
 
 from maps.query.spatial_math import (
-    CARDINALS, COMPASS_UNIT, _COMPASS8, _compass8, cardinal, cardinal_offset)
+    CARDINALS,
+    COMPASS_UNIT,
+    _COMPASS8,
+    _compass8,
+    cardinal,
+    cardinal_offset,
+)
 
-_EIGHT = {"north", "northeast", "east", "southeast",
-          "south", "southwest", "west", "northwest"}
+_EIGHT = {"north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"}
 
 
 def test_the_table_is_eight_winds_and_the_subset_is_four():
@@ -33,22 +39,25 @@ def test_the_frame_convention_is_stated_once_and_holds():
     assert COMPASS_UNIT["east"] == (1.0, 0.0)
     # ...and the diagonals sit exactly between their two cardinals, which is
     # what makes "southeast" a projectable axis rather than a label.
-    for diag, (a, b) in (("northeast", ("north", "east")),
-                         ("southeast", ("south", "east")),
-                         ("southwest", ("south", "west")),
-                         ("northwest", ("north", "west"))):
-        want = tuple((COMPASS_UNIT[a][i] + COMPASS_UNIT[b][i]) / math.sqrt(2)
-                     for i in (0, 1))
-        assert all(math.isclose(g, w, abs_tol=1e-12)
-                   for g, w in zip(COMPASS_UNIT[diag], want)), diag
+    for diag, (a, b) in (
+        ("northeast", ("north", "east")),
+        ("southeast", ("south", "east")),
+        ("southwest", ("south", "west")),
+        ("northwest", ("north", "west")),
+    ):
+        want = tuple((COMPASS_UNIT[a][i] + COMPASS_UNIT[b][i]) / math.sqrt(2) for i in (0, 1))
+        assert all(math.isclose(g, w, abs_tol=1e-12) for g, w in zip(COMPASS_UNIT[diag], want)), (
+            diag
+        )
 
 
 def test_compass8_words_are_exactly_the_table_keys():
     """The wedge table and the unit table name the same eight things."""
     assert {name for _hi, name in _COMPASS8} == set(COMPASS_UNIT)
     # and the binning agrees with the vectors at every wedge centre
-    for i, word in enumerate(("north", "northeast", "east", "southeast",
-                              "south", "southwest", "west", "northwest")):
+    for i, word in enumerate(
+        ("north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest")
+    ):
         assert _compass8(i * 45.0) == word, (i, word)
 
 

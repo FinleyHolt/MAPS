@@ -35,9 +35,14 @@ from maps.mission.picture_verbs import Pictures
 from maps.mission.program_verbs import Programs
 from maps.mission.reasoner import Reasoner
 from maps.mission.reply_repair import (
-    MALFORMED_ENVELOPE_NUDGE, NO_FLIGHT_ABSTAIN_STREAK, NO_FLIGHT_REPLY_NUDGE,
-    TRUNCATED_TURN_NUDGE, TRUNCATED_TURN_STREAK, _envelope_residue,
-    _not_a_reply)
+    MALFORMED_ENVELOPE_NUDGE,
+    NO_FLIGHT_ABSTAIN_STREAK,
+    NO_FLIGHT_REPLY_NUDGE,
+    TRUNCATED_TURN_NUDGE,
+    TRUNCATED_TURN_STREAK,
+    _envelope_residue,
+    _not_a_reply,
+)
 from maps.mission.serve_refusals import _REFUSAL_ENDINGS, _RETRIABLE_LLM_ERRORS
 from maps.mission.served_text import SERVED_TOOLS
 from maps.mission.spec import MissionReply, MissionSpec
@@ -85,13 +90,18 @@ def run_mission(
         cancel_event=cancel_event,
         reasoning_effort=reasoning_effort,
     )
-    mission = _Mission(reasoner=reasoner, workdir=workdir, rid_tag=rid_tag, preflight=True,
-                       compute_namespace=surface_from_ctx(turn["ctx"]), **turn)
+    mission = _Mission(
+        reasoner=reasoner,
+        workdir=workdir,
+        rid_tag=rid_tag,
+        preflight=True,
+        compute_namespace=surface_from_ctx(turn["ctx"]),
+        **turn,
+    )
     return mission.converse(instruction.strip()), mission
 
 
-def continue_mission(mission: "_Mission", instruction: str, *,
-                     rid_tag: str) -> MissionReply:
+def continue_mission(mission: "_Mission", instruction: str, *, rid_tag: str) -> MissionReply:
     """One more operator turn on the same mission: it follows a reply (the
     field path: the reply is a report), reads the surface the mission's
     ``ctx`` holds now, and keeps every name, handle, flown stop, staged view
@@ -152,38 +162,61 @@ class _Mission:
         # The interpreter is built last (it runs on the verbs), so the two
         # verbs that say the model's own name for a set ask it through these.
         self.surface = Surface(
-            ctx, compute_namespace, preflight=preflight,
-            name_of_ref=lambda ref: self.python.names.ref_name(ref) or UNNAMED)
+            ctx,
+            compute_namespace,
+            preflight=preflight,
+            name_of_ref=lambda ref: self.python.names.ref_name(ref) or UNNAMED,
+        )
         self.rejections = Rejections(self.surface)
         self.programs = Programs(self.surface, self.rejections, self.progress)
         self.stance = Stance(self.surface, self.rejections)
         self.pictures = Pictures(
-            self.surface, self.rejections, self.progress,
-            look_renderer=look_renderer, workdir=workdir,
-            obs_span_m=obs_span_m, obs_minor_m=obs_minor_m,
+            self.surface,
+            self.rejections,
+            self.progress,
+            look_renderer=look_renderer,
+            workdir=workdir,
+            obs_span_m=obs_span_m,
+            obs_minor_m=obs_minor_m,
             name_of_ref=lambda ref: self.python.names.ref_name(ref),
-            look_argument=lambda: self.python.names.call_arg("look"))
-        self.flights = Flights(mission_spec, self.surface, self.rejections,
-                               self.pictures, self.progress, obs_span_m=obs_span_m)
-        self.watchlist = Watchlist(mission_spec, self.surface, self.rejections,
-                                   self.progress, boost_queue=boost_queue)
+            look_argument=lambda: self.python.names.call_arg("look"),
+        )
+        self.flights = Flights(
+            mission_spec,
+            self.surface,
+            self.rejections,
+            self.pictures,
+            self.progress,
+            obs_span_m=obs_span_m,
+        )
+        self.watchlist = Watchlist(
+            mission_spec, self.surface, self.rejections, self.progress, boost_queue=boost_queue
+        )
 
         # Each library call's verb: what the interpreter's calls run on.
         carry = self.surface.carry
-        self.python = MissionPython(MissionEnv(
-            rows_of_ref=lambda ref: list(carry.read(ref) or []),
-            tied_of_ref=lambda ref: bool(
-                getattr(carry.read(ref), "name_set", False)),
-            version=lambda: carry.version,
-            plan_rn=carry.next_rn, widened=carry.paged, minted=carry.minted,
-            row_of_fid=self.surface.rows.get,
-            say_err=self.rejections.error,
-            ground=self.programs.ground, analyze=self.programs.analyze,
-            finish=self.programs.finish,
-            stand=self.stance.stand,
-            move=self.flights.go_to, cover=self.flights.explore,
-            crops=self.pictures.look, map=self.pictures.show_map,
-            watch=self.watchlist.watch, boost=self.watchlist.boost))
+        self.python = MissionPython(
+            MissionEnv(
+                rows_of_ref=lambda ref: list(carry.read(ref) or []),
+                tied_of_ref=lambda ref: bool(getattr(carry.read(ref), "name_set", False)),
+                version=lambda: carry.version,
+                plan_rn=carry.next_rn,
+                widened=carry.paged,
+                minted=carry.minted,
+                row_of_fid=self.surface.rows.get,
+                say_err=self.rejections.error,
+                ground=self.programs.ground,
+                analyze=self.programs.analyze,
+                finish=self.programs.finish,
+                stand=self.stance.stand,
+                move=self.flights.go_to,
+                cover=self.flights.explore,
+                crops=self.pictures.look,
+                map=self.pictures.show_map,
+                watch=self.watchlist.watch,
+                boost=self.watchlist.boost,
+            )
+        )
 
     def _new_turn(self) -> None:
         """An operator turn's own state: its flight budget (the backstop's
@@ -218,8 +251,7 @@ class _Mission:
             if self.diag is not None:
                 self.diag["turns_used"] = turn_idx + 1
             if turn_idx >= self.mission_spec.turn_cap:
-                log.info("%s mission turn cap (%d) reached", rid_tag,
-                         self.mission_spec.turn_cap)
+                log.info("%s mission turn cap (%d) reached", rid_tag, self.mission_spec.turn_cap)
                 return self._mission_end("turn_cap", turns=turn_idx)
             self._take_retasks(turn_idx)
             try:
@@ -238,8 +270,12 @@ class _Mission:
                 if nudge is not None:
                     self.reasoner.append_repair(nudge)
                     continue
-                log.info("%s mission ended by reply at turn %d (%d flights)",
-                         rid_tag, turn_idx, self.progress.turn_flights)
+                log.info(
+                    "%s mission ended by reply at turn %d (%d flights)",
+                    rid_tag,
+                    turn_idx,
+                    self.progress.turn_flights,
+                )
                 return self._mission_end("reply", turns=turn_idx + 1)
             streaks.no_call = streaks.truncated = streaks.no_flight = 0
             self._answer_tool_calls(r, turn_idx)
@@ -250,28 +286,38 @@ class _Mission:
         if self.retask is None:
             return
         while (operator_turn := self.retask()) is not None:
-            log.info("%s operator re-task at turn %d (%d chars)",
-                     self.progress.rid_tag, turn_idx, len(operator_turn))
+            log.info(
+                "%s operator re-task at turn %d (%d chars)",
+                self.progress.rid_tag,
+                turn_idx,
+                len(operator_turn),
+            )
             self.reasoner.append_user(operator_turn)
 
-    def _compaction_infeasible(self, exc: Exception, turn_idx: int,
-                               user_message: str) -> MissionReply:
+    def _compaction_infeasible(
+        self, exc: Exception, turn_idx: int, user_message: str
+    ) -> MissionReply:
         """The transcript cannot be folded into the window. Terminal: flag
         the thread and drop this turn's unread message."""
         self.reasoner.compaction_infeasible = True
         msgs = self.reasoner.messages
-        if (turn_idx == 0 and msgs
-                and msgs[-1].get("role") == "user"
-                and msgs[-1].get("content") == user_message):
+        if (
+            turn_idx == 0
+            and msgs
+            and msgs[-1].get("role") == "user"
+            and msgs[-1].get("content") == user_message
+        ):
             msgs.pop()
         log.warning(
-            "%s compaction infeasible -> mission ends "
-            "(thread flagged): %s",
-            self.progress.rid_tag, summarise_exc(exc))
+            "%s compaction infeasible -> mission ends (thread flagged): %s",
+            self.progress.rid_tag,
+            summarise_exc(exc),
+        )
         return self._mission_end("compaction_infeasible", turns=turn_idx + 1)
 
-    def _request_failed(self, exc: Exception, streaks: _Streaks,
-                        turn_idx: int) -> MissionReply | None:
+    def _request_failed(
+        self, exc: Exception, streaks: _Streaks, turn_idx: int
+    ) -> MissionReply | None:
         """A failed reasoner request: the ending of a rejection a retry
         would only repeat or of a spent transient budget; None after the
         wait before a retry."""
@@ -290,12 +336,10 @@ class _Mission:
             "" if cancel is not None else f"/{_MAX_TRANSIENT}",
             summarise_exc(exc),
         )
-        self._log("transient_error", attempt=streaks.transient,
-                  error=summarise_exc(exc))
+        self._log("transient_error", attempt=streaks.transient, error=summarise_exc(exc))
         if cancel is None:
             if streaks.transient >= _MAX_TRANSIENT:
-                return self._mission_end("transient_failures",
-                                         turns=turn_idx + 1)
+                return self._mission_end("transient_failures", turns=turn_idx + 1)
             time.sleep(min(15.0, 0.5 + 2.0 * streaks.transient))
         elif cancel.wait(min(30.0, 0.5 + 2.0 * streaks.transient)):
             raise CallCanceled("stopped while waiting for the reasoner")
@@ -305,15 +349,16 @@ class _Mission:
         """The nudge a text turn draws, or None when it stands as the reply
         that ends the mission."""
         content = str(r.get("content") or "")
-        if _envelope_residue(content) or _envelope_residue(
-                str(r.get("reasoning") or "")):
-            log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
-                     self.progress.rid_tag, turn_idx)
+        if _envelope_residue(content) or _envelope_residue(str(r.get("reasoning") or "")):
+            log.info("%s MALFORMED_ENVELOPE at turn %d -> repair", self.progress.rid_tag, turn_idx)
             self._log("malformed_envelope", turn_idx=turn_idx)
             return MALFORMED_ENVELOPE_NUDGE
         dropped = _not_a_reply(content)
-        cut_off = (dropped is not None and dropped[0] == "empty_turn"
-                   and r.get("finish_reason") == "length")
+        cut_off = (
+            dropped is not None
+            and dropped[0] == "empty_turn"
+            and r.get("finish_reason") == "length"
+        )
         if not cut_off:
             streaks.truncated = 0
         elif streaks.truncated < TRUNCATED_TURN_STREAK:
@@ -333,8 +378,9 @@ class _Mission:
         log.info("%s TRUNCATED turn %d -> nudge", self.progress.rid_tag, turn_idx)
         return TRUNCATED_TURN_NUDGE
 
-    def _dropped_message(self, dropped: tuple[str, str, str], streaks: _Streaks,
-                         turn_idx: int) -> str | None:
+    def _dropped_message(
+        self, dropped: tuple[str, str, str], streaks: _Streaks, turn_idx: int
+    ) -> str | None:
         """An empty turn or a block of code sent as text: repaired once; a
         repeat (the streak is shared) is the ending."""
         kind, what, nudge = dropped
@@ -343,24 +389,28 @@ class _Mission:
         if streaks.no_call < 2:
             log.info("%s %s %d -> repair", self.progress.rid_tag, what, turn_idx)
             return nudge
-        log.info("%s %s %d repeated; mission ends", self.progress.rid_tag, what,
-                 turn_idx)
+        log.info("%s %s %d repeated; mission ends", self.progress.rid_tag, what, turn_idx)
         return None
 
     def _reply_before_any_flight(self, streaks: _Streaks, turn_idx: int) -> str | None:
         """A clean prose reply before any flight answers nothing: hand the
         turn back, up to NO_FLIGHT_ABSTAIN_STREAK."""
         streaks.no_flight += 1
-        self._log("no_flight_reply", turn_idx=turn_idx,
-                  streak=streaks.no_flight)
+        self._log("no_flight_reply", turn_idx=turn_idx, streak=streaks.no_flight)
         if streaks.no_flight < NO_FLIGHT_ABSTAIN_STREAK:
-            log.info("%s reply with ZERO flights at turn %d "
-                     "(streak %d) -> repair", self.progress.rid_tag, turn_idx,
-                     streaks.no_flight)
+            log.info(
+                "%s reply with ZERO flights at turn %d (streak %d) -> repair",
+                self.progress.rid_tag,
+                turn_idx,
+                streaks.no_flight,
+            )
             return NO_FLIGHT_REPLY_NUDGE
-        log.info("%s reply with ZERO flights at turn %d, streak "
-                 "%d -- abstain", self.progress.rid_tag, turn_idx,
-                 streaks.no_flight)
+        log.info(
+            "%s reply with ZERO flights at turn %d, streak %d -- abstain",
+            self.progress.rid_tag,
+            turn_idx,
+            streaks.no_flight,
+        )
         return None
 
     def _answer_tool_calls(self, r: dict, turn_idx: int) -> None:
@@ -372,15 +422,20 @@ class _Mission:
             args = json.loads(tc["function"]["arguments"])
             if name != "run":
                 # An unknown tool's id is answered, never executed.
-                self.reasoner.append_tool_result(cid, name or "unknown", {
-                    "error": f"unknown tool {name!r}; available: run"})
+                self.reasoner.append_tool_result(
+                    cid, name or "unknown", {"error": f"unknown tool {name!r}; available: run"}
+                )
                 continue
             flights_before = self.progress.flights
             out = self._run_block(args)
-            out.setdefault("watching", (
-                self.watchlist.trailer()
-                or "nothing -- no class is segmented on any flight "
-                   'until one is looked for; call look_for("<class>").'))
+            out.setdefault(
+                "watching",
+                (
+                    self.watchlist.trailer()
+                    or "nothing -- no class is segmented on any flight "
+                    'until one is looked for; call look_for("<class>").'
+                ),
+            )
             self.reasoner.append_tool_result(cid, "run", out)
             self._log(
                 "run",
@@ -395,7 +450,8 @@ class _Mission:
                 # stops this block flew, an errored block's included
                 flights=self.progress.flights - flights_before,
                 # every image this block showed, by sha
-                frames=list(self.pictures.block_frames))
+                frames=list(self.pictures.block_frames),
+            )
             self.pictures.block_frames.clear()
         for caption, jpegs in self.pictures.pending:
             self.reasoner.append_vision_user(caption, jpegs)
@@ -405,8 +461,10 @@ class _Mission:
         """One code block, run in the mission's persistent namespace; an
         error costs the line it is on."""
         if "__args_parse_error" in args:
-            return {"error": "the call's arguments did not parse as JSON: "
-                             f"{args['__args_parse_error']}; nothing ran"}
+            return {
+                "error": "the call's arguments did not parse as JSON: "
+                f"{args['__args_parse_error']}; nothing ran"
+            }
         code = args.get("code")
         if not isinstance(code, str) or not code.strip():
             return {"error": "run takes one block of code in code"}

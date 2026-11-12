@@ -77,23 +77,40 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
 
     def make(*, pose_xy=(10.0, 20.0), rgb=None, **loop_overrides) -> me.MissionSession:
-        loop = episode_world({
-            fid: SimpleNamespace(world_xy=xy, provenance="detected" if prov == "detected" else "prebaked")
-            for fid, (xy, prov) in STUB_GRAPH.items()})
+        loop = episode_world(
+            {
+                fid: SimpleNamespace(
+                    world_xy=xy, provenance="detected" if prov == "detected" else "prebaked"
+                )
+                for fid, (xy, prov) in STUB_GRAPH.items()
+            }
+        )
         for k, v in loop_overrides.items():
             setattr(loop, k, v)
-        frame = SimpleNamespace(pose_xy=(130.0, 240.0), altitude_m=900.0, rgb=rgb,
-                                sensor=None, ortho_view_corners_xy=None)
+        frame = SimpleNamespace(
+            pose_xy=(130.0, 240.0),
+            altitude_m=900.0,
+            rgb=rgb,
+            sensor=None,
+            ortho_view_corners_xy=None,
+        )
         h = SimpleNamespace(
             state=EpisodeState(pose_xy=pose_xy, altitude_m=100.0),
-            assets=SimpleNamespace(bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0,
-                                   grid_shape=(10, 10)),
+            assets=SimpleNamespace(
+                bounds=SimpleNamespace(x_min=0.0, y_min=0.0), cell_size_m=2.0, grid_shape=(10, 10)
+            ),
             episode=SimpleNamespace(map_name="calcity", description="the largest building"),
-            sensor=None, tile_frame=None, ground_z_m=0.0, world=loop,
+            sensor=None,
+            tile_frame=None,
+            ground_z_m=0.0,
+            world=loop,
             # The bench as the test's environment places it, read when the session is made.
             bench=citynav_bench(os.environ),
-            settings=Settings(), workdir=None, routing_key=None,
-            perception=SimpleNamespace(detect=lambda obs: [], concepts=[]))
+            settings=Settings(),
+            workdir=None,
+            routing_key=None,
+            perception=SimpleNamespace(detect=lambda obs: [], concepts=[]),
+        )
         return me.MissionSession(h, observe=lambda: frame)
 
     return make

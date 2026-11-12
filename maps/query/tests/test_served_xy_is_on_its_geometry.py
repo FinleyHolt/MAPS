@@ -1,4 +1,5 @@
 """A row's served ``xy`` is the ``go_to``/``explore`` FLIGHT TARGET, so it is a place."""
+
 from __future__ import annotations
 
 import math
@@ -14,16 +15,20 @@ def _node(contour, name=None, world_xy=None):
     contour = [(float(x), float(y)) for x, y in contour]
     cells = _cells_of(contour)
     return MapObject(
-        class_name="", name=name,
+        class_name="",
+        name=name,
         tags={"highway": "residential"} if name else {"building": "yes"},
-        centroid=tuple(cells[0]), cells=cells, world_contour=contour,
-        world_xy=world_xy)
+        centroid=tuple(cells[0]),
+        cells=cells,
+        world_contour=contour,
+        world_xy=world_xy,
+    )
 
 
 def _cells_of(contour):
     import numpy as np
-    return np.asarray([[int(y // 2), int(x // 2)] for x, y in contour],
-                      dtype=int)
+
+    return np.asarray([[int(y // 2), int(x // 2)] for x, y in contour], dtype=int)
 
 
 # A way bent around three sides of a block. It states no closure, so it is a POLYLINE
@@ -32,18 +37,19 @@ def _cells_of(contour):
 _BENT_WAY = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
 # An ordinary building: convex, so the mean IS on it and nothing should move
 # far.
-_BUILDING = [(200.0, 200.0), (220.0, 200.0), (220.0, 214.0), (200.0, 214.0),
-             (200.0, 200.0)]
+_BUILDING = [(200.0, 200.0), (220.0, 200.0), (220.0, 214.0), (200.0, 214.0), (200.0, 200.0)]
 # One NAME, two places 800 m apart -- the mean is 400 m from both.
 _FAR_A = [(0.0, 500.0), (40.0, 500.0)]
 _FAR_B = [(800.0, 500.0), (840.0, 500.0)]
 
 
 def _surface():
-    nodes = [("p_bent", _node(_BENT_WAY)),
-             ("p_bldg", _node(_BUILDING)),
-             ("p_far_a", _node(_FAR_A, name="Raymond Avenue")),
-             ("p_far_b", _node(_FAR_B, name="Raymond Avenue"))]
+    nodes = [
+        ("p_bent", _node(_BENT_WAY)),
+        ("p_bldg", _node(_BUILDING)),
+        ("p_far_a", _node(_FAR_A, name="Raymond Avenue")),
+        ("p_far_b", _node(_FAR_B, name="Raymond Avenue")),
+    ]
     _cands, anchors = build_surface_from_graph(nodes, (0.0, 0.0), 2.0)
     return anchors
 
@@ -51,8 +57,8 @@ def _surface():
 def _gap(row) -> float:
     """Metres from the row's served point to its own geometry. 0 = on it."""
     import numpy as np
-    chains = [[[float(p[0]), float(p[1])] for p in ch]
-              for ch in (row.get("mask") or []) if ch]
+
+    chains = [[[float(p[0]), float(p[1])] for p in ch] for ch in (row.get("mask") or []) if ch]
     geom = G.mask_geom(chains)
     xy = [float(row["xy"][0]), float(row["xy"][1])]
     if len(geom["CA"]) and bool(G.mask_contains(geom, [xy])[0]):
@@ -75,9 +81,13 @@ def test_every_served_point_is_on_its_own_geometry():
 
 def test_a_measured_position_wins_over_a_derived_one():
     """A detection's ``world_xy`` is where the tracker put the object, sub-cell."""
-    det = ("d_car", _node([(10.0, 10.0), (14.0, 10.0), (14.0, 12.0),
-                           (10.0, 12.0), (10.0, 10.0)],
-                          world_xy=(11.37, 10.94)))
+    det = (
+        "d_car",
+        _node(
+            [(10.0, 10.0), (14.0, 10.0), (14.0, 12.0), (10.0, 12.0), (10.0, 10.0)],
+            world_xy=(11.37, 10.94),
+        ),
+    )
     det[1].provenance = "detected"
     cands, _anchors = build_surface_from_graph([det], (0.0, 0.0), 2.0)
     assert cands[0]["xy"] == [11.37, 10.94], cands[0]["xy"]

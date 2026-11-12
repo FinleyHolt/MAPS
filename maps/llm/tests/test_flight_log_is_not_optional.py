@@ -17,4 +17,7 @@ def test_no_workdir_records_nothing_and_says_so_once(monkeypatch, caplog):
 
 
 def test_the_workdir_is_expanded_like_any_other_path():
-    assert llm_http._resolved_flight_log_dir("~/runs/ep0") == Path(os.path.expanduser("~/runs/ep0")) / "flight" / "llm"
+    assert (
+        llm_http._resolved_flight_log_dir("~/runs/ep0")
+        == Path(os.path.expanduser("~/runs/ep0")) / "flight" / "llm"
+    )

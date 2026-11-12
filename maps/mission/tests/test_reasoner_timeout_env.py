@@ -20,7 +20,10 @@ def _endpoint(value: str):
 def test_the_env_sets_the_timeout_and_a_value_that_cannot_apply_is_loud():
     assert reasoner_timeout_s(_endpoint("   ").reasoner_timeout_s) == REASONER_TIMEOUT_DEFAULT_S
     assert Reasoner(endpoint_spec=TEST_SPEC, settings=from_environ({ENV: " 900 "})).timeout == 900.0
-    assert Reasoner(endpoint_spec=TEST_SPEC, settings=from_environ({})).timeout == REASONER_TIMEOUT_DEFAULT_S
+    assert (
+        Reasoner(endpoint_spec=TEST_SPEC, settings=from_environ({})).timeout
+        == REASONER_TIMEOUT_DEFAULT_S
+    )
     for bad in ("900s", "0", "nan", "1e12"):
         with pytest.raises(ValueError):
             reasoner_timeout_s(_endpoint(bad).reasoner_timeout_s)

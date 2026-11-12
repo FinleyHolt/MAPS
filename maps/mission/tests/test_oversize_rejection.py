@@ -22,26 +22,32 @@ SGLANG_OVERSIZE = (
 )
 
 
-@pytest.mark.parametrize("body", [
-    SGLANG_OVERSIZE,
-    SGLANG_OVERSIZE.upper(),
-    "This model's maximum context length is 65536 tokens",
-    "prompt is longer than the maximum model length",
-    "Please reduce the length of the messages",
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        SGLANG_OVERSIZE,
+        SGLANG_OVERSIZE.upper(),
+        "This model's maximum context length is 65536 tokens",
+        "prompt is longer than the maximum model length",
+        "Please reduce the length of the messages",
+    ],
+)
 def test_a_400_saying_the_request_does_not_fit_is_permanent(body: str) -> None:
     assert _is_oversize_rejection(_status_error(400, body))
 
 
-@pytest.mark.parametrize("err", [
-    # a grammar refusal: a fresh generation differs, so a retry fixes it
-    _status_error(400, "Failed to parse tool call arguments against schema"),
-    # fail-safe: an unrecognised 400 keeps the retry path
-    _status_error(400, "something else entirely"),
-    # capacity, which the transport already retries
-    _status_error(503, "maximum context length exceeded downstream"),
-    httpx.ConnectError("tunnel flap"),
-    ValueError("empty body"),
-])
+@pytest.mark.parametrize(
+    "err",
+    [
+        # a grammar refusal: a fresh generation differs, so a retry fixes it
+        _status_error(400, "Failed to parse tool call arguments against schema"),
+        # fail-safe: an unrecognised 400 keeps the retry path
+        _status_error(400, "something else entirely"),
+        # capacity, which the transport already retries
+        _status_error(503, "maximum context length exceeded downstream"),
+        httpx.ConnectError("tunnel flap"),
+        ValueError("empty body"),
+    ],
+)
 def test_everything_else_stays_retriable(err) -> None:
     assert not _is_oversize_rejection(err)

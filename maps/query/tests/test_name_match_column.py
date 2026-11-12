@@ -12,8 +12,9 @@ _ANCHORS = [
 
 
 def _run(ops, cands=None, anchors=None):
-    return run_program([dict(c) for c in (cands or _CANDS)],
-                       [dict(a) for a in (anchors or _ANCHORS)], {"ops": ops})
+    return run_program(
+        [dict(c) for c in (cands or _CANDS)], [dict(a) for a in (anchors or _ANCHORS)], {"ops": ops}
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -25,10 +26,11 @@ def test_query_find_rows_carry_name_match():
     # A fuzzy query find scores every matched row; that trust rides each row
     # as name_match (a NAME matched, never WHICH instance) -- not match_score,
     # not overloaded onto the resolved-set token 'score'.
-    out = _run([
-        {"ref": "r0", "op": "find",
-         "args": {"query": "manhattan house"}},
-    ])
+    out = _run(
+        [
+            {"ref": "r0", "op": "find", "args": {"query": "manhattan house"}},
+        ]
+    )
     rows = out["results"]["r0"]
     assert rows, rows
     for r in rows:

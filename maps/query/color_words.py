@@ -10,10 +10,21 @@ from __future__ import annotations
 # Palette word -> family; key order is the order a label's colour is read in
 # (surface._color_of).
 COLOR_FAMILY = {
-    "white": "achromatic", "black": "achromatic", "gray": "achromatic", "silver": "achromatic",
-    "red": "red", "blue": "blue", "green": "green", "yellow": "yellow",
-    "orange": "warm", "brown": "warm", "tan": "warm", "beige": "warm", "gold": "yellow",
-    "maroon": "red", "purple": "purple",
+    "white": "achromatic",
+    "black": "achromatic",
+    "gray": "achromatic",
+    "silver": "achromatic",
+    "red": "red",
+    "blue": "blue",
+    "green": "green",
+    "yellow": "yellow",
+    "orange": "warm",
+    "brown": "warm",
+    "tan": "warm",
+    "beige": "warm",
+    "gold": "yellow",
+    "maroon": "red",
+    "purple": "purple",
 }
 
 
@@ -69,16 +80,46 @@ def color_match(cand_color: str, cue_color: str, conf: float | None = None) -> f
 
 # The closed palette the surface serves; :func:`normalize_color` maps an open
 # word onto it.
-COLOR_ENUM = ["white", "gray", "black", "red", "blue", "green", "yellow", "orange", "brown", "purple"]
+COLOR_ENUM = [
+    "white",
+    "gray",
+    "black",
+    "red",
+    "blue",
+    "green",
+    "yellow",
+    "orange",
+    "brown",
+    "purple",
+]
 
 _COLOR_SYNONYMS = {
-    "silver": "gray", "charcoal": "gray", "slate": "gray",
-    "maroon": "red", "crimson": "red", "scarlet": "red", "burgundy": "red", "pink": "red",
-    "navy": "blue", "cyan": "blue", "teal": "blue", "turquoise": "blue", "aqua": "blue",
-    "violet": "purple", "magenta": "purple", "lavender": "purple",
-    "gold": "yellow", "golden": "yellow", "amber": "yellow",
-    "cream": "white", "beige": "brown", "tan": "brown", "bronze": "brown", "copper": "brown",
-    "olive": "green", "lime": "green",
+    "silver": "gray",
+    "charcoal": "gray",
+    "slate": "gray",
+    "maroon": "red",
+    "crimson": "red",
+    "scarlet": "red",
+    "burgundy": "red",
+    "pink": "red",
+    "navy": "blue",
+    "cyan": "blue",
+    "teal": "blue",
+    "turquoise": "blue",
+    "aqua": "blue",
+    "violet": "purple",
+    "magenta": "purple",
+    "lavender": "purple",
+    "gold": "yellow",
+    "golden": "yellow",
+    "amber": "yellow",
+    "cream": "white",
+    "beige": "brown",
+    "tan": "brown",
+    "bronze": "brown",
+    "copper": "brown",
+    "olive": "green",
+    "lime": "green",
 }
 
 
@@ -96,8 +137,7 @@ def normalize_color(word: str) -> str:
 COLOR_COLUMNS = frozenset("color_" + w for w in COLOR_ENUM)
 
 
-def compact_color_cell(color_str: str, *, shade: "str | None", uncertain: bool,
-                       rich: bool) -> str:
+def compact_color_cell(color_str: str, *, shade: "str | None", uncertain: bool, rich: bool) -> str:
     """The rendered colour cell ``[dk|lt ]word[/word2][?]`` of a mixture
     (``shade`` is ``dk``, ``lt`` or None): ``word2`` when ``rich`` and the
     second component crosses a family, ``?`` on an uncertain read."""

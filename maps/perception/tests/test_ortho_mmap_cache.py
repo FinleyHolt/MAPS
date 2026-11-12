@@ -145,9 +145,7 @@ def test_concurrent_cold_cache_builds_once_under_the_lock(tmp_path, monkeypatch)
 
     def worker():
         barrier.wait()
-        results.append(
-            cm.load_ortho_or_rasters("calcity", rgbd_dir=str(tmp_path))
-        )
+        results.append(cm.load_ortho_or_rasters("calcity", rgbd_dir=str(tmp_path)))
 
     threads = [threading.Thread(target=worker) for _ in range(2)]
     for t in threads:
@@ -170,12 +168,29 @@ def _geotiff_pair(d, seed=3, H=37, W=53, px=0.15, ground=610.0):
     rgb[5:9, 10:20] = 0  # ground the aircraft did not image
     rgb[0, :] = 0
     tr = from_origin(1200.0, 3400.0 + H * px, px, px)
-    with rasterio.open(d / "blk_rgb.tif", "w", driver="GTiff", width=W, height=H, count=3, dtype="uint8",
-                       transform=tr, compress="deflate") as dst:
+    with rasterio.open(
+        d / "blk_rgb.tif",
+        "w",
+        driver="GTiff",
+        width=W,
+        height=H,
+        count=3,
+        dtype="uint8",
+        transform=tr,
+        compress="deflate",
+    ) as dst:
         for b in range(3):
             dst.write(rgb[..., b], b + 1)
-    with rasterio.open(d / "blk.tif", "w", driver="GTiff", width=W, height=H, count=1, dtype="float32",
-                       transform=tr) as dst:
+    with rasterio.open(
+        d / "blk.tif",
+        "w",
+        driver="GTiff",
+        width=W,
+        height=H,
+        count=1,
+        dtype="float32",
+        transform=tr,
+    ) as dst:
         dst.write(np.full((H, W), ground, np.float32), 1)
     return rgb
 

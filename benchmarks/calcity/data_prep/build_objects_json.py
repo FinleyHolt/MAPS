@@ -143,14 +143,21 @@ def build_block(bundle: Path, map_name: str, bbox) -> dict:
         minx, miny, maxx, maxy = poly.bounds
         objects[str(oid)] = {
             "id": oid,
-            "position": [round(float(poly.centroid.x), 3), round(float(poly.centroid.y), 3),
-                         round(GROUND_LEVEL_M, 3)],
+            "position": [
+                round(float(poly.centroid.x), 3),
+                round(float(poly.centroid.y), 3),
+                round(GROUND_LEVEL_M, 3),
+            ],
             "dimension": [round(float(maxx - minx), 3), round(float(maxy - miny), 3)],
             "contour": _contour_xy(poly),
         }
 
-    log.info("%s: %d objects, type counts %s", map_name, len(objects),
-             dict(Counter(f["object_type"] for f in feats)))
+    log.info(
+        "%s: %d objects, type counts %s",
+        map_name,
+        len(objects),
+        dict(Counter(f["object_type"] for f in feats)),
+    )
     return objects
 
 

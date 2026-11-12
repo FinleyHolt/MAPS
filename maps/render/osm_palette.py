@@ -16,16 +16,36 @@ import hashlib
 # The tag whose value names a feature's kind, first hit wins. ``highway=residential`` -> "residential"; a bare flag value
 # (``building=yes``) labels as its key ("building").
 _LABEL_TAG_KEYS = (
-    "highway", "building", "natural", "landuse", "leisure", "amenity",
-    "railway", "waterway", "water", "man_made", "aeroway", "barrier",
+    "highway",
+    "building",
+    "natural",
+    "landuse",
+    "leisure",
+    "amenity",
+    "railway",
+    "waterway",
+    "water",
+    "man_made",
+    "aeroway",
+    "barrier",
 )
 
 # 12 hue-bucket words (30 deg each, centered on 0=red) so a text legend can
 # name a digest-derived hue: the model reads "residential=teal" beside the
 # teal region. Coarse on purpose -- a schematic's legend, not a color science.
 _HUE_WORDS = (
-    "red", "orange", "yellow", "yellow-green", "green", "spring-green",
-    "cyan", "azure", "blue", "violet", "magenta", "pink",
+    "red",
+    "orange",
+    "yellow",
+    "yellow-green",
+    "green",
+    "spring-green",
+    "cyan",
+    "azure",
+    "blue",
+    "violet",
+    "magenta",
+    "pink",
 )
 
 
@@ -86,8 +106,7 @@ def osm_kind(tags: dict | None) -> str:
     return "area"
 
 
-def paint_color(label: str, *, kind: str = "area",
-                detected: bool = False) -> tuple[int, int, int]:
+def paint_color(label: str, *, kind: str = "area", detected: bool = False) -> tuple[int, int, int]:
     """The schematic paint for one feature: reserved color per kind,
     digest hue for identity where hue is the information.
 
@@ -105,8 +124,7 @@ def paint_color(label: str, *, kind: str = "area",
     return _hsv_rgb(label, 0.30, 0.34)
 
 
-def paint_word(label: str, *, kind: str = "area",
-               detected: bool = False) -> str:
+def paint_word(label: str, *, kind: str = "area", detected: bool = False) -> str:
     """The legend word for :func:`paint_color` — named from the SAME rule
     so word and paint can never disagree."""
     if detected or kind not in ("road", "building"):

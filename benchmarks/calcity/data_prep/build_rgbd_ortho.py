@@ -59,7 +59,9 @@ def build_block(root: Path, map_name: str, bbox, raster: Path) -> tuple[Path, Pa
         px = float(abs(src.transform.a))
         W, H = src.width, src.height
         if abs(src.transform.e) != px:
-            raise ValueError(f"{raster}: the cell is {px} x {abs(src.transform.e)} m; a block raster's is square")
+            raise ValueError(
+                f"{raster}: the cell is {px} x {abs(src.transform.e)} m; a block raster's is square"
+            )
     lf = build_local_frame(bbox)
     want_h, want_w = grid_shape(lf, px)
     if (W, H) != (want_w, want_h):
@@ -102,11 +104,17 @@ def build_block(root: Path, map_name: str, bbox, raster: Path) -> tuple[Path, Pa
 
 
 def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s", datefmt="%H:%M:%S")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s", datefmt="%H:%M:%S"
+    )
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=calcity_bench(os.environ).root)
-    parser.add_argument("--raster", type=Path, required=True,
-                        help="the block's RGB GeoTIFF at the cell the bench runs on")
+    parser.add_argument(
+        "--raster",
+        type=Path,
+        required=True,
+        help="the block's RGB GeoTIFF at the cell the bench runs on",
+    )
     args = parser.parse_args(argv)
     build_block(args.root, "calcity", AOI_BBOX, args.raster)
     return 0

@@ -129,7 +129,8 @@ def test_a_live_flight_with_no_frame_says_the_recording_served_none(stub_session
     session = stub_session()
     session.observe = lambda: None
     assert session.fly({"target_fid": "building_7"}) == {
-        "error": "no observation: the aircraft's recording served no frame of this flight's ground"}
+        "error": "no observation: the aircraft's recording served no frame of this flight's ground"
+    }
     assert session.flights == []
 
 
@@ -156,10 +157,17 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
     monkeypatch.setattr(me, "run_mission", lambda **kw: served.update(kw))
     session = me.MissionSession.__new__(me.MissionSession)
     session.run_kwargs = {}
-    session.h = SimpleNamespace(sensor=resolve_sensor("oryx_orx32_25mm_nadir"),
-                                cfg=SimpleNamespace(start_altitude_agl_m=914.4),
-                                state=SimpleNamespace(altitude_m=600.0),
-                                ground_z_m=100.0, bench=SimpleNamespace(environ={}),
-                                settings=Settings(), workdir=None, routing_key=None)
+    session.h = SimpleNamespace(
+        sensor=resolve_sensor("oryx_orx32_25mm_nadir"),
+        cfg=SimpleNamespace(start_altitude_agl_m=914.4),
+        state=SimpleNamespace(altitude_m=600.0),
+        ground_z_m=100.0,
+        bench=SimpleNamespace(environ={}),
+        settings=Settings(),
+        workdir=None,
+        routing_key=None,
+    )
     session.run("find it")
-    assert "at the 1,640 ft AGL this run flies" in served["sensor_description"], served["sensor_description"]
+    assert "at the 1,640 ft AGL this run flies" in served["sensor_description"], served[
+        "sensor_description"
+    ]

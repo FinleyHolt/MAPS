@@ -122,8 +122,13 @@ def _cell_coverage(
             "%s: ortho geometry (origin %.2f,%.2f @ %.3g px/m) does not align "
             "with the block grid (origin %.2f,%.2f @ %.3g m cells); coverage "
             "stays the bounds rectangle",
-            block, float(ortho["x_min"]), float(ortho["y_min"]), ppm,
-            bounds.x_min, bounds.y_min, cell_size_m,
+            block,
+            float(ortho["x_min"]),
+            float(ortho["y_min"]),
+            ppm,
+            bounds.x_min,
+            bounds.y_min,
+            cell_size_m,
         )
         return None
     alpha = (np.asarray(ortho["alpha"]) > 0)[::-1]  # south-up, matching cell rows
@@ -136,7 +141,10 @@ def _cell_coverage(
     coverage = alpha.reshape(H, step, W, step).any(axis=(1, 3))
     log.info(
         "%s: imagery covers %.1f%% of the bounds rectangle (%d/%d cells)",
-        block, 100.0 * coverage.mean(), int(coverage.sum()), coverage.size,
+        block,
+        100.0 * coverage.mean(),
+        int(coverage.sum()),
+        coverage.size,
     )
     return coverage
 
@@ -191,7 +199,13 @@ def _record_bbox(geometry: dict[str, Any]) -> tuple[float, float, float, float] 
     """``(x_min, y_min, x_max, y_max)`` over every vertex of every part."""
     points: list[tuple[float, float]] = []
     for geom_type, coords in _iter_geometry_parts(geometry):
-        chains = [[coords]] if geom_type == "Point" else [coords] if geom_type == "LineString" else coords
+        chains = (
+            [[coords]]
+            if geom_type == "Point"
+            else [coords]
+            if geom_type == "LineString"
+            else coords
+        )
         for chain in chains:
             points += _as_point_list(chain)
     if not points:
@@ -211,8 +225,7 @@ def _chain_extent(chain: Sequence[tuple[float, float]]) -> float:
             (x0, y0), (x1, y1) = chain[i], chain[i + 1]
             area += x0 * y1 - x1 * y0
         return abs(area) * 0.5
-    return sum(math.dist(chain[i], chain[i + 1])
-               for i in range(len(chain) - 1))
+    return sum(math.dist(chain[i], chain[i + 1]) for i in range(len(chain) - 1))
 
 
 def _world_contour_from_geometry(geometry: dict[str, Any]) -> list[list[float]] | None:
@@ -290,11 +303,18 @@ def _window_centers(
     H, W = grid_shape
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
+
     def cell(v, lo):
         return int(math.floor((v - lo) / cell_size_m))
 
-    c0, c1 = max(0, cell(min(xs) - pad_m, bounds.x_min)), min(W - 1, cell(max(xs) + pad_m, bounds.x_min))
-    r0, r1 = max(0, cell(min(ys) - pad_m, bounds.y_min)), min(H - 1, cell(max(ys) + pad_m, bounds.y_min))
+    c0, c1 = (
+        max(0, cell(min(xs) - pad_m, bounds.x_min)),
+        min(W - 1, cell(max(xs) + pad_m, bounds.x_min)),
+    )
+    r0, r1 = (
+        max(0, cell(min(ys) - pad_m, bounds.y_min)),
+        min(H - 1, cell(max(ys) + pad_m, bounds.y_min)),
+    )
     if c1 < c0 or r1 < r0:
         return None
     cx = bounds.x_min + (np.arange(c0, c1 + 1) + 0.5) * cell_size_m
@@ -482,9 +502,7 @@ def _features_from_records(
 
         # Meters from any no-coverage cell to the nearest imagery, for the
         # off-imagery warning below.
-        no_data_dist_m = (
-            ndimage.distance_transform_edt(~coverage) * cell_size_m
-        )
+        no_data_dist_m = ndimage.distance_transform_edt(~coverage) * cell_size_m
     for props, geometry, bbox in sorted(in_window, key=lambda r: _record_sort_key(r[:2])):
         cells = _cells_for_geometry(geometry, bounds, grid_shape, cell_size_m, line_buffer_m)
         if coverage is not None:
@@ -492,8 +510,13 @@ def _features_from_records(
         if not cells:
             continue
         raw_name = _safe_text(props.get("name"))
-        entry = _feature_entry(props, cells, _safe_text(props.get("osm_id")),
-                               _world_contour_from_geometry(geometry), coverage)
+        entry = _feature_entry(
+            props,
+            cells,
+            _safe_text(props.get("osm_id")),
+            _world_contour_from_geometry(geometry),
+            coverage,
+        )
         # A named prior whose TRUE geometry centroid sits over no imagery
         # (outside the raster window, or inside it on no-data) is
         # SAM-invisible; the bake warns with them.
@@ -513,8 +536,7 @@ def _features_from_records(
         entries.append(entry)
     if named_off_raster:
         log.warning(
-            "%s named prior(s) of %d sit over NO imagery "
-            "(frac=%.3f, SAM-invisible): %s",
+            "%s named prior(s) of %d sit over NO imagery (frac=%.3f, SAM-invisible): %s",
             len(named_off_raster),
             named_priors_total,
             round(len(named_off_raster) / named_priors_total, 3),
@@ -543,7 +565,9 @@ def _read_geojson_cache(
         geometry = raw.get("geometry")
         if not isinstance(geometry, dict):
             continue
-        props = normalise_props(raw.get("properties") if isinstance(raw.get("properties"), dict) else {})
+        props = normalise_props(
+            raw.get("properties") if isinstance(raw.get("properties"), dict) else {}
+        )
         if raw.get("id") is not None:
             props.setdefault("osm_id", raw.get("id"))
         records.append((props, geometry))
@@ -579,29 +603,39 @@ def bake_block(
     imagery = bounds is None
     if bounds is None:
         if rgbd_dir is None:
-            raise BakeError(f"{name}: a block baked without bounds reads them off its raster: pass rgbd_dir")
+            raise BakeError(
+                f"{name}: a block baked without bounds reads them off its raster: pass rgbd_dir"
+            )
         x_min, y_min, x_max, y_max = _raster_bounds(name, rgbd_dir)
         bounds = WorldBounds(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
     # Row 0 is y_min (south) and rows run north, so grid_shape is (rows, cols) = (y, x).
-    grid_shape = (int(round((bounds.y_max - bounds.y_min) / CELL_SIZE_M)),
-                  int(round((bounds.x_max - bounds.x_min) / CELL_SIZE_M)))
+    grid_shape = (
+        int(round((bounds.y_max - bounds.y_min) / CELL_SIZE_M)),
+        int(round((bounds.x_max - bounds.x_min) / CELL_SIZE_M)),
+    )
     coverage = _cell_coverage(name, bounds, grid_shape, CELL_SIZE_M, rgbd_dir) if imagery else None
     features = _features_from_records(
-        records, bounds=bounds, grid_shape=grid_shape, cell_size_m=CELL_SIZE_M, coverage=coverage,
+        records,
+        bounds=bounds,
+        grid_shape=grid_shape,
+        cell_size_m=CELL_SIZE_M,
+        coverage=coverage,
     )
     if not features:
         log.warning("%s: no OSM records rasterized onto the block imagery", name)
 
     tiles_path.mkdir(parents=True, exist_ok=True)
     meta_path, feat_path = (Path(f"{tiles_path / name}{s}") for s in BAKE_OUTPUT_SUFFIXES)
-    feat_path.write_text(
-        json.dumps(features, separators=(",", ":")), encoding="utf-8"
-    )
+    feat_path.write_text(json.dumps(features, separators=(",", ":")), encoding="utf-8")
     out_meta: dict[str, Any] = {
         "grid_shape": [int(grid_shape[0]), int(grid_shape[1])],
         "cell_size_m": CELL_SIZE_M,
-        "bounds": {"x_min": bounds.x_min, "y_min": bounds.y_min,
-                   "x_max": bounds.x_max, "y_max": bounds.y_max},
+        "bounds": {
+            "x_min": bounds.x_min,
+            "y_min": bounds.y_min,
+            "x_max": bounds.x_max,
+            "y_max": bounds.y_max,
+        },
         **(meta or {}),
     }
     meta_path.write_text(json.dumps(out_meta, indent=2), encoding="utf-8")
@@ -616,8 +650,11 @@ def bake_city(city: str, osm_cache: str | Path, tiles_dir: str | Path, rgbd_dir:
     (block bounds are windows of the shared city frame)."""
     tiles_path = Path(tiles_dir).expanduser().resolve()
     rasters = Path(rgbd_dir)
-    blocks = sorted(p.stem for p in rasters.glob(f"{city}_block_*.tif")
-                    if re.fullmatch(rf"{city}_block_\d+", p.stem))
+    blocks = sorted(
+        p.stem
+        for p in rasters.glob(f"{city}_block_*.tif")
+        if re.fullmatch(rf"{city}_block_\d+", p.stem)
+    )
     if not blocks:
         raise BakeError(f"no {city}_block_<n>.tif under {rasters}")
     cache_path = Path(osm_cache).expanduser().resolve()
@@ -645,8 +682,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Bake every block of --city from its OSM cache into --tiles-dir."
     )
     ap.add_argument("--city", choices=_CITY_CHOICES, required=True)
-    ap.add_argument("--osm-cache", type=Path, required=True,
-                    help="the city's GeoJSON cache in CityNav local XY (tiles/osm_cache)")
+    ap.add_argument(
+        "--osm-cache",
+        type=Path,
+        required=True,
+        help="the city's GeoJSON cache in CityNav local XY (tiles/osm_cache)",
+    )
     bench = citynav_bench(os.environ)
     ap.add_argument("--tiles-dir", type=Path, default=bench.tiles_dir)
     args = ap.parse_args(argv)

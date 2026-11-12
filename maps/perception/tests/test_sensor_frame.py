@@ -35,8 +35,12 @@ class Bounds(NamedTuple):
 def test_footprint_is_two_agl_tan_half_fov():
     agl = 457.2  # 1500 ft
     w, h = footprint_m(ORYX, agl)
-    assert w == pytest.approx(2 * agl * math.tan(math.radians(ORYX.intrinsics.hfov_deg) / 2), rel=1e-12)
-    assert h == pytest.approx(2 * agl * math.tan(math.radians(ORYX.intrinsics.vfov_deg) / 2), rel=1e-12)
+    assert w == pytest.approx(
+        2 * agl * math.tan(math.radians(ORYX.intrinsics.hfov_deg) / 2), rel=1e-12
+    )
+    assert h == pytest.approx(
+        2 * agl * math.tan(math.radians(ORYX.intrinsics.vfov_deg) / 2), rel=1e-12
+    )
     # The values the Edwards site is specified against (the 1/1.8" IMX252
     # behind the 25 mm lens), so a sensor-card edit that moves them shows up here.
     assert (round(w, 1), round(h, 1)) == (129.2, 96.9)
@@ -86,9 +90,7 @@ def test_marker_lands_where_the_projection_predicts(mount_yaw_deg, across, down)
     marker = (aim[0] + w_m / 4.0, aim[1] + h_m / 4.0)
     rgb = _synthetic_ortho(px_per_m, bounds, marker)
 
-    frame = render_frame(
-        rgb, bounds, px_per_m, sensor=sensor, pose_xy=aim, agl_m=agl, yaw_deg=0.0
-    )
+    frame = render_frame(rgb, bounds, px_per_m, sensor=sensor, pose_xy=aim, agl_m=agl, yaw_deg=0.0)
     assert frame.shape == (1536, 2048, 3)
 
     rows, cols = np.nonzero(frame.max(axis=2) > 128)
@@ -98,19 +100,23 @@ def test_marker_lands_where_the_projection_predicts(mount_yaw_deg, across, down)
     # on the ortho's own grid, so the render is read against where the grid
     # put it: up to a quarter metre off the nominal, several frame pixels here.
     way = 1.0 if mount_yaw_deg == 0.0 else -1.0
-    on_grid = (bounds.x_min + round((marker[0] - bounds.x_min) * px_per_m) / px_per_m,
-               bounds.y_min + round((marker[1] - bounds.y_min) * px_per_m) / px_per_m)
-    assert cols.mean() == pytest.approx(2048 * across + way * (on_grid[0] - marker[0]) / (w_m / 2048), abs=2.0)
-    assert rows.mean() == pytest.approx(1536 * down - way * (on_grid[1] - marker[1]) / (h_m / 1536), abs=2.0)
+    on_grid = (
+        bounds.x_min + round((marker[0] - bounds.x_min) * px_per_m) / px_per_m,
+        bounds.y_min + round((marker[1] - bounds.y_min) * px_per_m) / px_per_m,
+    )
+    assert cols.mean() == pytest.approx(
+        2048 * across + way * (on_grid[0] - marker[0]) / (w_m / 2048), abs=2.0
+    )
+    assert rows.mean() == pytest.approx(
+        1536 * down - way * (on_grid[1] - marker[1]) / (h_m / 1536), abs=2.0
+    )
 
 
 def test_out_of_block_footprint_fails_loud():
     bounds = Bounds(0.0, 0.0, 1000.0, 1000.0)
     rgb = np.zeros((2000, 2000, 3), np.uint8)
     with pytest.raises(ValueError, match="outside the block"):
-        render_frame(
-            rgb, bounds, 2.0, sensor=ORYX, pose_xy=(20.0, 500.0), agl_m=457.2, yaw_deg=0.0
-        )
+        render_frame(rgb, bounds, 2.0, sensor=ORYX, pose_xy=(20.0, 500.0), agl_m=457.2, yaw_deg=0.0)
 
 
 def test_ground_corners_come_off_the_projector_and_match_the_level_rectangle():
@@ -119,7 +125,11 @@ def test_ground_corners_come_off_the_projector_and_match_the_level_rectangle():
     from dataclasses import replace
 
     from maps.perception.geometry.sensor_spec import resolve_sensor
-    from maps.perception.ortho.sensor_frame import footprint_corners_xy, footprint_m, ground_corners_xy
+    from maps.perception.ortho.sensor_frame import (
+        footprint_corners_xy,
+        footprint_m,
+        ground_corners_xy,
+    )
 
     # Aligned: the installed aft mount is checked at the end, and would
     # otherwise only relabel which corner is which.
@@ -131,22 +141,32 @@ def test_ground_corners_come_off_the_projector_and_match_the_level_rectangle():
     gsd = max(w_m / sensor.intrinsics.image_width, h_m / sensor.intrinsics.image_height)
     for (x, y), (lx, ly) in zip(ours, level):
         assert math.hypot(x - lx, y - ly) < gsd, (x - lx, y - ly, gsd)
+
     # And in the right direction: the corner PIXEL CENTRES sit half a pixel
     # inside the rectangle's edges, so the footprint is exactly one pixel
     # narrower and shorter. An inverted sign would still pass the bound above.
     def side(a, b):
         return math.hypot(a[0] - b[0], a[1] - b[1])
-    assert side(ours[0], ours[1]) == pytest.approx(side(level[0], level[1]) - w_m / sensor.intrinsics.image_width, abs=1e-3)
-    assert side(ours[1], ours[2]) == pytest.approx(side(level[1], level[2]) - h_m / sensor.intrinsics.image_height, abs=1e-3)
+
+    assert side(ours[0], ours[1]) == pytest.approx(
+        side(level[0], level[1]) - w_m / sensor.intrinsics.image_width, abs=1e-3
+    )
+    assert side(ours[1], ours[2]) == pytest.approx(
+        side(level[1], level[2]) - h_m / sensor.intrinsics.image_height, abs=1e-3
+    )
 
     # A mount pitch is a boresight the twin must render: the whole footprint
     # slides along track by the projector's own tan.
     pitched = replace(sensor, mount_pitch_deg=sensor.mount_pitch_deg + 1.0)
     moved = ground_corners_xy(pitched, pose, agl, yaw)
     shift = [((x2 - x1), (y2 - y1)) for (x1, y1), (x2, y2) in zip(ours, moved)]
-    along = [dx * math.sin(math.radians(yaw)) + dy * math.cos(math.radians(yaw)) for dx, dy in shift]
+    along = [
+        dx * math.sin(math.radians(yaw)) + dy * math.cos(math.radians(yaw)) for dx, dy in shift
+    ]
     assert all(abs(abs(a) - agl * math.tan(math.radians(1.0))) < 0.5 for a in along), along
-    assert len({round(a, 1) > 0 for a in along}) == 1, "the four corners moved in different directions"
+    assert len({round(a, 1) > 0 for a in along}) == 1, (
+        "the four corners moved in different directions"
+    )
 
     # Bolted in facing aft the camera sees the SAME ground, and names the
     # corners two apart: the footprint is the mount's business only through
@@ -178,11 +198,19 @@ def test_the_window_under_the_footprint_renders_the_whole_ortho_s_frame():
         ((620.0, 410.0), 300.0, 250.0, -20.0, 6.0),
     ):
         frame = render_frame(
-            rgb, bounds, px_per_m, sensor=ORYX, pose_xy=pose, agl_m=agl, yaw_deg=yaw,
-            airframe_roll_deg=roll, airframe_pitch_deg=pitch,
+            rgb,
+            bounds,
+            px_per_m,
+            sensor=ORYX,
+            pose_xy=pose,
+            agl_m=agl,
+            yaw_deg=yaw,
+            airframe_roll_deg=roll,
+            airframe_pitch_deg=pitch,
         )
-        corners = ground_corners_xy(ORYX, pose, agl, yaw, airframe_roll_deg=roll,
-                                    airframe_pitch_deg=pitch)
+        corners = ground_corners_xy(
+            ORYX, pose, agl, yaw, airframe_roll_deg=roll, airframe_pitch_deg=pitch
+        )
         src = np.array(
             [
                 [(x - bounds.x_min) * px_per_m, (rgb.shape[0] - 1) - (y - bounds.y_min) * px_per_m]
@@ -192,8 +220,12 @@ def test_the_window_under_the_footprint_renders_the_whole_ortho_s_frame():
         )
         map_x, map_y = source_map(src, ORYX.intrinsics.image_width, ORYX.intrinsics.image_height)
         whole = cv2.remap(
-            rgb, map_x, map_y, interpolation=cv2.INTER_LANCZOS4,
-            borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0),
+            rgb,
+            map_x,
+            map_y,
+            interpolation=cv2.INTER_LANCZOS4,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0),
         )
         assert np.array_equal(frame, whole)
         # The window was a window: a footprint that spanned the raster would

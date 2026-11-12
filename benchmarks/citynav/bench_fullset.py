@@ -69,9 +69,9 @@ SAMPLE_SEED = 1234
 _log_lock = threading.Lock()
 
 
-
 def _utc(epoch: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
 
 def _config_path(environ) -> Path:
     """The run's config: ``CITYNAV_BENCH_CONFIG`` under the repo, else ``DEFAULT_CONFIG``."""
@@ -129,7 +129,9 @@ def _answers(url: str, bearer: str | None = None) -> bool:
     """True when a GET of ``url`` (``bearer`` as an Authorization header)
     gets a 2xx or 3xx within 10 s."""
     try:
-        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {bearer}"} if bearer else {})
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Bearer {bearer}"} if bearer else {}
+        )
         with urllib.request.urlopen(req, timeout=10.0) as resp:
             return 200 <= resp.status < 400
     except (OSError, ValueError):
@@ -140,8 +142,11 @@ def _missing_block_assets(bench: Bench, episode_ids: list[str]) -> list[str]:
     """What the selected episodes' blocks need and do not have: the bake
     (``bench.missing_bake``), and ``<map>.tif`` beside ``<map>_rgb.tif`` or
     ``<map>.png``, each raster line with the command that builds it."""
-    build = ("python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
-             if bench.name == "calcity" else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh")
+    build = (
+        "python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
+        if bench.name == "calcity"
+        else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh"
+    )
     missing: list[str] = []
     for map_name in sorted({e.split("::", 1)[0] for e in episode_ids}):
         if why := missing_bake(bench.tile_stem(map_name)):
@@ -171,7 +176,9 @@ class Driver:
         self.summary_file = self.out_root / "summary.txt"
         self.limit = args.limit
         self.sample_seed = args.sample_seed
-        self.allowlist_path = Path(args.episode_allowlist).resolve() if args.episode_allowlist else None
+        self.allowlist_path = (
+            Path(args.episode_allowlist).resolve() if args.episode_allowlist else None
+        )
         # Fixed by main() before anything runs; guarded by _dispatch_lock.
         self._selection: list[str] = []
         # The allowlist's count line, for the preview or the driver log.
@@ -184,9 +191,7 @@ class Driver:
         self._abort: str | None = None
         # --max-wall-s: stop claiming once spent; in-flight attempts finish.
         self.max_wall_s = args.max_wall_s
-        self._deadline = (
-            time.monotonic() + self.max_wall_s if self.max_wall_s > 0 else None
-        )
+        self._deadline = time.monotonic() + self.max_wall_s if self.max_wall_s > 0 else None
 
     def log(self, msg: str) -> None:
         line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
@@ -341,7 +346,9 @@ class Driver:
         while not answers():
             if self._wall_spent() or self._abort is not None:
                 return False
-            left = self._deadline - time.monotonic() if self._deadline is not None else REASONER_WAIT_S
+            left = (
+                self._deadline - time.monotonic() if self._deadline is not None else REASONER_WAIT_S
+            )
             time.sleep(max(0.0, min(REASONER_WAIT_S, left)))
         self.log(f"{name} back; resuming")
         return True
@@ -388,18 +395,35 @@ class Driver:
         # The mission's wall-clock backstop: an absolute epoch from the cap's
         # start, less the reserve for ending.
         env[episodes.DEADLINE_ENV] = repr(
-            time.time() + self.episode_timeout_s * (1.0 - _DEADLINE_RESERVE_FRAC))
-        cmd = [sys.executable, "-m", RUNNER_MODULE, "--config", str(self.config),
-               "--split", self.split, "--episode-id", episode_id,
-               "--attempt-root", str(worker_root)]
+            time.time() + self.episode_timeout_s * (1.0 - _DEADLINE_RESERVE_FRAC)
+        )
+        cmd = [
+            sys.executable,
+            "-m",
+            RUNNER_MODULE,
+            "--config",
+            str(self.config),
+            "--split",
+            self.split,
+            "--episode-id",
+            episode_id,
+            "--attempt-root",
+            str(worker_root),
+        ]
         # The child prints its workdir as its first stdout line; an unlinked
         # file holds it, so no pipe can fill and stall the child.
-        with tempfile.TemporaryFile("w+") as out, \
-                (worker_root / "server.log").open("a") as err:
+        with tempfile.TemporaryFile("w+") as out, (worker_root / "server.log").open("a") as err:
             try:
                 # Its own session, so a kill takes the whole process group.
-                proc = subprocess.Popen(cmd, cwd=str(REPO), stdout=out, stderr=err,
-                                        text=True, start_new_session=True, env=env)
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=str(REPO),
+                    stdout=out,
+                    stderr=err,
+                    text=True,
+                    start_new_session=True,
+                    env=env,
+                )
             except OSError as exc:
                 return {
                     "episode_id": episode_id,
@@ -422,32 +446,51 @@ class Driver:
         crashed = verdict == "exited" and landed is None and proc.returncode != 0
         lost = verdict if verdict.endswith("_down_midrun") else None
         if lost:
-            self.log(f"[w{worker_id}] {lost.split('_')[0].upper()}-DEAD mid-episode {episode_id} after "
-                     f"{elapsed:.0f}s; killed + re-queued (not scored)")
+            self.log(
+                f"[w{worker_id}] {lost.split('_')[0].upper()}-DEAD mid-episode {episode_id} after "
+                f"{elapsed:.0f}s; killed + re-queued (not scored)"
+            )
         elif verdict == "timeout":
             self.log(f"[w{worker_id}] TIMEOUT {episode_id} after {elapsed:.0f}s; killed")
         elif crashed:
             # Killed by a signal (a cgroup OOM is SIGKILL) or exited with an error before landing a record.
-            self.log(f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
-                     f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)")
+            self.log(
+                f"[w{worker_id}] CRASHED mid-episode {episode_id} after "
+                f"{elapsed:.0f}s (exit {proc.returncode}); re-queued (not scored)"
+            )
         if lost or crashed:
             # Re-queued; a lost service's attempt is pending until it is back.
-            return {"episode_id": episode_id, "worker_id": worker_id,
-                    "status": episodes.STATUS_INFRA, "elapsed_s": round(elapsed, 1), **where,
-                    "error": lost or ("killed_midrun" if proc.returncode < 0
-                                      else f"exited {proc.returncode} with no record")}
+            return {
+                "episode_id": episode_id,
+                "worker_id": worker_id,
+                "status": episodes.STATUS_INFRA,
+                "elapsed_s": round(elapsed, 1),
+                **where,
+                "error": lost
+                or (
+                    "killed_midrun"
+                    if proc.returncode < 0
+                    else f"exited {proc.returncode} with no record"
+                ),
+            }
         # The child's own verdict decides (dispatch classifies the episode's
         # exception chain); the driver adds only what it alone saw.
-        row = {**(landed or {"episode_id": episode_id}), "worker_id": worker_id,
-               "elapsed_s": round(elapsed, 1), **where,
-               "started_at_utc": _utc(started), "finished_at_utc": _utc(started + elapsed)}
+        row = {
+            **(landed or {"episode_id": episode_id}),
+            "worker_id": worker_id,
+            "elapsed_s": round(elapsed, 1),
+            **where,
+            "started_at_utc": _utc(started),
+            "finished_at_utc": _utc(started + elapsed),
+        }
         if landed is None and verdict == "exited":
             # A child that exits clean with no record failed, unrecognised.
             row |= {"status": episodes.STATUS_INFRA, "error": "no_prediction_unclassified"}
         elif row.get("status") != episodes.STATUS_INFRA:
             # A timeout is counted apart; its record is scored as recorded, and none is a miss.
-            row["status"] = (episodes.STATUS_TIMED_OUT if verdict == "timeout"
-                             else episodes.STATUS_OK)
+            row["status"] = (
+                episodes.STATUS_TIMED_OUT if verdict == "timeout" else episodes.STATUS_OK
+            )
         return row
 
     def run_one(self, worker_id: int, episode_id: str) -> None:
@@ -455,8 +498,13 @@ class Driver:
         self.log(f"[w{worker_id}] START {episode_id}")
         row = self._run_attempt(worker_id, episode_id)
         m = row.get("metrics") or {}
-        summary = ("" if _rows.is_infra_abort(row)
-                   else f" NE={m.get('NE')} SR={m.get('SR')}" if m else " MISSING")
+        summary = (
+            ""
+            if _rows.is_infra_abort(row)
+            else f" NE={m.get('NE')} SR={m.get('SR')}"
+            if m
+            else " MISSING"
+        )
         self.log(
             f"[w{worker_id}] END {episode_id} status={row['status']} "
             f"elapsed={row['elapsed_s']:.0f}s{summary}"
@@ -469,9 +517,11 @@ class Driver:
     def _write_summary(self) -> None:
         """``summary.txt``: the driver's infra and abort lines above
         ``analysis.run_report.report`` over the root, once a row has landed."""
-        infra = Counter(_infra_cause(r)
-                        for r in _rows.iter_json_rows(self.episodes_file)
-                        if _rows.is_infra_abort(r))
+        infra = Counter(
+            _infra_cause(r)
+            for r in _rows.iter_json_rows(self.episodes_file)
+            if _rows.is_infra_abort(r)
+        )
         lines = [
             f"split: {self.split}   workers: {self.workers}   "
             f"episode_cap: {self.episode_timeout_s}s",
@@ -488,8 +538,11 @@ class Driver:
         # the driver's only other stdout writer.
         with _log_lock, contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
             try:
-                run_report.report(self.out_root, run_report.benches(self.bench.environ, first=self.bench),
-                                  allow_partial=True)
+                run_report.report(
+                    self.out_root,
+                    run_report.benches(self.bench.environ, first=self.bench),
+                    allow_partial=True,
+                )
             except SystemExit as exc:  # no scored row yet
                 print(exc)
         text = "\n".join(x for x in lines if x) + "\n" + buf.getvalue().lstrip("\n")
@@ -503,12 +556,14 @@ class Driver:
             except Exception as exc:  # noqa: BLE001
                 self.log(f"[w{worker_id}] FAIL {eid}: {type(exc).__name__}: {exc}")
                 try:
-                    self._append_result({
-                        "episode_id": eid,
-                        "worker_id": worker_id,
-                        "status": episodes.STATUS_INFRA,
-                        "error": f"{type(exc).__name__}: {exc}",
-                    })
+                    self._append_result(
+                        {
+                            "episode_id": eid,
+                            "worker_id": worker_id,
+                            "status": episodes.STATUS_INFRA,
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
+                    )
                 except OSError as werr:
                     # No worker can land a result: the run stops.
                     with self._dispatch_lock:
@@ -530,16 +585,22 @@ class Driver:
             try:
                 lines = self.allowlist_path.read_text().splitlines()
             except OSError as exc:
-                raise SystemExit(f"FATAL: --episode-allowlist read failed: {self.allowlist_path}: {exc}") from exc
+                raise SystemExit(
+                    f"FATAL: --episode-allowlist read failed: {self.allowlist_path}: {exc}"
+                ) from exc
             allowed = {ln.strip() for ln in lines if ln.strip()}
             if not allowed:
-                raise SystemExit(f"FATAL: --episode-allowlist names no episode: {self.allowlist_path}")
+                raise SystemExit(
+                    f"FATAL: --episode-allowlist names no episode: {self.allowlist_path}"
+                )
             before = len(episodes)
             episodes = [e for e in episodes if e in allowed]
             unknown = sorted(allowed - set(episodes))
             if unknown:
-                raise SystemExit(f"FATAL: --episode-allowlist names {len(unknown)} ids not in the "
-                                 f"{self.split} split, e.g. {unknown[0]}")
+                raise SystemExit(
+                    f"FATAL: --episode-allowlist names {len(unknown)} ids not in the "
+                    f"{self.split} split, e.g. {unknown[0]}"
+                )
             self._selection_note = (
                 f"--episode-allowlist {self.allowlist_path}: "
                 f"{len(allowed)} ids requested -> {len(episodes)} match "
@@ -744,8 +805,11 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
         print(exc, file=sys.stderr)
         return 2
     if missing := _missing_block_assets(bench, driver._selection):
-        print("FATAL: block assets missing for the selection (every episode on these blocks would land "
-              "infra):\n" + "\n".join(f"  {p}" for p in missing), file=sys.stderr)
+        print(
+            "FATAL: block assets missing for the selection (every episode on these blocks would land "
+            "infra):\n" + "\n".join(f"  {p}" for p in missing),
+            file=sys.stderr,
+        )
         return 2
     if args.dry_run:
         return driver.dry_run()

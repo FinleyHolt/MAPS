@@ -74,12 +74,9 @@ def _normalize_tool_call_arguments(tc: dict) -> dict:
             if isinstance(parsed2, dict):
                 fn["arguments"] = json.dumps(parsed2)
             else:
-                fn["arguments"] = json.dumps({
-                    "__args_parse_error": (
-                        f"{exc.msg} at pos {exc.pos} "
-                        f"(tail: ...{raw[-80:]!r})"
-                    )
-                })
+                fn["arguments"] = json.dumps(
+                    {"__args_parse_error": (f"{exc.msg} at pos {exc.pos} (tail: ...{raw[-80:]!r})")}
+                )
         else:
             fn["arguments"] = json.dumps(parsed) if isinstance(parsed, dict) else "{}"
     out = dict(tc)
@@ -184,9 +181,14 @@ class Reasoner:
         """Append one tool-role result, ``json.dumps(result, default=str)``.
         Every tool_call id the assistant emitted gets exactly one (the
         compactor refuses a call without a result)."""
-        self.messages.append({"role": "tool", "tool_call_id": tool_call_id,
-                              "name": name,
-                              "content": json.dumps(result, default=str)})
+        self.messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "name": name,
+                "content": json.dumps(result, default=str),
+            }
+        )
 
     def step_tool_call(self, tools: list[dict]) -> dict:
         """One turn under ``tool_choice="auto"`` (a plain reply must stay
@@ -212,12 +214,16 @@ class Reasoner:
         wire = speaks_openai(self.model)
         sent = self.messages
         if wire:
-            tools, sent = openai_wire.fit_tool_descriptions(tools, openai_wire.messages(self.messages))
+            tools, sent = openai_wire.fit_tool_descriptions(
+                tools, openai_wire.messages(self.messages)
+            )
         kwargs: dict[str, Any] = {
             "timeout": self.timeout,
             "model": self.model,
             "messages": sent,
-            openai_wire.OUTPUT_CAP_KEY if wire else "max_tokens": self.endpoint_spec.max_output_tokens,
+            openai_wire.OUTPUT_CAP_KEY
+            if wire
+            else "max_tokens": self.endpoint_spec.max_output_tokens,
             # No `stop` sequence: engines trim the matched text, so a stopped
             # collapse would arrive as an empty turn the guard cannot see, and
             # a hosted endpoint 400s on the engine-specific no-trim flags.
@@ -237,13 +243,17 @@ class Reasoner:
             kwargs["prompt_cache_key"] = cache_key
         if self.cancel_event is not None:
             if self.cancel_event.is_set():
-                raise CallCanceled(
-                    "reasoner.step_tool_call: cancel_event set before dispatch"
-                )
+                raise CallCanceled("reasoner.step_tool_call: cancel_event set before dispatch")
             kwargs["cancel_event"] = self.cancel_event
 
-        resp = chat_completions_raw(self.endpoint_spec.base_url, self.api_key, workdir=self.workdir,
-                                    routing_key=self.routing_key, endpoint=self.settings.endpoint, **kwargs)
+        resp = chat_completions_raw(
+            self.endpoint_spec.base_url,
+            self.api_key,
+            workdir=self.workdir,
+            routing_key=self.routing_key,
+            endpoint=self.settings.endpoint,
+            **kwargs,
+        )
         choice = resp["choices"][0]
         msg = choice.get("message", {})
         # The reasoning rides the assistant turn back to the next request (the
@@ -252,23 +262,32 @@ class Reasoner:
         text = msg.get("content") or ""
         finish_reason = str(choice.get("finish_reason") or "")
         # An unknown tool name stays on history: the loop answers its id.
-        calls = [_normalize_tool_call_arguments({
-            "id": tc.get("id"),
-            "type": tc.get("type") or "function",
-            "function": {
-                "name": tc.get("function", {}).get("name", ""),
-                "arguments": tc.get("function", {}).get("arguments", ""),
-            },
-        }) for tc in (msg.get("tool_calls") or [])]
+        calls = [
+            _normalize_tool_call_arguments(
+                {
+                    "id": tc.get("id"),
+                    "type": tc.get("type") or "function",
+                    "function": {
+                        "name": tc.get("function", {}).get("name", ""),
+                        "arguments": tc.get("function", {}).get("arguments", ""),
+                    },
+                }
+            )
+            for tc in (msg.get("tool_calls") or [])
+        ]
         # raised before the append, so a collapse never reaches the prefix
         degenerate = _degenerate_reason(
-            text=text, reasoning=reasoning_text, calls=calls,
+            text=text,
+            reasoning=reasoning_text,
+            calls=calls,
         )
         if degenerate:
             log.warning(
                 "reasoner.step_tool_call: degenerate completion (%s); "
                 "finish_reason=%s reasoning_chars=%d -- retriable serve fault",
-                degenerate, finish_reason or "?", len(reasoning_text),
+                degenerate,
+                finish_reason or "?",
+                len(reasoning_text),
             )
             raise DegenerateCompletion(
                 f"reasoner returned a degenerate completion: {degenerate} "
@@ -278,13 +297,26 @@ class Reasoner:
         # A Responses card's reasoning comes back encrypted: the turn carries it
         # to the next request, and its size, for the compactor to price.
         carried = msg.get("reasoning_items") or []
-        reasoning_tokens = ((resp.get("usage") or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")
-        self.messages.append({
-            "role": "assistant", "content": text,
-            "reasoning_content": reasoning_text,
-            **({"tool_calls": calls} if calls else {}),
-            **({"reasoning_items": carried, "reasoning_tokens": int(reasoning_tokens or 0)} if carried else {})})
-        return {"kind": "tool_call" if calls else "text",
+        reasoning_tokens = ((resp.get("usage") or {}).get("completion_tokens_details") or {}).get(
+            "reasoning_tokens"
+        )
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": text,
+                "reasoning_content": reasoning_text,
                 **({"tool_calls": calls} if calls else {}),
-                "content": text, "reasoning": reasoning_text,
-                "finish_reason": finish_reason}
+                **(
+                    {"reasoning_items": carried, "reasoning_tokens": int(reasoning_tokens or 0)}
+                    if carried
+                    else {}
+                ),
+            }
+        )
+        return {
+            "kind": "tool_call" if calls else "text",
+            **({"tool_calls": calls} if calls else {}),
+            "content": text,
+            "reasoning": reasoning_text,
+            "finish_reason": finish_reason,
+        }

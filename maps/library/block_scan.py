@@ -26,9 +26,19 @@ _MOVE_CALLS = ("go_to", "explore")
 _MOVE_SAYS = {"go_to": "go to", "explore": "cover"}
 # order/filter are METHODS on a result (rows.order(...), rows.filter(...)),
 # served through Rows.
-_LIBRARY_CALLS = ("find", "look_for", "go_to", "explore", "look",
-                  "show_map", "stand", "more_of",
-                  "intersection", "ends_of", "distance")
+_LIBRARY_CALLS = (
+    "find",
+    "look_for",
+    "go_to",
+    "explore",
+    "look",
+    "show_map",
+    "stand",
+    "more_of",
+    "intersection",
+    "ends_of",
+    "distance",
+)
 
 
 # Free-call spellings the surface refuses, mapped to the method that performs
@@ -42,38 +52,91 @@ _MOVED_TO_METHOD = {
     "gap": "distance(a, b), or a.distance(b)",
 }
 
-_FORBIDDEN_NAMES = frozenset({
-    "exec", "eval", "compile", "open", "globals", "locals", "vars",
-    "getattr", "setattr", "delattr", "breakpoint", "input", "exit",
-    "quit", "help"})
+_FORBIDDEN_NAMES = frozenset(
+    {
+        "exec",
+        "eval",
+        "compile",
+        "open",
+        "globals",
+        "locals",
+        "vars",
+        "getattr",
+        "setattr",
+        "delattr",
+        "breakpoint",
+        "input",
+        "exit",
+        "quit",
+        "help",
+    }
+)
 
-_SAFE_BUILTINS = {n: getattr(builtins, n)
-                  for n in ("len", "min", "max", "sorted", "sum", "abs",
-                            "round", "range", "enumerate", "zip", "str",
-                            "int", "float", "bool", "list", "dict",
-                            "tuple", "set", "reversed", "any", "all",
-                            "isinstance", "hasattr", "map", "filter",
-                            "repr", "divmod", "pow", "type", "dir",
-                            "next",
-                            # the standard exception names, for
-                            # try/except
-                            "Exception", "ValueError", "KeyError",
-                            "TypeError", "IndexError", "AttributeError",
-                            "ZeroDivisionError", "RuntimeError",
-                            "StopIteration", "ArithmeticError",
-                            "LookupError")}
+_SAFE_BUILTINS = {
+    n: getattr(builtins, n)
+    for n in (
+        "len",
+        "min",
+        "max",
+        "sorted",
+        "sum",
+        "abs",
+        "round",
+        "range",
+        "enumerate",
+        "zip",
+        "str",
+        "int",
+        "float",
+        "bool",
+        "list",
+        "dict",
+        "tuple",
+        "set",
+        "reversed",
+        "any",
+        "all",
+        "isinstance",
+        "hasattr",
+        "map",
+        "filter",
+        "repr",
+        "divmod",
+        "pow",
+        "type",
+        "dir",
+        "next",
+        # the standard exception names, for
+        # try/except
+        "Exception",
+        "ValueError",
+        "KeyError",
+        "TypeError",
+        "IndexError",
+        "AttributeError",
+        "ZeroDivisionError",
+        "RuntimeError",
+        "StopIteration",
+        "ArithmeticError",
+        "LookupError",
+    )
+}
 
 # Pure, deterministic stdlib only: no I/O, no clock, no randomness --
 # anything ambient would break identical bytes -> identical trajectory, and
 # numpy-class C loops would bypass the trace-line liveness ceiling.
-_SAFE_MODULES = {m.__name__: m for m in (
-    bisect, collections, functools, heapq, itertools, json, math,
-    operator, re)}
+_SAFE_MODULES = {
+    m.__name__: m
+    for m in (bisect, collections, functools, heapq, itertools, json, math, operator, re)
+}
 
 
 def _import_refusal(mod: str) -> str:
-    return (f"cannot import {mod}; the modules already loaded -- "
-            + ", ".join(sorted(_SAFE_MODULES)) + " -- need no import")
+    return (
+        f"cannot import {mod}; the modules already loaded -- "
+        + ", ".join(sorted(_SAFE_MODULES))
+        + " -- need no import"
+    )
 
 
 def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -88,7 +151,8 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
 _LOOP_MOVE_MSG = (
     "{name}() cannot go inside a loop or a def/lambda: it MOVES, and a loop moves to "
     "every row of the set -- go_to commits to whichever came last, and explore "
-    "flies a covering pass over each. Loop to LOOK, then move once to the place you chose.")
+    "flies a covering pass over each. Loop to LOOK, then move once to the place you chose."
+)
 
 
 def _shadows(name: str) -> str:
@@ -118,35 +182,34 @@ def scan_block(code: str, bound=()) -> ast.Module:
                 # caret lands under the offending column as rendered.
                 cut = max((e.offset or 1) - 1, 0)
                 pad = len(line[:cut].expandtabs(4))
-                where = (f"\n    {line.expandtabs(4)}\n    "
-                         + " " * pad + "^")
-        raise CodeError(
-            f"line {e.lineno}: syntax error: {e.msg}{where}") from None
+                where = f"\n    {line.expandtabs(4)}\n    " + " " * pad + "^"
+        raise CodeError(f"line {e.lineno}: syntax error: {e.msg}{where}") from None
     loop_depth = 0
-    at = 1                    # the line of the node being vetted
+    at = 1  # the line of the node being vetted
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
     # A move's name is the model's variable where a store of it comes first
     # (earlier in this block, or in an earlier block). A comprehension binds
     # its targets over its own span, its element (written first) included.
     first_store: dict = {}
-    comp_spans: list = []        # (name, start, end) a comprehension binds
+    comp_spans: list = []  # (name, start, end) a comprehension binds
     comp_targets: set = set()
-    for n in ast.walk(tree):     # breadth first: a comprehension before its targets
+    for n in ast.walk(tree):  # breadth first: a comprehension before its targets
         if isinstance(n, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
             for g in n.generators:
                 for t in ast.walk(g.target):
                     if isinstance(t, ast.Name):
                         comp_targets.add(id(t))
-                        comp_spans.append((t.id, (n.lineno, n.col_offset),
-                                           (n.end_lineno, n.end_col_offset)))
+                        comp_spans.append(
+                            (t.id, (n.lineno, n.col_offset), (n.end_lineno, n.end_col_offset))
+                        )
         elif isinstance(n, (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef)):
             # Parameters are bound over the function's own span.
             for arg in ast.walk(n.args):
                 if isinstance(arg, ast.arg):
-                    comp_spans.append((arg.arg, (n.lineno, n.col_offset),
-                                       (n.end_lineno, n.end_col_offset)))
-        elif (isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
-              and id(n) not in comp_targets):
+                    comp_spans.append(
+                        (arg.arg, (n.lineno, n.col_offset), (n.end_lineno, n.end_col_offset))
+                    )
+        elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store) and id(n) not in comp_targets:
             pos = (n.lineno, n.col_offset)
             first_store[n.id] = min(first_store.get(n.id, pos), pos)
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ExceptHandler)) and n.name:
@@ -160,15 +223,19 @@ def scan_block(code: str, bound=()) -> ast.Module:
 
     def _stored_before(n) -> bool:
         pos = (n.lineno, n.col_offset)
-        return (n.id in bound or first_store.get(n.id, (1 << 30, 0)) < pos
-                or any(k == n.id and lo <= pos <= hi for k, lo, hi in comp_spans))
+        return (
+            n.id in bound
+            or first_store.get(n.id, (1 << 30, 0)) < pos
+            or any(k == n.id and lo <= pos <= hi for k, lo, hi in comp_spans)
+        )
 
     def _walk(node):
         nonlocal loop_depth, at
         at = getattr(node, "lineno", at)
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            mods = ([node.module] if isinstance(node, ast.ImportFrom)
-                    else [a.name for a in node.names])
+            mods = (
+                [node.module] if isinstance(node, ast.ImportFrom) else [a.name for a in node.names]
+            )
             if getattr(node, "level", 0):
                 raise CodeError(_import_refusal("a relative module"))
             for m in mods:
@@ -176,39 +243,57 @@ def scan_block(code: str, bound=()) -> ast.Module:
                 if root not in _SAFE_MODULES:
                     raise CodeError(_import_refusal(root or "that"))
         if isinstance(node, ast.ClassDef):
-            raise CodeError("no class definitions -- write the calls "
-                            "you want run")
+            raise CodeError("no class definitions -- write the calls you want run")
         if isinstance(node, (ast.Global, ast.Nonlocal)):
             raise CodeError("no global/nonlocal")
         if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
             raise CodeError(f"no underscore attributes (.{node.attr})")
         if isinstance(node, ast.Name):
-            if node.id in _MOVE_CALLS and isinstance(node.ctx, ast.Load) \
-                    and id(node) not in called and not _stored_before(node):
+            if (
+                node.id in _MOVE_CALLS
+                and isinstance(node.ctx, ast.Load)
+                and id(node) not in called
+                and not _stored_before(node)
+            ):
                 raise CodeError(
                     f"{node.id} is a move; call it once, {node.id}(<place>), "
-                    "outside any loop or function.")
+                    "outside any loop or function."
+                )
             if node.id.startswith("_"):
                 raise CodeError(f"no underscore names ({node.id})")
             if node.id in _FORBIDDEN_NAMES:
                 raise CodeError(f"there is no {node.id}()")
-            if isinstance(node.ctx, ast.Store) \
-                    and node.id in _SAFE_MODULES:
+            if isinstance(node.ctx, ast.Store) and node.id in _SAFE_MODULES:
                 # one bad bind would break the module for the rest of the
                 # mission
                 raise CodeError(
                     f"{node.id} is a loaded module -- binding over it "
                     f"would shadow it for the rest of the mission. Pick "
-                    "another name.")
-        in_loop = isinstance(node, (ast.For, ast.While, ast.AsyncFor, ast.ListComp,
-                                    ast.SetComp, ast.DictComp, ast.GeneratorExp,
-                                    ast.FunctionDef, ast.AsyncFunctionDef,
-                                    ast.Lambda))
+                    "another name."
+                )
+        in_loop = isinstance(
+            node,
+            (
+                ast.For,
+                ast.While,
+                ast.AsyncFor,
+                ast.ListComp,
+                ast.SetComp,
+                ast.DictComp,
+                ast.GeneratorExp,
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.Lambda,
+            ),
+        )
         if in_loop:
             loop_depth += 1
-        if (loop_depth and isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in _MOVE_CALLS):
+        if (
+            loop_depth
+            and isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _MOVE_CALLS
+        ):
             raise CodeError(_LOOP_MOVE_MSG.format(name=node.func.id))
         for child in ast.iter_child_nodes(node):
             _walk(child)
@@ -231,9 +316,10 @@ def _instrument(tree: ast.Module) -> ast.Module:
             label = ast.unparse(node.value)
             call = ast.Call(
                 func=ast.Name(id="__show__", ctx=ast.Load()),
-                args=[node.value, ast.Constant(value=label)], keywords=[])
-            tree.body[i] = ast.copy_location(
-                ast.Expr(value=ast.copy_location(call, node)), node)
+                args=[node.value, ast.Constant(value=label)],
+                keywords=[],
+            )
+            tree.body[i] = ast.copy_location(ast.Expr(value=ast.copy_location(call, node)), node)
     ast.fix_missing_locations(tree)
     return tree
 
@@ -246,5 +332,7 @@ def looks_like_code(text: str) -> bool:
         tree = ast.parse(text)
     except SyntaxError:
         return False
-    return any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-               and n.func.id in _LIBRARY_CALLS for n in ast.walk(tree))
+    return any(
+        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _LIBRARY_CALLS
+        for n in ast.walk(tree)
+    )

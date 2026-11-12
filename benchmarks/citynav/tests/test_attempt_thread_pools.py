@@ -20,15 +20,26 @@ _COUNT = (
     "cv2.resize(np.zeros((2000, 2000, 3), np.uint8), (1000, 1000))\n"
     "print(len(os.listdir('/proc/self/task')))\n"
 )
-_POOLS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
-          "OPENCV_FOR_THREADS_NUM", "RAYON_NUM_THREADS", "MALLOC_ARENA_MAX")
+_POOLS = (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENCV_FOR_THREADS_NUM",
+    "RAYON_NUM_THREADS",
+    "MALLOC_ARENA_MAX",
+)
 
 
 def test_a_runner_starts_with_its_native_thread_pools_capped(monkeypatch):
     for name in _POOLS:
         monkeypatch.delenv(name, raising=False)
-    out = subprocess.run([sys.executable, "-c", _COUNT], env=bf._runner_env(citynav_bench(os.environ)),
-                         capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(
+        [sys.executable, "-c", _COUNT],
+        env=bf._runner_env(citynav_bench(os.environ)),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     assert int(out) <= 4, out
 
 

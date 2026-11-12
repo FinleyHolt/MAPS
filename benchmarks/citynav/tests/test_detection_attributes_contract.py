@@ -17,9 +17,7 @@ from maps.perception.detection import DetectedObject
 _BOUNDS = (0.0, 0.0)
 
 
-def _make_detection(
-    *, world_xy=(10.0, 20.0), attributes=None, label="truck"
-) -> DetectedObject:
+def _make_detection(*, world_xy=(10.0, 20.0), attributes=None, label="truck") -> DetectedObject:
     return DetectedObject(
         world_xy=world_xy,
         label=label,

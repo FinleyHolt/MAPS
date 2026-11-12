@@ -54,11 +54,14 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     d.episode_timeout_s, d.max_infra_attempts = 3, 1
     # The reasoner is down exactly while the "reasoner" episode flies.
     monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
-    monkeypatch.setattr(d, "_reasoner_answers",
-                        lambda: not any(e.startswith("reasoner") for e in d._in_flight))
+    monkeypatch.setattr(
+        d, "_reasoner_answers", lambda: not any(e.startswith("reasoner") for e in d._in_flight)
+    )
     # SAM is down exactly while the "sam" episode flies.
     monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
-    monkeypatch.setattr(d, "_sam_answers", lambda: not any(e.startswith("sam") for e in d._in_flight))
+    monkeypatch.setattr(
+        d, "_sam_answers", lambda: not any(e.startswith("sam") for e in d._in_flight)
+    )
     t0 = time.time()
     d.worker_loop(0)
     rows = {r["episode_id"].split("::")[0]: r for r in iter_json_rows(d.episodes_file)}
@@ -99,7 +102,9 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
         monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, base_url=base_url))
 
     monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
-    monkeypatch.setenv("SEARCH_REASONER_URL", "http://never-asked/v1")  # the gate asks the spec's URL
+    monkeypatch.setenv(
+        "SEARCH_REASONER_URL", "http://never-asked/v1"
+    )  # the gate asks the spec's URL
     installed("https://reasoner.example/serve/v1")
     monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", "https://reasoner.example/catalog/models")
     assert driver()._reasoner_answers()
@@ -108,16 +113,24 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
     assert driver()._reasoner_answers()
     installed("http://127.0.0.1:8001/v1")
     assert driver()._reasoner_answers()
-    assert asked == ["https://reasoner.example/catalog/models", "https://example.openai.azure.com/openai/v1/models",
-                     "http://127.0.0.1:8001/v1/models"]
+    assert asked == [
+        "https://reasoner.example/catalog/models",
+        "https://example.openai.azure.com/openai/v1/models",
+        "http://127.0.0.1:8001/v1/models",
+    ]
     installed("")  # an offline spec names no URL: a reasoner that does not answer
     assert not driver()._reasoner_answers()
     bearers: list = []
-    monkeypatch.setattr(bf.urllib.request, "urlopen", lambda req, timeout: bearers.append(
-        req.get_header("Authorization")) or _Answer())
+    monkeypatch.setattr(
+        bf.urllib.request,
+        "urlopen",
+        lambda req, timeout: bearers.append(req.get_header("Authorization")) or _Answer(),
+    )
     monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
     installed("http://127.0.0.1:8001/v1")
-    assert driver()._reasoner_answers() and bearers == ["Bearer k"]  # hosted endpoints auth the listing
+    assert driver()._reasoner_answers() and bearers == [
+        "Bearer k"
+    ]  # hosted endpoints auth the listing
 
 
 def test_a_window_of_infra_casualties_stops_the_run(driver, tmp_path: Path) -> None:
@@ -143,20 +156,24 @@ def test_a_window_of_infra_casualties_stops_the_run(driver, tmp_path: Path) -> N
     assert d._done_cache == set()
 
     fresh = driver(tmp_path / "w0")
-    fresh._append_result(_infra(0, cause="mission ended_by=transient_failures",
-                                workdir="nonexistent"))
+    fresh._append_result(
+        _infra(0, cause="mission ended_by=transient_failures", workdir="nonexistent")
+    )
     fresh._append_result({"episode_id": "ep100", "status": "ok", "error": "RuntimeError: x"})
     for i in range(1, bf.ABORT_WINDOW):
         fresh._append_result(_infra(i, cause="mission ended_by=transient_failures"))
     assert "transient_failures" in fresh._abort
-    assert "1 episode(s) were scored; every infra attempt is excluded" in fresh.driver_log.read_text()
+    assert (
+        "1 episode(s) were scored; every infra attempt is excluded" in fresh.driver_log.read_text()
+    )
 
 
 def test_scattered_infra_and_timeouts_never_stop_the_run(driver) -> None:
     d = driver()
     for i in range(200):
-        d._append_result(_infra(i) if i % 8 == 0 else
-                         {"episode_id": f"ep{i}", "status": "timed_out"})
+        d._append_result(
+            _infra(i) if i % 8 == 0 else {"episode_id": f"ep{i}", "status": "timed_out"}
+        )
     assert d._abort is None and d._next_claimed_episode() is not None
 
 
@@ -177,12 +194,19 @@ def test_claims_hand_each_episode_to_one_worker(driver) -> None:
 
 def test_the_summary_is_the_run_report_under_the_infra_lines(driver) -> None:
     d = driver()
-    d.episodes_file.write_text("".join(json.dumps(r) + "\n" for r in (
-        ledger_row("c::3#6534", "20260725_111500", 0),
-        ledger_row("c::3#6534", "20260725_110958", 1),
-        ledger_row("e::1#1", "20260725_110000", 1),
-        ledger_row("g::2#2", "20260725_110100", status="infra", error="reasoner_down_midrun"),
-    )))
+    d.episodes_file.write_text(
+        "".join(
+            json.dumps(r) + "\n"
+            for r in (
+                ledger_row("c::3#6534", "20260725_111500", 0),
+                ledger_row("c::3#6534", "20260725_110958", 1),
+                ledger_row("e::1#1", "20260725_110000", 1),
+                ledger_row(
+                    "g::2#2", "20260725_110100", status="infra", error="reasoner_down_midrun"
+                ),
+            )
+        )
+    )
     d._write_summary()
     out = d.summary_file.read_text()
     assert "infra attempts (excluded): 1  by cause: reasoner_down_midrun (1)" in out
@@ -218,7 +242,9 @@ def test_an_aborted_run_exits_3_and_the_summary_says_why(driver, monkeypatch, no
     assert len(d.episodes_file.read_text().splitlines()) < 60, "it did not stop early"
 
 
-def test_persistent_infra_is_left_out_and_reported(driver, tmp_path, monkeypatch, no_flight) -> None:
+def test_persistent_infra_is_left_out_and_reported(
+    driver, tmp_path, monkeypatch, no_flight
+) -> None:
     for cause in ("A", "A", "B"):
         episodes.append_row(tmp_path, _infra(0, cause=cause))
     d = driver(selection=["ep0"])
@@ -239,11 +265,18 @@ def test_a_spent_wall_budget_stops_the_run(driver, monkeypatch, no_flight) -> No
 
 def test_a_second_run_into_a_held_root_is_refused(driver, tmp_path, monkeypatch) -> None:
     holder = subprocess.Popen(
-        [sys.executable, "-c",
-         "import sys, time\nfrom pathlib import Path\nfrom benchmarks.run_record import episodes\n"
-         "lock = episodes.hold_root(Path(sys.argv[1]))\nprint('held', flush=True)\n"
-         "time.sleep(60)\n", str(tmp_path)],
-        cwd=REPO, stdout=subprocess.PIPE, text=True)
+        [
+            sys.executable,
+            "-c",
+            "import sys, time\nfrom pathlib import Path\nfrom benchmarks.run_record import episodes\n"
+            "lock = episodes.hold_root(Path(sys.argv[1]))\nprint('held', flush=True)\n"
+            "time.sleep(60)\n",
+            str(tmp_path),
+        ],
+        cwd=REPO,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert holder.stdout.readline().strip() == "held"
         monkeypatch.setattr(rm, "build_manifest", lambda **kw: pytest.fail("flew"))
@@ -255,8 +288,9 @@ def test_a_second_run_into_a_held_root_is_refused(driver, tmp_path, monkeypatch)
 
 
 @pytest.mark.parametrize("dry", [[], ["--dry-run"]])
-def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(dry, tmp_path, monkeypatch,
-                                                                            capsys) -> None:
+def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(
+    dry, tmp_path, monkeypatch, capsys
+) -> None:
     from benchmarks.bench import BAKE_OUTPUT_SUFFIXES
     from maps.llm import endpoint_spec
 
@@ -269,13 +303,17 @@ def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(dry,
     monkeypatch.setenv("SEARCH_CITYNAV_TILES", str(tiles))
     monkeypatch.setenv("SEARCH_CITYNAV_RGBD_DIR", str(rgbd))
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["blk::1#0"])
-    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: pytest.fail("asked a serve"))
+    monkeypatch.setattr(
+        endpoint_spec, "discover_from_settings", lambda settings: pytest.fail("asked a serve")
+    )
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("flew"))
     monkeypatch.setattr(bf.Driver, "dry_run", lambda self: pytest.fail("previewed"))
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
     assert not (tmp_path / "r").exists()
-    assert (f"  Missing {rgbd / 'blk_rgb.tif'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
-            in capsys.readouterr().err.splitlines())
+    assert (
+        f"  Missing {rgbd / 'blk_rgb.tif'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
+        in capsys.readouterr().err.splitlines()
+    )
     (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
     assert bf._missing_block_assets(citynav_bench(os.environ), ["blk::1#0"]) == []
 
@@ -327,8 +365,9 @@ def _alive(pid: int) -> bool:
 
 def test_a_sigkilled_driver_takes_its_attempt_with_it() -> None:
     """The attempt sits in its own session, so nothing else reaps it."""
-    parent = subprocess.Popen([sys.executable, "-c", _PARENT], cwd=REPO,
-                              stdout=subprocess.PIPE, text=True)
+    parent = subprocess.Popen(
+        [sys.executable, "-c", _PARENT], cwd=REPO, stdout=subprocess.PIPE, text=True
+    )
     child = int(parent.stdout.readline())
     try:
         assert _alive(child)
@@ -373,13 +412,18 @@ def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
     """Ctrl-C releases the root, so a worker left flying would fly beside the next launch."""
     # A shell that ignores SIGINT hands that to its children; the driver is
     # launched with the default handler, as from a terminal.
-    proc = subprocess.Popen([sys.executable, "-c", _INTERRUPTED, str(tmp_path)], cwd=REPO,
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-                            preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _INTERRUPTED, str(tmp_path)],
+        cwd=REPO,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
+    )
     try:
         flying = (line for line in iter(proc.stdout.readline, "") if line == "flying\n")
         assert next(flying) and next(flying)
-        time.sleep(0.5)    # the main thread is joining its first worker
+        time.sleep(0.5)  # the main thread is joining its first worker
         proc.send_signal(signal.SIGINT)
         assert proc.wait(timeout=10) != 0
     finally:
@@ -404,16 +448,30 @@ def test_the_summary_names_an_errorless_infra_row_as_the_driver_counts_it(driver
     d = driver()
     episodes.append_row(d.out_root, {"episode_id": "ep0", "worker_id": 0, "status": "infra"})
     # The driver's one infra predicate: a mission the serve ended counts too.
-    episodes.append_row(d.out_root, {"episode_id": "ep1", "worker_id": 0, "status": "ok",
-                                     "metrics": {"mission": {"ended_by": "transient_failures"}}})
+    episodes.append_row(
+        d.out_root,
+        {
+            "episode_id": "ep1",
+            "worker_id": 0,
+            "status": "ok",
+            "metrics": {"mission": {"ended_by": "transient_failures"}},
+        },
+    )
     d._write_summary()
     assert "infra attempts (excluded): 2  by cause: infra (2)" in d.summary_file.read_text()
 
 
 def test_the_end_line_prints_no_score_for_an_infra_attempt(driver, monkeypatch) -> None:
     d = driver(selection=["a::1#0", "b::1#1"])
-    rows = {"a": {**_infra(0), "metrics": {"NE": 3.0, "SR": 1}, "elapsed_s": 1.0},
-            "b": {"episode_id": "b::1#1", "status": "ok", "metrics": {"NE": 3.0, "SR": 1}, "elapsed_s": 1.0}}
+    rows = {
+        "a": {**_infra(0), "metrics": {"NE": 3.0, "SR": 1}, "elapsed_s": 1.0},
+        "b": {
+            "episode_id": "b::1#1",
+            "status": "ok",
+            "metrics": {"NE": 3.0, "SR": 1},
+            "elapsed_s": 1.0,
+        },
+    }
     monkeypatch.setattr(d, "_run_attempt", lambda w, eid: rows[eid[0]])
     d.run_one(0, "a::1#0")
     d.run_one(0, "b::1#1")
@@ -422,7 +480,9 @@ def test_the_end_line_prints_no_score_for_an_infra_attempt(driver, monkeypatch) 
     assert ends[1].endswith("status=ok elapsed=1s NE=3.0 SR=1"), ends
 
 
-def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_path, monkeypatch, capsys) -> None:
+def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(
+    driver, tmp_path, monkeypatch, capsys
+) -> None:
     for _ in range(3):
         episodes.append_row(tmp_path, _infra(0))
     d = driver(selection=["ep0", "ep1"])
@@ -434,8 +494,13 @@ def test_the_dry_run_counts_a_persistent_infra_episode_as_left_out(driver, tmp_p
 def test_relative_paths_resolve_against_the_working_directory(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     bench = citynav_bench({})
-    d = bf.Driver(bf._build_parser(bench).parse_args(["--out-root", "runs/a", "--episode-allowlist", "ids.txt"]),
-                  bench, bf._config_path(bench.environ))
+    d = bf.Driver(
+        bf._build_parser(bench).parse_args(
+            ["--out-root", "runs/a", "--episode-allowlist", "ids.txt"]
+        ),
+        bench,
+        bf._config_path(bench.environ),
+    )
     assert d.out_root == tmp_path / "runs" / "a"
     assert d.allowlist_path == tmp_path / "ids.txt"
 
@@ -518,7 +583,12 @@ def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
     assert not bf.Driver._sam_answers()
     up.add("http://b:8100/health")
     assert bf.Driver._sam_answers()
-    assert asked == ["http://a:8100/health", "http://b:8100/health", "http://a:8100/health", "http://b:8100/health"]
+    assert asked == [
+        "http://a:8100/health",
+        "http://b:8100/health",
+        "http://a:8100/health",
+        "http://b:8100/health",
+    ]
 
 
 @pytest.mark.parametrize("flag", ["--workers", "--max-infra-attempts", "--episode-timeout-s"])
@@ -537,22 +607,28 @@ def test_an_allowlist_that_cannot_be_read_is_refused_fatal(driver, tmp_path, mon
 
 
 @pytest.mark.parametrize("refusal", ["split", "allowlist", "partial", "empty"])
-def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, tmp_path, monkeypatch,
-                                                                      capsys) -> None:
+def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(
+    refusal, tmp_path, monkeypatch, capsys
+) -> None:
     """A bad selection is refused as the dry run refuses it: no serve asked, no root made, no lock taken."""
     from maps.llm import endpoint_spec
 
-    monkeypatch.setattr(endpoint_spec, "discover_from_settings",
-                        lambda settings: pytest.fail("a refused selection asked a serve"))
+    monkeypatch.setattr(
+        endpoint_spec,
+        "discover_from_settings",
+        lambda settings: pytest.fail("a refused selection asked a serve"),
+    )
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused selection flew"))
     if refusal != "split":
         monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     (tmp_path / "ids.txt").write_text("a\nz\n")
     (tmp_path / "empty.txt").write_text("\n")
-    flags = {"split": ["--split", "nope"],
-             "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
-             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
-             "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")]}[refusal]
+    flags = {
+        "split": ["--split", "nope"],
+        "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
+        "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
+        "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")],
+    }[refusal]
     assert bf.main(["--out-root", str(tmp_path / "r"), *flags]) == 2
     assert not (tmp_path / "r").exists()
     assert capsys.readouterr().err.startswith("FATAL: ")
@@ -569,7 +645,9 @@ def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch
     assert capsys.readouterr().err.startswith("FATAL: ")
 
 
-def test_a_config_that_is_not_yaml_is_refused_naming_its_file(tmp_path, monkeypatch, capsys) -> None:
+def test_a_config_that_is_not_yaml_is_refused_naming_its_file(
+    tmp_path, monkeypatch, capsys
+) -> None:
     bad = tmp_path / "arm.yaml"
     bad.write_text("max_steps: [1\n")
     monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(bad))
@@ -578,14 +656,19 @@ def test_a_config_that_is_not_yaml_is_refused_naming_its_file(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize("ids", [["z"], ["a", "z"]])
-def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(ids, driver, tmp_path, monkeypatch) -> None:
+def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(
+    ids, driver, tmp_path, monkeypatch
+) -> None:
     """Every allowlisted id must be in the split: one that is not is a wrong
     split or a stale list, and a run over the rest would read as complete."""
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     d = driver()
     d.allowlist_path = tmp_path / "ids.txt"
     d.allowlist_path.write_text("\n".join(ids) + "\n")
-    with pytest.raises(SystemExit, match="^FATAL: --episode-allowlist names 1 ids not in the train_seen split, e.g. z"):
+    with pytest.raises(
+        SystemExit,
+        match="^FATAL: --episode-allowlist names 1 ids not in the train_seen split, e.g. z",
+    ):
         d._select_episodes()
 
 
@@ -596,26 +679,42 @@ def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypat
         monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     (tmp_path / "ids.txt").write_text("a\nz\n")
     (tmp_path / "empty.txt").write_text("\n")
-    flags = {"split": ["--split", "nope"],
-             "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
-             "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
-             "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")]}[refusal]
+    flags = {
+        "split": ["--split", "nope"],
+        "allowlist": ["--episode-allowlist", str(tmp_path / "absent.txt")],
+        "partial": ["--episode-allowlist", str(tmp_path / "ids.txt")],
+        "empty": ["--episode-allowlist", str(tmp_path / "empty.txt")],
+    }[refusal]
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run", *flags]) == 2
     assert not (tmp_path / "r").exists()
     assert capsys.readouterr().err.startswith("FATAL: ")
 
 
-def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(tmp_path, monkeypatch, capsys) -> None:
+def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(
+    tmp_path, monkeypatch, capsys
+) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     monkeypatch.setattr(bf, "_missing_block_assets", lambda bench, eps: [])
     (tmp_path / "ids.txt").write_text("a\n")
-    assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run",
-                    "--episode-allowlist", str(tmp_path / "ids.txt")]) == 0
+    assert (
+        bf.main(
+            [
+                "--out-root",
+                str(tmp_path / "r"),
+                "--dry-run",
+                "--episode-allowlist",
+                str(tmp_path / "ids.txt"),
+            ]
+        )
+        == 0
+    )
     assert not (tmp_path / "r").exists()
     assert "1 ids requested -> 1 match" in capsys.readouterr().out
 
 
-def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(tmp_path, monkeypatch, capsys) -> None:
+def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(
+    tmp_path, monkeypatch, capsys
+) -> None:
     base = tmp_path / "base.yaml"
     base.write_text("max_steps: [1\n")
     top = tmp_path / "arm.yaml"

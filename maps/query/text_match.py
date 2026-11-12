@@ -86,8 +86,7 @@ def tag_family_keys(q_data: tuple, rows) -> frozenset:
     out: set = set()
     norm: dict = {}
     for row in rows:
-        for k, v in ((row.get("tags") if isinstance(row, dict) else None)
-                     or {}).items():
+        for k, v in ((row.get("tags") if isinstance(row, dict) else None) or {}).items():
             sv = str(v)
             if sv not in norm:
                 norm[sv] = fuzzy_normalize(sv)
@@ -105,8 +104,7 @@ def token_idf(rows) -> dict[str, float]:
         if not isinstance(row, dict):
             continue
         n += 1
-        for t in _fuzzy_expand_tokens(
-                f"{row.get('search_text') or ''} {row.get('name') or ''}"):
+        for t in _fuzzy_expand_tokens(f"{row.get('search_text') or ''} {row.get('name') or ''}"):
             df[t] = df.get(t, 0) + 1
     return {t: math.log(1 + n / (1 + d)) for t, d in df.items()}
 
@@ -135,7 +133,7 @@ def _singular_forms(word: str) -> set[str]:
     """Every plausible singular: ``-ses`` gives both "bus" and "house"."""
     out = {word, singularize(word)}
     if word.endswith("ses") and len(word) > 3:
-        out.add(word[:-1])          # houses -> house, beside buses -> bus
+        out.add(word[:-1])  # houses -> house, beside buses -> bus
     return out
 
 
@@ -147,8 +145,9 @@ def _fuzzy_expand_tokens(text: str) -> set[str]:
 
 def _word_forms(text: str) -> tuple:
     """One frozenset of spellings per word, so coverage counts words."""
-    return tuple(frozenset(_singular_forms(t))
-                 for t in dict.fromkeys(fuzzy_normalize(text).split()))
+    return tuple(
+        frozenset(_singular_forms(t)) for t in dict.fromkeys(fuzzy_normalize(text).split())
+    )
 
 
 COLORS = frozenset(COLOR_FAMILY)
@@ -156,17 +155,24 @@ COLORS = frozenset(COLOR_FAMILY)
 
 def _row_match_text(row) -> str:
     """A row's name, search_text and ``k v`` tag pairs as one string."""
-    return (f"{row.get('name') or ''} {row.get('search_text') or ''} "
-            + " ".join(f"{k} {v}"
-                       for k, v in (row.get("tags") or {}).items()))
+    return f"{row.get('name') or ''} {row.get('search_text') or ''} " + " ".join(
+        f"{k} {v}" for k, v in (row.get("tags") or {}).items()
+    )
 
 
 def _colors_read(rows) -> set:
     """The palette words in the rows' ``color`` fields, mixture or rendered
     cell alike."""
-    return COLORS & set(re.findall(r"[a-z]+", " ".join(
-        r["color"].lower() for r in rows
-        if isinstance(r, dict) and isinstance(r.get("color"), str))))
+    return COLORS & set(
+        re.findall(
+            r"[a-z]+",
+            " ".join(
+                r["color"].lower()
+                for r in rows
+                if isinstance(r, dict) and isinstance(r.get("color"), str)
+            ),
+        )
+    )
 
 
 def unmatched_query_tokens(query: str, rows):
@@ -230,7 +236,7 @@ def _extract_kv_pairs(clause: str) -> tuple:
             continue
         forms = [(kn, vn)]
         ext = v
-        for nxt in toks[i + 1:]:
+        for nxt in toks[i + 1 :]:
             if "=" in nxt:
                 break
             ext = f"{ext} {nxt}"
@@ -244,12 +250,12 @@ def _extract_kv_pairs(clause: str) -> tuple:
 def fuzzy_prepare_query(query: str) -> tuple:
     """The query's ``OR`` clauses, each ``(normalized text, token set with
     singulars, spellings per word, key=value groups)``."""
-    clauses = [c for c in re.split(r"\s+OR\s+", query or "") if c.strip()] \
-        or [query or ""]
+    clauses = [c for c in re.split(r"\s+OR\s+", query or "") if c.strip()] or [query or ""]
     out = []
     for c in clauses:
-        out.append((fuzzy_normalize(c), _fuzzy_expand_tokens(c),
-                    _word_forms(c), _extract_kv_pairs(c)))
+        out.append(
+            (fuzzy_normalize(c), _fuzzy_expand_tokens(c), _word_forms(c), _extract_kv_pairs(c))
+        )
     return tuple(out)
 
 
@@ -274,7 +280,7 @@ def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
     num = den = 0.0
     for forms in qw:
         w = min((idf[f] for f in forms if f in idf), default=0.0)
-        if not w:                       # df == 0 everywhere: unsatisfiable
+        if not w:  # df == 0 everywhere: unsatisfiable
             continue
         den += w
         if forms & ct:
@@ -284,8 +290,9 @@ def fuzzy_match_score(clause: tuple, candidate: str, idf: dict) -> float:
     return min(num / den, TOKEN_BAG_CEIL)
 
 
-def find_score(q_data: tuple, search_text: str, name: str | None = None,
-               tags: dict | None = None, *, idf: dict) -> float:
+def find_score(
+    q_data: tuple, search_text: str, name: str | None = None, tags: dict | None = None, *, idf: dict
+) -> float:
     """The tiered score (module docstring) of a prepared query over one row,
     max over its clauses; ``idf`` is :func:`token_idf` of the rows scored."""
     name_norm = fuzzy_normalize(name) if name else ""
@@ -298,17 +305,16 @@ def find_score(q_data: tuple, search_text: str, name: str | None = None,
         if name_norm and q_norm:
             if q_norm == name_norm:
                 s = 1.0
-            elif (len(q_norm.split()) >= 2
-                    and re.search(r"\b" + re.escape(q_norm) + r"\b",
-                                  name_norm)):
+            elif len(q_norm.split()) >= 2 and re.search(
+                r"\b" + re.escape(q_norm) + r"\b", name_norm
+            ):
                 s = NAME_TIER_FLOOR + 0.09 * (len(q_norm) / len(name_norm))
         if s < 1.0 and kv and tags:
             if tag_pairs is None:
                 tag_pairs = {
-                    (fuzzy_normalize(str(k)), fuzzy_normalize(str(v)))
-                    for k, v in tags.items()}
-            matched = sum(
-                1 for grp in kv if any(p in tag_pairs for p in grp))
+                    (fuzzy_normalize(str(k)), fuzzy_normalize(str(v))) for k, v in tags.items()
+                }
+            matched = sum(1 for grp in kv if any(p in tag_pairs for p in grp))
             if matched:
                 s = max(s, KV_TIER_BASE + 0.09 * (matched / len(kv)))
         if s < KV_TIER_BASE and q_norm and tags:

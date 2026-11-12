@@ -1,4 +1,5 @@
 """The tile-schema guard refuses another bake shape and passes the current one."""
+
 from __future__ import annotations
 
 import glob
@@ -13,10 +14,13 @@ from benchmarks.citynav.run_benchmark.assets import assert_current_tile_schema
 _REPO = Path(__file__).resolve().parents[3]
 
 
-@pytest.mark.parametrize("payload", [
-    {"building": [{"cells": [[0, 0]]}], "footpath": [{"cells": [[0, 1]]}]},
-    {"prior": [["cells", [0, 0]]]},
-])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"building": [{"cells": [[0, 0]]}], "footpath": [{"cells": [[0, 1]]}]},
+        {"prior": [["cells", [0, 0]]]},
+    ],
+)
 def test_another_bake_shape_is_refused(payload) -> None:
     with pytest.raises(RuntimeError, match="not the current tile bake"):
         assert_current_tile_schema(payload, "tiles/other")
@@ -24,10 +28,12 @@ def test_another_bake_shape_is_refused(payload) -> None:
 
 def test_current_tags_verbatim_shape_passes() -> None:
     assert_current_tile_schema(
-        {"prior": [
-            {"cells": [[0, 0]], "osm_id": "w1", "highway": "residential"},
-            {"cells": [[1, 1]], "name": "Parker's Piece"},
-        ]},
+        {
+            "prior": [
+                {"cells": [[0, 0]], "osm_id": "w1", "highway": "residential"},
+                {"cells": [[1, 1]], "name": "Parker's Piece"},
+            ]
+        },
         "tiles/citynav_2m_osmv3",
     )
 

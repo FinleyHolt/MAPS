@@ -78,7 +78,11 @@ def synthesize_compliant_trajectory(
                     "step %d/%d (reserved %d) after %d/%d stops; remaining "
                     "tail stops dropped from the replay so the commit leg "
                     "is reached",
-                    len(visited), max_frames, descent_reserve, i, len(tour_wps),
+                    len(visited),
+                    max_frames,
+                    descent_reserve,
+                    i,
+                    len(tour_wps),
                 )
                 return True
             if _drive_to(wp, altitude_m=tour_alts[i], budget=tour_budget):
@@ -86,7 +90,11 @@ def synthesize_compliant_trajectory(
                     "replay budget: leg %d/%d truncated MID-LEG at the commit "
                     "reserve (step %d/%d, reserved %d); remaining stops "
                     "dropped from the replay so the commit leg is reached",
-                    i, len(tour_wps), len(visited), max_frames, descent_reserve,
+                    i,
+                    len(tour_wps),
+                    len(visited),
+                    max_frames,
+                    descent_reserve,
                 )
                 return True
         return False
@@ -101,16 +109,22 @@ def synthesize_compliant_trajectory(
         dy = descent_xy[1] - pose.y
         dist = math.hypot(dx, dy)
         if dist > SNAP_XY_TOL_M + 0.5:
-            final_target = (descent_xy[0] + SNAP_XY_TOL_M * dx / dist,
-                            descent_xy[1] + SNAP_XY_TOL_M * dy / dist)
+            final_target = (
+                descent_xy[0] + SNAP_XY_TOL_M * dx / dist,
+                descent_xy[1] + SNAP_XY_TOL_M * dy / dist,
+            )
         return _drive_to(final_target, altitude_m=pose.altitude_m, budget=max_frames)
 
     descent_reserve = min(6, max_frames // 2)
     descent_replans = 0
     while True:
         # A fresh replay from the start pose per attempt.
-        pose = Pose(float(start_pose_xyh[0]), float(start_pose_xyh[1]), float(start_alt),
-                    float(start_pose_xyh[2]) % 360.0)
+        pose = Pose(
+            float(start_pose_xyh[0]),
+            float(start_pose_xyh[1]),
+            float(start_alt),
+            float(start_pose_xyh[2]) % 360.0,
+        )
         visited.clear()
         tail_dropped = _walk_tour(max_frames - descent_reserve, descent_reserve)
         descent_truncated = _fly_descent()
@@ -123,16 +137,17 @@ def synthesize_compliant_trajectory(
                 "action budget even with the FULL budget reserved (whole "
                 "tour dropped): the final pose stays %.1fm short of the committed "
                 "target %s (steps=%d/%d, replans=%d)",
-                short_m, descent_xy, len(visited), int(max_frames),
+                short_m,
+                descent_xy,
+                len(visited),
+                int(max_frames),
                 descent_replans,
             )
             break
         descent_replans += 1
         new_reserve = min(
             max_frames,
-            max(2 * descent_reserve,
-                descent_reserve + int(short_m / FORWARD_STEP_M) + 12,
-                16),
+            max(2 * descent_reserve, descent_reserve + int(short_m / FORWARD_STEP_M) + 12, 16),
         )
         log.warning(
             "replay: commit descent truncated %.1fm short of "
@@ -140,8 +155,13 @@ def synthesize_compliant_trajectory(
             "re-synthesizing the replay with reserve=%d (replan %d; the "
             "stop tail is already perceived, the commit transit is not "
             "optional)",
-            short_m, descent_xy, len(visited), int(max_frames),
-            descent_reserve, new_reserve, descent_replans,
+            short_m,
+            descent_xy,
+            len(visited),
+            int(max_frames),
+            descent_reserve,
+            new_reserve,
+            descent_replans,
         )
         descent_reserve = new_reserve
 

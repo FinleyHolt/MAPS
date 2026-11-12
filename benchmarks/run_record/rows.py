@@ -29,7 +29,13 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator
 
-from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME, STATUS_INFRA, STATUS_OK, STATUS_TIMED_OUT
+from benchmarks.run_record.episodes import (
+    EPISODES_JSONL,
+    MANIFEST_NAME,
+    STATUS_INFRA,
+    STATUS_OK,
+    STATUS_TIMED_OUT,
+)
 
 
 def metrics(row: dict) -> dict:
@@ -246,9 +252,12 @@ def load_attempts(
 
 
 def add_allow_partial(ap: argparse.ArgumentParser) -> None:
-    ap.add_argument("--allow-partial", action="store_true",
-                    help="read a run that scores fewer episodes than its manifest "
-                         "selected (the shortfall is printed to stderr)")
+    ap.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="read a run that scores fewer episodes than its manifest "
+        "selected (the shortfall is printed to stderr)",
+    )
 
 
 def scored_metrics(picked: dict[str, Attempt]) -> dict[str, dict]:

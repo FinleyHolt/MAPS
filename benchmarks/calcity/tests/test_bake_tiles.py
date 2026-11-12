@@ -53,8 +53,13 @@ def test_a_road_bakes_as_a_way_not_a_buffered_polygon(tmp_path, monkeypatch):
     3890 areas and not one way. A LineString must stay a way."""
     _bundle(
         monkeypatch,
-        [_road(1, {"highway": "secondary", "name": "South Loop Boulevard"},
-               [(100, 100), (900, 100)])],
+        [
+            _road(
+                1,
+                {"highway": "secondary", "name": "South Loop Boulevard"},
+                [(100, 100), (900, 100)],
+            )
+        ],
     )
     bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")
     prior = json.loads((tmp_path / "tiles" / "calcity_features.json").read_text())["prior"]
@@ -81,13 +86,19 @@ def test_every_tag_rides_through(tmp_path, monkeypatch):
     """ref / lanes / surface / building ride with every other tag."""
     _bundle(
         monkeypatch,
-        [_area(9, {"building": "house", "addr:street": "Hacienda Boulevard",
-                   "roof:shape": "gabled"}, 100, 100, 140, 140)],
+        [
+            _area(
+                9,
+                {"building": "house", "addr:street": "Hacienda Boulevard", "roof:shape": "gabled"},
+                100,
+                100,
+                140,
+                140,
+            )
+        ],
     )
     bake_block(tmp_path / "bundle", tmp_path / "tiles", "calcity")
-    prior = json.loads(
-        (tmp_path / "tiles" / "calcity_features.json").read_text()
-    )["prior"][0]
+    prior = json.loads((tmp_path / "tiles" / "calcity_features.json").read_text())["prior"][0]
     # The baker colon-escapes keys on the way in.
     assert prior["building"] == "house"
     assert prior["addr_street"] == "Hacienda Boulevard"
@@ -135,8 +146,16 @@ def test_ground_truth_keys_can_never_enter_the_prior(tmp_path, monkeypatch):
     """The leak wall: properties ride through, ground-truth keys never do."""
     _bundle(
         monkeypatch,
-        [_area(7, {"name": "X", "descriptions": ["leak"], "target_id": 3,
-                   "ann_id": 9}, 100, 100, 140, 140)],
+        [
+            _area(
+                7,
+                {"name": "X", "descriptions": ["leak"], "target_id": 3, "ann_id": 9},
+                100,
+                100,
+                140,
+                140,
+            )
+        ],
     )
     prior = json.loads(
         (
@@ -153,8 +172,10 @@ def test_the_bake_reads_no_citynav_raster_and_keeps_the_bounds_rectangle(tmp_pat
     rule, so a building keeps every cell its footprint covers."""
     from benchmarks.citynav.bake import city
 
-    features = [_road(1, {"highway": "residential", "name": "Elm"}, [(100, 100), (400, 120)]),
-                _area(2, {"building": "yes"}, 200, 200, 260, 250)]
+    features = [
+        _road(1, {"highway": "residential", "name": "Elm"}, [(100, 100), (400, 120)]),
+        _area(2, {"building": "yes"}, 200, 200, 260, 250),
+    ]
     _bundle(monkeypatch, features)
 
     def untouchable(*args, **kwargs):

@@ -27,14 +27,18 @@ TERRAIN_SUFFIX = "_dem.tif"
 
 def raster_pair(map_name: str) -> str:
     """The files a raster directory holds for ``map_name``, as a refusal names them."""
-    return (f"{map_name}_rgb.tif (or {map_name}.png) beside {map_name}.tif, as "
-            f"benchmarks.calcity.data_prep.build_rgbd_ortho builds them")
+    return (
+        f"{map_name}_rgb.tif (or {map_name}.png) beside {map_name}.tif, as "
+        f"benchmarks.calcity.data_prep.build_rgbd_ortho builds them"
+    )
 
 
 def holds_raster(rgbd_dir: str | Path, map_name: str) -> bool:
     """Whether a raster directory holds ``map_name``'s pair (:func:`raster_pair`)."""
     d = Path(rgbd_dir)
-    return (d / f"{map_name}.tif").is_file() and any((d / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png"))
+    return (d / f"{map_name}.tif").is_file() and any(
+        (d / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png")
+    )
 
 
 def load_raster(rgbd_dir: str | Path, map_name: str):
@@ -63,8 +67,12 @@ class Terrain:
 
     def elevation(self, x, y) -> np.ndarray:
         h, w = self.grid.shape
-        col = np.floor((np.asarray(x, dtype=np.float64) - self.x_min) / self.cell_m).astype(np.int64)
-        row = np.floor((self.y_max - np.asarray(y, dtype=np.float64)) / self.cell_m).astype(np.int64)
+        col = np.floor((np.asarray(x, dtype=np.float64) - self.x_min) / self.cell_m).astype(
+            np.int64
+        )
+        row = np.floor((self.y_max - np.asarray(y, dtype=np.float64)) / self.cell_m).astype(
+            np.int64
+        )
         return self.grid[np.clip(row, 0, h - 1), np.clip(col, 0, w - 1)].astype(np.float64)
 
 
@@ -89,10 +97,16 @@ def ground_msl(terrain: Terrain | None, floor_msl_m: float, xy) -> float:
     """The ground under ``xy`` in the map's MSL: the map's ``terrain`` where it carries one, else its floor."""
     if terrain is None:
         return float(floor_msl_m)
-    return float(terrain.elevation(np.asarray([xy[0]], dtype=np.float64), np.asarray([xy[1]], dtype=np.float64))[0])
+    return float(
+        terrain.elevation(
+            np.asarray([xy[0]], dtype=np.float64), np.asarray([xy[1]], dtype=np.float64)
+        )[0]
+    )
 
 
-def window_render(window: tuple[float, float, float, float], shape: tuple[int, int], ortho) -> np.ndarray | None:
+def window_render(
+    window: tuple[float, float, float, float], shape: tuple[int, int], ortho
+) -> np.ndarray | None:
     """The map north-up over ``window`` (``(x0, y0, x1, y1)`` bake-local metres)
     at ``shape`` (rows, cols), row 0 the window's north edge; None where the
     window reaches off the raster."""
@@ -106,8 +120,11 @@ def window_render(window: tuple[float, float, float, float], shape: tuple[int, i
     r0, r1 = (int(round(rows - 0.5 - (y - bounds.y_min) * ppm)) for y in (y1, y0))
     if c0 < 0 or r0 < 0 or c1 > cols or r1 > rows or c1 <= c0 or r1 <= r0:
         return None
-    return cv2.resize(np.ascontiguousarray(rgb[r0:r1, c0:c1, :3]), (int(shape[1]), int(shape[0])),
-                      interpolation=cv2.INTER_AREA)
+    return cv2.resize(
+        np.ascontiguousarray(rgb[r0:r1, c0:c1, :3]),
+        (int(shape[1]), int(shape[0])),
+        interpolation=cv2.INTER_AREA,
+    )
 
 
 def renderer(ortho):
@@ -117,10 +134,20 @@ def renderer(ortho):
     leaves the raster or a corner reaches the horizon."""
     rgb, bounds, ppm = ortho
 
-    def render(sensor, pose_xy, agl_m: float, yaw_deg: float, roll_deg: float = 0.0,
-               pitch_deg: float = 0.0) -> np.ndarray:
-        frame = render_frame(rgb, bounds, ppm, sensor=sensor, pose_xy=pose_xy, agl_m=agl_m,
-                             yaw_deg=yaw_deg, airframe_roll_deg=roll_deg, airframe_pitch_deg=pitch_deg)
+    def render(
+        sensor, pose_xy, agl_m: float, yaw_deg: float, roll_deg: float = 0.0, pitch_deg: float = 0.0
+    ) -> np.ndarray:
+        frame = render_frame(
+            rgb,
+            bounds,
+            ppm,
+            sensor=sensor,
+            pose_xy=pose_xy,
+            agl_m=agl_m,
+            yaw_deg=yaw_deg,
+            airframe_roll_deg=roll_deg,
+            airframe_pitch_deg=pitch_deg,
+        )
         return np.ascontiguousarray(np.asarray(frame)[..., :3])
 
     return render

@@ -138,7 +138,9 @@ def _components(frames: list, ties: list[TieRow]) -> list[set]:
     index = {f: k for k, f in enumerate(frames)}
     rows = [index[t.i] for t in ties] + [index[t.j] for t in ties]
     cols = [index[t.j] for t in ties] + [index[t.i] for t in ties]
-    graph = scipy.sparse.coo_matrix((np.ones(len(rows)), (rows, cols)), shape=(len(frames), len(frames)))
+    graph = scipy.sparse.coo_matrix(
+        (np.ones(len(rows)), (rows, cols)), shape=(len(frames), len(frames))
+    )
     _n, labels = connected_components(graph, directed=False)
     out: dict[int, set] = {}
     for f, label in zip(frames, labels):
@@ -171,7 +173,14 @@ def _levered(nodes: dict, ties: list[TieRow], solved: set, *, radial: bool) -> s
     return set(arms) if half > 0.0 and lever >= MIN_ROTATE_ARM * half else set()
 
 
-def _system(anchors: list[Anchor], ties: list[TieRow], columns: dict, yaw_cols: dict, scale_cols: dict, width: int):
+def _system(
+    anchors: list[Anchor],
+    ties: list[TieRow],
+    columns: dict,
+    yaw_cols: dict,
+    scale_cols: dict,
+    width: int,
+):
     """``(A, b, priors)``: two equations a row, each scaled by its sigma, the priors first."""
     import scipy.sparse  # noqa: PLC0415
 
@@ -184,8 +193,9 @@ def _system(anchors: list[Anchor], ties: list[TieRow], columns: dict, yaw_cols: 
         data.append(val)
 
     # The window's one yaw column and one scale column, each held to its prior.
-    prior_rows = ([(0, c, 1.0 / YAW_PRIOR_DEG) for c in set(yaw_cols.values())]
-                  + [(1, c, 1.0 / SCALE_PRIOR) for c in set(scale_cols.values())])
+    prior_rows = [(0, c, 1.0 / YAW_PRIOR_DEG) for c in set(yaw_cols.values())] + [
+        (1, c, 1.0 / SCALE_PRIOR) for c in set(scale_cols.values())
+    ]
     for row, col, val in prior_rows:
         put(n + row, col, val)
         b.extend([0.0, 0.0])
@@ -226,12 +236,30 @@ def rows_from(geometry: dict, measurements: dict, ties) -> tuple[list[Anchor], l
     """``(anchors, tie_rows)`` from each frame's ``FrameGeometry`` (by key),
     the registrations ``key -> (east, north, response)`` and the ties
     ``(key_i, key_j, uv_i, uv_j)``."""
-    anchors = [Anchor(k, (float(e), float(n)), ANCHOR_SIGMA_M / float(response), geometry[k].lever(geometry[k].centre),
-                      geometry[k].radial(geometry[k].centre))
-               for k, (e, n, response) in measurements.items() if response > 0.0]
-    tie_rows = [TieRow(i, j, geometry[i].ground(uv_i), geometry[j].ground(uv_j), geometry[i].lever(uv_i),
-                       geometry[j].lever(uv_j), geometry[i].radial(uv_i), geometry[j].radial(uv_j))
-                for i, j, uv_i, uv_j in ties]
+    anchors = [
+        Anchor(
+            k,
+            (float(e), float(n)),
+            ANCHOR_SIGMA_M / float(response),
+            geometry[k].lever(geometry[k].centre),
+            geometry[k].radial(geometry[k].centre),
+        )
+        for k, (e, n, response) in measurements.items()
+        if response > 0.0
+    ]
+    tie_rows = [
+        TieRow(
+            i,
+            j,
+            geometry[i].ground(uv_i),
+            geometry[j].ground(uv_j),
+            geometry[i].lever(uv_i),
+            geometry[j].lever(uv_j),
+            geometry[i].radial(uv_i),
+            geometry[j].radial(uv_j),
+        )
+        for i, j, uv_i, uv_j in ties
+    ]
     return anchors, tie_rows
 
 
@@ -267,9 +295,15 @@ def solve(nodes: dict, anchors: list[Anchor], ties: list[TieRow]) -> dict:
         scale_cols = {f: width for f in scaled}
         width += bool(scaled)
         a, b, priors = _system(anchors, ties, columns, yaw_cols, scale_cols, width)
-        x = irls_fit(a, b, groups=np.r_[np.full(priors, 2, dtype=np.int64),
-                                                np.zeros(len(anchors), dtype=np.int64),
-                                                np.ones(len(ties), dtype=np.int64)])
+        x = irls_fit(
+            a,
+            b,
+            groups=np.r_[
+                np.full(priors, 2, dtype=np.int64),
+                np.zeros(len(anchors), dtype=np.int64),
+                np.ones(len(ties), dtype=np.int64),
+            ],
+        )
         too_far = {f for f, col in yaw_cols.items() if abs(x[col]) > MAX_YAW_DEG}
         too_big = {f for f, col in scale_cols.items() if abs(x[col]) > MAX_SCALE}
         if not too_far and not too_big:

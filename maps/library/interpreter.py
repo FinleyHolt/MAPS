@@ -15,10 +15,22 @@ import re
 import time
 
 from maps.library.block_ceilings import (
-    _block_ceilings, _block_line, _code_objects, _outer_block_line)
+    _block_ceilings,
+    _block_line,
+    _code_objects,
+    _outer_block_line,
+)
 from maps.library.block_scan import (
-    BLOCK_FILENAME, _MOVED_TO_METHOD, _SAFE_BUILTINS, _SAFE_MODULES, _instrument,
-    _LIBRARY_CALLS, _safe_import, _shadows, scan_block)
+    BLOCK_FILENAME,
+    _MOVED_TO_METHOD,
+    _SAFE_BUILTINS,
+    _SAFE_MODULES,
+    _instrument,
+    _LIBRARY_CALLS,
+    _safe_import,
+    _shadows,
+    scan_block,
+)
 from maps.library.call_arguments import MissionEnv, Names, _Stop, _no_such_fid
 from maps.library.calls import Library
 from maps.library.op_compiler import CodeError, fid_like
@@ -77,32 +89,33 @@ class MissionNamespace(dict):
         m = re.fullmatch(r"([A-Za-z]+)_(\d+)", k)
         if m:
             for pref in ("detected", "prior"):
-                if not difflib.get_close_matches(
-                        m.group(1), [pref], n=1, cutoff=0.75):
+                if not difflib.get_close_matches(m.group(1), [pref], n=1, cutoff=0.75):
                     continue
                 fix = f"{pref}_{m.group(2)}"
                 if fix != k and mp.env.row_of_fid(fix) is not None:
-                    raise CodeError(f"there is no {k} on this surface -- "
-                                    f"did you mean {fix}?")
+                    raise CodeError(f"there is no {k} on this surface -- did you mean {fix}?")
         # A free spelling of a method: the name stays undefined and the
         # refusal names the method.
-        _moved = difflib.get_close_matches(k, tuple(_MOVED_TO_METHOD),
-                                           n=1, cutoff=0.8)
+        _moved = difflib.get_close_matches(k, tuple(_MOVED_TO_METHOD), n=1, cutoff=0.8)
         if k in _MOVED_TO_METHOD or _moved:
             k = k if k in _MOVED_TO_METHOD else _moved[0]
             raise CodeError(
                 f"there is no {k}() here -- did you mean "
                 f"{_MOVED_TO_METHOD[k]}? A cut and a sort are methods on the "
-                "rows they act on.")
+                "rows they act on."
+            )
         # The suggestion pool: the mission calls and the model's own bound
         # handles, never the module names.
-        known = [n for n in self if isinstance(n, str)
-                 and not n.startswith("__") and n not in _SAFE_MODULES]
-        close = difflib.get_close_matches(
-            k, _LIBRARY_CALLS + tuple(known), n=2, cutoff=0.6)
+        known = [
+            n
+            for n in self
+            if isinstance(n, str) and not n.startswith("__") and n not in _SAFE_MODULES
+        ]
+        close = difflib.get_close_matches(k, _LIBRARY_CALLS + tuple(known), n=2, cutoff=0.6)
         if close:
-            raise CodeError(f"there is no {k} here -- did you mean "
-                            + " or ".join(dict.fromkeys(close)) + "?")
+            raise CodeError(
+                f"there is no {k} here -- did you mean " + " or ".join(dict.fromkeys(close)) + "?"
+            )
         raise KeyError(k)
 
 
@@ -124,7 +137,7 @@ class MissionPython:
         # over one shadows it until ``del`` gives the call back.
         for name in _LIBRARY_CALLS:
             self.ns["__builtins__"][name] = _said(getattr(self.library, name), name)
-        self._picked: dict = {}         # fids the model's Row names hold
+        self._picked: dict = {}  # fids the model's Row names hold
         # Every block's code objects: a def from an earlier block is still
         # the model's own lines.
         self._codes: list = []
@@ -137,24 +150,26 @@ class MissionPython:
     def _print(self, *parts, sep=" ", end="\n", flush=False):
         # print()'s own signature; the block's output is one text, cut into
         # lines when the block ends.
-        self._printed += ((" " if sep is None else sep).join(
-            str(p)[:2_000] for p in parts) + ("\n" if end is None else end))
+        self._printed += (" " if sep is None else sep).join(str(p)[:2_000] for p in parts) + (
+            "\n" if end is None else end
+        )
 
     def _show(self, value, label: str | None):
         if value is None:
             return
         library = self.library
-        if isinstance(value, Rows) and not value._spec \
-                and library.unrendered.get(value._ref) == self.env.version():
+        if (
+            isinstance(value, Rows)
+            and not value._spec
+            and library.unrendered.get(value._ref) == self.env.version()
+        ):
             return
         if isinstance(value, Rows):
             # Key the envelope by the MODEL's spelling ("r1[0:5]"), not the
             # executor's ref the window compiled onto (the window shows it
             # under a label; a nameless set is served whole all the same).
-            library.shown_whole.add(
-                library._window(value._ref, value._spec, label, value._ref))
-        elif isinstance(value, Row) and value._src \
-                and not re.fullmatch(r"\w+", label):
+            library.shown_whole.add(library._window(value._ref, value._spec, label, value._ref))
+        elif isinstance(value, Row) and value._src and not re.fullmatch(r"\w+", label):
             # Render the ROW: a one-row window keeps the ordering
             # attribute a bare dict loses, so the model sees the row it
             # asked for rather than a census of one.
@@ -164,8 +179,9 @@ class MissionPython:
         elif isinstance(value, Row):
             library.out.setdefault("shown", {})[label] = value._bind
         else:
-            self._printed += (f"{label} = {value!r}" if label != repr(value)
-                              else repr(value)) + "\n"
+            self._printed += (
+                f"{label} = {value!r}" if label != repr(value) else repr(value)
+            ) + "\n"
 
     def run_block(self, code: str) -> dict:
         out: dict = {}
@@ -179,32 +195,39 @@ class MissionPython:
         except CodeError as e:
             return self.env.say_err(out, f"nothing in this block ran -- {e}")
         codes = _code_objects(compiled)
-        self._block_codes = set(codes)     # the block the model just sent
+        self._block_codes = set(codes)  # the block the model just sent
         self.names.running(self._block_codes)
         self._codes.extend(codes)
 
         self._deadline = time.monotonic() + TRACE_DEADLINE_S
         try:
             with _block_ceilings(self):
-                exec(compiled, self.ns)        # noqa: S102 -- the surface
-        except Exception as e:                          # noqa: BLE001
+                exec(compiled, self.ns)  # noqa: S102 -- the surface
+        except Exception as e:  # noqa: BLE001
             self._unbind_failed_assign(tree, _outer_block_line())
-            if not isinstance(e, _Stop):   # a _Stop's refusal is in the receipt
+            if not isinstance(e, _Stop):  # a _Stop's refusal is in the receipt
                 line = _block_line(self._block_codes)
-                what = (str(e) if isinstance(e, CodeError)
-                        else f"{type(e).__name__}: {e}")
+                what = str(e) if isinstance(e, CodeError) else f"{type(e).__name__}: {e}"
                 if isinstance(e, NameError) and e.name in _LIBRARY_CALLS:
                     # a call name resolves through the builtins, so only a
                     # del of it misses
-                    what = (f"nothing is bound over {e.name} to del; "
-                            f"{e.name}() is the mission call itself and stays.")
+                    what = (
+                        f"nothing is bound over {e.name} to del; "
+                        f"{e.name}() is the mission call itself and stays."
+                    )
                 elif isinstance(e, TypeError) and str(e).endswith("is not callable"):
-                    shadowed = next((n.func.id for n in ast.walk(tree)
-                                     if isinstance(n, ast.Call)
-                                     and isinstance(n.func, ast.Name)
-                                     and n.lineno <= line <= n.end_lineno
-                                     and n.func.id in _LIBRARY_CALLS
-                                     and n.func.id in self.ns), None)
+                    shadowed = next(
+                        (
+                            n.func.id
+                            for n in ast.walk(tree)
+                            if isinstance(n, ast.Call)
+                            and isinstance(n.func, ast.Name)
+                            and n.lineno <= line <= n.end_lineno
+                            and n.func.id in _LIBRARY_CALLS
+                            and n.func.id in self.ns
+                        ),
+                        None,
+                    )
                     if shadowed:
                         what += f": {_shadows(shadowed)}"
                 out.update(self.env.say_err({}, f"line {line}: {what}"))
@@ -216,21 +239,22 @@ class MissionPython:
         if self._lines > TRACE_LINE_CEILING:
             raise CodeError(
                 f"the block ran past {TRACE_LINE_CEILING:,} of its "
-                "own lines -- an unbounded loop. Simplify the block.")
+                "own lines -- an unbounded loop. Simplify the block."
+            )
         if time.monotonic() > self._deadline:
             raise CodeError(
                 f"the block ran past {TRACE_DEADLINE_S:.0f} s -- a slow or "
                 "large query, most likely a find/near loop over the whole "
                 "map. Scope it tighter (fewer rows, a smaller dwithin)"
-                " or split it across turns.")
+                " or split it across turns."
+            )
 
     def _unbind_failed_assign(self, tree: ast.Module, line: int) -> None:
         """A rebind that failed UNBINDS the name: Python leaves the target
         holding its OLD value when the right-hand side raises, and a stale
         pick that stays bound is a wrong commit."""
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Assign)
-                    and node.lineno <= line <= node.end_lineno):
+            if isinstance(node, ast.Assign) and node.lineno <= line <= node.end_lineno:
                 for t in node.targets:
                     # ast.walk reaches Names inside tuple/list unpacking
                     # too -- `a, b = <raises>` must unbind BOTH.
@@ -239,22 +263,29 @@ class MissionPython:
                             self.ns.pop(n.id, None)
                             self.ns.unbound[n.id] = (
                                 "its assignment failed, so the stale "
-                                "value was removed -- re-derive it")
+                                "value was removed -- re-derive it"
+                            )
 
     def _finish(self, out: dict) -> dict:
         if self._printed:
             lines = self._printed.splitlines()
             if len(lines) > PRINT_LINE_CAP:
-                kept = lines[:PRINT_LINE_CAP - 8] + [
-                    f"... [{len(lines) - PRINT_LINE_CAP + 3} printed "
-                    "lines suppressed -- slice or aggregate instead of "
-                    "printing whole sets]"] + lines[-5:]
+                kept = (
+                    lines[: PRINT_LINE_CAP - 8]
+                    + [
+                        f"... [{len(lines) - PRINT_LINE_CAP + 3} printed "
+                        "lines suppressed -- slice or aggregate instead of "
+                        "printing whole sets]"
+                    ]
+                    + lines[-5:]
+                )
                 lines = kept
             text = "\n".join(lines)
             if len(text) > PRINT_CHAR_CAP:
-                text = (text[:PRINT_CHAR_CAP]
-                        + f"\n... [printed output clipped at "
-                          f"{PRINT_CHAR_CAP:,} chars]")
+                text = (
+                    text[:PRINT_CHAR_CAP] + f"\n... [printed output clipped at "
+                    f"{PRINT_CHAR_CAP:,} chars]"
+                )
             out["printed"] = text
         # Named picks: the fid a model-named Row holds, receipted once.
         picked = {}
@@ -282,8 +313,7 @@ class MissionPython:
             keys = list(results)
             answer = keys[-1] if keys else None
             _a = results.get(answer)
-            said = set(str(_a.get("hint") or "").splitlines()
-                       if isinstance(_a, dict) else ())
+            said = set(str(_a.get("hint") or "").splitlines() if isinstance(_a, dict) else ())
             folded = []
             for k in keys[:-1]:
                 if k in self.library.shown_whole:
@@ -294,15 +324,17 @@ class MissionPython:
                 # the answer already says is dropped, but a named result
                 # keeps its own status line.
                 name = mine.get(k) or self.names.labels.get(k)
-                keep = [ln for i, ln in enumerate(str(hint or "").splitlines())
-                        if (i == 0 and name) or ln not in said]
+                keep = [
+                    ln
+                    for i, ln in enumerate(str(hint or "").splitlines())
+                    if (i == 0 and name) or ln not in said
+                ]
                 if keep:
                     hint = "\n".join(keep)
                     folded.append(f"{name}: {hint}" if name else hint)
             if folded and isinstance(results.get(answer), dict):
                 a = dict(results[answer])
-                a["hint"] = "\n".join(
-                    ([a["hint"]] if a.get("hint") else []) + folded)
+                a["hint"] = "\n".join(([a["hint"]] if a.get("hint") else []) + folded)
                 results[answer] = a
             # A key is the set's spelling: an unbound find its call unless
             # another key already says it, a nameless set its mission number.
@@ -322,9 +354,9 @@ class MissionPython:
                         envs[i] = {k: v for k, v in env.items() if k != "legend"}
                     legend = True
             out["result"] = {**res, "results": dict(zip(keys, envs))}
-        names = sorted(k for k, v in self.ns.items()
-                       if isinstance(v, (Rows, Row))
-                       and not k.startswith("__"))
+        names = sorted(
+            k for k, v in self.ns.items() if isinstance(v, (Rows, Row)) and not k.startswith("__")
+        )
         if names:
             out["handles"] = names
         return out

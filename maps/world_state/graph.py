@@ -1,8 +1,8 @@
 """Feature graph data structures.
 
-  MapObject   — a spatial feature with geometry and metadata
-  ObjectGraph — dict-backed node graph
-  GridDomain  — the tile raster grid and its cell size
+MapObject   — a spatial feature with geometry and metadata
+ObjectGraph — dict-backed node graph
+GridDomain  — the tile raster grid and its cell size
 """
 
 from __future__ import annotations

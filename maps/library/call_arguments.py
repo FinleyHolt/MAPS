@@ -17,10 +17,17 @@ from maps.xy_token import format_xy_token, is_xy, parse_xy_token
 
 
 # Each act's place slot as the model spells it, by the act's ``why``.
-_SITE_SLOT = {"map": "around=", "boost": "at=", "stage": "at=", "facing": "facing=",
-              "crops": "each look() place", "marks": "each mark",
-              "move": "go_to()", "cover": "each explore() place",
-              "anchor": "each place a relation names"}
+_SITE_SLOT = {
+    "map": "around=",
+    "boost": "at=",
+    "stage": "at=",
+    "facing": "facing=",
+    "crops": "each look() place",
+    "marks": "each mark",
+    "move": "go_to()",
+    "cover": "each explore() place",
+    "anchor": "each place a relation names",
+}
 
 
 class _Stop(Exception):
@@ -29,8 +36,7 @@ class _Stop(Exception):
 
 def _no_such_fid(fid: str) -> CodeError:
     """The refusal of a prior_/detected_ fid no surface row carries."""
-    return CodeError(f"there is no {fid} on this surface; say a fid off a "
-                     "served row.")
+    return CodeError(f"there is no {fid} on this surface; say a fid off a served row.")
 
 
 class _Name(str):
@@ -90,7 +96,8 @@ def place_token(v, why: str):
     if v is None and why != "marks":
         raise CodeError(
             f"{_SITE_SLOT[why]} got None, which is no place: the name it "
-            "came from holds no row. Bind a row first.")
+            "came from holds no row. Bind a row first."
+        )
     if isinstance(v, Ref):
         return v.ref
     if isinstance(v, Bind):
@@ -103,24 +110,25 @@ def place_token(v, why: str):
         if is_xy(v):
             return format_xy_token(float(v[0]), float(v[1]))
         if not v:
-            raise CodeError(f"{_SITE_SLOT[why]} takes ONE place and that "
-                            "list holds 0 row(s).")
+            raise CodeError(f"{_SITE_SLOT[why]} takes ONE place and that list holds 0 row(s).")
         raise CodeError(
             f"{_SITE_SLOT[why]} takes ONE place and that is a list of "
-            f"{len(v)} -- index the one you mean, or give one [x, y] point.")
+            f"{len(v)} -- index the one you mean, or give one [x, y] point."
+        )
     # A QUOTED [x, y] IS A POINT: welcome in a relating slot, refused as
     # a COORDINATE in a moving one.
     pt = parse_xy_token(v) if isinstance(v, str) else None
     if pt:
         if why in ("move", "cover"):
-            raise CodeError(act_needs_a_thing(
-                name="go_to/explore", got=f"{pt[0]:g}, {pt[1]:g}")
+            raise CodeError(
+                act_needs_a_thing(name="go_to/explore", got=f"{pt[0]:g}, {pt[1]:g}")
                 + " A crossing you computed is a ROW: index it "
-                  "-- r2 = intersection(\"A Road\", \"B St\") then "
-                  "go_to(r2[0]).")
+                '-- r2 = intersection("A Road", "B St") then '
+                "go_to(r2[0])."
+            )
         return format_xy_token(float(pt[0]), float(pt[1]))
     if isinstance(v, str) and not v.strip() and why == "marks":
-        return v                # a blank mark marks nothing, as None does
+        return v  # a blank mark marks nothing, as None does
     if isinstance(v, str) and not fid_like(v):
         return _Name(v)
     return str(_plain(v))
@@ -129,10 +137,8 @@ def place_token(v, why: str):
 def fold(out: dict, part: dict) -> None:
     """Fold one call's ack ``part`` into the block's receipt ``out``."""
     for k, v in part.items():
-        if k == "result" and isinstance(out.get("result"), dict) \
-                and isinstance(v, dict):
-            res = {**(out["result"].get("results") or {}),
-                   **(v.get("results") or {})}
+        if k == "result" and isinstance(out.get("result"), dict) and isinstance(v, dict):
+            res = {**(out["result"].get("results") or {}), **(v.get("results") or {})}
             out["result"] = {**out["result"], **v, "results": res}
             if not res:
                 del out["result"]["results"]
@@ -141,8 +147,7 @@ def fold(out: dict, part: dict) -> None:
         elif k == "flown" and k in out:
             # A second call of one kind keeps the first's part: flights
             # run on in one list, any other kind lists each call's part.
-            out[k] = {f: out[k].get(f, []) + v.get(f, [])
-                      for f in {**out[k], **v}}
+            out[k] = {f: out[k].get(f, []) + v.get(f, []) for f in {**out[k], **v}}
         elif isinstance(v, dict) and k in out:
             prev = out[k]
             out[k] = [*prev, v] if isinstance(prev, list) else [prev, v]
@@ -161,7 +166,7 @@ class Names:
         self.shown: dict = {}
         #: ref -> the call that made it (find).
         self.labels: dict = {}
-        self._unnamed: dict = {}        # nameless set -> its slot number
+        self._unnamed: dict = {}  # nameless set -> its slot number
         # The running block: its source, its code objects and (parsed once
         # a block) its calls and subscripts by position.
         self.code = ""
@@ -197,8 +202,7 @@ class Names:
         """The model's name for a whole result: a bound name, else what it
         was shown under or the call that made it; None when it has none."""
         for k, v in self.ns.items():
-            if isinstance(v, Rows) and not v._spec and v._ref == ref \
-                    and not k.startswith("__"):
+            if isinstance(v, Rows) and not v._spec and v._ref == ref and not k.startswith("__"):
                 return k
         return self.shown.get(ref) or self.labels.get(ref)
 
@@ -206,8 +210,7 @@ class Names:
         """What a refusal or a page calls ``x``: its bound name, else the
         model's text for it in the running ``fn(...)`` call (:meth:`call_arg`),
         else its spelling, else unnamed."""
-        return (self.name_of(x) or self.call_arg(fn) or self.spelling(x)
-                or UNNAMED)
+        return self.name_of(x) or self.call_arg(fn) or self.spelling(x) or UNNAMED
 
     def call_arg(self, fn: str | None) -> str | None:
         """The model's text for the first argument of the ``fn(...)`` call
@@ -216,8 +219,12 @@ class Names:
         node = self.running_node()
         if fn is None and isinstance(node, ast.Subscript):
             return ast.unparse(node.value)
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id == fn and node.args):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == fn
+            and node.args
+        ):
             return ast.unparse(node.args[0])
         return None
 
@@ -235,8 +242,9 @@ class Names:
             self._nodes = {}
             for n in ast.walk(ast.parse(self.code)):
                 if isinstance(n, (ast.Call, ast.Subscript)):
-                    self._nodes.setdefault((n.lineno, n.end_lineno, n.col_offset,
-                                            n.end_col_offset), n)
+                    self._nodes.setdefault(
+                        (n.lineno, n.end_lineno, n.col_offset, n.end_col_offset), n
+                    )
         return self._nodes.get(tuple(inspect.getframeinfo(fr, context=0).positions))
 
     def held_refs(self) -> set:
@@ -246,15 +254,14 @@ class Names:
 
     def unnamed_label(self, ref: str) -> str:
         """A nameless set's label, numbered once per mission."""
-        return "(unnamed {})".format(
-            self._unnamed.setdefault(ref, len(self._unnamed) + 1))
+        return "(unnamed {})".format(self._unnamed.setdefault(ref, len(self._unnamed) + 1))
 
     def not_one_place(self, kw: str, x: "Rows") -> str:
         """The refusal of a set where ``kw=`` takes one place."""
         name = self.spelling(x)
         one = _one_row(x, name or "s")
         if one is None:
-            return (f"{kw}= takes ONE place and {name or 'that set'} holds "
-                    "0 row(s) here")
-        return (f"{kw}= takes ONE place and {name or 'that'} is a set. "
-                f"{_index_it(name)} -- {kw}={one}")
+            return f"{kw}= takes ONE place and {name or 'that set'} holds 0 row(s) here"
+        return (
+            f"{kw}= takes ONE place and {name or 'that'} is a set. {_index_it(name)} -- {kw}={one}"
+        )

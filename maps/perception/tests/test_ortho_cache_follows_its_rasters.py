@@ -30,14 +30,23 @@ def _write_rasters(rgbd: Path, block: str, colour: tuple[int, int, int], kind: s
     from rasterio.transform import Affine
 
     tr = Affine(0.1, 0.0, 0.0, 0.0, -0.1, H * 0.1)
-    with rasterio.open(rgbd / f"{block}.tif", "w", driver="GTiff", height=H, width=W, count=1,
-                       dtype="float32", transform=tr) as dst:
+    with rasterio.open(
+        rgbd / f"{block}.tif",
+        "w",
+        driver="GTiff",
+        height=H,
+        width=W,
+        count=1,
+        dtype="float32",
+        transform=tr,
+    ) as dst:
         dst.write(np.full((1, H, W), 3.0, np.float32))
     rgb = np.full((H, W, 3), colour, np.uint8)
     if kind == "geotiff":
         path = rgbd / f"{block}_rgb.tif"
-        with rasterio.open(path, "w", driver="GTiff", height=H, width=W, count=3, dtype="uint8",
-                           transform=tr) as dst:
+        with rasterio.open(
+            path, "w", driver="GTiff", height=H, width=W, count=3, dtype="uint8", transform=tr
+        ) as dst:
             dst.write(rgb.transpose(2, 0, 1))
     else:
         path = rgbd / f"{block}.png"

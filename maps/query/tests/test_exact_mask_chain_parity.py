@@ -1,4 +1,5 @@
 """THE exact-mask resolution law + the mega-mask containment idiom."""
+
 from __future__ import annotations
 
 import pytest
@@ -7,8 +8,7 @@ from maps.query.op_io import ProgramError
 from maps.query.result_tables import _grid_cell
 from maps.query.program import run_program
 from maps.query.surface import build_surface_from_graph
-from maps.query.text_match import (
-    find_score, fuzzy_prepare_query, token_idf)
+from maps.query.text_match import find_score, fuzzy_prepare_query, token_idf
 
 
 # --- fixture surface: two mask-bearing buildings in CONTACT, one detached ---
@@ -17,40 +17,60 @@ from maps.query.text_match import (
 # centroids (the tracker's sub-cell point vs the mask's true centroid) so a
 # mask-stripped chain that degrades to xy points produces DIFFERENT numbers
 # -- exactly the defect class the resolution law kills.
-_B1 = {"fid": "prior_1", "name": "One", "xy": [9.0, 9.0],
-       "mask": [[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]]],
-       "mask_centroid": [10.0, 10.0], "tags": {"building": "yes"}}
-_B2 = {"fid": "prior_2", "name": "Two", "xy": [31.0, 11.0],
-       "mask": [[[20.0, 0.0], [40.0, 0.0], [40.0, 20.0], [20.0, 20.0], [20.0, 0.0]]],
-       "mask_centroid": [30.0, 10.0], "tags": {"building": "yes"}}
-_B3 = {"fid": "prior_3", "name": "Three", "xy": [55.0, 10.0],
-       "mask": [[[50.0, 0.0], [60.0, 0.0], [60.0, 20.0], [50.0, 20.0], [50.0, 0.0]]],
-       "mask_centroid": [55.0, 10.0], "tags": {"building": "yes"}}
+_B1 = {
+    "fid": "prior_1",
+    "name": "One",
+    "xy": [9.0, 9.0],
+    "mask": [[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]]],
+    "mask_centroid": [10.0, 10.0],
+    "tags": {"building": "yes"},
+}
+_B2 = {
+    "fid": "prior_2",
+    "name": "Two",
+    "xy": [31.0, 11.0],
+    "mask": [[[20.0, 0.0], [40.0, 0.0], [40.0, 20.0], [20.0, 20.0], [20.0, 0.0]]],
+    "mask_centroid": [30.0, 10.0],
+    "tags": {"building": "yes"},
+}
+_B3 = {
+    "fid": "prior_3",
+    "name": "Three",
+    "xy": [55.0, 10.0],
+    "mask": [[[50.0, 0.0], [60.0, 0.0], [60.0, 20.0], [50.0, 20.0], [50.0, 0.0]]],
+    "mask_centroid": [55.0, 10.0],
+    "tags": {"building": "yes"},
+}
 _CAR = {"fid": "detected_0", "xy": [45.0, 10.0], "class": "car"}
 
 
 def _anchors():
-    return [dict(_B1, tags=dict(_B1["tags"])),
-            dict(_B2, tags=dict(_B2["tags"])),
-            dict(_B3, tags=dict(_B3["tags"]))]
+    return [
+        dict(_B1, tags=dict(_B1["tags"])),
+        dict(_B2, tags=dict(_B2["tags"])),
+        dict(_B3, tags=dict(_B3["tags"])),
+    ]
 
 
 def _geom_cols(row):
-    return {k: v for k, v in row.items()
-            if k.startswith(("distance to ", "center distance to ",
-                             "bearing from ", "facing ",
-                             "contains "))}
+    return {
+        k: v
+        for k, v in row.items()
+        if k.startswith(
+            ("distance to ", "center distance to ", "bearing from ", "facing ", "contains ")
+        )
+    }
 
 
 def test_repeated_compare_byte_parity():
     # The IDENTICAL compare twice in one program serves identical bytes.
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-        {"ref": "r2", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+            {"ref": "r2", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+        ]
+    }
     out = run_program([dict(_CAR)], _anchors(), prog)["results"]
     a = {r["fid"]: _geom_cols(r) for r in out["r1"]}
     b = {r["fid"]: _geom_cols(r) for r in out["r2"]}
@@ -61,26 +81,43 @@ def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
     # A compare on rows that came through a compare, score_by, a slice and
     # a filter serves geometry
     # byte-identical to a fresh compare on the same fids.
-    chained = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r0c", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0c",
-                  "emphasis": [{"key": "distance to prior_1", "w": -1}]}},
-        {"ref": "r2", "op": "filter_items",
-         "args": {"items": "r1", "key": "distance to prior_1", "op": "le",
-                  "value": 1000}},
-        {"ref": "r3", "op": "compare",
-         "args": {"items": "r2[0:3]", "refs": ["prior_1", "prior_2"]}},
-    ]}
+    chained = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {"ref": "r0c", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+            {
+                "ref": "r1",
+                "op": "score_by",
+                "args": {"items": "r0c", "emphasis": [{"key": "distance to prior_1", "w": -1}]},
+            },
+            {
+                "ref": "r2",
+                "op": "filter_items",
+                "args": {"items": "r1", "key": "distance to prior_1", "op": "le", "value": 1000},
+            },
+            {
+                "ref": "r3",
+                "op": "compare",
+                "args": {"items": "r2[0:3]", "refs": ["prior_1", "prior_2"]},
+            },
+        ]
+    }
     out = run_program([dict(_CAR)], _anchors(), chained)["results"]
     chained_rows = {r["fid"]: _geom_cols(r) for r in out["r3"]}
     for fid, cols in chained_rows.items():
-        fresh = run_program([dict(_CAR)], _anchors(), {"ops": [
-            {"ref": "r0", "op": "compare",
-             "args": {"items": [fid], "refs": ["prior_1", "prior_2"]}},
-        ]})["results"]["r0"][0]
+        fresh = run_program(
+            [dict(_CAR)],
+            _anchors(),
+            {
+                "ops": [
+                    {
+                        "ref": "r0",
+                        "op": "compare",
+                        "args": {"items": [fid], "refs": ["prior_1", "prior_2"]},
+                    },
+                ]
+            },
+        )["results"]["r0"][0]
         for k, v in _geom_cols(fresh).items():
             assert cols.get(k) == v, (fid, k, cols.get(k), v)
         # nothing extra either (score is a score_by field, not geometry)
@@ -91,16 +128,18 @@ def test_chain_vs_fresh_parity_over_score_by_slice_and_filter():
 
 
 def test_self_ref_reads_zero_and_directionless():
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r0c", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0c",
-                  "emphasis": [{"key": "distance to prior_1", "w": -1}]}},
-        {"ref": "r2", "op": "compare",
-         "args": {"items": "r1", "refs": ["prior_1"]}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {"ref": "r0c", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+            {
+                "ref": "r1",
+                "op": "score_by",
+                "args": {"items": "r0c", "emphasis": [{"key": "distance to prior_1", "w": -1}]},
+            },
+            {"ref": "r2", "op": "compare", "args": {"items": "r1", "refs": ["prior_1"]}},
+        ]
+    }
     out = run_program([], _anchors(), prog)["results"]
     row = {r["fid"]: r for r in out["r2"]}["prior_1"]
     assert row["distance to prior_1"] == 0.0, row
@@ -112,26 +151,36 @@ def test_self_ref_reads_zero_and_directionless():
 def test_pasted_row_echo_resolves_geometry_by_fid():
     # A model-pasted row literal (fid + degraded/absent fields) computes from
     # the registry's exact mask, not from the pasted xy.
-    prog = {"ops": [
-        {"ref": "r0", "op": "compare",
-         "args": {"items": [{"fid": "prior_2", "xy": [31.0, 11.0]}],
-                  "refs": ["prior_1"]}},
-    ]}
+    prog = {
+        "ops": [
+            {
+                "ref": "r0",
+                "op": "compare",
+                "args": {"items": [{"fid": "prior_2", "xy": [31.0, 11.0]}], "refs": ["prior_1"]},
+            },
+        ]
+    }
     out = run_program([], _anchors(), prog)["results"]
     row = out["r0"][0]
-    assert row["distance to prior_1"] == 0.0, row              # masks touch
-    assert row["center distance to prior_1"] == 20.0, row            # true centroids, not xy
+    assert row["distance to prior_1"] == 0.0, row  # masks touch
+    assert row["center distance to prior_1"] == 20.0, row  # true centroids, not xy
 
 
 # --- the mega-mask containment idiom ---------------------------------------
 
+
 def _mega_surface():
     anchors = _anchors()
-    mega = {"fid": "prior_9", "name": "Cambridge", "xy": [30.0, 10.0],
-            "mask": [[[-100.0, -100.0], [200.0, -100.0], [200.0, 200.0],
-                      [-100.0, 200.0], [-100.0, -100.0]]],
-            "mask_centroid": [50.0, 50.0],
-            "tags": {"boundary": "administrative"}}
+    mega = {
+        "fid": "prior_9",
+        "name": "Cambridge",
+        "xy": [30.0, 10.0],
+        "mask": [
+            [[-100.0, -100.0], [200.0, -100.0], [200.0, 200.0], [-100.0, 200.0], [-100.0, -100.0]]
+        ],
+        "mask_centroid": [50.0, 50.0],
+        "tags": {"boundary": "administrative"},
+    }
     return [dict(_CAR)], anchors + [mega]
 
 
@@ -147,16 +196,22 @@ def test_build_surface_stamps_covers_window_geometrically():
     # A mask containing every surface row position gets the VISIBLE fact; a
     # normal footprint does not. Cell-space: a 40x40-cell blanket over three
     # single-cell nodes (cell_m=2, origin 0).
-    blanket = _N(name="Blanket", centroid=[20, 20],
-                 cells=[[r, c] for r in range(41) for c in range(41)],
-                 tags={"boundary": "administrative"}, class_name="")
-    small = _N(name="Small", centroid=[5, 5], cells=[[5, 5]],
-               tags={"building": "yes"}, class_name="")
-    far = _N(name="Far", centroid=[35, 35], cells=[[35, 35]],
-             tags={"building": "yes"}, class_name="")
+    blanket = _N(
+        name="Blanket",
+        centroid=[20, 20],
+        cells=[[r, c] for r in range(41) for c in range(41)],
+        tags={"boundary": "administrative"},
+        class_name="",
+    )
+    small = _N(
+        name="Small", centroid=[5, 5], cells=[[5, 5]], tags={"building": "yes"}, class_name=""
+    )
+    far = _N(
+        name="Far", centroid=[35, 35], cells=[[35, 35]], tags={"building": "yes"}, class_name=""
+    )
     cands, anchors = build_surface_from_graph(
-        [("prior_1", small), ("prior_2", far), ("prior_9", blanket)],
-        (0.0, 0.0), 2.0)
+        [("prior_1", small), ("prior_2", far), ("prior_9", blanket)], (0.0, 0.0), 2.0
+    )
     rows = {a["fid"]: a for a in anchors}
     assert rows["prior_9"].get("covers_window") is True, rows["prior_9"]
     assert "covers_window" not in rows["prior_1"]
@@ -165,11 +220,12 @@ def test_build_surface_stamps_covers_window_geometrically():
 
 def test_covering_ref_serves_containment_fact_not_zero_columns():
     cands, anchors = _mega_surface()
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_9"]}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": ["prior_9"]}},
+        ]
+    }
     # covers_window is stamped at build_surface_from_graph; stamp it here
     # directly (the geometric stamp has its own test above).
     anchors[-1]["covers_window"] = True
@@ -178,7 +234,7 @@ def test_covering_ref_serves_containment_fact_not_zero_columns():
     for fid, r in rows.items():
         assert "distance to prior_9" not in r, (fid, list(r))
         assert "facing prior_9" not in r, (fid, list(r))
-        assert "center distance to prior_9" in r, (fid, list(r))     # centroid vector rides
+        assert "center distance to prior_9" in r, (fid, list(r))  # centroid vector rides
     notes = list(getattr(out["r1"], "notes", []))
     assert any("contains the whole surface window" in n for n in notes), notes
 
@@ -186,17 +242,21 @@ def test_covering_ref_serves_containment_fact_not_zero_columns():
 def test_score_by_on_covering_ref_gap_key_states_the_containment_fact():
     cands, anchors = _mega_surface()
     anchors[-1]["covers_window"] = True
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0",
-                  "emphasis": [{"key": "distance to prior_9", "w": -1}]}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {
+                "ref": "r1",
+                "op": "score_by",
+                "args": {"items": "r0", "emphasis": [{"key": "distance to prior_9", "w": -1}]},
+            },
+        ]
+    }
     with pytest.raises(ProgramError) as ei:
         run_program(cands, anchors, prog)
     msg = str(ei.value)
     assert "contains the whole surface window" in msg, msg
-    assert "center distance to prior_9" in msg, msg                  # the working idiom named
+    assert "center distance to prior_9" in msg, msg  # the working idiom named
 
 
 def test_covering_row_as_item_omitted_from_sort_head_with_note():
@@ -208,18 +268,21 @@ def test_covering_row_as_item_omitted_from_sort_head_with_note():
     # ordering op) still shows it.
     cands, anchors = _mega_surface()
     anchors[-1]["covers_window"] = True
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r0c", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-        {"ref": "r1", "op": "score_by",
-         "args": {"items": "r0c",
-                  "emphasis": [{"key": "distance to prior_1", "w": -1}]}},
-        {"ref": "r2", "op": "find",
-         "args": {"query": "Cambridge"}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {"ref": "r0c", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+            {
+                "ref": "r1",
+                "op": "score_by",
+                "args": {"items": "r0c", "emphasis": [{"key": "distance to prior_1", "w": -1}]},
+            },
+            {"ref": "r2", "op": "find", "args": {"query": "Cambridge"}},
+        ]
+    }
     out = run_program(cands, anchors, prog)["results"]
     from maps.query.result_tables import compact_results
+
     env = compact_results(out)
     sort_env = env["r1"]
     # omitted from the rendered head...
@@ -233,8 +296,7 @@ def test_covering_row_as_item_omitted_from_sort_head_with_note():
     assert "'distance to' = 0" in hint and "containment" in hint, hint
     # ...len is the TRUE set size and the raw rN keeps the full set.
     assert sort_env["len"] == len(out["r1"])
-    assert any(isinstance(r, dict) and r.get("fid") == "prior_9"
-               for r in out["r1"])
+    assert any(isinstance(r, dict) and r.get("fid") == "prior_9" for r in out["r1"])
     # a QUERY-find render is untouched: the covering row still renders
     # there, covers_window riding it as a visible fact. (The browse r0 is
     # unordered — census + len, no row head.)
@@ -256,10 +318,17 @@ def test_tag_fat_row_renders_bounded_head():
 
 # --- degrader pins ----------------------------------------------------------
 
+
 def test_semicolon_compound_query_gets_the_or_remedy():
-    prog = {"ops": [{"ref": "r0", "op": "find",
-                     "args": {"query":
-                              "highway=residential;addr_street=Brookside"}}]}
+    prog = {
+        "ops": [
+            {
+                "ref": "r0",
+                "op": "find",
+                "args": {"query": "highway=residential;addr_street=Brookside"},
+            }
+        ]
+    }
     with pytest.raises(ProgramError) as ei:
         run_program([], _anchors(), prog)
     msg = str(ei.value)
@@ -273,23 +342,27 @@ def test_tag_family_token_hit_outranks_proper_name_substring_fuzz():
     # (the real rows are UNNAMED: 'Parking End Cottages' rides naptan tag
     # VALUES, so the substring hit is token-bag fuzz, not the name tier)
     q = fuzzy_prepare_query("parking")
-    _texts = ("amenity parking surface",
-              "naptan commonname parking end cottages highway bus stop")
+    _texts = ("amenity parking surface", "naptan commonname parking end cottages highway bus stop")
     idf = token_idf([{"search_text": t, "name": ""} for t in _texts])
-    lot = find_score(
-        q, _texts[0], None, {"amenity": "parking"}, idf=idf)
+    lot = find_score(q, _texts[0], None, {"amenity": "parking"}, idf=idf)
     naptan = find_score(
         q,
         _texts[1],
         None,
-        {"naptan:CommonName": "Parking End Cottages",
-         "highway": "bus_stop"}, idf=idf)
+        {"naptan:CommonName": "Parking End Cottages", "highway": "bus_stop"},
+        idf=idf,
+    )
     assert lot >= 0.80, lot
     assert naptan <= 0.75, naptan
     assert lot > naptan, (lot, naptan)
     # the tag-family tier stays BELOW an exact k=v pair hit
-    kv = find_score(fuzzy_prepare_query("amenity=parking"),
-                    "amenity parking", None, {"amenity": "parking"}, idf=idf)
+    kv = find_score(
+        fuzzy_prepare_query("amenity=parking"),
+        "amenity parking",
+        None,
+        {"amenity": "parking"},
+        idf=idf,
+    )
     assert kv > lot, (kv, lot)
 
 
@@ -299,19 +372,23 @@ def test_tag_family_token_hit_outranks_proper_name_substring_fuzz():
 # yet its d_prior_1 reads 0 and it tops any nearest-first sort as if
 # adjacent. The d_=0 row must render the containment fact (contains_<ref>
 # cell + note); sorts unchanged, nothing dropped (armC5→C7 recurring).
-_WARD = {"fid": "prior_9", "name": "Castle Ward", "xy": [15.0, 15.0],
-         "mask": [[[-30.0, -30.0], [45.0, -30.0], [45.0, 45.0],
-                   [-30.0, 45.0], [-30.0, -30.0]]],
-         "mask_centroid": [7.5, 7.5],
-         "tags": {"boundary": "political"}}
+_WARD = {
+    "fid": "prior_9",
+    "name": "Castle Ward",
+    "xy": [15.0, 15.0],
+    "mask": [[[-30.0, -30.0], [45.0, -30.0], [45.0, 45.0], [-30.0, 45.0], [-30.0, -30.0]]],
+    "mask_centroid": [7.5, 7.5],
+    "tags": {"boundary": "political"},
+}
 
 
 def _ward_out():
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+        ]
+    }
     anchors = _anchors() + [dict(_WARD, tags=dict(_WARD["tags"]))]
     return run_program([dict(_CAR)], anchors, prog)["results"]
 
@@ -339,17 +416,21 @@ def test_self_compare_gets_no_contains_fact():
 
 
 def test_containment_note_names_the_row_and_the_fact():
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {}},
+            {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+        ]
+    }
     anchors = _anchors() + [dict(_WARD, tags=dict(_WARD["tags"]))]
     out = run_program([dict(_CAR)], anchors, prog)
     notes = out.get("notes") or []
     if not notes:  # notes may ride the rendered envelope instead
-        notes = [n for v in (out.get("results") or {}).values()
-                 for n in (getattr(v, "notes", None) or [])]
+        notes = [
+            n
+            for v in (out.get("results") or {}).values()
+            for n in (getattr(v, "notes", None) or [])
+        ]
     joined = " ".join(str(n) for n in notes)
     assert "prior_9" in joined and "contains prior_1" in joined, joined
     assert "containment, not adjacency" in joined
@@ -358,11 +439,12 @@ def test_containment_note_names_the_row_and_the_fact():
 def test_compare_rows_carry_no_mask_fields():
     # Op output rows hold no geometry: a later op reads it by fid off the
     # live surface (row_geometry), so a carried row never goes stale.
-    prog = {"ops": [
-        {"ref": "r0", "op": "find", "args": {"query": "building"}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": ["prior_1"]}},
-    ]}
+    prog = {
+        "ops": [
+            {"ref": "r0", "op": "find", "args": {"query": "building"}},
+            {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": ["prior_1"]}},
+        ]
+    }
     out = run_program([dict(_CAR)], _anchors(), prog)["results"]
     assert out["r1"], out
     assert not any(k in r for r in out["r1"] for k in ("mask", "mask_centroid")), out["r1"]

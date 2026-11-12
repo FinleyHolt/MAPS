@@ -75,9 +75,7 @@ def mint_workdir(root: Path, episode_id: str, run_no: int | None = None, *, benc
         )
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run = f"_run{run_no:02d}" if run_no is not None else ""
-    return Path(root) / (
-        f"{WORKDIR_PREFIX}_{stamp}{run}_{benchmark}_{_slug(episode_id)[:40]}"
-    )
+    return Path(root) / (f"{WORKDIR_PREFIX}_{stamp}{run}_{benchmark}_{_slug(episode_id)[:40]}")
 
 
 class ConversationLog(list):

@@ -10,6 +10,7 @@ is exercised on an isolated module global.
 
 Run: ``pytest maps/llm/tests/test_endpoint_spec.py``.
 """
+
 from __future__ import annotations
 
 import http.client
@@ -119,11 +120,7 @@ def test_case_b_empty_model_list(monkeypatch):
 def test_case_c_more_than_one_model(monkeypatch):
     _fake_http(
         monkeypatch,
-        {
-            f"{_URL_A}/models": _models_payload(
-                extra=[{"id": "other", "max_model_len": 8192}]
-            )
-        },
+        {f"{_URL_A}/models": _models_payload(extra=[{"id": "other", "max_model_len": 8192}])},
     )
     with pytest.raises(EndpointDiscoveryError, match="2 models"):
         discover(_URL_A)
@@ -289,7 +286,11 @@ def test_override_selects_among_many_models(monkeypatch):
         monkeypatch,
         {
             f"{_URL_A}/models": {
-                "data": [{"id": "gemma4-e4b"}, {"id": "gemma4-26b-a4b-nvfp4"}, {"id": "inkling-small"}]
+                "data": [
+                    {"id": "gemma4-e4b"},
+                    {"id": "gemma4-26b-a4b-nvfp4"},
+                    {"id": "inkling-small"},
+                ]
             }
         },
     )
@@ -384,13 +385,19 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
     assert len(calls) == E._PROBE_TRIES
 
 
-@pytest.mark.parametrize("fault,unreachable", [
-    (lambda: urllib.error.HTTPError("u", 429, "Too Many Requests", None, None), True),
-    (lambda: urllib.error.HTTPError("u", 401, "Unauthorized", None, None), False),
-    (lambda: ValueError("unknown url type: 'arm'"), False),
-    (lambda: http.client.IncompleteRead(b'{"data":'), True),
-], ids=["429", "401", "malformed url", "truncated body"])
-def test_a_serve_that_is_busy_or_drops_its_body_is_unreachable_and_a_refusal_is_not(monkeypatch, fault, unreachable):
+@pytest.mark.parametrize(
+    "fault,unreachable",
+    [
+        (lambda: urllib.error.HTTPError("u", 429, "Too Many Requests", None, None), True),
+        (lambda: urllib.error.HTTPError("u", 401, "Unauthorized", None, None), False),
+        (lambda: ValueError("unknown url type: 'arm'"), False),
+        (lambda: http.client.IncompleteRead(b'{"data":'), True),
+    ],
+    ids=["429", "401", "malformed url", "truncated body"],
+)
+def test_a_serve_that_is_busy_or_drops_its_body_is_unreachable_and_a_refusal_is_not(
+    monkeypatch, fault, unreachable
+):
     """A 4xx the serve clears on its own and a body cut short are the serve's
     fault, asked again; any other 4xx is the config's, refused at once."""
     monkeypatch.setattr(E, "_PROBE_RETRY_S", 0.0)
@@ -417,19 +424,30 @@ def _arm(effort: str) -> Settings:
     return from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort})
 
 
-@pytest.mark.parametrize("model_id,effort", [
-    ("inkling-small", "0.99"), ("qwen38-flash-next-nvfp4", "xhigh"), ("gemma4-e4b", "0.9"),
-])
+@pytest.mark.parametrize(
+    "model_id,effort",
+    [
+        ("inkling-small", "0.99"),
+        ("qwen38-flash-next-nvfp4", "xhigh"),
+        ("gemma4-e4b", "0.9"),
+    ],
+)
 def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
     assert discover(_URL_A, settings=_arm(effort)).model_id == model_id
 
 
-@pytest.mark.parametrize("model_id,effort,named", [
-    ("inkling-small", "nan", "nan"), ("inkling-small", "1.0", "1.0"),
-    ("inkling-small", "hgih", "hgih"), ("inkling-small", "xhigh", "xhigh"),
-    ("inkling-small", "-0.0", "'0.0'"), ("qwen38-flash-next-nvfp4", "0.9", "0.9"),
-])
+@pytest.mark.parametrize(
+    "model_id,effort,named",
+    [
+        ("inkling-small", "nan", "nan"),
+        ("inkling-small", "1.0", "1.0"),
+        ("inkling-small", "hgih", "hgih"),
+        ("inkling-small", "xhigh", "xhigh"),
+        ("inkling-small", "-0.0", "'0.0'"),
+        ("qwen38-flash-next-nvfp4", "0.9", "0.9"),
+    ],
+)
 def test_discovery_refuses_an_effort_the_card_does_not_take(monkeypatch, model_id, effort, named):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
     with pytest.raises(EndpointDiscoveryError, match=f"SEARCH_SAMPLING_REASONING_EFFORT.*{named}"):

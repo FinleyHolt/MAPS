@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 
 _MON = sys.monitoring
 _MON_LOCK = threading.Lock()
-_MON_TOOL: list = [None]          # the tool id, once claimed
-_MON_ACTIVE: dict = {}            # id(code object) -> the MissionPython running it
+_MON_TOOL: list = [None]  # the tool id, once claimed
+_MON_ACTIVE: dict = {}  # id(code object) -> the MissionPython running it
 
 
 def _code_objects(code) -> list:
@@ -44,8 +44,7 @@ def _on_line(code, _line):
 def _monitor_tool() -> int:
     with _MON_LOCK:
         if _MON_TOOL[0] is None:
-            tid = next(i for i in (3, 4, 5, 2, 1, 0)
-                       if _MON.get_tool(i) is None)
+            tid = next(i for i in (3, 4, 5, 2, 1, 0) if _MON.get_tool(i) is None)
             _MON.use_tool_id(tid, "maps-block-ceilings")
             _MON.register_callback(tid, _MON.events.LINE, _on_line)
             _MON_TOOL[0] = tid

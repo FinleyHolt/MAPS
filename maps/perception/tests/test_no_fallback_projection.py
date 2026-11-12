@@ -18,9 +18,7 @@ CORNERS = ((-32.0, 24.0), (32.0, 24.0), (32.0, -24.0), (-32.0, -24.0))
 
 
 def _project(mask: np.ndarray, depth: np.ndarray | None):
-    return project_mask_to_world_ortho(
-        region_of(mask), depth=depth, view_corners_xy=CORNERS
-    )
+    return project_mask_to_world_ortho(region_of(mask), depth=depth, view_corners_xy=CORNERS)
 
 
 def _centered(half: int = 6) -> np.ndarray:

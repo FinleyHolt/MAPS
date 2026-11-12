@@ -102,9 +102,7 @@ def test_encode_from_crop_matches_full_frame_encode():
         r0, c0 = int(rows.argmax()), int(cols.argmax())
         r1 = int(H - 1 - rows[::-1].argmax())
         c1 = int(W - 1 - cols[::-1].argmax())
-        via_crop = encode_mask_record(
-            m[r0 : r1 + 1, c0 : c1 + 1], bbox_rcrc=(r0, c0, r1, c1)
-        )
+        via_crop = encode_mask_record(m[r0 : r1 + 1, c0 : c1 + 1], bbox_rcrc=(r0, c0, r1, c1))
         assert via_crop == encode_mask_record(m)
 
 
@@ -120,7 +118,9 @@ def _tile_det(mask_1008, label, score):
 def _tile_b64(rgb, bound):
     """The client's own tile encode: the mock's content key."""
     r0, r1, c0, c1 = bound
-    return base64.b64encode(_png_wire_bytes(np.ascontiguousarray(rgb[r0:r1, c0:c1]))).decode("ascii")
+    return base64.b64encode(_png_wire_bytes(np.ascontiguousarray(rgb[r0:r1, c0:c1]))).decode(
+        "ascii"
+    )
 
 
 def _build_tile_case():
@@ -175,14 +175,18 @@ def _build_tile_case():
 
 def _decoded(monkeypatch, client, obs):
     captured = []
-    monkeypatch.setattr(SamDetectClient, "detections", lambda self, obs, masks: captured.append(masks) or [])
+    monkeypatch.setattr(
+        SamDetectClient, "detections", lambda self, obs, masks: captured.append(masks) or []
+    )
     client.segment(obs, ["car"])
     assert captured, "the tiles never reached the decode"
     return captured[0]
 
 
 def _assert_matches_reference(masks, ref):
-    assert [(oid, lab, sc) for _r, lab, oid, sc in masks] == [(i, lab, sc) for i, (_m, lab, sc) in enumerate(ref)]
+    assert [(oid, lab, sc) for _r, lab, oid, sc in masks] == [
+        (i, lab, sc) for i, (_m, lab, sc) in enumerate(ref)
+    ]
     for (region, _l, _o, _s), (rm, _rl, _rs) in zip(masks, ref):
         assert np.array_equal(full(region), rm)
 

@@ -65,15 +65,28 @@ def floor_homography(pose: Pose, sensor, floor: float) -> np.ndarray:
     import cv2  # noqa: PLC0415
 
     intr = sensor.intrinsics
-    corners = ground_corners_xy(sensor, tuple(pose.pose_xy), pose.alt_msl_m - floor, pose.yaw_deg,
-                                airframe_roll_deg=pose.roll_deg, airframe_pitch_deg=-pose.pitch_deg, ground_z=floor)
-    src = np.asarray(frame_corners_px(int(intr.image_width), int(intr.image_height)), dtype=np.float32)
+    corners = ground_corners_xy(
+        sensor,
+        tuple(pose.pose_xy),
+        pose.alt_msl_m - floor,
+        pose.yaw_deg,
+        airframe_roll_deg=pose.roll_deg,
+        airframe_pitch_deg=-pose.pitch_deg,
+        ground_z=floor,
+    )
+    src = np.asarray(
+        frame_corners_px(int(intr.image_width), int(intr.image_height)), dtype=np.float32
+    )
     # cv2 takes float32 points and bake metres run to 13 km, so the map is
     # solved about the footprint's centroid and the centroid put back in float64.
     dst = np.asarray(corners, dtype=np.float64)
     centre = dst.mean(axis=0)
-    relative = np.asarray(cv2.getPerspectiveTransform(src, (dst - centre).astype(np.float32)), dtype=np.float64)
-    back = np.array([[1.0, 0.0, centre[0]], [0.0, 1.0, centre[1]], [0.0, 0.0, 1.0]], dtype=np.float64)
+    relative = np.asarray(
+        cv2.getPerspectiveTransform(src, (dst - centre).astype(np.float32)), dtype=np.float64
+    )
+    back = np.array(
+        [[1.0, 0.0, centre[0]], [0.0, 1.0, centre[1]], [0.0, 0.0, 1.0]], dtype=np.float64
+    )
     return back @ relative
 
 
@@ -94,7 +107,9 @@ def work_grid(sensor, agl_m: float) -> tuple[int, int, np.ndarray]:
     return int(binned.intrinsics.image_width), int(binned.intrinsics.image_height), s
 
 
-def candidates(warp: np.ndarray, size_j: tuple[int, int], size_i: tuple[int, int]) -> list[tuple[float, float]]:
+def candidates(
+    warp: np.ndarray, size_j: tuple[int, int], size_i: tuple[int, int]
+) -> list[tuple[float, float]]:
     """Template centres on frame i's work grid: a :data:`TIE_PITCH_PX` grid inside the
     search border and inside the partner's warped footprint eroded by :data:`ERODE_PX`."""
     import cv2  # noqa: PLC0415
@@ -105,7 +120,9 @@ def candidates(warp: np.ndarray, size_j: tuple[int, int], size_i: tuple[int, int
     poly = cv2.perspectiveTransform(corners, warp).reshape(-1, 2).astype(np.float32)
     out = []
     for v in range(locator.SEARCH_HALF + TIE_PITCH_PX // 2, hi - locator.SEARCH_HALF, TIE_PITCH_PX):
-        for u in range(locator.SEARCH_HALF + TIE_PITCH_PX // 2, wi - locator.SEARCH_HALF, TIE_PITCH_PX):
+        for u in range(
+            locator.SEARCH_HALF + TIE_PITCH_PX // 2, wi - locator.SEARCH_HALF, TIE_PITCH_PX
+        ):
             if cv2.pointPolygonTest(poly, (float(u), float(v)), True) >= ERODE_PX:
                 out.append((float(u), float(v)))
     return out
@@ -160,13 +177,18 @@ class TieMatcher:
         w, h, s = work_grid(self.sensor, agl_m)
 
         def make():
-            small = gray if (w, h) == (gray.shape[1], gray.shape[0]) else cv2.resize(
-                gray, (w, h), interpolation=cv2.INTER_AREA)
+            small = (
+                gray
+                if (w, h) == (gray.shape[1], gray.shape[0])
+                else cv2.resize(gray, (w, h), interpolation=cv2.INTER_AREA)
+            )
             return small, locator.edge_maps(small)
 
         return w, h, s, self._cached((key, w, h), make)
 
-    def ties(self, key_i, pose_i: Pose, gray_i: np.ndarray, pose_j: Pose, gray_j: np.ndarray) -> list[Tie]:
+    def ties(
+        self, key_i, pose_i: Pose, gray_i: np.ndarray, pose_j: Pose, gray_j: np.ndarray
+    ) -> list[Tie]:
         """The ties between frame i (cached under ``key_i``) and frame j, in the frames' own pixels."""
         import cv2  # noqa: PLC0415
 
@@ -179,7 +201,9 @@ class TieMatcher:
         if not centres:
             return []
         _w, _h, _s, own = self._frame(key_i, gray_i, pose_i.alt_msl_m - g_i)
-        e = cv2.warpPerspective(gray_j, warp, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+        e = cv2.warpPerspective(
+            gray_j, warp, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT
+        )
         edges_e = locator.edge_maps(e)
         _a, edges_a = own.result()
         found = locator.pool.map(lambda c: locator.locate_edges(edges_a, edges_e, c), centres)
@@ -201,9 +225,15 @@ class FrameGeometry:
     def __init__(self, pose: Pose, sensor, floor: float) -> None:
         intr = sensor.intrinsics
         self.h = floor_homography(pose, sensor, floor)
-        self._ahead = floor_homography(replace(pose, yaw_deg=pose.yaw_deg + YAW_STEP_DEG), sensor, floor)
-        self._behind = floor_homography(replace(pose, yaw_deg=pose.yaw_deg - YAW_STEP_DEG), sensor, floor)
-        corners = ground_of_pixels(self.h, [(0.0, 0.0), (intr.image_width - 1.0, intr.image_height - 1.0)])
+        self._ahead = floor_homography(
+            replace(pose, yaw_deg=pose.yaw_deg + YAW_STEP_DEG), sensor, floor
+        )
+        self._behind = floor_homography(
+            replace(pose, yaw_deg=pose.yaw_deg - YAW_STEP_DEG), sensor, floor
+        )
+        corners = ground_of_pixels(
+            self.h, [(0.0, 0.0), (intr.image_width - 1.0, intr.image_height - 1.0)]
+        )
         self.nadir_xy = (float(pose.pose_xy[0]), float(pose.pose_xy[1]))
         self.half_diagonal_m = float(np.hypot(*(corners[1] - corners[0])) / 2.0)
         self.centre = (intr.cx - 0.5, intr.cy - 0.5)
@@ -214,7 +244,9 @@ class FrameGeometry:
 
     def lever(self, uv) -> tuple[float, float]:
         """Metres a degree of yaw moves the ground under ``uv``."""
-        j = (ground_of_pixels(self._ahead, [uv])[0] - ground_of_pixels(self._behind, [uv])[0]) / (2.0 * YAW_STEP_DEG)
+        j = (ground_of_pixels(self._ahead, [uv])[0] - ground_of_pixels(self._behind, [uv])[0]) / (
+            2.0 * YAW_STEP_DEG
+        )
         return float(j[0]), float(j[1])
 
     def radial(self, uv) -> tuple[float, float]:

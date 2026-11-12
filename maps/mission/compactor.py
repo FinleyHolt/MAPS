@@ -146,8 +146,9 @@ def _evict_crops(
     if newest:
         slots = [s for s in slots if s[0] == last][:-1]
     else:
-        slots = [(i, j) for i, j in slots
-                 if i < last and image_tokens_of(messages[i]["content"][j])]
+        slots = [
+            (i, j) for i, j in slots if i < last and image_tokens_of(messages[i]["content"][j])
+        ]
     taken: list[tuple[int, int]] = []
     freed = 0
     for i, j in slots:
@@ -177,8 +178,12 @@ def bound_image_count(messages: list[dict], *, max_images: int) -> list[dict]:
     excess = len(image_at) - max(max_images - _IMAGE_COUNT_HEADROOM, 1)
     out = list(messages)
     _evict_parts(out, image_at[:excess])
-    log.info("image bound: evicted the %d oldest of %d crops (limit %d)",
-             excess, len(image_at), max_images)
+    log.info(
+        "image bound: evicted the %d oldest of %d crops (limit %d)",
+        excess,
+        len(image_at),
+        max_images,
+    )
     return out
 
 
@@ -227,8 +232,11 @@ def _turn_units(messages: list[dict]) -> list[tuple[int, int]]:
             ids = {tc.get("id") for tc in msg["tool_calls"] if tc.get("id")}
             j = i + 1
             answered: set[str] = set()
-            while (j < len(messages) and messages[j].get("role") == "tool"
-                   and messages[j].get("tool_call_id") in ids):
+            while (
+                j < len(messages)
+                and messages[j].get("role") == "tool"
+                and messages[j].get("tool_call_id") in ids
+            ):
                 answered.add(messages[j]["tool_call_id"])
                 j += 1
             if ids and answered == ids:
@@ -255,8 +263,7 @@ def _folded_findings(messages: list[dict], span: tuple[int, int]) -> list[str]:
     return out
 
 
-def _script_block(sources: list[str], n_turns: int,
-                  findings: list[str] | None = None) -> dict:
+def _script_block(sources: list[str], n_turns: int, findings: list[str] | None = None) -> dict:
     """The script block: the folded turns' code verbatim (their names stay
     bound in the mission's namespace), then what they found."""
     body = "\n".join(sources)
@@ -284,23 +291,35 @@ def _folded(messages: list[dict], spans: list[tuple[int, int]]) -> list[dict]:
     out: list[dict] = []
     i = 0
     for run in runs:
-        out += messages[i:run[0][0]]
-        out.append(_script_block(
-            [c for a, _ in run for c in _run_code_of(messages[a])], len(run),
-            [f for span in run for f in _folded_findings(messages, span)]))
+        out += messages[i : run[0][0]]
+        out.append(
+            _script_block(
+                [c for a, _ in run for c in _run_code_of(messages[a])],
+                len(run),
+                [f for span in run for f in _folded_findings(messages, span)],
+            )
+        )
         i = run[-1][1]
     return out + messages[i:]
 
 
 def _is_script_block(message: dict) -> bool:
     content = message.get("content")
-    return (message.get("role") == "assistant" and isinstance(content, str)
-            and content.startswith(_SCRIPT_BLOCK_HEADER))
+    return (
+        message.get("role") == "assistant"
+        and isinstance(content, str)
+        and content.startswith(_SCRIPT_BLOCK_HEADER)
+    )
 
 
 def _drop_spent_turns(
-    messages: list[dict], *, before: int, shed_tokens: int, model: str,
-    tools: list[dict] | None, tokenizer_name: str = "",
+    messages: list[dict],
+    *,
+    before: int,
+    shed_tokens: int,
+    model: str,
+    tools: list[dict] | None,
+    tokenizer_name: str = "",
 ) -> tuple[list[dict], int, int]:
     """``(messages, n_turns_folded, tokens_freed)``: the oldest foldable
     turns of ``messages`` (``before`` input tokens) folded into script
@@ -444,9 +463,11 @@ def _degrade_tool_result_content(
             head["colors"] = "; ".join(colors)
             had_colors = True
         changed = True
-        note = ("rows trimmed to fids for token budget; the world-state "
-                "graph is live: show the handle again to re-derive the full "
-                "rows.")
+        note = (
+            "rows trimmed to fids for token budget; the world-state "
+            "graph is live: show the handle again to re-derive the full "
+            "rows."
+        )
         head["hint"] = f"{head['hint']}\n{note}" if head.get("hint") else note
     if not changed:
         return None, False
@@ -463,24 +484,25 @@ def _stub_until(out, idxs, *, keep_color, source, bound, tokens, model, tools, t
     for i in idxs:
         if tokens <= bound:
             break
-        stub, had_colors = _degrade_tool_result_content(
-            source[i]["content"], keep_color=keep_color)
+        stub, had_colors = _degrade_tool_result_content(source[i]["content"], keep_color=keep_color)
         if stub is None:
             continue
         out[i] = _with_content(out[i], stub)
         stubbed.append(i)
         if had_colors:
             colored.append(i)
-        tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
+        tokens = _estimate_input_tokens(
+            out, model=model, tools=tools, tokenizer_name=tokenizer_name
+        )
     return stubbed, colored, tokens
 
 
 def _dump_result_indices(messages: list[dict]) -> list[int]:
     """Indices of the tool-result messages carrying re-derivable dumps."""
     return [
-        i for i, m in enumerate(messages)
-        if m.get("role") == "tool"
-        and _degrade_tool_result_content(m.get("content"))[0] is not None
+        i
+        for i, m in enumerate(messages)
+        if m.get("role") == "tool" and _degrade_tool_result_content(m.get("content"))[0] is not None
     ]
 
 
@@ -499,7 +521,9 @@ def compact_transcript(
     if len(messages) <= _CHEAP_GATE_MSG_COUNT:
         return messages
 
-    input_tokens = _estimate_input_tokens(messages, model=model, tools=tools, tokenizer_name=tokenizer_name)
+    input_tokens = _estimate_input_tokens(
+        messages, model=model, tools=tools, tokenizer_name=tokenizer_name
+    )
 
     if input_tokens <= target_input_tokens:
         return messages
@@ -509,20 +533,27 @@ def compact_transcript(
     # Step 1 goes first: every other step rewrites an old message in place,
     # leaving it to re-prefill. The low-water mark is never above target and
     # floored at the least input budget a reasoner runs on.
-    low_water = max(target_input_tokens - _CLEAR_HEADROOM_TOKENS,
-                    min(MIN_INPUT_BUDGET, target_input_tokens))
+    low_water = max(
+        target_input_tokens - _CLEAR_HEADROOM_TOKENS, min(MIN_INPUT_BUDGET, target_input_tokens)
+    )
     output_tokens = input_tokens
     out, folded_turns, freed_fold = _drop_spent_turns(
-        messages, before=input_tokens, shed_tokens=input_tokens - low_water,
-        model=model, tools=tools, tokenizer_name=tokenizer_name,
+        messages,
+        before=input_tokens,
+        shed_tokens=input_tokens - low_water,
+        model=model,
+        tools=tools,
+        tokenizer_name=tokenizer_name,
     )
     if folded_turns:
         output_tokens = input_tokens - freed_fold
         log.info(
-            "compaction folded %d spent turn(s) into %d script block(s), "
-            "freed ~%d tok -> %s/%d", folded_turns,
+            "compaction folded %d spent turn(s) into %d script block(s), freed ~%d tok -> %s/%d",
+            folded_turns,
             sum(map(_is_script_block, out)) - sum(map(_is_script_block, messages)),
-            freed_fold, output_tokens, target_input_tokens,
+            freed_fold,
+            output_tokens,
+            target_input_tokens,
         )
 
     # Steps 2-4.
@@ -530,11 +561,23 @@ def compact_transcript(
     out = list(out)
     _est = {"model": model, "tools": tools, "tokenizer_name": tokenizer_name}
     cleared, colored, output_tokens = _stub_until(
-        out, _dump_result_indices(out)[:-1], keep_color=True, source=base,
-        bound=low_water, tokens=output_tokens, **_est)
+        out,
+        _dump_result_indices(out)[:-1],
+        keep_color=True,
+        source=base,
+        bound=low_water,
+        tokens=output_tokens,
+        **_est,
+    )
     plain, _, output_tokens = _stub_until(
-        out, colored, keep_color=False, source=base,
-        bound=target_input_tokens, tokens=output_tokens, **_est)
+        out,
+        colored,
+        keep_color=False,
+        source=base,
+        bound=target_input_tokens,
+        tokens=output_tokens,
+        **_est,
+    )
     color_tables_kept = len(colored) - len(plain)
     idxs = _dump_result_indices(out)
     # Largest first, the newest last.
@@ -542,8 +585,14 @@ def compact_transcript(
     if idxs:
         order = [i for i in order if i != idxs[-1]] + [idxs[-1]]
     degraded, _, output_tokens = _stub_until(
-        out, order, keep_color=False, source=out,
-        bound=target_input_tokens, tokens=output_tokens, **_est)
+        out,
+        order,
+        keep_color=False,
+        source=out,
+        bound=target_input_tokens,
+        tokens=output_tokens,
+        **_est,
+    )
     degraded_dumps = len(degraded)
 
     # Step 5, on the blocks this fire made: earlier blocks are served prefix.
@@ -560,9 +609,12 @@ def compact_transcript(
                 out[i] = _with_content(m, body)
                 stripped = True
         if stripped:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
-            log.info("compaction stripped block findings -> %s/%d",
-                     output_tokens, target_input_tokens)
+            output_tokens = _estimate_input_tokens(
+                out, model=model, tools=tools, tokenizer_name=tokenizer_name
+            )
+            log.info(
+                "compaction stripped block findings -> %s/%d", output_tokens, target_input_tokens
+            )
 
     # Step 6.
     n_evicted = 0
@@ -571,10 +623,15 @@ def compact_transcript(
             out, shed_tokens=output_tokens - target_input_tokens, newest=False
         )
         if n_evicted:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
+            output_tokens = _estimate_input_tokens(
+                out, model=model, tools=tools, tokenizer_name=tokenizer_name
+            )
             log.info(
                 "compaction evicted %d stale crop(s), freed ~%d tok -> %s/%d",
-                n_evicted, freed, output_tokens, target_input_tokens,
+                n_evicted,
+                freed,
+                output_tokens,
+                target_input_tokens,
             )
 
     # Step 7.
@@ -584,11 +641,15 @@ def compact_transcript(
             out, shed_tokens=output_tokens - target_input_tokens, newest=True
         )
         if evicted_newest:
-            output_tokens = _estimate_input_tokens(out, model=model, tools=tools, tokenizer_name=tokenizer_name)
+            output_tokens = _estimate_input_tokens(
+                out, model=model, tools=tools, tokenizer_name=tokenizer_name
+            )
             log.info(
                 "compaction evicted %d of the newest crop-bearing message's "
                 "crops, freed ~%d tok -> %s/%d",
-                evicted_newest, freed_newest, output_tokens,
+                evicted_newest,
+                freed_newest,
+                output_tokens,
                 target_input_tokens,
             )
 
@@ -597,15 +658,18 @@ def compact_transcript(
         # The raise names the largest messages.
         sizes = sorted(
             (
-                (len(str(m.get("content") or "")), i,
-                 str(m.get("role") or "?"), str(m.get("name") or ""))
+                (
+                    len(str(m.get("content") or "")),
+                    i,
+                    str(m.get("role") or "?"),
+                    str(m.get("name") or ""),
+                )
                 for i, m in enumerate(out)
             ),
             reverse=True,
         )[:5]
         anatomy = "; ".join(
-            f"msg[{i}] {role}{('/' + name) if name else ''} "
-            f"{b}B ~{head!r}"
+            f"msg[{i}] {role}{('/' + name) if name else ''} {b}B ~{head!r}"
             for b, i, role, name in sizes
             for head in [str(out[i].get("content") or "")[:60]]
         )
@@ -615,7 +679,8 @@ def compact_transcript(
             f"evicted {n_evicted} stale crop(s) AND {evicted_newest} of the "
             f"newest crop-bearing message's crops; tokens={output_tokens} "
             f"still exceeds target={target_input_tokens} "
-            f"(input_tokens={input_tokens}); largest: {anatomy}")
+            f"(input_tokens={input_tokens}); largest: {anatomy}"
+        )
 
     _validate_invariants(out)
 

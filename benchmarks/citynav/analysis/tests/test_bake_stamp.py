@@ -57,14 +57,17 @@ def test_two_bakes_of_one_prior_hash_equal(tmp_path):
     """A meta's key order and layout are not its content, and a file the bake
     did not write is no part of it."""
     a, b = _bake(tmp_path / "a"), _bake(tmp_path / "b")
-    (a / "block_0_meta.json").write_text(json.dumps({"crs": "utm", "provenance": {"prior": "osm"}}, indent=2))
+    (a / "block_0_meta.json").write_text(
+        json.dumps({"crs": "utm", "provenance": {"prior": "osm"}}, indent=2)
+    )
     (b / "block_0_meta.json").write_text(json.dumps({"provenance": {"prior": "osm"}, "crs": "utm"}))
     (b / "notes.txt").write_text("scratch")
     (b / "block_0_graph.npz").write_bytes(b"a graph file an older bake wrote")
     assert bake_sha256(a) == bake_sha256(b)
 
-    (b / "block_0_meta.json").write_text(json.dumps({
-        "crs": "utm", "provenance": {"prior": "osm-other"}}))
+    (b / "block_0_meta.json").write_text(
+        json.dumps({"crs": "utm", "provenance": {"prior": "osm-other"}})
+    )
     assert bake_sha256(a) != bake_sha256(b), "the prior is content"
 
 
@@ -140,8 +143,7 @@ def test_the_resolved_tiles_dir_names_the_bake_to_check(tmp_path, monkeypatch):
             {
                 "perception": {
                     # Absolute, on the machine that flew it -- not this one.
-                    "tiles_dir_resolved": "/scratch/someone/MAPS"
-                    "/benchmarks/calcity/tiles",
+                    "tiles_dir_resolved": "/scratch/someone/MAPS/benchmarks/calcity/tiles",
                     "bake_sha256": bake_sha256(calcity),
                 }
             }
@@ -176,8 +178,16 @@ def test_a_bake_outside_the_repo_is_checked_where_the_run_recorded_it(tmp_path, 
     def run(name, tiles_dir):
         root = tmp_path / name
         root.mkdir()
-        (root / "run_manifest.json").write_text(json.dumps({"perception": {
-            "tiles_dir_resolved": str(tiles_dir), "bake_sha256": bake_sha256(outside)}}))
+        (root / "run_manifest.json").write_text(
+            json.dumps(
+                {
+                    "perception": {
+                        "tiles_dir_resolved": str(tiles_dir),
+                        "bake_sha256": bake_sha256(outside),
+                    }
+                }
+            )
+        )
         return root
 
     line = _bake_line(run("abs", outside), default)

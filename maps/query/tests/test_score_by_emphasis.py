@@ -1,4 +1,5 @@
 """AGENT-WEIGHTED ordering — the ``score_by{items, emphasis}`` contract."""
+
 from __future__ import annotations
 
 from maps.query.program import run_program
@@ -19,9 +20,11 @@ _CANDS = [
 ]
 _BASE = [
     {"ref": "r0", "op": "find", "args": {}},
-    {"ref": "r1", "op": "compare",
-     "args": {"items": "r0",
-              "refs": [[100.0, 0.0], {"ref": [0.0, 100.0], "as": "n"}]}},
+    {
+        "ref": "r1",
+        "op": "compare",
+        "args": {"items": "r0", "refs": [[100.0, 0.0], {"ref": [0.0, 100.0], "as": "n"}]},
+    },
 ]
 
 
@@ -45,8 +48,9 @@ def test_orders_by_exactly_the_named_keys():
     emphasis = [{"key": "distance to xy", "w": -1}, {"key": "color_white", "w": 1}]
     fids, out = _run_fids(_score_by(emphasis))
     rows_r1 = out["results"]["r1"]
-    expected = [r["fid"] for r in G.score_by(
-        rows_r1, ["color_white", "distance to xy"], [1.0, -1.0])]
+    expected = [
+        r["fid"] for r in G.score_by(rows_r1, ["color_white", "distance to xy"], [1.0, -1.0])
+    ]
     assert fids == expected, (fids, expected)
 
 
@@ -56,8 +60,9 @@ def test_unnamed_present_column_contributes_nothing():
     one, out = _run_fids(_score_by([{"key": "distance to xy", "w": -1}]))
     rows_r1 = out["results"]["r1"]
     assert one == [r["fid"] for r in G.score_by(rows_r1, ["distance to xy"], [-1.0])]
-    both, _ = _run_fids(_score_by([{"key": "distance to xy", "w": -1},
-                                   {"key": "distance to n", "w": -1}]))
+    both, _ = _run_fids(
+        _score_by([{"key": "distance to xy", "w": -1}, {"key": "distance to n", "w": -1}])
+    )
     assert both != one, (both, one)
 
 
@@ -77,7 +82,7 @@ def test_emphasis_sign_controls_order():
 
 def test_surfaced_order_is_the_programs_own_order():
     ns = {"cands": [dict(c) for c in _CANDS], "anchors": []}
-    prog = _score_by([{"key": "bearing from xy", "w": 1}])   # agent's own weighted order
+    prog = _score_by([{"key": "bearing from xy", "w": 1}])  # agent's own weighted order
     out = run_ops(prog["ops"], namespace=ns)
     assert "error" not in out
     # the surfaced order is the AGENT's brg-weighted order verbatim -- the

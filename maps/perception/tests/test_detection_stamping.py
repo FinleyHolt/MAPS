@@ -41,9 +41,7 @@ def _rgb() -> np.ndarray:
 
 def test_real_tier_gets_contour_and_color():
     det = _det("sam")
-    project_and_stamp_ortho_detections(
-        [det], view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE
-    )
+    project_and_stamp_ortho_detections([det], view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE)
     assert det.metadata.get("world_contour"), "real tier must get a contour"
     assert "color" in det.attributes
     # color_conf is stamped as a 3-decimal string.
@@ -55,11 +53,7 @@ def test_real_tier_gets_contour_and_color():
 def test_adapter_median_color_is_superseded():
     # color WITH color_rgb is the adapter's single-word median — same
     # fidelity class, so the mixture pass replaces it.
-    det = _det(
-        "sam", attributes={"color": "mud", "color_rgb": "1,2,3"}
-    )
-    project_and_stamp_ortho_detections(
-        [det], view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE
-    )
+    det = _det("sam", attributes={"color": "mud", "color_rgb": "1,2,3"})
+    project_and_stamp_ortho_detections([det], view_corners_xy=_CORNERS, rgb=_rgb(), tile=_TILE)
     assert det.attributes["color"] != "mud"
     assert "color_conf" in det.attributes

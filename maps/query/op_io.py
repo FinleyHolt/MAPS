@@ -8,8 +8,11 @@ import re
 
 from maps.query import spatial_math as G
 from maps.query.result_tables import (
-    MODEL_UNSERVED_COLUMNS, STANDING_SIDE_PREFIXES, _COMPARE_COL_PREFIXES,
-    _column_ref)
+    MODEL_UNSERVED_COLUMNS,
+    STANDING_SIDE_PREFIXES,
+    _COMPARE_COL_PREFIXES,
+    _column_ref,
+)
 from maps.xy_token import is_xy
 
 
@@ -36,9 +39,19 @@ class Result(list):
 
     consumed: bool = False
 
-    def __init__(self, rows=(), kind: str = "broad", *, ordered=False,
-                 name_set=False, op_cols=(), notes=(), set_notes=(),
-                 cut_stats=None, empty_condition=None):
+    def __init__(
+        self,
+        rows=(),
+        kind: str = "broad",
+        *,
+        ordered=False,
+        name_set=False,
+        op_cols=(),
+        notes=(),
+        set_notes=(),
+        cut_stats=None,
+        empty_condition=None,
+    ):
         super().__init__(rows)
         self.kind, self.ordered, self.name_set = kind, ordered, name_set
         self.op_cols, self.notes, self.set_notes = op_cols, notes, set_notes
@@ -69,15 +82,13 @@ def _grouped_keys(present) -> str:
             continue
         pre, stem = col
         base = re.match(r"^([A-Za-z]+)_", stem)
-        fams.setdefault(pre + (base.group(1) + "_" if base else stem),
-                        []).append(k)
+        fams.setdefault(pre + (base.group(1) + "_" if base else stem), []).append(k)
     parts = []
     for fam, members in sorted(fams.items()):
         if len(members) <= 3:
             parts.extend(members)
         else:
-            parts.append(
-                f"{fam}* ({len(members)} instances, e.g. {members[0]})")
+            parts.append(f"{fam}* ({len(members)} instances, e.g. {members[0]})")
     return ", ".join(parts)
 
 
@@ -86,14 +97,26 @@ def _present_keys_hint(items, numeric: bool) -> str:
     numeric ones (grouped) for a sort or a numeric cut, every scalar one
     for any other cut."""
     kinds = (int, float) if numeric else (int, float, str, bool)
-    present = sorted({k for it in items if isinstance(it, dict)
-                      for k, v in it.items() if isinstance(v, kinds)
-                      and v != "" and k not in MODEL_UNSERVED_COLUMNS})
+    present = sorted(
+        {
+            k
+            for it in items
+            if isinstance(it, dict)
+            for k, v in it.items()
+            if isinstance(v, kinds) and v != "" and k not in MODEL_UNSERVED_COLUMNS
+        }
+    )
     if numeric:
-        return (f"numeric keys present on these items: {_grouped_keys(present)}."
-                if present else "these items carry NO numeric key.")
-    return (f"keys present on these items: {present}." if present
-            else "these items carry NO scalar key.")
+        return (
+            f"numeric keys present on these items: {_grouped_keys(present)}."
+            if present
+            else "these items carry NO numeric key."
+        )
+    return (
+        f"keys present on these items: {present}."
+        if present
+        else "these items carry NO scalar key."
+    )
 
 
 def _attach_standing_columns(items, frame, with_distance=False):
@@ -106,8 +129,7 @@ def _attach_standing_columns(items, frame, with_distance=False):
     fx, fy = (float(frame["from_xy"][0]), float(frame["from_xy"][1]))
     ux, uy = (float(frame["up_unit"][0]), float(frame["up_unit"][1]))
     rx, ry = G.cw((ux, uy))
-    left_k, right_k, ahead_k, behind_k = (
-        f"{p}{h}" for p in STANDING_SIDE_PREFIXES)
+    left_k, right_k, ahead_k, behind_k = (f"{p}{h}" for p in STANDING_SIDE_PREFIXES)
     dist_k = f"distance to {h}"
     out = []
     for it in items:
@@ -172,15 +194,16 @@ class _Args(dict):
         self._cx = cx
 
     def __missing__(self, key):
-        raise ProgramError(
-            f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}")
+        raise ProgramError(f"op {_quote(self._cx.op)} is missing required arg {_quote(key)}")
 
 
 def empty_window_refusal(part: str, n: int) -> str:
     """The refusal for a window ``part`` that selects none of ``n`` rows."""
-    return (f"window {part} selected 0 of {n} rows: the set holds {n} row(s) "
-            "and the window begins at or past the end of them (or begins at "
-            "or after where it stops).")
+    return (
+        f"window {part} selected 0 of {n} rows: the set holds {n} row(s) "
+        "and the window begins at or past the end of them (or begins at "
+        "or after where it stops)."
+    )
 
 
 def window_span(spec: str) -> tuple[int, int]:
@@ -223,8 +246,8 @@ def _as_rows(cx, arg):
         else:
             raise ProgramError(
                 f"cannot resolve a point in the list from item {_quote(it)}: each item must "
-                f"be a fid on this surface, an [x, y], or a set. "
-                + _SAY_A_FID)
+                f"be a fid on this surface, an [x, y], or a set. " + _SAY_A_FID
+            )
     return out
 
 
@@ -236,7 +259,7 @@ def _named_rows(cx, el, need):
     if isinstance(el, dict):
         el = el.get("ref")
     out: list = []
-    for t in (el if isinstance(el, list) else [el]):
+    for t in el if isinstance(el, list) else [el]:
         vals = [t]
         if isinstance(t, str) and t not in cx.by_fid:
             vals = cx.resolve(t) if cx.is_ref(t) else []
@@ -260,18 +283,15 @@ def _refuse_if_empty(cx, el, what: str) -> None:
     """Refuse a crossings/ends ref whose handles hold no rows, saying so."""
     ref = el.get("ref") if isinstance(el, dict) else el
     refs = ref if isinstance(ref, list) else [ref]
-    if refs and all(isinstance(t, str) and cx.is_ref(t) and not cx.resolve(t)
-                    for t in refs):
-        raise ProgramError(f"{_quote(_as_said(el))} holds 0 rows here; there "
-                           f"is nothing to {what}.")
+    if refs and all(isinstance(t, str) and cx.is_ref(t) and not cx.resolve(t) for t in refs):
+        raise ProgramError(f"{_quote(_as_said(el))} holds 0 rows here; there is nothing to {what}.")
 
 
 def _relate_ran(key, items) -> bool:
     """Whether the compare that writes a ``facing <lab>`` or ``<dir> of
     <lab>`` key ran: its sibling ``distance to <lab>`` is on a row, so the
     key absent everywhere means no row has a word or a side to name."""
-    col = _column_ref(key, ("facing ", "north of ", "south of ", "east of ",
-                            "west of "))
+    col = _column_ref(key, ("facing ", "north of ", "south of ", "east of ", "west of "))
     if col is None:
         return False
     sib = "distance to " + col[1]
@@ -287,10 +307,12 @@ def _contact_fact(cx, key) -> str:
         _p = col[1]
         _n = cx.by_fid.get(_p)
         if isinstance(_n, dict) and _n.get("covers_window"):
-            return (f"{_p}'s mask contains the whole surface window, so "
-                    f"'distance to {_p}'=0 for every row (containment, "
-                    f"not proximity) and neither the distance nor the "
-                    f"facing is stamped; 'center distance to "
-                    f"{_p}'/'bearing from {_p}' attach per-row and DO "
-                    f"order/filter. ")
+            return (
+                f"{_p}'s mask contains the whole surface window, so "
+                f"'distance to {_p}'=0 for every row (containment, "
+                f"not proximity) and neither the distance nor the "
+                f"facing is stamped; 'center distance to "
+                f"{_p}'/'bearing from {_p}' attach per-row and DO "
+                f"order/filter. "
+            )
     return ""

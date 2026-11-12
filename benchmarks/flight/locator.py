@@ -49,15 +49,21 @@ def sized(sensor, width: int, height: int):
     intr = sensor.intrinsics
     if (intr.image_width, intr.image_height) == (width, height):
         return sensor
-    return replace(sensor, intrinsics=CameraIntrinsics(hfov_deg=intr.hfov_deg, vfov_deg=intr.vfov_deg,
-                                                       image_width=width, image_height=height))
+    return replace(
+        sensor,
+        intrinsics=CameraIntrinsics(
+            hfov_deg=intr.hfov_deg, vfov_deg=intr.vfov_deg, image_width=width, image_height=height
+        ),
+    )
 
 
 def work_sensor(sensor, agl_m: float):
     """``(sensor, scale)``: the sensor binned to :data:`WORK_GSD_M`, and the
     binned pixels per frame pixel; the sensor itself and 1.0 for a frame no
     finer than that."""
-    gsd = float(agl_m) / float(sensor.intrinsics.fx)   # the ground a pixel covers at the optical axis, m/px
+    gsd = float(agl_m) / float(
+        sensor.intrinsics.fx
+    )  # the ground a pixel covers at the optical axis, m/px
     if gsd <= 0.0 or gsd * BIN_ABOVE >= WORK_GSD_M:
         return sensor, 1.0
     intr = sensor.intrinsics
@@ -76,7 +82,9 @@ def gray(rgb: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(np.ascontiguousarray(a[..., :3]), cv2.COLOR_RGB2GRAY)
 
 
-def unique_peak(score: np.ndarray, radius: int = UNIQUE_RADIUS) -> tuple[tuple[int, int], float, float]:
+def unique_peak(
+    score: np.ndarray, radius: int = UNIQUE_RADIUS
+) -> tuple[tuple[int, int], float, float]:
     """``(at, peak, margin)``: the best score and by how much it beats everything ``radius`` away."""
     import cv2  # noqa: PLC0415
 
@@ -102,10 +110,20 @@ def edge_maps(gray: np.ndarray, *, template_half: int = EDGE_TEMPLATE_HALF) -> n
     nx, ny = gx / norm, gy / norm
     channels = [nx * nx, ny * ny, np.sqrt(2.0) * nx * ny]
     pad = template_half - TEMPLATE_HALF
-    out = np.empty((len(channels), gray.shape[0] + 2 * pad, gray.shape[1] + 2 * pad), dtype=np.float32)
+    out = np.empty(
+        (len(channels), gray.shape[0] + 2 * pad, gray.shape[1] + 2 * pad), dtype=np.float32
+    )
     for c, dst in zip(channels, out):
-        cv2.copyMakeBorder(cv2.GaussianBlur(c.astype(np.float32), (0, 0), EDGE_SIGMA), pad, pad, pad, pad,
-                           cv2.BORDER_CONSTANT, dst=dst, value=0.0)
+        cv2.copyMakeBorder(
+            cv2.GaussianBlur(c.astype(np.float32), (0, 0), EDGE_SIGMA),
+            pad,
+            pad,
+            pad,
+            pad,
+            cv2.BORDER_CONSTANT,
+            dst=dst,
+            value=0.0,
+        )
     return out
 
 
@@ -121,19 +139,29 @@ def joint_ncc(window: np.ndarray, template: np.ndarray) -> np.ndarray | None:
         return None
     k = template.shape[1:]
     n = float(template.size)
-    num = sum(cv2.matchTemplate(np.ascontiguousarray(w), np.ascontiguousarray(tc), cv2.TM_CCORR)
-              for w, tc in zip(window, t))
-    box = lambda a: cv2.boxFilter(np.ascontiguousarray(a), -1, (k[1], k[0]), normalize=False,  # noqa: E731
-                                  anchor=(0, 0), borderType=cv2.BORDER_CONSTANT)[:window.shape[1] - k[0] + 1,
-                                                                                    :window.shape[2] - k[1] + 1]
+    num = sum(
+        cv2.matchTemplate(np.ascontiguousarray(w), np.ascontiguousarray(tc), cv2.TM_CCORR)
+        for w, tc in zip(window, t)
+    )
+    box = (
+        lambda a: cv2.boxFilter(
+            np.ascontiguousarray(a),
+            -1,
+            (k[1], k[0]),
+            normalize=False,  # noqa: E731
+            anchor=(0, 0),
+            borderType=cv2.BORDER_CONSTANT,
+        )[: window.shape[1] - k[0] + 1, : window.shape[2] - k[1] + 1]
+    )
     w_sum = sum(box(w) for w in window)
     w_sq = sum(box(w * w) for w in window)
     w_norm = np.sqrt(np.maximum(w_sq - w_sum * w_sum / n, 0.0))
     return (num / np.maximum(t_norm * w_norm, 1e-6)).astype(np.float32)
 
 
-def locate_edges(edges_actual: np.ndarray, edges_expected: np.ndarray, predicted: tuple[float, float]
-                 ) -> tuple[tuple[float, float], float, float] | None:
+def locate_edges(
+    edges_actual: np.ndarray, edges_expected: np.ndarray, predicted: tuple[float, float]
+) -> tuple[tuple[float, float], float, float] | None:
     """Where the edge structure at ``predicted`` in the expected frame sits in
     the actual one: each map's normalised correlation averaged, so an edge
     counts where it is and which way it runs. ``((u, v), peak, margin)``, or
@@ -148,15 +176,20 @@ def locate_edges(edges_actual: np.ndarray, edges_expected: np.ndarray, predicted
     u, v = u + pad, v + pad
     reach = SEARCH_HALF - TEMPLATE_HALF
     win = EDGE_TEMPLATE_HALF + reach
-    template = edges_expected[:, v - EDGE_TEMPLATE_HALF:v + EDGE_TEMPLATE_HALF + 1,
-                              u - EDGE_TEMPLATE_HALF:u + EDGE_TEMPLATE_HALF + 1]
-    window = edges_actual[:, v - win:v + win + 1, u - win:u + win + 1]
+    template = edges_expected[
+        :,
+        v - EDGE_TEMPLATE_HALF : v + EDGE_TEMPLATE_HALF + 1,
+        u - EDGE_TEMPLATE_HALF : u + EDGE_TEMPLATE_HALF + 1,
+    ]
+    window = edges_actual[:, v - win : v + win + 1, u - win : u + win + 1]
     score = None
     n = 0
     for actual, expected in zip(window, template):
         if expected.std() < 1e-6:
             continue
-        s = cv2.matchTemplate(np.ascontiguousarray(actual), np.ascontiguousarray(expected), cv2.TM_CCOEFF_NORMED)
+        s = cv2.matchTemplate(
+            np.ascontiguousarray(actual), np.ascontiguousarray(expected), cv2.TM_CCOEFF_NORMED
+        )
         score = s if score is None else score + s
         n += 1
     if score is None:

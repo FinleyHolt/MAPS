@@ -61,6 +61,7 @@ def release() -> None:
         _torch.cuda.synchronize()
         _torch.cuda.empty_cache()
 
+
 # Distinct concept lists the text-encoder cache holds before it is cleared: a
 # bound against a caller that never stops minting new lists.
 _TEXT_MEMO_MAX = 32
@@ -237,7 +238,9 @@ def _build_datapoint(rgb: np.ndarray, concepts: list[str]):
 
     h, w = rgb.shape[:2]
     qids = list(range(1, len(concepts) + 1))
-    dp = Datapoint(find_queries=[], images=[SAMImage(data=Image.fromarray(rgb), objects=[], size=[h, w])])
+    dp = Datapoint(
+        find_queries=[], images=[SAMImage(data=Image.fromarray(rgb), objects=[], size=[h, w])]
+    )
     for concept, cid in zip(concepts, qids):
         dp.find_queries.append(
             FindQueryLoaded(
@@ -305,7 +308,9 @@ def segment(
         if masks_sel_t.ndim == 4:
             masks_sel_t = masks_sel_t[:, 0]
         masks_bool_t = masks_sel_t > 0
-        keep_idx_t = _torch.nonzero(masks_bool_t.sum(dim=(1, 2)) >= min_area_px, as_tuple=False).flatten()
+        keep_idx_t = _torch.nonzero(
+            masks_bool_t.sum(dim=(1, 2)) >= min_area_px, as_tuple=False
+        ).flatten()
         if keep_idx_t.numel() == 0:
             continue
         masks_bool_t = masks_bool_t.index_select(0, keep_idx_t)
@@ -316,19 +321,30 @@ def segment(
         H, W = masks_bool_t.shape[1], masks_bool_t.shape[2]
         # The four bbox bounds move to the host in one transfer: each
         # ``.cpu()`` is a CUDA sync.
-        r_min, c_min, r_max, c_max = _torch.stack([
-            rows_any_t.float().argmax(dim=1),
-            cols_any_t.float().argmax(dim=1),
-            (H - 1) - rows_any_t.flip(dims=[1]).float().argmax(dim=1),
-            (W - 1) - cols_any_t.flip(dims=[1]).float().argmax(dim=1),
-        ], dim=0).cpu().numpy()
+        r_min, c_min, r_max, c_max = (
+            _torch.stack(
+                [
+                    rows_any_t.float().argmax(dim=1),
+                    cols_any_t.float().argmax(dim=1),
+                    (H - 1) - rows_any_t.flip(dims=[1]).float().argmax(dim=1),
+                    (W - 1) - cols_any_t.flip(dims=[1]).float().argmax(dim=1),
+                ],
+                dim=0,
+            )
+            .cpu()
+            .numpy()
+        )
         scores_np = sel_scores_t.to(_torch.float32).cpu().numpy()
         masks_np = masks_bool_t.cpu().numpy()
         for k in range(int(masks_np.shape[0])):
-            dets.append(SamDetection(
-                label=concept, score=float(scores_np[k]), pixel_mask=masks_np[k],
-                pixel_bbox_rcrc=(int(r_min[k]), int(c_min[k]), int(r_max[k]), int(c_max[k])),
-            ))
+            dets.append(
+                SamDetection(
+                    label=concept,
+                    score=float(scores_np[k]),
+                    pixel_mask=masks_np[k],
+                    pixel_bbox_rcrc=(int(r_min[k]), int(c_min[k]), int(r_max[k]), int(c_max[k])),
+                )
+            )
             if len(dets) >= max_per_image:
                 return dets
     return dets

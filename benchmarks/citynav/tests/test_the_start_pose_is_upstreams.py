@@ -30,18 +30,26 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _row(pose: list) -> dict:
-    return {"area": "birmingham", "block": 1, "descriptions": ["the church"],
-            "ann_ids": [0], "target_positions": [[10.0, 20.0, 0.0]],
-            "trajectory": [pose]}
+    return {
+        "area": "birmingham",
+        "block": 1,
+        "descriptions": ["the church"],
+        "ann_ids": [0],
+        "target_positions": [[10.0, 20.0, 0.0]],
+        "trajectory": [pose],
+    }
 
 
-@pytest.mark.parametrize("pose, heading", [
-    ([0.0, 0.0, 120.0, 0.0, 0.0], 90.0),  # east
-    ([0.0, 0.0, 120.0, math.pi / 2, -0.3], 0.0),  # north
-    ([0.0, 0.0, 120.0, math.pi, 0.0], 270.0),  # west
-    ([0.0, 0.0, 120.0, 0.0, -1.0, 0.0], 180.0),  # a direction vector, due south
-    ([0.0, 0.0, 120.0], 0.0),  # no heading: north
-])
+@pytest.mark.parametrize(
+    "pose, heading",
+    [
+        ([0.0, 0.0, 120.0, 0.0, 0.0], 90.0),  # east
+        ([0.0, 0.0, 120.0, math.pi / 2, -0.3], 0.0),  # north
+        ([0.0, 0.0, 120.0, math.pi, 0.0], 270.0),  # west
+        ([0.0, 0.0, 120.0, 0.0, -1.0, 0.0], 180.0),  # a direction vector, due south
+        ([0.0, 0.0, 120.0], 0.0),  # no heading: north
+    ],
+)
 def test_the_row_start_yaw_is_read_as_upstream_reads_it(pose, heading):
     assert parse_episode(_row(pose), row_index=0).start_heading_deg == pytest.approx(heading)
 

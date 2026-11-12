@@ -45,9 +45,7 @@ PARAMS = {
                                             {
                                                 "properties": {
                                                     "op": {"const": "count"},
-                                                    "args": {
-                                                        "properties": {"of": {}}
-                                                    },
+                                                    "args": {"properties": {"of": {}}},
                                                 }
                                             },
                                         ]
@@ -87,9 +85,7 @@ def _analyze_call(ops: list) -> dict:
 def _write(flight: Path, records: list[dict]) -> None:
     llm = flight / "llm"
     llm.mkdir(parents=True, exist_ok=True)
-    (llm / "transcript.jsonl").write_text(
-        "".join(json.dumps(r) + "\n" for r in records)
-    )
+    (llm / "transcript.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
 
 
 def _flight(tmp_path: Path) -> Path:
@@ -153,10 +149,23 @@ def test_turns_tokens_and_latency(tmp_path: Path) -> None:
 
     assert s["latency_s_sum"] == 12.5
     # Every key has a reader (measures, the endpoint check).
-    assert set(s) == set(flight_summary.blank()) == {
-        "turns", "requests", "unanswered", "prompt_tokens", "completion_tokens",
-        "total_tokens", "reasoning_tokens", "latency_s_sum",
-        "cached_tokens", "cache_write_tokens", "served_model"}
+    assert (
+        set(s)
+        == set(flight_summary.blank())
+        == {
+            "turns",
+            "requests",
+            "unanswered",
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "reasoning_tokens",
+            "latency_s_sum",
+            "cached_tokens",
+            "cache_write_tokens",
+            "served_model",
+        }
+    )
 
 
 def test_the_cache_meters_sum_what_the_responses_report(tmp_path: Path) -> None:
@@ -164,10 +173,25 @@ def test_the_cache_meters_sum_what_the_responses_report(tmp_path: Path) -> None:
     model it names on its responses rides as it last named it."""
     flight = _flight(tmp_path)
     with (flight / "llm" / "transcript.jsonl").open("a") as fh:
-        fh.write(json.dumps({"kind": "response", "response": {
-            "model": "gpt-5.6-sol-2026-07-09", "choices": [{"message": {}}],
-            "usage": {"prompt_tokens": 2000, "prompt_tokens_details": {
-                "cached_tokens": 1408, "cache_write_tokens": 512}}}}) + "\n")
+        fh.write(
+            json.dumps(
+                {
+                    "kind": "response",
+                    "response": {
+                        "model": "gpt-5.6-sol-2026-07-09",
+                        "choices": [{"message": {}}],
+                        "usage": {
+                            "prompt_tokens": 2000,
+                            "prompt_tokens_details": {
+                                "cached_tokens": 1408,
+                                "cache_write_tokens": 512,
+                            },
+                        },
+                    },
+                }
+            )
+            + "\n"
+        )
     s = flight_summary.summarize(flight)
     assert s["cached_tokens"] == 640 + 800 + 1408
     assert s["cache_write_tokens"] == 512
@@ -194,8 +218,18 @@ def test_reasoning_tokens_are_summed_over_the_responses_that_carry_a_span(tmp_pa
     spans = [({"reasoning_content": "thought"}, 207), ({"reasoning": "more"}, 93), ({}, 50)]
     with (flight / "llm" / "transcript.jsonl").open("a") as fh:
         for message, n in spans:
-            fh.write(json.dumps({"kind": "response", "response": {
-                "usage": {"reasoning_tokens": n}, "choices": [{"message": message}]}}) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "kind": "response",
+                        "response": {
+                            "usage": {"reasoning_tokens": n},
+                            "choices": [{"message": message}],
+                        },
+                    }
+                )
+                + "\n"
+            )
     assert flight_summary.summarize(flight)["reasoning_tokens"] == 300
 
 
@@ -209,18 +243,21 @@ def test_wrong_typed_fields_are_skipped_not_fatal(tmp_path: Path) -> None:
         flight,
         [
             # usage, message, and the tool-call function each arrive as strings.
-            {"kind": "response", "response": {"usage": "n/a",
-                                              "choices": [{"message": "?"}]}},
-            {"kind": "response", "response": {
-                "choices": [{"message": {"tool_calls": ["?"]}}]}},
+            {"kind": "response", "response": {"usage": "n/a", "choices": [{"message": "?"}]}},
+            {"kind": "response", "response": {"choices": [{"message": {"tool_calls": ["?"]}}]}},
             # a params record whose tool entries and analyze schema are strings
             {"kind": "params", "params": {"tools": ["find", {"function": "analyze"}]}},
-            {"kind": "params", "params": {
-                "tools": [{"function": {"name": "analyze", "parameters": "?"}}]}},
+            {
+                "kind": "params",
+                "params": {"tools": [{"function": {"name": "analyze", "parameters": "?"}}]},
+            },
             # and one good round, so the scan is proven still to be counting
-            _response("r9", 1.0, usage={"total_tokens": 5}, tool_calls=[
-                _analyze_call([{"op": "find", "args": {"color": "red"}}])
-            ]),
+            _response(
+                "r9",
+                1.0,
+                usage={"total_tokens": 5},
+                tool_calls=[_analyze_call([{"op": "find", "args": {"color": "red"}}])],
+            ),
         ],
     )
     s = flight_summary.summarize(flight)

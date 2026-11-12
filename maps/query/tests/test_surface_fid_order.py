@@ -1,4 +1,5 @@
 """The served surface orders fids NUMERICALLY, never as strings."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -9,15 +10,19 @@ from maps.world_state.graph import MapObject
 
 
 def _node(i):
-    return MapObject(class_name="parking lot", name=None, tags={},
-                     centroid=(0, int(10 * i)), provenance="detected",
-                     world_xy=[float(10 * i), 0.0])
+    return MapObject(
+        class_name="parking lot",
+        name=None,
+        tags={},
+        centroid=(0, int(10 * i)),
+        provenance="detected",
+        world_xy=[float(10 * i), 0.0],
+    )
 
 
 def test_detected_2_serves_before_detected_100():
     nodes = {f"detected_{i}": _node(i) for i in range(120)}
-    cands, _anchors = build_surface_from_graph(
-        nodes.items(), (0.0, 0.0), 2.0)
+    cands, _anchors = build_surface_from_graph(nodes.items(), (0.0, 0.0), 2.0)
     fids = [c["fid"] for c in cands]
     assert fids[:8] == [f"detected_{i}" for i in range(8)], fids[:8]
     assert fids.index("detected_2") == 2, fids.index("detected_2")
@@ -36,19 +41,26 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
         # A linear feature: the bake gives a road a centerline, and
         # axis_length_m is served only for a node that has one.
         return MapObject(
-            class_name="", name=name, tags={},
+            class_name="",
+            name=name,
+            tags={},
             centroid=(float(cells[:, 0].mean()), float(cells[:, 1].mean())),
-            cells=cells, centerline=[[int(r), int(c)] for r, c in cells],
-            axis_length_m=20.0)
+            cells=cells,
+            centerline=[[int(r), int(c)] for r, c in cells],
+            axis_length_m=20.0,
+        )
 
     n = _NAME_SET_SHAPE_ROWS + 2
-    ways = [(f"prior_{i}", _way("Neuralia Road",
-                                [[10, c] for c in range(i * 20, i * 20 + 10)]))
-            for i in range(n)]
+    ways = [
+        (f"prior_{i}", _way("Neuralia Road", [[10, c] for c in range(i * 20, i * 20 + 10)]))
+        for i in range(n)
+    ]
     _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
-    out = run_program([], [dict(a) for a in anchors],
-                      {"ops": [{"ref": "r1", "op": "find",
-                                "args": {"query": "Neuralia Road"}}]})
+    out = run_program(
+        [],
+        [dict(a) for a in anchors],
+        {"ops": [{"ref": "r1", "op": "find", "args": {"query": "Neuralia Road"}}]},
+    )
     head = compact_results(out["results"])["r1"]
 
     assert head["len"] == n
@@ -66,9 +78,11 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     # A SMALL set still renders: the table is cheap and a reader holds it.
     few = ways[:_NAME_SET_SHAPE_ROWS]
     _c, anchors = build_surface_from_graph(few, (0.0, 0.0), 2.0)
-    out = run_program([], [dict(a) for a in anchors],
-                      {"ops": [{"ref": "r1", "op": "find",
-                                "args": {"query": "Neuralia Road"}}]})
+    out = run_program(
+        [],
+        [dict(a) for a in anchors],
+        {"ops": [{"ref": "r1", "op": "find", "args": {"query": "Neuralia Road"}}]},
+    )
     small = compact_results(out["results"])["r1"]
     assert "rows" in small, small
     assert len(small["fids"]) == len(few), small
@@ -76,10 +90,20 @@ def test_a_names_ways_serve_their_shape_and_not_a_tied_table():
     # The identity window a bare line serves keeps every way, so it serves
     # the same shape, not a 24-row head.
     _c, anchors = build_surface_from_graph(ways, (0.0, 0.0), 2.0)
-    out = run_program([], [dict(a) for a in anchors], {"ops": [
-        {"ref": "r1", "op": "find", "args": {"query": "Neuralia Road"}},
-        {"ref": "r2", "op": "filter_items",
-         "args": {"items": "r1", "key": "xy", "op": "truthy"}}]})
+    out = run_program(
+        [],
+        [dict(a) for a in anchors],
+        {
+            "ops": [
+                {"ref": "r1", "op": "find", "args": {"query": "Neuralia Road"}},
+                {
+                    "ref": "r2",
+                    "op": "filter_items",
+                    "args": {"items": "r1", "key": "xy", "op": "truthy"},
+                },
+            ]
+        },
+    )
     window = compact_results(out["results"], answer_ref="r2")["r2"]
     assert set(window) == {"len", "name", "length_m"}, sorted(window)
 
@@ -91,9 +115,9 @@ def _crops_of(src: str) -> list:
 
 def test_look_marks_a_street_by_its_handle_not_a_piece_of_it():
     """``marks=`` names what ELSE bears on the choice, and a street is a SET."""
-    crops = _crops_of('poppy = find("Poppy Boulevard")\n'
-                      'cars = find("car")\n'
-                      'look(cars[0:10], marks=poppy)\n')
+    crops = _crops_of(
+        'poppy = find("Poppy Boulevard")\ncars = find("car")\nlook(cars[0:10], marks=poppy)\n'
+    )
     assert crops, "no crops step compiled"
     # The mark rides the SAME crop request as its subject.
     assert crops[-1][2], crops[-1]
@@ -113,9 +137,19 @@ def test_an_unresolvable_list_item_names_only_what_a_list_takes():
     from maps.query.program import run_program
 
     with pytest.raises(ProgramError) as e:
-        run_program([{"fid": "prior_1", "xy": [0.0, 0.0]}], [], {"ops": [
-            {"ref": "r1", "op": "filter_items",
-             "args": {"items": ["prior_1", "nowhere"], "key": "xy",
-                      "op": "truthy"}}]})
-    assert "each item must be a fid on this surface, an [x, y], or a set." \
-        in str(e.value), str(e.value)
+        run_program(
+            [{"fid": "prior_1", "xy": [0.0, 0.0]}],
+            [],
+            {
+                "ops": [
+                    {
+                        "ref": "r1",
+                        "op": "filter_items",
+                        "args": {"items": ["prior_1", "nowhere"], "key": "xy", "op": "truthy"},
+                    }
+                ]
+            },
+        )
+    assert "each item must be a fid on this surface, an [x, y], or a set." in str(e.value), str(
+        e.value
+    )

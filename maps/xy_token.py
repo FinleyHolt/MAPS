@@ -1,11 +1,11 @@
 """The ``[x, y]`` world-point token, the one grammar for every slot that
 takes a fid or a point (``"[1530, 1378]"``; a bare ``"1530, 1378"`` too)."""
+
 from __future__ import annotations
 
 import re
 
-_XY_TOKEN_RE = re.compile(
-    r"^\s*\[?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]?\s*$")
+_XY_TOKEN_RE = re.compile(r"^\s*\[?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]?\s*$")
 
 
 def parse_xy_token(token) -> tuple[float, float] | None:
@@ -28,5 +28,8 @@ def format_xy_token(x: float, y: float) -> str:
 def is_xy(v) -> bool:
     """True for a bare ``[x, y]`` point value: a list or tuple of exactly two
     numbers (a bool is not a number here)."""
-    return (isinstance(v, (list, tuple)) and len(v) == 2
-            and all(isinstance(c, (int, float)) and not isinstance(c, bool) for c in v))
+    return (
+        isinstance(v, (list, tuple))
+        and len(v) == 2
+        and all(isinstance(c, (int, float)) and not isinstance(c, bool) for c in v)
+    )

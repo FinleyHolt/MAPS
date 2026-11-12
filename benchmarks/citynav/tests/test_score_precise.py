@@ -45,9 +45,7 @@ def test_the_shape_beats_the_radius_when_both_are_available():
 
 
 def test_falls_back_to_the_radius_with_no_shape():
-    out = score_precise(
-        final_xy=(5.0, 19.0), target_xy=(5.0, 5.0), gt_polygon=None, radius_m=15.0
-    )
+    out = score_precise(final_xy=(5.0, 19.0), target_xy=(5.0, 5.0), gt_polygon=None, radius_m=15.0)
     assert out["SR"] == 1
     assert out["precise_target"] == "radius"
 
@@ -76,5 +74,7 @@ def test_degenerate_polygon_is_not_treated_as_a_shape():
 def test_a_narrow_shape_is_scored_as_drawn():
     """A 4 m-wide road intersection gets no widening: 1 m past its edge misses."""
     crossing = [(0.0, 0.0), (12.0, 0.0), (12.0, 4.0), (0.0, 4.0)]
-    out = score_precise(final_xy=(13.0, 2.0), target_xy=(6.0, 2.0), gt_polygon=crossing, radius_m=15.0)
+    out = score_precise(
+        final_xy=(13.0, 2.0), target_xy=(6.0, 2.0), gt_polygon=crossing, radius_m=15.0
+    )
     assert out["SR"] == 0

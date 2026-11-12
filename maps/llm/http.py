@@ -210,7 +210,7 @@ def _map_image_parts(messages: list, fn) -> list:
                 raw = base64.b64decode(b64)
             except (ValueError, binascii.Error):
                 raw = None
-            parts.append(fn(part, head[len("data:"):].split(";")[0] or "image/jpeg", raw))
+            parts.append(fn(part, head[len("data:") :].split(";")[0] or "image/jpeg", raw))
             changed = True
         out.append({**msg, "content": parts} if changed else msg)
     return out
@@ -221,8 +221,12 @@ def _image_ref(part: dict, media_type: str, raw: bytes | None) -> dict:
     or of its base64 text when that does not decode."""
     if raw is None:
         raw = part["image_url"]["url"].partition(",")[2].encode("utf-8")
-    return {"type": "image_ref", "media_type": media_type,
-            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+    return {
+        "type": "image_ref",
+        "media_type": media_type,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+    }
 
 
 # shas the store holds; a 409 from it drops the ones it names.
@@ -236,17 +240,18 @@ class ImageStoreError(ValueError):
     the mission loop retries the turn (``maps.mission.serve_refusals._RETRIABLE_LLM_ERRORS``)."""
 
 
-def _put_image(url: str, raw: bytes, media_type: str,
-               cancel_event: threading.Event | None) -> None:
+def _put_image(url: str, raw: bytes, media_type: str, cancel_event: threading.Event | None) -> None:
     """PUT one image's bytes to the store, its Content-Type the one header; the
     cancel event aborts it as it does the chat call."""
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=_CONNECT_TIMEOUT_S)) as client:
-            client.put(url, content=raw,
-                       headers={"Content-Type": media_type},
-                       extensions={"trace": watch.trace} if watch is not None else None,
-                       ).raise_for_status()
+            client.put(
+                url,
+                content=raw,
+                headers={"Content-Type": media_type},
+                extensions={"trace": watch.trace} if watch is not None else None,
+            ).raise_for_status()
     except httpx.HTTPError as exc:
         if cancel_event is not None and cancel_event.is_set():
             raise CallCanceled("canceled during an image-store PUT") from None
@@ -256,7 +261,9 @@ def _put_image(url: str, raw: bytes, media_type: str,
             watch.close()
 
 
-def _wire_body(body: dict, cancel_event: threading.Event | None = None, image_store_url: str = "") -> dict:
+def _wire_body(
+    body: dict, cancel_event: threading.Event | None = None, image_store_url: str = ""
+) -> dict:
     """``body`` as it crosses the wire: with an image store set
     (``image_store_url``, the run's ``MAPS_IMAGE_STORE_URL``), every
     data-URL image part rides as ``sha256:<sha>``, its bytes PUT once; a
@@ -297,9 +304,7 @@ def _append_flight_record(directory: Path, record: dict) -> None:
     filesystem error is logged and swallowed: recording never fails a call."""
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        with (directory / TRANSCRIPT_JSONL).open(
-            "a", encoding="utf-8"
-        ) as fh:
+        with (directory / TRANSCRIPT_JSONL).open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, default=str) + "\n")
             fh.flush()
     except OSError as exc:
@@ -343,18 +348,20 @@ def _flight_request_record(
                     break
                 n_prefix += 1
             _FLIGHT_THREAD_DIGESTS[str(directory)] = digests
-            _append_flight_record(directory, {
-                "kind": "request",
-                "request_id": request_id,
-                "created_at": time.time(),
-                "params_sha": params_sha,
-                "n_prefix": n_prefix,
-                "n_messages": len(scrubbed),
-                "new_messages": scrubbed[n_prefix:],
-            })
+            _append_flight_record(
+                directory,
+                {
+                    "kind": "request",
+                    "request_id": request_id,
+                    "created_at": time.time(),
+                    "params_sha": params_sha,
+                    "n_prefix": n_prefix,
+                    "n_messages": len(scrubbed),
+                    "new_messages": scrubbed[n_prefix:],
+                },
+            )
         except Exception as exc:  # noqa: BLE001 - never fail the LLM call
-            log.warning("flight request record failed at %s: %s",
-                        directory, exc)
+            log.warning("flight request record failed at %s: %s", directory, exc)
 
 
 def _flight_response_record(
@@ -364,12 +371,15 @@ def _flight_response_record(
 ) -> None:
     """Append the response record that closes one request_id."""
     with _FLIGHT_LOCK:
-        _append_flight_record(directory, {
-            "kind": "response",
-            "request_id": request_id,
-            "ts": time.time(),
-            "response": response_json,
-        })
+        _append_flight_record(
+            directory,
+            {
+                "kind": "response",
+                "request_id": request_id,
+                "ts": time.time(),
+                "response": response_json,
+            },
+        )
 
 
 def _request_headers(api_key: str | None, routing_key: str | None = None) -> dict[str, str]:
@@ -417,10 +427,16 @@ def stream_chat_completions(
 
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
-        with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client, client.stream(
-            "POST", url, headers=headers, json=body,
-            extensions={"trace": watch.trace} if watch is not None else None,
-        ) as resp:
+        with (
+            httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client,
+            client.stream(
+                "POST",
+                url,
+                headers=headers,
+                json=body,
+                extensions={"trace": watch.trace} if watch is not None else None,
+            ) as resp,
+        ):
             if resp.status_code >= 400:
                 resp.read()  # the body is legible after the stream closes
             resp.raise_for_status()
@@ -455,9 +471,7 @@ def stream_chat_completions(
                 if content_delta:
                     aggregated_text.append(content_delta)
                 # The serve names the span ``reasoning`` or ``reasoning_content``.
-                reasoning_delta = delta.get("reasoning") or delta.get(
-                    "reasoning_content"
-                )
+                reasoning_delta = delta.get("reasoning") or delta.get("reasoning_content")
                 if reasoning_delta:
                     aggregated_reasoning.append(reasoning_delta)
                 for tc in delta.get("tool_calls") or []:
@@ -480,14 +494,22 @@ def stream_chat_completions(
                 fin = choice.get("finish_reason")
                 if fin is not None:
                     finish_reason = fin
-                if content_delta or reasoning_delta or delta.get("tool_calls") or fin is not None or delta.get("role"):
+                if (
+                    content_delta
+                    or reasoning_delta
+                    or delta.get("tool_calls")
+                    or fin is not None
+                    or delta.get("role")
+                ):
                     empty_chunk_count = 0
                     first_empty_at = None
                     continue
                 empty_chunk_count += 1
                 first_empty_at = first_empty_at or time.monotonic()
-                if (time.monotonic() - first_empty_at >= _EMPTY_STREAM_S
-                        or empty_chunk_count >= _EMPTY_STREAM_CHUNKS):
+                if (
+                    time.monotonic() - first_empty_at >= _EMPTY_STREAM_S
+                    or empty_chunk_count >= _EMPTY_STREAM_CHUNKS
+                ):
                     raise httpx.ReadTimeout(f"{_EMPTY_STREAM_ERROR} for {empty_chunk_count} chunks")
             if finish_reason is None and not saw_done:
                 raise httpx.RemoteProtocolError("LLM stream ended without a finish_reason")
@@ -503,13 +525,9 @@ def stream_chat_completions(
     if aggregated_reasoning:
         message["reasoning"] = "".join(aggregated_reasoning)
     if aggregated_tool_calls:
-        message["tool_calls"] = [
-            aggregated_tool_calls[k] for k in sorted(aggregated_tool_calls)
-        ]
+        message["tool_calls"] = [aggregated_tool_calls[k] for k in sorted(aggregated_tool_calls)]
     response_json: dict = {
-        "choices": [
-            {"index": 0, "message": message, "finish_reason": finish_reason or "stop"}
-        ],
+        "choices": [{"index": 0, "message": message, "finish_reason": finish_reason or "stop"}],
     }
     if usage is not None:
         response_json["usage"] = usage
@@ -536,10 +554,16 @@ def stream_responses(
     final: dict | None = None
     watch = _CancelWatch(cancel_event) if cancel_event is not None else None
     try:
-        with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client, client.stream(
-            "POST", url, headers=headers, json=body,
-            extensions={"trace": watch.trace} if watch is not None else None,
-        ) as resp:
+        with (
+            httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client,
+            client.stream(
+                "POST",
+                url,
+                headers=headers,
+                json=body,
+                extensions={"trace": watch.trace} if watch is not None else None,
+            ) as resp,
+        ):
             if resp.status_code >= 400:
                 resp.read()  # the body is legible after the stream closes
             resp.raise_for_status()
@@ -549,14 +573,16 @@ def stream_responses(
                 if not raw_line or not raw_line.startswith("data:"):
                     continue
                 try:
-                    event = json.loads(raw_line[len("data:"):].strip())
+                    event = json.loads(raw_line[len("data:") :].strip())
                 except json.JSONDecodeError:
                     continue
                 kind = event.get("type")
                 if kind in _RESPONSES_TERMINAL:
                     final = event.get("response") or {}
                 elif kind in ("response.failed", "error"):
-                    raise httpx.RemoteProtocolError(f"Responses stream {kind}: {json.dumps(event)[:300]}")
+                    raise httpx.RemoteProtocolError(
+                        f"Responses stream {kind}: {json.dumps(event)[:300]}"
+                    )
             if final is None:
                 raise httpx.RemoteProtocolError("Responses stream ended without a closing event")
     except httpx.HTTPError:
@@ -569,8 +595,9 @@ def stream_responses(
     return openai_wire.from_responses(final)
 
 
-def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusal: str,
-                                    endpoint: Endpoint = Endpoint()) -> None:
+def _raise_on_served_model_mismatch(
+    base_url: str, requested: str | None, refusal: str, endpoint: Endpoint = Endpoint()
+) -> None:
     """On a 404, re-probe the served ids and raise when the request's model is
     no longer among them (the server behind the URL changed since discovery).
     Returns when the probe fails or the model is still served."""
@@ -591,8 +618,15 @@ def _raise_on_served_model_mismatch(base_url: str, requested: str | None, refusa
 
 #: The sampling keys a refused request's summary names (a serve whose template
 #: carries no effort field answers 400 on one).
-_SAMPLING_KEYS = ("temperature", "top_p", "top_k", "presence_penalty", "max_tokens", "max_completion_tokens",
-                  "reasoning_effort")
+_SAMPLING_KEYS = (
+    "temperature",
+    "top_p",
+    "top_k",
+    "presence_penalty",
+    "max_tokens",
+    "max_completion_tokens",
+    "reasoning_effort",
+)
 
 
 def chat_completions_raw(
@@ -642,9 +676,12 @@ def chat_completions_raw(
                 wire = openai_wire.to_responses(wire)
             if use_stream:
                 response_json = (stream_responses if responses else stream_chat_completions)(
-                    url, headers, wire, timeout=timeout, cancel_event=cancel_event)
+                    url, headers, wire, timeout=timeout, cancel_event=cancel_event
+                )
             else:
-                with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client:
+                with httpx.Client(
+                    timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)
+                ) as client:
                     r = client.post(url, headers=headers, json=wire)
                 r.raise_for_status()
                 response_json = r.json()
@@ -673,16 +710,14 @@ def chat_completions_raw(
             raise
         except (httpx.RequestError, httpx.HTTPStatusError, ImageStoreError) as e:
             if isinstance(e, ImageStoreError) and not isinstance(
-                    e.__cause__, (httpx.ConnectError, httpx.ConnectTimeout)):
+                e.__cause__, (httpx.ConnectError, httpx.ConnectTimeout)
+            ):
                 raise
-            status = (
-                e.response.status_code
-                if isinstance(e, httpx.HTTPStatusError)
-                else None
-            )
+            status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
             if status in RATE_LIMIT_STATUS:
                 delay = _retry_after_delay(
-                    e.response.headers, _BACKOFF_S * (2**min(rate_limit_attempt, 6)))
+                    e.response.headers, _BACKOFF_S * (2 ** min(rate_limit_attempt, 6))
+                )
                 if rate_limit_waited + delay > _RATE_LIMIT_BUDGET_S:
                     log.error(
                         "LLM endpoint %d after %d rate-limit retries (%.0fs "
@@ -705,22 +740,32 @@ def chat_completions_raw(
                 )
                 _backoff(delay, cancel_event)
                 continue
-            if (status == 409 and wire is not body and attempt < _MAX_RETRIES
-                    and _forget_missing(e.response)):
+            if (
+                status == 409
+                and wire is not body
+                and attempt < _MAX_RETRIES
+                and _forget_missing(e.response)
+            ):
                 attempt += 1
                 continue
             if status == 404:
-                _raise_on_served_model_mismatch(base_url, body.get("model"), e.response.text, endpoint)
+                _raise_on_served_model_mismatch(
+                    base_url, body.get("model"), e.response.text, endpoint
+                )
             if status is not None and status < 500:
                 msgs = body.get("messages") or []
-                log.error(
-                    "LLM endpoint %d response body: %s", status, e.response.text[:4000])
+                log.error("LLM endpoint %d response body: %s", status, e.response.text[:4000])
                 log.error(
                     "LLM endpoint %d request summary: body_keys=%s, "
                     "n_tools=%d, sampling=%r, model=%r, n_messages=%d, roles=%s",
-                    status, sorted(body),
-                    len(body.get("tools") or []), {k: body[k] for k in _SAMPLING_KEYS if k in body},
-                    body.get("model"), len(msgs), [m.get("role") for m in msgs])
+                    status,
+                    sorted(body),
+                    len(body.get("tools") or []),
+                    {k: body[k] for k in _SAMPLING_KEYS if k in body},
+                    body.get("model"),
+                    len(msgs),
+                    [m.get("role") for m in msgs],
+                )
                 raise
             if attempt >= _MAX_RETRIES:
                 raise

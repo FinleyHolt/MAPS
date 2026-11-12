@@ -16,7 +16,11 @@ def cells_of(row) -> np.ndarray:
     """A surface row's or graph node's ``cells`` (the bake's 2 m ``(row,
     col)`` grid) as an ``(n, 2)`` int array, empty when it carries none."""
     c = row.get("cells") if isinstance(row, dict) else getattr(row, "cells", None)
-    return np.zeros((0, 2), dtype=int) if c is None else np.asarray(c).reshape(-1, 2).astype(int, copy=False)
+    return (
+        np.zeros((0, 2), dtype=int)
+        if c is None
+        else np.asarray(c).reshape(-1, 2).astype(int, copy=False)
+    )
 
 
 def chains_of(row) -> list:
@@ -35,8 +39,7 @@ def chains_of(row) -> list:
 def mask_center(mask):
     """The mask's area centroid when it is one connected piece, else None:
     several disjoint places have no centre to measure from."""
-    return (G.loops_area_centroid(mask)
-            if mask and G.one_place(mask) else None)
+    return G.loops_area_centroid(mask) if mask and G.one_place(mask) else None
 
 
 # A mask list's (G.mask_geom, centre), keyed on the list's identity; the
@@ -85,8 +88,7 @@ class SurfaceGeometry:
 
     def _geom(self, place):
         fid, xy = place
-        return place_geom(self.row_of_fid(fid) if fid else None,
-                          {"xy": xy})[0]
+        return place_geom(self.row_of_fid(fid) if fid else None, {"xy": xy})[0]
 
     def geom(self, places: tuple):
         """``(member geoms, their stacked boxes)`` of a tuple of places."""

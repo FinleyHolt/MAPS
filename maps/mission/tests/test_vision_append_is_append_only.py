@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Delivering a crop never rewrites an earlier message."""
+
 from __future__ import annotations
 
 import hashlib
@@ -15,9 +16,7 @@ _DELIVERIES = 40
 def _digests(messages: list[dict]) -> list[str]:
     """The same per-message digest ``maps.llm.http`` takes to compute ``n_prefix``."""
     return [
-        hashlib.sha256(
-            json.dumps(m, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()
+        hashlib.sha256(json.dumps(m, sort_keys=True, default=str).encode("utf-8")).hexdigest()
         for m in messages
     ]
 

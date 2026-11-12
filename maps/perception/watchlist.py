@@ -58,8 +58,16 @@ def _find_flown(w: dict, stops: list[dict]) -> dict | None:
     if fid:
         return next((f for f in stops if fid in f["target_fids"]), None)
     wxy = w["xy"]
-    return next((f for f in stops if f["pose_xy"] is not None and math.hypot(
-        wxy[0] - f["pose_xy"][0], wxy[1] - f["pose_xy"][1]) <= BOOST_MATCH_RADIUS_M), None)
+    return next(
+        (
+            f
+            for f in stops
+            if f["pose_xy"] is not None
+            and math.hypot(wxy[0] - f["pose_xy"][0], wxy[1] - f["pose_xy"][1])
+            <= BOOST_MATCH_RADIUS_M
+        ),
+        None,
+    )
 
 
 @dataclass
@@ -101,8 +109,11 @@ class SegmenterTasking:
         if self.push is None:
             return None
         try:
-            self.push(_dedup_concepts(
-                self.watchlist + [c for b in self.boosts if b.riding for c in b.concepts]))
+            self.push(
+                _dedup_concepts(
+                    self.watchlist + [c for b in self.boosts if b.riding for c in b.concepts]
+                )
+            )
         except Exception as e:  # noqa: BLE001
             log.warning("live concept push failed: %s", e)
             return str(e)
@@ -110,16 +121,19 @@ class SegmenterTasking:
 
     def _retro(self, flown: dict, concepts: list[str], token) -> dict:
         if self.retro_perceiver is None:
-            return {"where": token,
-                    "error": ("retrospective re-segmentation is not wired "
-                              "on this run; the flown observation cannot "
-                              "be re-analyzed")}
+            return {
+                "where": token,
+                "error": (
+                    "retrospective re-segmentation is not wired "
+                    "on this run; the flown observation cannot "
+                    "be re-analyzed"
+                ),
+            }
         try:
             res = self.retro_perceiver(dict(flown), list(concepts))
         except Exception as exc:  # noqa: BLE001 -- served to the model; never crash the turn
             log.exception("retro perceiver raised")
-            res = {"error": f"retrospective re-segmentation failed: "
-                            f"{type(exc).__name__}: {exc}"}
+            res = {"error": f"retrospective re-segmentation failed: {type(exc).__name__}: {exc}"}
         rec = {"where": token}
         if isinstance(res, dict):
             rec.update(res)
@@ -165,8 +179,7 @@ class SegmenterTasking:
             # A targeted boost none of whose targets resolved says so rather
             # than becoming a where-less one.
             return {
-                "error": ("no boost target resolved; nothing was queued or "
-                          "re-segmented"),
+                "error": ("no boost target resolved; nothing was queued or re-segmented"),
                 "unknown_where": unknown,
             }
         if retro:
@@ -190,14 +203,15 @@ class SegmenterTasking:
         stop = {
             "pose_xy": _xy_of(flown.get("pose_xy")),
             "alt_m": flown.get("alt_m"),
-            "stop_id": (str(flown.get("stop_id")).strip()
-                        if flown.get("stop_id") else None),
-            "target_fids": [str(x) for x in (flown.get("target_fids") or [])
-                            if x],
+            "stop_id": (str(flown.get("stop_id")).strip() if flown.get("stop_id") else None),
+            "target_fids": [str(x) for x in (flown.get("target_fids") or []) if x],
         }
         self.flown_log.append(stop)
-        self.boosts = [b for b in self.boosts if not b.riding or (
-            b.where and not any(_find_flown(w, [stop]) for w in b.where))]
+        self.boosts = [
+            b
+            for b in self.boosts
+            if not b.riding or (b.where and not any(_find_flown(w, [stop]) for w in b.where))
+        ]
         for b in self.boosts:
             b.riding = False
         self._push_live()

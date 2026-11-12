@@ -35,8 +35,10 @@ def _write_tour_cursor(flights: list[dict], workdir: Path | None) -> None:
     if not workdir:
         return
     try:
-        atomic_write_json(Path(workdir) / TOUR_CURSOR, {
-            "stops_visited": [{"stop_id": f["target"], "xy": f["resolved_xy"]} for f in flights]})
+        atomic_write_json(
+            Path(workdir) / TOUR_CURSOR,
+            {"stops_visited": [{"stop_id": f["target"], "xy": f["resolved_xy"]} for f in flights]},
+        )
     except Exception:
         log.debug("tour_cursor write failed; non-fatal", exc_info=True)
 
@@ -75,8 +77,7 @@ def resolve_flight_target(token: str, *, node_xy) -> dict:
     if resolved is None:
         return {"error": f"unknown fid {token!r}; it is not on the surface"}
     nxy, provenance = resolved
-    return {"xy": (float(nxy[0]), float(nxy[1])),
-            "provenance": str(provenance)}
+    return {"xy": (float(nxy[0]), float(nxy[1])), "provenance": str(provenance)}
 
 
 # The flight report's head of fresh detections.
@@ -93,14 +94,18 @@ def detected_digest(dets: list[dict]) -> dict:
         return {}
     by_class: dict = {}
     for i, d in enumerate(dets):
-        by_class.setdefault(str(d.get("class") or ""), []).append((-float(d.get("conf") or 0.0), i, d))
+        by_class.setdefault(str(d.get("class") or ""), []).append(
+            (-float(d.get("conf") or 0.0), i, d)
+        )
     # Each lane by conf descending, fold order breaking a tie; lanes by their
     # first row. ``i`` is unique, so no comparison reaches the dict.
     lanes = sorted(sorted(rows, key=lambda t: t[:2]) for rows in by_class.values())
-    head = [t[2] for tier in itertools.zip_longest(*lanes) for t in tier if t is not None][:_DETECTED_HEAD]
-    out: dict = {"detected": [
-        {"fid": d["fid"], "class": d["class"], "xy": list(d["xy"])}
-        for d in head]}
+    head = [t[2] for tier in itertools.zip_longest(*lanes) for t in tier if t is not None][
+        :_DETECTED_HEAD
+    ]
+    out: dict = {
+        "detected": [{"fid": d["fid"], "class": d["class"], "xy": list(d["xy"])} for d in head]
+    }
     if len(dets) > len(head):
         out["detected_more"] = len(dets) - len(head)
     return out
@@ -118,7 +123,8 @@ def perceive(h, obs, detections) -> list[dict]:
     and fold them into the live world-state; returns the folded rows. The
     one ingest path a flight and the bench's retrospective boost share."""
     projected = project_and_stamp_ortho_detections(
-        detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame)
+        detections, view_corners_xy=obs.ortho_view_corners_xy, rgb=obs.rgb, tile=h.tile_frame
+    )
     return h.world.update_perception(detections=detections, projected_masks=projected)
 
 
@@ -181,7 +187,8 @@ class MissionSession:
             routing_key=h.routing_key,
             seed=_seed_base(h.bench.environ) & 0x7FFFFFFF,
             sensor_description=served_description(
-                h.sensor, agl_m=float(h.state.altitude_m) - h.ground_z_m),
+                h.sensor, agl_m=float(h.state.altitude_m) - h.ground_z_m
+            ),
             **self.run_kwargs,
             **extra,
         )
@@ -189,7 +196,11 @@ class MissionSession:
     def _coverage_stops(self, fid: str, spacing_m: float):
         # The flight budget bounds a pass: a stop IS a flight.
         return self.h.world.node_coverage_stops(
-            fid, spacing_m, max_stops=self.mission_spec.flight_budget, minor_spacing_m=self.obs_minor_m)
+            fid,
+            spacing_m,
+            max_stops=self.mission_spec.flight_budget,
+            minor_spacing_m=self.obs_minor_m,
+        )
 
     def resolve(self, token: str) -> dict:
         """``token`` as :func:`resolve_flight_target` resolves it over the live graph."""
@@ -229,7 +240,9 @@ class MissionSession:
         if self.observe is not None:
             obs = self.observe()
             if obs is None:
-                return {"error": "no observation: the aircraft's recording served no frame of this flight's ground"}
+                return {
+                    "error": "no observation: the aircraft's recording served no frame of this flight's ground"
+                }
             new_xy = (float(obs.pose_xy[0]), float(obs.pose_xy[1]))
             new_alt = float(obs.altitude_m)
         else:
@@ -251,8 +264,13 @@ class MissionSession:
         except Exception as exc:  # noqa: BLE001 - colour enrichment never kills a flight
             self.prior_enrich_fails += 1
             if self.prior_enrich_fails == 1 or self.prior_enrich_fails % 50 == 0:
-                log.warning("prior percept enrichment failed (n=%d) step=%d: %s",
-                            self.prior_enrich_fails, step_idx, exc, exc_info=exc)
+                log.warning(
+                    "prior percept enrichment failed (n=%d) step=%d: %s",
+                    self.prior_enrich_fails,
+                    step_idx,
+                    exc,
+                    exc_info=exc,
+                )
 
         if self.observe is not None:
             # The frame's own pose fed the fold and the recorder; from here
@@ -261,8 +279,14 @@ class MissionSession:
             state.pose_xy = new_xy
         # The flight is perceived: a boost can now address this stop.
         try:
-            world.record_flown_stop({"pose_xy": new_xy, "alt_m": new_alt, "stop_id": stop_id,
-                                    "target_fids": [token] if token else []})
+            world.record_flown_stop(
+                {
+                    "pose_xy": new_xy,
+                    "alt_m": new_alt,
+                    "stop_id": stop_id,
+                    "target_fids": [token] if token else [],
+                }
+            )
         except Exception:  # noqa: BLE001 - perception direction never kills a flight
             log.exception("flown-stop record failed (non-fatal)")
 

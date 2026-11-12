@@ -30,7 +30,8 @@ def transport(monkeypatch):
         with ChatServe(answers) as serve:
             try:
                 result = http_mod.chat_completions_raw(
-                    f"{serve.url}/v1", "key", model="m", messages=_MESSAGES, timeout=60.0, **kwargs)
+                    f"{serve.url}/v1", "key", model="m", messages=_MESSAGES, timeout=60.0, **kwargs
+                )
             except Exception as exc:  # noqa: BLE001 - the test inspects it
                 result = exc
         return result, serve.bodies, sleeps
@@ -97,7 +98,9 @@ def test_an_arm_naming_no_effort_puts_no_effort_key_on_the_wire(monkeypatch, tra
     from maps.llm.model_cards import sampling_kwargs
     from maps.settings import from_environ
 
-    quiet = _posted_body(transport, **sampling_kwargs("inkling-small", sampling=from_environ({}).sampling))
+    quiet = _posted_body(
+        transport, **sampling_kwargs("inkling-small", sampling=from_environ({}).sampling)
+    )
     assert "reasoning_effort" not in quiet
     assert "reasoning_effort" not in json.dumps(quiet)
 
@@ -112,7 +115,9 @@ def test_rejected_reasoning_effort_is_named_in_the_refusal(transport, caplog) ->
     """A 400 on an effort field raises at once, and the request summary names the key and value."""
     with caplog.at_level(logging.ERROR, logger="maps.llm.http"):
         result, calls, sleeps = transport(
-            [_err(400, payload={"error": "unrecognized field reasoning_effort"})], reasoning_effort="0.99")
+            [_err(400, payload={"error": "unrecognized field reasoning_effort"})],
+            reasoning_effort="0.99",
+        )
 
     assert isinstance(result, httpx.HTTPStatusError)
     assert len(calls) == 1
@@ -162,9 +167,7 @@ class _RaisingClient:
 def _run_raising(monkeypatch, exc: Exception) -> list[int]:
     monkeypatch.setattr(http_mod.time, "sleep", lambda _s: None)
     calls: list[int] = []
-    monkeypatch.setattr(
-        http_mod.httpx, "Client", lambda *a, **kw: _RaisingClient(exc, calls)
-    )
+    monkeypatch.setattr(http_mod.httpx, "Client", lambda *a, **kw: _RaisingClient(exc, calls))
     with pytest.raises(httpx.TimeoutException):
         http_mod.chat_completions_raw(
             "http://endpoint/v1",
@@ -197,28 +200,39 @@ def test_connect_timeout_still_burns_the_fault_budget(monkeypatch) -> None:
 def test_every_call_names_its_timeout() -> None:
     with pytest.raises(TypeError, match="timeout"):
         http_mod.chat_completions_raw(
-            "http://endpoint/v1", "key", model="m", messages=[{"role": "user", "content": "hi"}])
+            "http://endpoint/v1", "key", model="m", messages=[{"role": "user", "content": "hi"}]
+        )
 
 
 @pytest.mark.parametrize("stream", [False, True], ids=["blocking", "streaming"])
-def test_a_404_for_a_model_no_longer_served_is_named_on_both_paths(transport, monkeypatch, stream) -> None:
+def test_a_404_for_a_model_no_longer_served_is_named_on_both_paths(
+    transport, monkeypatch, stream
+) -> None:
     """A serve restarted behind the URL with another model answers 404; the re-probe names the change."""
     import threading
 
     from maps.llm import endpoint_spec
 
-    monkeypatch.setattr(endpoint_spec, "probe_models", lambda _url, _endpoint: [{"id": "another-model"}])
-    result, calls, _sleeps = transport([_err(404)], **({"cancel_event": threading.Event()} if stream else {}))
+    monkeypatch.setattr(
+        endpoint_spec, "probe_models", lambda _url, _endpoint: [{"id": "another-model"}]
+    )
+    result, calls, _sleeps = transport(
+        [_err(404)], **({"cancel_event": threading.Event()} if stream else {})
+    )
     assert isinstance(result, RuntimeError), result
     assert "served-model mismatch" in str(result) and "another-model" in str(result)
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize("tail,finish", [
-    (b"", None),
-    (b"data: [DONE]\n\n", "stop"),
-    (b'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n', "length"),
-], ids=["cut", "done", "finish"])
+@pytest.mark.parametrize(
+    "tail,finish",
+    [
+        (b"", None),
+        (b"data: [DONE]\n\n", "stop"),
+        (b'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n', "length"),
+    ],
+    ids=["cut", "done", "finish"],
+)
 def test_a_stream_cut_before_its_end_is_a_transport_fault(monkeypatch, tail, finish) -> None:
     """A stream that closes with neither a finish_reason nor ``[DONE]`` was cut short: it raises
     (and is retried) instead of reading as a whole answer that stopped."""
@@ -246,7 +260,13 @@ def test_an_empty_delta_stream_is_logged_as_one_not_as_a_timeout(monkeypatch, ca
     mock = httpx.MockTransport(lambda _r: httpx.Response(200, content=sse))
     monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=mock, **kw))
     with caplog.at_level(logging.ERROR, logger=http_mod.__name__), pytest.raises(httpx.ReadTimeout):
-        http_mod.chat_completions_raw("http://e/v1", "key", model="m", messages=_MESSAGES, timeout=60.0,
-                                      cancel_event=threading.Event())
+        http_mod.chat_completions_raw(
+            "http://e/v1",
+            "key",
+            model="m",
+            messages=_MESSAGES,
+            timeout=60.0,
+            cancel_event=threading.Event(),
+        )
     assert "only empty deltas for 3 chunks" in caplog.text
     assert "SEARCH_REASONER_TIMEOUT_S" not in caplog.text

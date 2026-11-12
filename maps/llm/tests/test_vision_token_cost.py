@@ -47,17 +47,23 @@ def test_non_square_crops_price_by_area() -> None:
 
 
 def test_text_only_messages_cost_nothing() -> None:
-    assert image_tokens_in([
-        {"role": "user", "content": "plain text"},
-        {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
-        {"role": "tool", "content": [{"type": "text", "text": "a result"}]},
-    ]) == 0
+    assert (
+        image_tokens_in(
+            [
+                {"role": "user", "content": "plain text"},
+                {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
+                {"role": "tool", "content": [{"type": "text", "text": "a result"}]},
+            ]
+        )
+        == 0
+    )
 
 
 def test_a_malformed_part_reads_zero_rather_than_raising() -> None:
     assert image_tokens_of({"type": "image_url", "image_url": {"url": "nonsense"}}) == 0
-    assert image_tokens_of({
-        "type": "image_url", "image_url": {"url": "data:image/jpeg;base64,!!!"}
-    }) == 0
+    assert (
+        image_tokens_of({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,!!!"}})
+        == 0
+    )
     assert image_tokens_of({"type": "text", "text": "not an image"}) == 0
     assert image_tokens_of("not even a part") == 0

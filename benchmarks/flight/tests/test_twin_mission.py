@@ -31,20 +31,55 @@ def calcity(tmp_path, monkeypatch):
     church = Polygon([(x0, y0), (x0 + 40, y0), (x0 + 40, y0 + 40), (x0, y0 + 40)])
     shed = Polygon([(x0 - 430, y0), (x0 - 400, y0), (x0 - 400, y0 + 30), (x0 - 430, y0 + 30)])
     barn = Polygon([(x0, y0 + 700), (x0 + 30, y0 + 700), (x0 + 30, y0 + 730), (x0, y0 + 730)])
-    monkeypatch.setattr(bake_tiles, "load_features_local", lambda bundle, lf: [
-        {"layer": "test", "osm_id": 1, "tags": {"amenity": "place_of_worship", "name": "First Church",
-                                                "building": "church"}, "geom": church},
-        {"layer": "test", "osm_id": 2, "tags": {"name": "West Shed", "building": "shed"}, "geom": shed},
-        {"layer": "test", "osm_id": 3, "tags": {"name": "North Barn", "building": "barn"}, "geom": barn}])
+    monkeypatch.setattr(
+        bake_tiles,
+        "load_features_local",
+        lambda bundle, lf: [
+            {
+                "layer": "test",
+                "osm_id": 1,
+                "tags": {
+                    "amenity": "place_of_worship",
+                    "name": "First Church",
+                    "building": "church",
+                },
+                "geom": church,
+            },
+            {
+                "layer": "test",
+                "osm_id": 2,
+                "tags": {"name": "West Shed", "building": "shed"},
+                "geom": shed,
+            },
+            {
+                "layer": "test",
+                "osm_id": 3,
+                "tags": {"name": "North Barn", "building": "barn"},
+                "geom": barn,
+            },
+        ],
+    )
     root = tmp_path / "calcity"
     tiles, splits, rgbd = root / "tiles", root / "splits", root / "data" / "rgbd_upstream"
     bake_tiles.bake_block(tmp_path / "bundle", tiles, "calcity")
     splits.mkdir(parents=True)
-    (splits / "calcity.json").write_text(json.dumps([{
-        "area": "calcity", "descriptions": ["The church at the end of the road."], "ann_ids": [0],
-        "object_ids": [], "target_positions": [[*TARGET, 0.0]], "marker_positions": [],
-        "trajectory": [[*START, 125.0]], "source": "authored",
-        "target_mask": [list(p) for p in church.exterior.coords[:-1]]}]))
+    (splits / "calcity.json").write_text(
+        json.dumps(
+            [
+                {
+                    "area": "calcity",
+                    "descriptions": ["The church at the end of the road."],
+                    "ann_ids": [0],
+                    "object_ids": [],
+                    "target_positions": [[*TARGET, 0.0]],
+                    "marker_positions": [],
+                    "trajectory": [[*START, 125.0]],
+                    "source": "authored",
+                    "target_mask": [list(p) for p in church.exterior.coords[:-1]],
+                }
+            ]
+        )
+    )
     (root / "data" / "cityrefer").mkdir(parents=True)
     (root / "data" / "cityrefer" / "objects.json").write_text(json.dumps({"calcity": {}}))
     rgbd.mkdir(parents=True)
@@ -78,22 +113,36 @@ def serves(monkeypatch):
     # No test loads a tokenizer off the hub: prompt sizing and reasoning-token counts read this one.
     monkeypatch.setattr(hub, "HF_HUB_OFFLINE", True)
     monkeypatch.setattr(compactor, "load_tokenizer", lambda model, tokenizer_name="": _Tokenizer())
-    monkeypatch.setattr(flight_summary, "load_tokenizer", lambda model, tokenizer_name="": _Tokenizer())
-    spec = EndpointSpec(base_url="http://unused", model_id="inkling-small", max_model_len=262144, tokenizer_name="qwen",
-                        max_output_tokens=40000)
+    monkeypatch.setattr(
+        flight_summary, "load_tokenizer", lambda model, tokenizer_name="": _Tokenizer()
+    )
+    spec = EndpointSpec(
+        base_url="http://unused",
+        model_id="inkling-small",
+        max_model_len=262144,
+        tokenizer_name="qwen",
+        max_output_tokens=40000,
+    )
     monkeypatch.setattr(endpoint_spec, "_SPEC", None)
-    monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")   # no tokenizer to measure the prompt with
+    monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")  # no tokenizer to measure the prompt with
     monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: spec)
     sent: list[dict] = []
 
     def reply(url, headers, body, *, timeout, cancel_event):
         sent.append(json.loads(json.dumps(body)))
         if len(sent) == 1:
-            call = {"id": "c1", "type": "function",
-                    "function": {"name": "run", "arguments": json.dumps({"code": "go_to(prior_0)\n"})}}
+            call = {
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "run", "arguments": json.dumps({"code": "go_to(prior_0)\n"})},
+            }
             message = {"content": "", "reasoning_content": "fly there", "tool_calls": [call]}
         else:
-            message = {"content": "The church is under the last flight.", "reasoning_content": "", "tool_calls": []}
+            message = {
+                "content": "The church is under the last flight.",
+                "reasoning_content": "",
+                "tool_calls": [],
+            }
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
     monkeypatch.setattr(http, "stream_chat_completions", reply)
@@ -108,12 +157,24 @@ def serves(monkeypatch):
     return sent
 
 
-def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(calcity, serves, tmp_path):
+def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(
+    calcity, serves, tmp_path
+):
     from benchmarks.flight import twin
 
     out = tmp_path / "out"
-    code = twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--out", str(out)])
+    code = twin.main(
+        [
+            "--config",
+            "configs/calcity.yaml",
+            "--episode",
+            "calcity::0#0",
+            "--ortho",
+            str(calcity.rgbd),
+            "--out",
+            str(out),
+        ]
+    )
     assert code == 0
     sortie = next(out.iterdir())
     rows = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
@@ -121,7 +182,9 @@ def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(
     run = sortie / rows[0]["workdir"]
     assert run.name.startswith("maps_") and "_run01_calcity_" in run.name
     assert rows[0]["flights_flown"] == 1
-    conversation = [json.loads(line) for line in (run / "conversation.jsonl").read_text().splitlines()]
+    conversation = [
+        json.loads(line) for line in (run / "conversation.jsonl").read_text().splitlines()
+    ]
     legs = [r["said"] for r in conversation if r.get("kind") == "leg"]
     assert any("arrived" in s for s in legs), legs
     frames = [json.loads(line) for line in (run / "frames.jsonl").read_text().splitlines()]
@@ -129,7 +192,10 @@ def test_a_twin_mission_flies_its_leg_and_lands_the_records_a_flown_run_carries(
     assert frames[0]["mosaic"]["placed"] >= 1
     assert (run / "flight" / "llm" / "transcript.jsonl").is_file()
     first = serves[0]
-    assert first["messages"][-1] == {"role": "user", "content": "The church at the end of the road."}
+    assert first["messages"][-1] == {
+        "role": "user",
+        "content": "The church at the end of the road.",
+    }
 
 
 def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves, tmp_path):
@@ -138,13 +204,30 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
     from benchmarks.flight import measures, twin
 
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--out", str(out)]) == 0
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
     sortie = next(out.iterdir())
-    rows, _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
+    rows, _radius, _turns = measures.collect(
+        [sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench)
+    )
     (run,) = rows
     assert run["success"] is True and run["track_source"] == "GNSS track", run
-    assert run["track_coverage"] == 1.0 and run["oracle_success"] is True and run["agl_ft"] is not None
+    assert (
+        run["track_coverage"] == 1.0 and run["oracle_success"] is True and run["agl_ft"] is not None
+    )
     assert 0.0 < run["spl"] <= 1.0 and run["path_ft"] > 0.0
     # Leg 700 m north at the C-12's speed: the time to ID is the twin's flying time, not the host's.
     assert 0.0 < run["time_to_id_s"] < 120.0
@@ -152,11 +235,18 @@ def test_a_twin_sortie_scores_fully_on_the_closed_loop_measures(calcity, serves,
     # turn radius and the height fallback read them.
     (window,) = measures.routed_windows(sortie)
     assert window[0] < window[1]
-    conversation = [json.loads(line) for line in next(sortie.glob("*/conversation.jsonl")).read_text().splitlines()]
-    assert [r["altitudeAglMeters"] for r in conversation if r.get("kind") == "waypoint"] == [pytest.approx(world.AGL_M)]
+    conversation = [
+        json.loads(line)
+        for line in next(sortie.glob("*/conversation.jsonl")).read_text().splitlines()
+    ]
+    assert [r["altitudeAglMeters"] for r in conversation if r.get("kind") == "waypoint"] == [
+        pytest.approx(world.AGL_M)
+    ]
 
 
-def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity, serves, tmp_path, monkeypatch):
+def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(
+    calcity, serves, tmp_path, monkeypatch
+):
     """The flight wires the agent's watchlist channel exactly as the bench
     does: a declaration reaches the segmenter's concept list, not
     engine state alone."""
@@ -167,17 +257,31 @@ def test_the_flights_watchlist_reaches_the_segmenter_as_the_benchs_does(calcity,
 
     monkeypatch.setattr(episode_runner, "make_perception", lambda settings: SamDetectClient())
     endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
-    h = M.hydrate(bench=calcity.bench, episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=914.4)
+    h = M.hydrate(
+        bench=calcity.bench,
+        episode_id="calcity::0#0",
+        split="calcity",
+        config="configs/calcity.yaml",
+        agl_m=914.4,
+    )
     h.world.declare_mission_concepts(["car", "tree"])
     assert h.perception.concepts == ["car", "tree"]
 
 
-def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(calcity, serves, monkeypatch):
+def test_a_mission_hydrated_at_a_commanded_height_flies_at_that_height(
+    calcity, serves, monkeypatch
+):
     from benchmarks.flight import mission as M
     from maps.llm import endpoint_spec
 
     endpoint_spec.install_spec(endpoint_spec.discover_from_settings(None))
-    h = M.hydrate(bench=calcity.bench, episode_id="calcity::0#0", split="calcity", config="configs/calcity.yaml", agl_m=1828.8)
+    h = M.hydrate(
+        bench=calcity.bench,
+        episode_id="calcity::0#0",
+        split="calcity",
+        config="configs/calcity.yaml",
+        agl_m=1828.8,
+    )
     assert h.state.altitude_m - h.ground_z_m == pytest.approx(1828.8)
 
 
@@ -198,16 +302,34 @@ def _fly_failing(tmp_path, monkeypatch, fault):
 
     monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho",
-                      str(tmp_path / "calcity" / "data" / "rgbd_upstream"), "--out", str(out)]) == 1
-    (row,) = [json.loads(line) for line in (next(out.iterdir()) / "episodes.jsonl").read_text().splitlines()]
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(tmp_path / "calcity" / "data" / "rgbd_upstream"),
+                "--out",
+                str(out),
+            ]
+        )
+        == 1
+    )
+    (row,) = [
+        json.loads(line)
+        for line in (next(out.iterdir()) / "episodes.jsonl").read_text().splitlines()
+    ]
     return row
 
 
 def test_an_engine_fault_mid_flight_is_a_scored_miss(calcity, serves, tmp_path, monkeypatch):
     """The bench's infra rule: a fault that is not the serve's is the method's own, scored."""
     row = _fly_failing(tmp_path, monkeypatch, KeyError("boom"))
-    assert row["status"] == "ok" and row["error"] == "KeyError: 'boom'" and row["flights_flown"] == 1
+    assert (
+        row["status"] == "ok" and row["error"] == "KeyError: 'boom'" and row["flights_flown"] == 1
+    )
 
 
 def test_a_segmenter_outage_that_ends_the_mission_is_infra(calcity, serves, tmp_path, monkeypatch):
@@ -225,8 +347,18 @@ def test_a_config_the_loader_refuses_leaves_no_sortie(calcity, serves, tmp_path)
     arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nbogus: 1\n")
     out = tmp_path / "out"
     with pytest.raises(ValueError, match="unknown config key"):
-        twin.main(["--config", str(arm), "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                   "--out", str(out)])
+        twin.main(
+            [
+                "--config",
+                str(arm),
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--out",
+                str(out),
+            ]
+        )
     assert not out.exists()
 
 
@@ -244,17 +376,38 @@ def test_a_retasked_mission_is_measured_to_its_last_report(calcity, serves, tmp_
         if code is None:
             message = {"content": "Reported.", "reasoning_content": "", "tool_calls": []}
         else:
-            call = {"id": "c1", "type": "function", "function": {"name": "run", "arguments": json.dumps({"code": code})}}
+            call = {
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "run", "arguments": json.dumps({"code": code})},
+            }
             message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
     monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--then", "Check the west side too.", "--out", str(out)]) == 0
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--then",
+                "Check the west side too.",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
+    (run,), _radius, _turns = measures.collect(
+        [sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench)
+    )
     assert row["flights_flown"] == 2
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
@@ -270,16 +423,39 @@ def test_a_reasoner_unreachable_at_discovery_is_infra(calcity, serves, tmp_path,
         s.bind(("127.0.0.1", 0))
         closed = s.getsockname()[1]
     monkeypatch.setattr(endpoint_spec, "_PROBE_TRIES", 1)
-    monkeypatch.setattr(endpoint_spec, "discover_from_settings",
-                        lambda settings: endpoint_spec._get_json(f"http://127.0.0.1:{closed}/v1/models"))
+    monkeypatch.setattr(
+        endpoint_spec,
+        "discover_from_settings",
+        lambda settings: endpoint_spec._get_json(f"http://127.0.0.1:{closed}/v1/models"),
+    )
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--out", str(out)]) == 1
-    (row,) = [json.loads(line) for line in (next(out.iterdir()) / "episodes.jsonl").read_text().splitlines()]
-    assert row["status"] == "infra" and row["error"].startswith("EndpointUnreachable: endpoint unreachable")
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--out",
+                str(out),
+            ]
+        )
+        == 1
+    )
+    (row,) = [
+        json.loads(line)
+        for line in (next(out.iterdir()) / "episodes.jsonl").read_text().splitlines()
+    ]
+    assert row["status"] == "infra" and row["error"].startswith(
+        "EndpointUnreachable: endpoint unreachable"
+    )
 
 
-def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, serves, tmp_path, monkeypatch):
+def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(
+    calcity, serves, tmp_path, monkeypatch
+):
     """The segmenter fails out on the retask after it flew a second leg: the
     report stands (its end, time, flights and commit), the error is recorded, and the
     run is scored, never infra."""
@@ -296,26 +472,56 @@ def test_a_serve_fault_after_a_report_scores_the_run_at_that_report(calcity, ser
         if code is None:
             message = {"content": "Reported.", "reasoning_content": "", "tool_calls": []}
         else:
-            call = {"id": "c1", "type": "function", "function": {"name": "run", "arguments": json.dumps({"code": code})}}
+            call = {
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "run", "arguments": json.dumps({"code": code})},
+            }
             message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
     monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--then", "Check the west side too.", "--out", str(out)]) == 1
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--then",
+                "Check the west side too.",
+                "--out",
+                str(out),
+            ]
+        )
+        == 1
+    )
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
-    assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] == "SamServerOutage: no tile answered"
+    assert (
+        row["status"] == "ok"
+        and row["ended_by"] == "reply"
+        and row["error"] == "SamServerOutage: no tile answered"
+    )
     assert row["flights_flown"] == 1 and len(row["visited_xy"]) == 2
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
-    assert run["commit_xy"] == pytest.approx(row["visited_xy"][-1], abs=0.01) and run["end"] == "reply" and run["success"] is True
+    (run,), _radius, _turns = measures.collect(
+        [sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench)
+    )
+    assert (
+        run["commit_xy"] == pytest.approx(row["visited_xy"][-1], abs=0.01)
+        and run["end"] == "reply"
+        and run["success"] is True
+    )
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
 
 @pytest.mark.parametrize("end", ["stopped", "turn_cap"])
 def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_report(
-        calcity, serves, tmp_path, monkeypatch, end):
+    calcity, serves, tmp_path, monkeypatch, end
+):
     """The retask flies a second leg and ends with no new report, by the
     crew's Stop or at the turn cap: the report stands (its end, commit,
     time and flights)."""
@@ -344,25 +550,48 @@ def test_a_follow_up_that_ends_without_a_new_report_scores_the_run_at_that_repor
         if code is None:
             message = {"content": "Reported.", "reasoning_content": "", "tool_calls": []}
         else:
-            call = {"id": "c1", "type": "function", "function": {"name": "run", "arguments": json.dumps({"code": code})}}
+            call = {
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "run", "arguments": json.dumps({"code": code})},
+            }
             message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
     monkeypatch.setattr(http, "stream_chat_completions", reply)
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--then", "Check the west side too.", "--out", str(out)]) == 0
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--then",
+                "Check the west side too.",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     run_dir = sortie / row["workdir"]
-    conversation = [json.loads(line) for line in (run_dir / "conversation.jsonl").read_text().splitlines()]
+    conversation = [
+        json.loads(line) for line in (run_dir / "conversation.jsonl").read_text().splitlines()
+    ]
     ends = [r["ended_by"] for r in conversation if r.get("kind") == "mission_end"]
     assert ends == ["reply"] + (["turn_cap"] if end == "turn_cap" else [])
     assert row["status"] == "ok" and row["ended_by"] == "reply" and row["error"] is None
     assert row["flights_flown"] == 1 and len(row["visited_xy"]) == 2
     second_leg = [r for r in conversation if r.get("kind") == "leg"][-1]
     assert row["elapsed_s"] < second_leg["t_s"]
-    (run,), _radius, _turns = measures.collect([sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench))
+    (run,), _radius, _turns = measures.collect(
+        [sortie], measures.Truth([calcity.root / "splits" / "calcity.json"], calcity.bench)
+    )
     assert run["end"] == "reply" and run["success"] is True
     assert run["time_to_id_s"] == round(row["elapsed_s"], 1)
 
@@ -372,8 +601,20 @@ def test_an_authored_start_without_the_operators_words_is_refused(calcity, serve
 
     out = tmp_path / "out"
     with pytest.raises(SystemExit) as refused:
-        twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::authored", "--start-xy", "1000,300",
-                   "--ortho", str(calcity.rgbd), "--out", str(out)])
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::authored",
+                "--start-xy",
+                "1000,300",
+                "--ortho",
+                str(calcity.rgbd),
+                "--out",
+                str(out),
+            ]
+        )
     assert refused.value.code == 2 and not out.exists() and not serves
 
 
@@ -384,8 +625,21 @@ def test_the_mission_stamps_the_effort_its_requests_carry(calcity, serves, tmp_p
 
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", " 0.9 ")
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--out", str(out)]) == 0
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     manifest = json.loads((sortie / row["workdir"] / "run_manifest.json").read_text())
@@ -401,21 +655,49 @@ def test_a_blank_mission_effort_flies_the_arm_s(calcity, serves, tmp_path, monke
 
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")
     out = tmp_path / "out"
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--reasoning-effort", " ", "--out", str(out)]) == 0
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--reasoning-effort",
+                " ",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
     sortie = next(out.iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     manifest = json.loads((sortie / row["workdir"] / "run_manifest.json").read_text())
     assert serves[0].get("reasoning_effort") == manifest["mission"]["reasoning_effort"] == "0.9"
 
 
-def test_a_mission_s_own_effort_the_served_card_refuses_never_reaches_the_reasoner(calcity, serves, tmp_path,
-                                                                                  monkeypatch):
+def test_a_mission_s_own_effort_the_served_card_refuses_never_reaches_the_reasoner(
+    calcity, serves, tmp_path, monkeypatch
+):
     from benchmarks.flight import twin
 
     monkeypatch.delenv("SEARCH_SAMPLING_REASONING_EFFORT", raising=False)
-    twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-               "--reasoning-effort", "0.90", "--out", str(tmp_path / "out")])
+    twin.main(
+        [
+            "--config",
+            "configs/calcity.yaml",
+            "--episode",
+            "calcity::0#0",
+            "--ortho",
+            str(calcity.rgbd),
+            "--reasoning-effort",
+            "0.90",
+            "--out",
+            str(tmp_path / "out"),
+        ]
+    )
     assert not serves
 
 
@@ -433,18 +715,38 @@ def test_a_pass_flies_first_the_stop_the_recording_holds(calcity, serves, tmp_pa
         n = sum(1 for m in body["messages"] if m["role"] == "assistant")
         asked.append(n)
         if n < len(script):
-            call = {"id": f"c{n}", "type": "function",
-                    "function": {"name": "run", "arguments": json.dumps({"code": script[n]})}}
+            call = {
+                "id": f"c{n}",
+                "type": "function",
+                "function": {"name": "run", "arguments": json.dumps({"code": script[n]})},
+            }
             message = {"content": "", "reasoning_content": "fly", "tool_calls": [call]}
         else:
-            message = {"content": "The church is under the pass.", "reasoning_content": "", "tool_calls": []}
+            message = {
+                "content": "The church is under the pass.",
+                "reasoning_content": "",
+                "tool_calls": [],
+            }
         return {"choices": [{"finish_reason": "stop", "message": message}]}
 
     monkeypatch.setattr(http, "stream_chat_completions", reply)
     shed, church = [565.0, 995.0], [999.0, 1019.0]
 
-    assert twin.main(["--config", "configs/calcity.yaml", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd),
-                      "--out", str(tmp_path / "flown")]) == 0
+    assert (
+        twin.main(
+            [
+                "--config",
+                "configs/calcity.yaml",
+                "--episode",
+                "calcity::0#0",
+                "--ortho",
+                str(calcity.rgbd),
+                "--out",
+                str(tmp_path / "flown"),
+            ]
+        )
+        == 0
+    )
     sortie = next((tmp_path / "flown").iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     assert row["visited_xy"][-2:] == [shed, church]

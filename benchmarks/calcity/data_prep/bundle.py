@@ -92,5 +92,3 @@ def load_features_local(bundle: Path, lf: LocalFrame) -> list[dict[str, Any]]:
 def grid_shape(lf: LocalFrame, m_per_px: float) -> tuple[int, int]:
     """``(H, W)`` of the block raster at ``m_per_px``."""
     return int(round(lf.height_m / m_per_px)), int(round(lf.width_m / m_per_px))
-
-

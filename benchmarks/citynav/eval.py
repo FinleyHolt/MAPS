@@ -110,7 +110,11 @@ def score_arrival(
 
     ne = _d(final_pos_xy)
     # Under two poses nothing was flown: the path is the final pose, held.
-    pos_traj = list(pos_trajectory) if pos_trajectory and len(pos_trajectory) >= 2 else [final_pos_xy, final_pos_xy]
+    pos_traj = (
+        list(pos_trajectory)
+        if pos_trajectory and len(pos_trajectory) >= 2
+        else [final_pos_xy, final_pos_xy]
+    )
     sr = 1 if ne <= success_dist_m else 0
     scores = {
         "spl_pos": spl_pos_from_path(target_xy, pos_traj, sr),

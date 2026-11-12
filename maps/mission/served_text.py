@@ -13,10 +13,10 @@ CODE_DOC = (
     " served in full -- earlier assignments come back as a one-line"
     " summary, so show a set you want to read.\n"
     "\nA block is any number of lines, run in order. This is one block:\n"
-    "  look_for(\"pool\", \"house\")\n"
-    "  explore(\"Mill Lane\")\n"
-    "  pools = find(\"pool\")\n"
-    "  r1 = find(\"house\", nearest=pools, color=\"white\")\n"
+    '  look_for("pool", "house")\n'
+    '  explore("Mill Lane")\n'
+    '  pools = find("pool")\n'
+    '  r1 = find("house", nearest=pools, color="white")\n'
     "  look(r1[0:20])\n"
     "  go_to(r1[0])\n"
     "\nEach line runs the moment it is reached -- the find after the"
@@ -25,17 +25,17 @@ CODE_DOC = (
     "  find reads ONE set of rows: the PRIOR map, plus whatever flights"
     " have detected. Nothing is detected until look_for names a class, so"
     " before that the set is the prior map alone.\n"
-    "  r1 = find(\"house\")                 rows of that name or kind\n"
-    "  r1 = find(\"Icaarus Court\")         a NAMED place: the name IS the"
+    '  r1 = find("house")                 rows of that name or kind\n'
+    '  r1 = find("Icaarus Court")         a NAMED place: the name IS the'
     " query, on its own. There is no name= or query= to put it in.\n"
-    "  r1 = find(\"house\", nearest=<place>)   ORDERS by distance to it and DROPS NOTHING -- every row of the class is still there, best first. To keep only the close ones say near= with dwithin=.\n"
-    "  r1 = find(\"house\", nearest=[<place>, <place>])   ORDERS by BOTH"
+    '  r1 = find("house", nearest=<place>)   ORDERS by distance to it and DROPS NOTHING -- every row of the class is still there, best first. To keep only the close ones say near= with dwithin=.\n'
+    '  r1 = find("house", nearest=[<place>, <place>])   ORDERS by BOTH'
     " distances together -- how you say a spot between two things, or a"
     " corner. When the description names two places, naming both here"
     " ranks far better than picking one and flying to where they meet.\n"
-    "  r1 = find(\"house\", within=<place>)  KEEPS only what TOUCHES it --"
-    " distance 0, \"on\" or \"at\", never \"nearby\"\n"
-    "  r1 = find(\"house\", color=\"white\")   ORDERS by how well each row's"
+    '  r1 = find("house", within=<place>)  KEEPS only what TOUCHES it --'
+    ' distance 0, "on" or "at", never "nearby"\n'
+    '  r1 = find("house", color="white")   ORDERS by how well each row\'s'
     " OWN seen colour matches that word, best first, and drops none. It is"
     " the one criterion here that is not geometry, so it is the only way to"
     " rank on what a thing LOOKS like without flying to each one. Only a"
@@ -43,23 +43,23 @@ CODE_DOC = (
     " is UNKNOWN, and unknown ranks between the two -- above a row seen to"
     " be the wrong colour, below one seen to be right. Name it in the same"
     " find as the places and they rank together:"
-    " find(\"house\", nearest=<place>, color=\"red\").\n"
-    "  r1 = find(\"house\", east_of=<place>, west_of=<place>)   KEEPS what is"
+    ' find("house", nearest=<place>, color="red").\n'
+    '  r1 = find("house", east_of=<place>, west_of=<place>)   KEEPS what is'
     " on that side of each place, NEAREST first. north_of= and south_of="
     " too, one keyword per place, as many as the description names. A row"
     " the map places on the other side is dropped; a row it cannot place"
     " either way is KEPT and its column reads blank, so a blank means"
-    " unknown and never \"no\". If nothing surveyed is on that side it says"
+    ' unknown and never "no". If nothing surveyed is on that side it says'
     " so -- the map holds no answer there and only looking will.\n"
-    "  r2 = intersection(\"A Road\", \"B St\")  where two roads cross;"
+    '  r2 = intersection("A Road", "B St")  where two roads cross;'
     " SEVERAL is normal, so index the one you mean\n"
     "  A CORNER is two of those cuts against the SAME place:"
-    " corner = intersection(\"86th Street\", \"Jacaranda Avenue\") then"
-    " find(\"house\", north_of=corner, east_of=corner) is the house on the"
+    ' corner = intersection("86th Street", "Jacaranda Avenue") then'
+    ' find("house", north_of=corner, east_of=corner) is the house on the'
     " NORTHEAST corner of them. Any diagonal is its two halves that way,"
     " off a crossing, a road's end, or any place at all.\n"
     "  r3 = ends_of(<a road row>)         where a road ENDS -- one row per"
-    " terminus, so a cul-de-sac or \"the end of\" a street is a thing you"
+    ' terminus, so a cul-de-sac or "the end of" a street is a thing you'
     " can go to. Reads a road; a footprint has no ends.\n"
     "  A CUT and a SORT are methods on the rows themselves, and they"
     " CHAIN.\n"
@@ -70,10 +70,10 @@ CODE_DOC = (
     " parked outside a house touches nothing, so containment cannot say"
     " it.\n"
     "  r3 = r1.order(nearest=<place>)      put them in ONE order, nearest"
-    " first; r1.order(color=\"red\") orders by colour instead. ONE key: a"
+    ' first; r1.order(color="red") orders by colour instead. ONE key: a'
     " table sorts by one column, and asking for two ranks whatever is"
     " middling at both above the thing that is right.\n"
-    "  r1.order(direction=\"north\")   the northernmost FIRST. A direction"
+    '  r1.order(direction="north")   the northernmost FIRST. A direction'
     " ORDERS globally -- it is a fact about the map, not about any place,"
     " so it takes no anchor. Relating to a place is the other question and"
     " it is a CUT: east_of= keeps what lies that way of it, facing= keeps"
@@ -84,24 +84,24 @@ CODE_DOC = (
     " never a thing that happens to be true.\n"
     "  A SET in near=, within= or nearest= is its UNION, and the distance"
     " is the gap to its NEAREST member -- so a whole CLASS is one place to"
-    " measure from. r1.filter(near=find(\"house\"), dwithin=25) keeps"
+    ' measure from. r1.filter(near=find("house"), dwithin=25) keeps'
     " every car outside SOME house without your having to pick the house"
     " first, and picking one house instead answers a different question:"
     " the nearest car to THAT house is not the car the cue described.\n"
     "  r4 = r1.filter(west_of=<place>)   keep what lies that way of it; north_of= south_of= east_of= too, and they CHAIN. A row the map cannot place either way is KEPT with a blank column -- unmeasured is never refuted.\n"
-    "  Relating rows to a place also stamps WHICH WAY EACH ONE FACES it: \"facing <place>\" reads a compass word -- north, southeast -- for the direction from that row to that place. A thing faces what it fronts, so a house whose front is on the road reads facing <road>. It rides every near= and nearest= you already write; read it like any column, r[\"facing Poppy Boulevard\"].\n"
-    "  r5 = r1.filter(facing=<place>, direction=\"south\")   keep the"
+    '  Relating rows to a place also stamps WHICH WAY EACH ONE FACES it: "facing <place>" reads a compass word -- north, southeast -- for the direction from that row to that place. A thing faces what it fronts, so a house whose front is on the road reads facing <road>. It rides every near= and nearest= you already write; read it like any column, r["facing Poppy Boulevard"].\n'
+    '  r5 = r1.filter(facing=<place>, direction="south")   keep the'
     " south-facing ones -- the cut on that same column. direction= takes"
     " north south east west, and a DIRECTION COMPOSES: a thing facing"
-    " southwest faces south AND west, so direction=\"south\" keeps it. For"
+    ' southwest faces south AND west, so direction="south" keeps it. For'
     " the diagonal itself chain the two -- .filter(facing=<place>,"
-    " direction=\"south\").filter(facing=<place>, direction=\"west\")."
+    ' direction="south").filter(facing=<place>, direction="west").'
     " A row TOUCHING the place has no facing word and is KEPT --"
     " unmeasured is never refuted.\n"
     "  find takes the cut too: find(<thing>, near=<place>, dwithin=25)"
     " KEEPS what is that close and DROPS the rest. near= always CUTS and always needs its gap; nearest= always ORDERS and never drops -- the same split .filter() and .order() use.\n"
     "  distance(a, b) is metres between two FOOTPRINTS -- the same"
-    " quantity the \"distance to <ref>\" column carries -- and"
+    ' quantity the "distance to <ref>" column carries -- and'
     " a.distance(b) is that measurement as a method. A set counts"
     " as ONE place, so it is the gap to its nearest member.\n"
     "  Either takes a plain function instead, over rows you already hold:"
@@ -115,12 +115,12 @@ CODE_DOC = (
     " anything a set can.\n"
     "  more_of(r1)                         the next block of a long result\n"
     "\nSENSING -- free, moves nothing\n"
-    "  look_for(\"pool\", \"house\")   what the segmenter looks for on"
+    '  look_for("pool", "house")   what the segmenter looks for on'
     " EVERY later flight. NOTHING is detected until you say this. Up to"
     " four classes, each naming a THING, never a colour.\n"
     "  ARM EVERY CLASS THE CUE NAMES, in one call, before you fly --"
     " the thing you are looking for AND everything it is described"
-    " relative to. \"a red car outside a house\" is TWO classes: the car"
+    ' relative to. "a red car outside a house" is TWO classes: the car'
     " is what you want and the house is what makes it the right one, and"
     " a house nothing segmented is a row that does not exist to measure"
     " against. The classes cost nothing to add: the sensor runs once per"
@@ -128,9 +128,9 @@ CODE_DOC = (
     " all on the other side -- a class you left out is missing from every"
     " flight of the mission, and a relation you cannot measure is one you"
     " will end up guessing.\n"
-    "  look_for(\"pool\", at=<place>)   the same, plus extra"
+    '  look_for("pool", at=<place>)   the same, plus extra'
     " segmentation there.\n"
-    "  stand(at=<place>, facing=\"north\")   a ground viewpoint; facing"
+    '  stand(at=<place>, facing="north")   a ground viewpoint; facing'
     " takes a compass word or a place. Its sides ride every find row;"
     " crops and maps face its way.\n"
     "  look(r1[0])       a CLOSE look at one row -- the sensor's own"
@@ -151,18 +151,18 @@ CODE_DOC = (
     "  A thing the map does not carry -- a pool, solar panels, a shed, a"
     " parked car -- is not a row until look_for names it and a flight goes"
     " over it. Then it IS one, and it sorts and cuts like any other:\n"
-    "    look_for(\"pool\")\n"
-    "    houses = find(\"house\", nearest=\"Glade Avenue\")\n"
+    '    look_for("pool")\n'
+    '    houses = find("house", nearest="Glade Avenue")\n'
     "    explore(houses[0])\n"
-    "    pools = find(\"pool\")\n"
-    "    answer = find(\"house\", nearest=pools)   the house nearest a pool"
+    '    pools = find("pool")\n'
+    '    answer = find("house", nearest=pools)   the house nearest a pool'
     " ranks first\n"
     "  A SET in nearest= / near= / within= is ONE place: the gap to its"
     " NEAREST member, one column, not one column per row. So nearest=pools"
     " ranks every house by its own closest pool, and"
     " houses.filter(within=pools) keeps only the houses that hold one.\n"
-    "  The same goes for a cue WORD no column carries -- \"small\","
-    " \"organized\", a shape: it is only in the pixels. look_for the"
+    '  The same goes for a cue WORD no column carries -- "small",'
+    ' "organized", a shape: it is only in the pixels. look_for the'
     " classes the cue names AND what stands on the thing -- a lot is"
     " found by its cars, a helipad by its H, and what stands on a thing"
     " is often the stronger detection -- explore the named place so the"
@@ -177,7 +177,7 @@ CODE_DOC = (
     " row it added, in pass order. Ends on its last stop.\n"
     "  explore(r6)       a SET is one place to cover: ONE pass over the"
     " union of its rows, chained end to end."
-    " explore(\"Willow Avenue\") covers EVERY segment of that name -- the"
+    ' explore("Willow Avenue") covers EVERY segment of that name -- the'
     " name is the whole street, not its first fragment.\n"
     "  BOTH TAKE A THING ON THE MAP, never a coordinate. To reach a PART"
     " of something -- the west side of a store, the bulb at the end of a"
@@ -187,9 +187,9 @@ CODE_DOC = (
     "\nTYPES\n"
     "  a handle holds a SET; r1[0] is a ROW; a quoted name is a PLACE;"
     " [x, y] is a POINT -- points RELATE and LOOK, they do not move you.\n"
-    "  a ROW is its served columns, readable as data: r.xy, r[\"class\"],"
-    " r.get(\"color\"), r.keys(); a spaced column goes through"
-    " r[\"distance to ...\"]; print(r) shows them. Two sets add into a"
+    '  a ROW is its served columns, readable as data: r.xy, r["class"],'
+    ' r.get("color"), r.keys(); a spaced column goes through'
+    ' r["distance to ..."]; print(r) shows them. Two sets add into a'
     " plain list of rows to loop over.\n"
     "  go_to takes ONE THING; explore takes ONE THING or ONE SET -- a set"
     " is one place to cover. Every RELATING slot -- near= nearest= within="
@@ -198,7 +198,7 @@ CODE_DOC = (
     "  show_map(around=) and stand(at=, facing=) take ONE thing: a"
     " viewpoint stands somewhere and looks at something. Index a set"
     " first.\n"
-    "  A fid or a point binds: h = \"prior_3123\" is a thing you can move"
+    '  A fid or a point binds: h = "prior_3123" is a thing you can move'
     " to; corner = [3411, 1468] is a place to look and relate near, and"
     " binding it does not make it movable.\n"
     "\nORDINARY PYTHON RUNS HERE\n"
@@ -206,7 +206,8 @@ CODE_DOC = (
     " sorted(), print(). No underscore names. go_to and"
     " explore cannot go inside a loop, because a loop would move to every"
     " row of the set -- loop to LOOK, then move once to the place you"
-    " chose, or explore(the set) to cover it all in one pass.\n")
+    " chose, or explore(the set) to cover it all in one pass.\n"
+)
 
 # The system prompt, in the surface's own notation (another notation would
 # teach forms the parser refuses).
@@ -280,11 +281,21 @@ before it ran and stands. Names persist for the whole mission.
 
 
 #: The one tool a run serves, ``run``: a block of Python in ``code``.
-SERVED_TOOLS = [{"type": "function", "function": {
-    "name": "run", "description": CODE_DOC,
-    "parameters": {"type": "object", "additionalProperties": False,
-                   "required": ["code"],
-                   "properties": {"code": {"type": "string"}}}}}]
+SERVED_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "run",
+            "description": CODE_DOC,
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["code"],
+                "properties": {"code": {"type": "string"}},
+            },
+        },
+    }
+]
 
 
 def served_system_prompt(sensor_description: str = "") -> str:
@@ -293,10 +304,13 @@ def served_system_prompt(sensor_description: str = "") -> str:
     segmenter sees."""
     if not sensor_description.strip():
         return CODE_SYSTEM_PROMPT
-    return (CODE_SYSTEM_PROMPT + "\n\nSensor rig (active for this run):\n"
-            + sensor_description.strip()
-            + "\n\nA concept this rig cannot see produces an empty SAM response."
-              " SAM covers un-cataloged / movable objects; static map features"
-              " are already in the graph as prior footprints with geometry and"
-              " raw OSM tags."
-              " SAM segments roads as merged blobs and over-splits buildings.")
+    return (
+        CODE_SYSTEM_PROMPT
+        + "\n\nSensor rig (active for this run):\n"
+        + sensor_description.strip()
+        + "\n\nA concept this rig cannot see produces an empty SAM response."
+        " SAM covers un-cataloged / movable objects; static map features"
+        " are already in the graph as prior footprints with geometry and"
+        " raw OSM tags."
+        " SAM segments roads as merged blobs and over-splits buildings."
+    )

@@ -17,15 +17,13 @@ def test_named_feature_note_fires_on_a_world_state_name():
 
 
 def test_named_feature_note_is_silent_on_visual_classes():
-    assert _named_feature_note(["house", "pool"],
-                               {"airway boulevard", "lime avenue"}) is None
+    assert _named_feature_note(["house", "pool"], {"airway boulevard", "lime avenue"}) is None
     assert _named_feature_note([], {"airway boulevard"}) is None
     assert _named_feature_note(["house"], set()) is None
 
 
 def test_named_feature_note_is_case_blind():
-    assert _named_feature_note(["Airway Boulevard"],
-                               {"airway boulevard"}) is not None
+    assert _named_feature_note(["Airway Boulevard"], {"airway boulevard"}) is not None
 
 
 # --------------------------------------------------------------------------- #
@@ -37,14 +35,12 @@ def test_setter_failure_reaches_the_receipt():
     def _boom(_cs):
         raise RuntimeError("sam server gone")
 
-    rcpt = episode_world(sam_setter=_boom).declare_mission_concepts(
-        ["house"])
+    rcpt = episode_world(sam_setter=_boom).declare_mission_concepts(["house"])
     assert "sam server gone" in rcpt
 
 
 def test_clean_setter_keeps_a_clean_receipt():
-    assert episode_world(sam_setter=lambda cs: None).declare_mission_concepts(
-        ["house"]) is None
+    assert episode_world(sam_setter=lambda cs: None).declare_mission_concepts(["house"]) is None
 
 
 def test_the_placed_form_also_arms_the_standing_watchlist():
@@ -54,8 +50,9 @@ def test_the_placed_form_also_arms_the_standing_watchlist():
         boosts.append((concepts, where))
         return {"queued": True}
 
-    _, fr, _, declared = drive([[run('look_for("pool", at="the depot")\n')], "done"],
-                               boost_queue=_boost)
+    _, fr, _, declared = drive(
+        [[run('look_for("pool", at="the depot")\n')], "done"], boost_queue=_boost
+    )
     assert [c for c, _w in boosts] == [["pool"]]
     assert "pool" in declared[-1], declared
     ack = json.dumps(tool_results(fr)[0])
@@ -65,7 +62,8 @@ def test_the_placed_form_also_arms_the_standing_watchlist():
 def test_a_retro_boost_at_a_flown_stop_also_arms_the_standing_watchlist():
     _, fr, _, declared = drive(
         [[run('look_for("pool", at="stop_000")\n')], "done"],
-        boost_queue=lambda concepts, where: {"retro": [{"n_dets": 0}]})
+        boost_queue=lambda concepts, where: {"retro": [{"n_dets": 0}]},
+    )
     assert "pool" in declared[-1], declared
     ack = json.dumps(tool_results(fr)[0])
     assert "pool (target)" in ack and "boost queued" not in ack, ack
@@ -74,7 +72,8 @@ def test_a_retro_boost_at_a_flown_stop_also_arms_the_standing_watchlist():
 def test_the_declared_union_is_canonical_and_keeps_first_seen_order():
     pushed = []
     episode_world(sam_setter=pushed.append).declare_mission_concepts(
-        ["Red  Car", "tree", "None", "red car", None])
+        ["Red  Car", "tree", "None", "red car", None]
+    )
     assert pushed[0] == ["red car", "tree"]
 
 
@@ -93,7 +92,8 @@ def test_a_boost_at_an_unflown_stop_names_it_and_queues_nothing():
 
     assert SegmenterTasking().boost_queue(["car"], ["stop_009"]) == {
         "error": "no boost target resolved; nothing was queued or re-segmented",
-        "unknown_where": ["stop_009"]}
+        "unknown_where": ["stop_009"],
+    }
 
 
 def test_a_queued_boost_rides_every_flight_until_its_target_flies():
@@ -122,16 +122,25 @@ def test_the_segmenter_keeps_the_declared_order_across_a_flight():
     loop.boost_queue(["pool"], ["prior_1"])
     loop.start_flight()
     loop.record_flown_stop({"pose_xy": (0.0, 0.0), "stop_id": "s", "target_fids": ["prior_9"]})
-    assert pushed == [["car", "house"], ["house", "car"], ["house", "car", "pool"], ["house", "car"]]
+    assert pushed == [
+        ["car", "house"],
+        ["house", "car"],
+        ["house", "car", "pool"],
+        ["house", "car"],
+    ]
 
 
 def test_an_empty_watchlist_is_told_once_per_run_not_per_flight():
     def _fly(item):
-        return {"stop_id": "stop_000", "target": item["target_fid"],
-                "pose_xy": [1.0, 2.0], "new_detections": 0, "cue": "the cue"}
+        return {
+            "stop_id": "stop_000",
+            "target": item["target_fid"],
+            "pose_xy": [1.0, 2.0],
+            "new_detections": 0,
+            "cue": "the cue",
+        }
 
-    _, fr, flights, _ = drive(
-        [[run('go_to("prior_7")\ngo_to("prior_1")\n')], "done"], fly=_fly)
+    _, fr, flights, _ = drive([[run('go_to("prior_7")\ngo_to("prior_1")\n')], "done"], fly=_fly)
     assert len(flights) == 2, flights
     served = json.dumps(tool_results(fr)[0])
     assert served.count('look_for(\\"<class>\\")') == 1, served

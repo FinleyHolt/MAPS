@@ -38,13 +38,13 @@ class FakeReasoner:
         self.messages.append({"role": "user", "content": content})
 
     def append_repair(self, message):
-        self.messages.append(
-            {"role": "user", "content": f"[Repair] {message}"})
+        self.messages.append({"role": "user", "content": f"[Repair] {message}"})
 
     def append_tool_result(self, cid, name, result):
         content = result if isinstance(result, str) else json.dumps(result)
-        self.messages.append({"role": "tool", "tool_call_id": cid,
-                              "name": name, "content": content})
+        self.messages.append(
+            {"role": "tool", "tool_call_id": cid, "name": name, "content": content}
+        )
 
     def append_vision_user(self, text, jpegs):
         self.vision.append((text, list(jpegs)))
@@ -57,30 +57,45 @@ class FakeReasoner:
             self.exhausted += 1
             assert self.exhausted <= 2, "loop did not return after two replies"
             self.messages.append({"role": "assistant", "content": ""})
-            return {"kind": "text", "content": "", "reasoning": "",
-                    "finish_reason": "stop"}
+            return {"kind": "text", "content": "", "reasoning": "", "finish_reason": "stop"}
         t = self.turns.pop(0)
         if isinstance(t, dict):  # a text turn with its own finish_reason
             self.messages.append({"role": "assistant", "content": t["content"]})
-            return {"kind": "text", "content": t["content"], "reasoning": "",
-                    "finish_reason": t["finish_reason"]}
+            return {
+                "kind": "text",
+                "content": t["content"],
+                "reasoning": "",
+                "finish_reason": t["finish_reason"],
+            }
         if isinstance(t, str):
             self.messages.append({"role": "assistant", "content": t})
-            return {"kind": "text", "content": t, "reasoning": "",
-                    "finish_reason": "stop"}
-        calls = [{"id": f"c{len(self.messages)}_{i}", "type": "function",
-                  "function": {"name": n, "arguments": json.dumps(a)}}
-                 for i, (n, a) in enumerate(t)]
-        self.messages.append({"role": "assistant", "content": "",
-                              "tool_calls": calls})
-        return {"kind": "tool_call", "tool_calls": calls, "content": "",
-                "reasoning": "", "finish_reason": "tool_calls"}
+            return {"kind": "text", "content": t, "reasoning": "", "finish_reason": "stop"}
+        calls = [
+            {
+                "id": f"c{len(self.messages)}_{i}",
+                "type": "function",
+                "function": {"name": n, "arguments": json.dumps(a)},
+            }
+            for i, (n, a) in enumerate(t)
+        ]
+        self.messages.append({"role": "assistant", "content": "", "tool_calls": calls})
+        return {
+            "kind": "tool_call",
+            "tool_calls": calls,
+            "content": "",
+            "reasoning": "",
+            "finish_reason": "tool_calls",
+        }
 
 
 def bare_ctx(graph=None, grid_shape=(10, 10), pose_xy=None):
-    return SimpleNamespace(graph=SimpleNamespace(nodes={}) if graph is None else graph, cell_size_m=1.0,
-                           tile_origin_xy=(0.0, 0.0), grid_shape=grid_shape,
-                           pose_xy=pose_xy)
+    return SimpleNamespace(
+        graph=SimpleNamespace(nodes={}) if graph is None else graph,
+        cell_size_m=1.0,
+        tile_origin_xy=(0.0, 0.0),
+        grid_shape=grid_shape,
+        pose_xy=pose_xy,
+    )
 
 
 def episode_world(nodes=None, *, cell_size_m=2.0, sam_setter=None):
@@ -89,9 +104,13 @@ def episode_world(nodes=None, *, cell_size_m=2.0, sam_setter=None):
     from maps.mission.episode_world import EpisodeWorld
     from maps.world_state.graph import GridDomain
 
-    loop = EpisodeWorld(GridDomain(height=10, width=10, cell_size_m=cell_size_m),
-                      tile_origin_xy=(0.0, 0.0), map_name="test", sam_setter=sam_setter,
-                      rgbd_dir="")
+    loop = EpisodeWorld(
+        GridDomain(height=10, width=10, cell_size_m=cell_size_m),
+        tile_origin_xy=(0.0, 0.0),
+        map_name="test",
+        sam_setter=sam_setter,
+        rgbd_dir="",
+    )
     loop.start(SimpleNamespace(nodes=dict(nodes or {})))
     return loop
 
@@ -113,16 +132,11 @@ def tool_results(fr: FakeReasoner) -> list[dict]:
 
 
 CANDS = [
-    {"fid": "prior_7", "xy": [3.0, 4.0], "class": "depot",
-     "search_text": "depot"},
-    {"fid": "prior_1", "xy": [10.0, 20.0], "class": "gate",
-     "search_text": "gate"},
-    {"fid": "prior_2", "xy": [10.0, 40.0], "class": "tower",
-     "search_text": "tower"},
-    {"fid": "car_1", "xy": [20.0, 20.0], "class": "car",
-     "search_text": "car"},
-    {"fid": "car_2", "xy": [0.0, 30.0], "class": "car",
-     "search_text": "car"},
+    {"fid": "prior_7", "xy": [3.0, 4.0], "class": "depot", "search_text": "depot"},
+    {"fid": "prior_1", "xy": [10.0, 20.0], "class": "gate", "search_text": "gate"},
+    {"fid": "prior_2", "xy": [10.0, 40.0], "class": "tower", "search_text": "tower"},
+    {"fid": "car_1", "xy": [20.0, 20.0], "class": "car", "search_text": "car"},
+    {"fid": "car_2", "xy": [0.0, 30.0], "class": "car", "search_text": "car"},
 ]
 
 
@@ -131,9 +145,19 @@ def unarmed_boost(concepts, where):
     return {"error": "boost queueing is not armed this episode"}
 
 
-def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
-          transcript=None, cands=None, retask=None, look_renderer=None,
-          reasoner=None, **loop_kw):
+def drive(
+    script,
+    *,
+    fly=None,
+    flight_budget=8,
+    turn_cap=48,
+    transcript=None,
+    cands=None,
+    retask=None,
+    look_renderer=None,
+    reasoner=None,
+    **loop_kw,
+):
     """One operator turn over a still surface. Returns (reply, reasoner,
     flights, declared); ``reasoner`` (a returned one) continues its mission
     with ``script`` as the next operator turn (its flights and declarations
@@ -155,9 +179,13 @@ def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
         flights.append(item)
         if fly is not None:
             return fly(item)
-        return {"stop_id": f"stop_{len(flights) - 1:03d}",
-                "target": item["target_fid"], "pose_xy": [1.0, 2.0],
-                "new_detections": 1, "cue": "the cue"}
+        return {
+            "stop_id": f"stop_{len(flights) - 1:03d}",
+            "target": item["target_fid"],
+            "pose_xy": [1.0, 2.0],
+            "new_detections": 1,
+            "cue": "the cue",
+        }
 
     declared: list[list[dict]] = []
 
@@ -171,12 +199,15 @@ def drive(script, *, fly=None, flight_budget=8, turn_cap=48,
         ctx=bare_ctx(),
         rid_tag="m0",
         transcript=transcript,
-        compute_namespace={"cands": list(CANDS if cands is None else cands),
-                           "anchors": [], "cell_m": 1.0},
+        compute_namespace={
+            "cands": list(CANDS if cands is None else cands),
+            "anchors": [],
+            "cell_m": 1.0,
+        },
         diag={},
-        mission_spec=MissionSpec(fly=_fly, declare_concepts=_declare,
-                                 flight_budget=flight_budget,
-                                 turn_cap=turn_cap),
+        mission_spec=MissionSpec(
+            fly=_fly, declare_concepts=_declare, flight_budget=flight_budget, turn_cap=turn_cap
+        ),
         retask=retask,
         look_renderer=look_renderer,
         **loop_kw,
@@ -193,9 +224,18 @@ STOPS = [[100.0, 200.0], [200.0, 200.0], [300.0, 200.0]]
 START = (7.0, 9.0)
 
 
-def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
-                  obs_minor_m=None, with_renderer=False,
-                  deadline_epoch=None, on_fly=None, held_now=None):
+def explore_drive(
+    script,
+    *,
+    stops=STOPS,
+    obs_span_m=200.0,
+    cands=None,
+    obs_minor_m=None,
+    with_renderer=False,
+    deadline_epoch=None,
+    on_fly=None,
+    held_now=None,
+):
     """The mission with coverage stops; each flight reports its own target
     point as its pose. ``stops`` is one list every fid answers or a dict by
     fid. Returns (reply, tool results, flights, stops asked, rendered)."""
@@ -210,10 +250,13 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
         if on_fly is not None:
             on_fly(item)
         _pt = parse_xy_token(item["target_fid"]) or (1.0, 2.0)
-        return {"stop_id": f"stop_{len(flights) - 1:03d}",
-                "target": item["target_fid"],
-                "pose_xy": [float(_pt[0]), float(_pt[1])],
-                "new_detections": 1, "cue": "the cue"}
+        return {
+            "stop_id": f"stop_{len(flights) - 1:03d}",
+            "target": item["target_fid"],
+            "pose_xy": [float(_pt[0]), float(_pt[1])],
+            "new_detections": 1,
+            "cue": "the cue",
+        }
 
     asked: list[tuple] = []
 
@@ -226,38 +269,60 @@ def explore_drive(script, *, stops=STOPS, obs_span_m=200.0, cands=None,
 
     def _renderer(reqs):
         rendered.append(list(reqs))
-        return [{"jpeg": b"x", "center_fid": r["center_fid"],
-                 "legend": [{"digit": 1, "label": "car", "role": "center"}],
-                 "context_m": 30.0, "world_window": [0, 0, 200, 200]}
-                for r in reqs]
+        return [
+            {
+                "jpeg": b"x",
+                "center_fid": r["center_fid"],
+                "legend": [{"digit": 1, "label": "car", "role": "center"}],
+                "context_m": 30.0,
+                "world_window": [0, 0, 200, 200],
+            }
+            for r in reqs
+        ]
 
     fr = FakeReasoner(script)
     reply = _Mission(
         boost_queue=unarmed_boost,
-        reasoner=fr, ctx=bare_ctx(pose_xy=(START[0], START[1])),
+        reasoner=fr,
+        ctx=bare_ctx(pose_xy=(START[0], START[1])),
         rid_tag="m0",
-        compute_namespace={"cands": list(CANDS if cands is None else cands),
-                           "anchors": [], "cell_m": 1.0},
-        diag={}, obs_span_m=obs_span_m,
+        compute_namespace={
+            "cands": list(CANDS if cands is None else cands),
+            "anchors": [],
+            "cell_m": 1.0,
+        },
+        diag={},
+        obs_span_m=obs_span_m,
         obs_minor_m=obs_minor_m,
         look_renderer=_renderer if with_renderer else None,
-        mission_spec=MissionSpec(held_now=held_now,
-            fly=_fly, declare_concepts=lambda i: None,
-            coverage_stops=_stops, flight_budget=32, turn_cap=48,
-            deadline_epoch=deadline_epoch),
+        mission_spec=MissionSpec(
+            held_now=held_now,
+            fly=_fly,
+            declare_concepts=lambda i: None,
+            coverage_stops=_stops,
+            flight_budget=32,
+            turn_cap=48,
+            deadline_epoch=deadline_epoch,
+        ),
     ).converse("Find the goal object.")
     return reply, tool_results(fr), flights, asked, rendered
 
 
 # --- a graph the flight grows ----------------------------------------------
 
+
 class GraphNode(MapObject):
     """A graph node at world point ``xy`` (cell_m 1, origin 0)."""
 
     def __init__(self, xy, class_name, provenance="detected"):
-        super().__init__(class_name=class_name, name=None, tags={},
-                         centroid=(int(xy[1]), int(xy[0])), provenance=provenance,
-                         world_xy=[float(xy[0]), float(xy[1])])
+        super().__init__(
+            class_name=class_name,
+            name=None,
+            tags={},
+            centroid=(int(xy[1]), int(xy[0])),
+            provenance=provenance,
+            world_xy=[float(xy[0]), float(xy[1])],
+        )
 
 
 class Road(GraphNode):
@@ -286,8 +351,7 @@ ROADS = {
 }
 
 
-def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
-               extra_priors=None):
+def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None, extra_priors=None):
     """One mission over a graph each flight grows by ``per_flight`` cars (one
     black, the rest white, each flight on its own line). ``evict_on_flight``
     = {flight_index: [fid, ...]} deletes nodes on that flight. Returns (tool
@@ -309,15 +373,20 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
                 fid = f"detected_{base + i}"
                 graph.nodes[fid] = GraphNode(
                     (100.0 + 6.0 * i, 100.0 + 20.0 * len(added)),
-                    "black car" if i == 0 else "white car")
+                    "black car" if i == 0 else "white car",
+                )
                 new.append(fid)
         added.append(new)
-        return {"stop_id": f"stop_{len(added) - 1:03d}",
-                "target": item["target_fid"], "pose_xy": [100.0, 100.0],
-                "alt_m": 144.8, "new_detections": len(new), "cue": "the cue"}
+        return {
+            "stop_id": f"stop_{len(added) - 1:03d}",
+            "target": item["target_fid"],
+            "pose_xy": [100.0, 100.0],
+            "alt_m": 144.8,
+            "new_detections": len(new),
+            "cue": "the cue",
+        }
 
-    cands, anchors = build_surface_from_graph(
-        graph.nodes.items(), (0.0, 0.0), 1.0)
+    cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
     fr = FakeReasoner(script)
     _Mission(
         boost_queue=unarmed_boost,
@@ -325,19 +394,26 @@ def grow_drive(script, *, per_flight=3, flights_add=True, evict_on_flight=None,
         ctx=bare_ctx(graph=graph),
         rid_tag="m0",
         transcript=[],
-        compute_namespace={"cands": cands, "anchors": anchors,
-                           "cell_m": 1.0},
+        compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
         diag={},
         look_renderer=lambda reqs: [
-            {"jpeg": b"x", "center_fid": r["center_fid"], "legend": [
-                {"digit": 1, "label": "car", "role": "center"}] + [
-                {"digit": 3 + i, "label": "car", "role": "context"}
-                for i, m in enumerate(r["marks"])
-                if m["fid"] != r["center_fid"]],
-             "context_m": 30.0, "world_window": [0, 0, 200, 200],
-             "marks_dropped": 0, "marks_out_of_view": [],
-             "marks_unbadged_in_frame": []}
-            for r in reqs],
+            {
+                "jpeg": b"x",
+                "center_fid": r["center_fid"],
+                "legend": [{"digit": 1, "label": "car", "role": "center"}]
+                + [
+                    {"digit": 3 + i, "label": "car", "role": "context"}
+                    for i, m in enumerate(r["marks"])
+                    if m["fid"] != r["center_fid"]
+                ],
+                "context_m": 30.0,
+                "world_window": [0, 0, 200, 200],
+                "marks_dropped": 0,
+                "marks_out_of_view": [],
+                "marks_unbadged_in_frame": [],
+            }
+            for r in reqs
+        ],
         mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: None),
     ).converse("Find the goal object.")
     return tool_results(fr), graph, added
@@ -366,17 +442,26 @@ def map_mission(script, renderer=None, finds=1, extra_priors=None, spread=False)
             node.cells = np.asarray([[34, x]], dtype=np.int32)
             node.tags = {}
             graph.nodes[f"detected_{len(graph.nodes)}"] = node
-        return {"stop_id": "stop_001", "target": item["target_fid"], "pose_xy": [30.0, 30.0],
-                "alt_m": 100.0, "new_detections": finds, "cue": "the cue"}
+        return {
+            "stop_id": "stop_001",
+            "target": item["target_fid"],
+            "pose_xy": [30.0, 30.0],
+            "alt_m": 100.0,
+            "new_detections": finds,
+            "cue": "the cue",
+        }
 
     cands, anchors = build_surface_from_graph(graph.nodes.items(), (0.0, 0.0), 1.0)
     fr = FakeReasoner([[run(c)] for c in script] + ["done"])
     _Mission(
         boost_queue=unarmed_boost,
-        reasoner=fr, ctx=bare_ctx(graph=graph, grid_shape=(100, 100)),
-        rid_tag="m0", transcript=[],
+        reasoner=fr,
+        ctx=bare_ctx(graph=graph, grid_shape=(100, 100)),
+        rid_tag="m0",
+        transcript=[],
         compute_namespace={"cands": cands, "anchors": anchors, "cell_m": 1.0},
-        diag={}, look_renderer=renderer or (lambda reqs: []),
+        diag={},
+        look_renderer=renderer or (lambda reqs: []),
         mission_spec=MissionSpec(fly=_fly, declare_concepts=lambda i: None),
     ).converse("Find the car.")
     return tool_results(fr), fr.vision
@@ -390,11 +475,19 @@ ORTHO_GROUND_Z = 10.0
 
 def cars(n: int, step_m: float = 6.0) -> list[dict]:
     """``n`` cars on a square lattice centred near (100, 100)."""
-    side = int(n ** 0.5) + 1
-    return [{"fid": f"detected_{i}",
-             "xy": [100.0 + step_m * (i % side - side / 2.0),
-                    100.0 + step_m * (i // side - side / 2.0)],
-             "class": "car", "search_text": "car"} for i in range(n)]
+    side = int(n**0.5) + 1
+    return [
+        {
+            "fid": f"detected_{i}",
+            "xy": [
+                100.0 + step_m * (i % side - side / 2.0),
+                100.0 + step_m * (i // side - side / 2.0),
+            ],
+            "class": "car",
+            "search_text": "car",
+        }
+        for i in range(n)
+    ]
 
 
 def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
@@ -421,42 +514,59 @@ def look_drive(script, cands, ortho_dir, map_name=ORTHO_MAP):
         ctx=bare_ctx(),
         rid_tag="m0",
         transcript=[],
-        compute_namespace={"cands": list(cands), "anchors": [],
-                           "cell_m": 1.0},
+        compute_namespace={"cands": list(cands), "anchors": [], "cell_m": 1.0},
         diag={},
         look_renderer=renderer,
-        mission_spec=MissionSpec(fly=lambda i: {"error": "unused"},
-                                 declare_concepts=lambda i: None),
+        mission_spec=MissionSpec(
+            fly=lambda i: {"error": "unused"}, declare_concepts=lambda i: None
+        ),
     ).converse("find the car")
-    vision = [str(m.get("content")) for m in fr.messages
-              if m.get("role") == "user" and "badge legend" in
-              str(m.get("content"))]
+    vision = [
+        str(m.get("content"))
+        for m in fr.messages
+        if m.get("role") == "user" and "badge legend" in str(m.get("content"))
+    ]
     return tool_results(fr), seen_reqs, seen_recs, vision
 
 
 # --- one block run against a recording env --------------------------------
 
+
 def quiet_env(**kw):
     """A MissionEnv whose verbs do nothing and refuse nothing; ``kw``
     overrides any field."""
     from maps.library.call_arguments import MissionEnv
+
     def nop(*_a):
         return {}
 
     fields = dict(
-        rows_of_ref=lambda ref: [], plan_rn=[0], widened={}, minted=[],
+        rows_of_ref=lambda ref: [],
+        plan_rn=[0],
+        widened={},
+        minted=[],
         say_err=lambda ack, msg: {**ack, "error": msg},
         ground=lambda names: {"ties": {n: [n] for n in names}},
-        analyze=nop, stand=nop, move=nop, cover=nop, crops=nop, map=nop,
-        watch=nop, boost=nop, finish=lambda ack: ack,
-        row_of_fid=lambda fid: None, tied_of_ref=lambda ref: False,
-        version=lambda: 0)
+        analyze=nop,
+        stand=nop,
+        move=nop,
+        cover=nop,
+        crops=nop,
+        map=nop,
+        watch=nop,
+        boost=nop,
+        finish=lambda ack: ack,
+        row_of_fid=lambda fid: None,
+        tied_of_ref=lambda ref: False,
+        version=lambda: 0,
+    )
     fields.update(kw)
     return MissionEnv(**fields)
 
 
-def record_block(code: str, bound: dict | None = None, rn: int = 0,
-                 widened: dict | None = None) -> tuple[list[tuple], dict]:
+def record_block(
+    code: str, bound: dict | None = None, rn: int = 0, widened: dict | None = None
+) -> tuple[list[tuple], dict]:
     """Run ONE block against an env whose verbs record: (calls, ack).
 
     Each call is ``(verb, *args)``; a grounding is recorded only when it
@@ -465,11 +575,10 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
     result handle, any other string a row's fid, anything else as is."""
     import re
 
-
-
     from maps.library.interpreter import MissionPython
 
     from maps.library.rows import Row, Rows
+
     calls: list[tuple] = []
     counter = [rn]
 
@@ -477,6 +586,7 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
         def f(*args):
             calls.append((name, *args))
             return {}
+
         return f
 
     def ground(names):
@@ -489,11 +599,15 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
         counter[0] = max(counter[0], rn_end)
         return {}
 
-    mp = MissionPython(quiet_env(
-        plan_rn=counter, widened=widened if widened is not None else {},
-        ground=ground, analyze=analyze,
-        **{v: verb(v) for v in ("stand", "move", "cover", "crops", "map",
-                                "watch", "boost")}))
+    mp = MissionPython(
+        quiet_env(
+            plan_rn=counter,
+            widened=widened if widened is not None else {},
+            ground=ground,
+            analyze=analyze,
+            **{v: verb(v) for v in ("stand", "move", "cover", "crops", "map", "watch", "boost")},
+        )
+    )
     for name, held in (bound or {}).items():
         if isinstance(held, str) and re.fullmatch(r"r\d+", held):
             mp.ns[name] = Rows(held, mp.library)
@@ -504,11 +618,13 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
     return calls, mp.run_block(code)
 
 
-def calls_of_block(code: str, bound: dict | None = None, rn: int = 0,
-                   widened: dict | None = None) -> list[tuple]:
+def calls_of_block(
+    code: str, bound: dict | None = None, rn: int = 0, widened: dict | None = None
+) -> list[tuple]:
     """The verb calls ONE block makes, raising its refusal when it made
     none."""
     from maps.library.op_compiler import CodeError
+
     calls, out = record_block(code, bound, rn, widened)
     if "error" in out and not calls:
         raise CodeError(str(out["error"]))
@@ -517,35 +633,32 @@ def calls_of_block(code: str, bound: dict | None = None, rn: int = 0,
 
 def acts_of_block(code: str, bound: dict | None = None) -> list[tuple]:
     """The act calls ONE block makes: no groundings, no programs."""
-    return [c for c in calls_of_block(code, bound)
-            if c[0] not in ("ground", "analyze")]
+    return [c for c in calls_of_block(code, bound) if c[0] not in ("ground", "analyze")]
 
 
-def raising_ops_of_block(code: str, bound: dict | None = None,
-                         rn: int = 0) -> list[dict]:
+def raising_ops_of_block(code: str, bound: dict | None = None, rn: int = 0) -> list[dict]:
     """Every op ONE block compiles, raising the block's own refusal even when
     an earlier line already ran."""
     from maps.library.op_compiler import CodeError
+
     calls, out = record_block(code, bound, rn)
     if "error" in out:
         raise CodeError(str(out["error"]))
     return [op for c in calls if c[0] == "analyze" for op in c[1]]
 
 
-def ops_of_block(code: str, bound: dict | None = None,
-                 rn: int = 0) -> list[dict]:
+def ops_of_block(code: str, bound: dict | None = None, rn: int = 0) -> list[dict]:
     """Every op ONE block compiles, in order."""
-    return [op for c in calls_of_block(code, bound, rn) if c[0] == "analyze"
-            for op in c[1]]
+    return [op for c in calls_of_block(code, bound, rn) if c[0] == "analyze" for op in c[1]]
 
 
 def grounded_in_block(code: str, bound: dict | None = None) -> list[str]:
     """The NAMES one block grounds, in order."""
-    return [n for c in calls_of_block(code, bound) if c[0] == "ground"
-            for n in c[1]]
+    return [n for c in calls_of_block(code, bound) if c[0] == "ground" for n in c[1]]
 
 
 # --- small builders --------------------------------------------------------
+
 
 def ring(x, y, w, h):
     """An axis-aligned w x h rectangle as one closed ring."""

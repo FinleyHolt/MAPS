@@ -16,6 +16,7 @@
 (default ``citynav``) picks the constructor, which is how an attempt child
 learns the bench its driver flies.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -76,8 +77,12 @@ def _assert_available(bench: Bench) -> None:
 
 def citynav_bench(environ: Mapping[str, str]) -> Bench:
     """The CityNav bench ``environ`` describes."""
-    root = _env_path(environ, "SEARCH_CITYNAV_DATA", "CITYNAV_ROOT",
-                     default=Path.home() / "datasets" / "citynav-arxiv")
+    root = _env_path(
+        environ,
+        "SEARCH_CITYNAV_DATA",
+        "CITYNAV_ROOT",
+        default=Path.home() / "datasets" / "citynav-arxiv",
+    )
     data = root / "data"
     return Bench(
         name="citynav",

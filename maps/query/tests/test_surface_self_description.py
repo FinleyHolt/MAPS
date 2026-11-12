@@ -1,6 +1,6 @@
 """A program never redefines a handle."""
-from __future__ import annotations
 
+from __future__ import annotations
 
 
 from maps.query.program import run_program
@@ -15,15 +15,21 @@ _GRID = [
     {"fid": "c12", "xy": [20.0, 22.8], "class": "car", "color": "white"},
 ]
 _ANCHORS = [
-    {"fid": "road_1", "name": "Main Street", "xy": [50.0, 0.0], "class": "road",
-     "centerline": [[0.0, 0.0], [100.0, 0.0]]},
+    {
+        "fid": "road_1",
+        "name": "Main Street",
+        "xy": [50.0, 0.0],
+        "class": "road",
+        "centerline": [[0.0, 0.0], [100.0, 0.0]],
+    },
     {"fid": "shed_1", "name": "Shed", "xy": [15.0, -30.0], "class": "building"},
 ]
 
 
 def _run(ops):
-    return run_program([dict(c) for c in _GRID],
-                       [dict(a) for a in _ANCHORS], {"ops": ops})["results"]
+    return run_program([dict(c) for c in _GRID], [dict(a) for a in _ANCHORS], {"ops": ops})[
+        "results"
+    ]
 
 
 # --- One handle, one op --------------------------------------------------------

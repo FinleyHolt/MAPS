@@ -67,8 +67,10 @@ def _city(osm_cache_dir: str, city: str) -> Placement | None:
 def placement(tiles_dir: str, osm_cache_dir: str, map_name: str) -> Placement | None:
     """How ``map_name`` is placed: by its bake's georef, else by its city's OSM cache, else None."""
     if tile_georef.local_to_lonlat(tiles_dir, map_name, 0.0, 0.0) is not None:
-        return Placement(lambda x, y: tile_georef.local_to_lonlat(tiles_dir, map_name, x, y),
-                         lambda lon, lat: tile_georef.lonlat_to_local(tiles_dir, map_name, lon, lat))
+        return Placement(
+            lambda x, y: tile_georef.local_to_lonlat(tiles_dir, map_name, x, y),
+            lambda lon, lat: tile_georef.lonlat_to_local(tiles_dir, map_name, lon, lat),
+        )
     # A CityNav block is ``<city>_block_<n>``, in its city's one local frame.
     city, sep, _ = map_name.partition("_block_")
     return _city(osm_cache_dir, city) if sep else None

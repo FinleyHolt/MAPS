@@ -1,4 +1,5 @@
 """``find``'s text matching is strictly LEXICAL — no semantic lookup table."""
+
 from __future__ import annotations
 
 import pytest
@@ -14,16 +15,17 @@ def _flat(*texts: str) -> dict:
 
 def _score(query: str, candidate: str) -> float:
     idf = _flat(query, candidate)
-    return max(T.fuzzy_match_score(clause, candidate, idf)
-               for clause in T.fuzzy_prepare_query(query))
+    return max(
+        T.fuzzy_match_score(clause, candidate, idf) for clause in T.fuzzy_prepare_query(query)
+    )
 
 
 def _rows(*texts: str, colour: str | None = None) -> list[dict]:
     """Matched rows as ``unmatched_query_tokens`` reads them: the searched text, plus
     perception's ``color`` mixture when the row carries one."""
-    return [dict({"search_text": t},
-                 **({"color": colour} if colour is not None else {}))
-            for t in texts]
+    return [
+        dict({"search_text": t}, **({"color": colour} if colour is not None else {})) for t in texts
+    ]
 
 
 def test_semantic_gap_scores_zero_census_is_the_remedy():
@@ -43,13 +45,14 @@ def test_lexical_token_overlap_reaches_tag_vocabulary():
     assert _score("lot", "amenity parking") == 0.0  # bare 'lot' has no token
 
     # 'parking' is then the whole of the denominator and the row saturates the band.
-    corpus = [{"search_text": "amenity parking", "name": ""},
-              {"search_text": "building yes", "name": ""}]
+    corpus = [
+        {"search_text": "amenity parking", "name": ""},
+        {"search_text": "building yes", "name": ""},
+    ]
     idf = T.token_idf(corpus)
     assert "lot" not in idf
     (clause,) = T.fuzzy_prepare_query("parking lot")
-    assert T.fuzzy_match_score(clause, "amenity parking", idf) \
-        == T.TOKEN_BAG_CEIL
+    assert T.fuzzy_match_score(clause, "amenity parking", idf) == T.TOKEN_BAG_CEIL
     # ...and dropping it is not "ignore the word": a query of ONLY
     # unsatisfiable words still scores nothing.
     (none_of_it,) = T.fuzzy_prepare_query("lot")
@@ -76,16 +79,17 @@ def test_containment_fuzz_never_enters_the_exact_tier_bands():
     'Cambridge' vs a 'Museum of Cambridge' query) is a fuzz hit and must stay at or
     below the fuzz ceiling, never inside the k=v (0.80+) or name-phrase (0.90+) bands
     the served docs declare."""
-    from maps.query.text_match import (
-        TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
+    from maps.query.text_match import TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query
+
     q = fuzzy_prepare_query("Museum of Cambridge")
-    idf = _flat("boundary administrative cambridge",
-                "tourism museum the museum of cambridge")
-    squatter = find_score(q, "boundary=administrative", name="Cambridge",
-                          tags={"boundary": "administrative"}, idf=idf)
+    idf = _flat("boundary administrative cambridge", "tourism museum the museum of cambridge")
+    squatter = find_score(
+        q, "boundary=administrative", name="Cambridge", tags={"boundary": "administrative"}, idf=idf
+    )
     assert 0.0 < squatter <= TOKEN_BAG_CEIL
-    named = find_score(q, "tourism=museum", name="The Museum of Cambridge",
-                       tags={"tourism": "museum"}, idf=idf)
+    named = find_score(
+        q, "tourism=museum", name="The Museum of Cambridge", tags={"tourism": "museum"}, idf=idf
+    )
     assert named > 0.9
     assert named > squatter
 
@@ -95,15 +99,17 @@ def test_a_query_is_scored_by_what_it_found_not_by_the_haystack_length():
     # `pool` is a single satisfiable word, so it is its own whole denominator and the
     # IDF MASS FOUND over IDF MASS SATISFIABLE saturates the band whatever else the row
     # happens to spell.
-    corpus = [{"search_text": "leisure swimming pool", "name": ""},
-              {"search_text": "leisure swimming pool building yes "
-                              "access private", "name": ""},
-              {"search_text": "highway residential", "name": ""}]
+    corpus = [
+        {"search_text": "leisure swimming pool", "name": ""},
+        {"search_text": "leisure swimming pool building yes access private", "name": ""},
+        {"search_text": "highway residential", "name": ""},
+    ]
     idf = T.token_idf(corpus)
     q = T.fuzzy_prepare_query("pool")[0]
     bare = T.fuzzy_match_score(q, "leisure=swimming_pool", idf)
     with_more_tags = T.fuzzy_match_score(
-        q, "leisure=swimming_pool building=yes access=private", idf)
+        q, "leisure=swimming_pool building=yes access=private", idf
+    )
     assert bare == with_more_tags, (bare, with_more_tags)
     assert with_more_tags >= T.FUZZY_THRESHOLD, with_more_tags
 
@@ -111,29 +117,33 @@ def test_a_query_is_scored_by_what_it_found_not_by_the_haystack_length():
     # band. The weighting decides which PARTIAL hits survive; it never
     # discounts a complete one.
     ms_idf = T.token_idf([{"search_text": "old main street", "name": ""}])
-    assert T.fuzzy_match_score(T.fuzzy_prepare_query("main street")[0],
-                               "old main street", ms_idf) > 0.6
+    assert (
+        T.fuzzy_match_score(T.fuzzy_prepare_query("main street")[0], "old main street", ms_idf)
+        > 0.6
+    )
     # ...the fuzz ceiling still holds, so no fuzz path reaches an exact tier.
-    assert max(T.fuzzy_match_score(q, c, idf) for c in
-               ("leisure=swimming_pool", "pool house", "swimming pool")) \
+    assert (
+        max(
+            T.fuzzy_match_score(q, c, idf)
+            for c in ("leisure=swimming_pool", "pool house", "swimming pool")
+        )
         <= T.TOKEN_BAG_CEIL
+    )
     # ...and a query with nothing in common still scores nothing.
     assert T.fuzzy_match_score(q, "highway=residential", idf) == 0.0
 
 
 def test_single_token_generic_query_never_enters_name_phrase_tier():
     """Query 'building' stays out of the name-phrase band (>=0.90) for 'Baker Building'."""
-    from maps.query.text_match import (
-        KV_TIER_BASE, TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query)
+    from maps.query.text_match import KV_TIER_BASE, TOKEN_BAG_CEIL, find_score, fuzzy_prepare_query
+
     q = fuzzy_prepare_query("building")
     idf = _flat("baker building", "building terrace")
     name_mention = find_score(
-        q, "baker building", name="Baker Building",
-        tags={"amenity": "university"}, idf=idf)
+        q, "baker building", name="Baker Building", tags={"amenity": "university"}, idf=idf
+    )
     assert name_mention <= TOKEN_BAG_CEIL, name_mention
-    tag_hit = find_score(
-        q, "building terrace", name=None, tags={"building": "terrace"},
-        idf=idf)
+    tag_hit = find_score(q, "building terrace", name=None, tags={"building": "terrace"}, idf=idf)
     assert KV_TIER_BASE <= tag_hit < 0.90, tag_hit
     assert tag_hit > name_mention
 
@@ -141,13 +151,12 @@ def test_single_token_generic_query_never_enters_name_phrase_tier():
 def test_multi_token_name_phrase_tier_kept():
     """'Downing Street' keeps its 1.0 exact / 0.9x phrase-inside-name scores."""
     from maps.query.text_match import find_score, fuzzy_prepare_query
+
     q = fuzzy_prepare_query("Downing Street")
     idf = _flat("downing street", "little downing street")
-    exact = find_score(q, "downing street", name="Downing Street", tags={},
-                       idf=idf)
+    exact = find_score(q, "downing street", name="Downing Street", tags={}, idf=idf)
     assert exact == 1.0
-    phrase = find_score(q, "little downing street",
-                        name="Little Downing Street", tags={}, idf=idf)
+    phrase = find_score(q, "little downing street", name="Little Downing Street", tags={}, idf=idf)
     assert 0.90 <= phrase < 1.0, phrase
 
 
@@ -155,21 +164,24 @@ def test_single_token_exact_name_equality_still_perfect():
     # Equality is tier 1.0 regardless of token count — only the
     # phrase-INSIDE-a-longer-name tier requires a multi-token query.
     from maps.query.text_match import find_score, fuzzy_prepare_query
+
     q = fuzzy_prepare_query("grass")
-    assert find_score(q, "grass", name="Grass", tags={},
-                      idf=_flat("grass")) == 1.0
+    assert find_score(q, "grass", name="Grass", tags={}, idf=_flat("grass")) == 1.0
 
 
 def test_7872_multiword_value_coverage_separates_compound_query():
     from maps.query.text_match import find_score, fuzzy_prepare_query
+
     q = fuzzy_prepare_query("addr_street=Castle Street building=yes")
     idf = _flat("castle street building yes 12", "building yes")
-    both = find_score(q, "castle street building yes", name=None,
-                      tags={"addr_street": "Castle Street",
-                            "building": "yes",
-                            "addr_housenumber": "12"}, idf=idf)
-    bldg_only = find_score(q, "building yes", name=None,
-                           tags={"building": "yes"}, idf=idf)
+    both = find_score(
+        q,
+        "castle street building yes",
+        name=None,
+        tags={"addr_street": "Castle Street", "building": "yes", "addr_housenumber": "12"},
+        idf=idf,
+    )
+    bldg_only = find_score(q, "building yes", name=None, tags={"building": "yes"}, idf=idf)
     assert both > bldg_only, (both, bldg_only)
     # full coverage tops the k=v band; half coverage sits mid-band
     assert abs(both - 0.89) < 1e-9, both
@@ -180,6 +192,7 @@ def test_kv_value_extension_stops_at_the_next_pair():
     # 'a=b c=d' keeps two independent single-token pairs — the extension
     # consumes only BARE tokens, so pair grammar is unchanged.
     from maps.query.text_match import fuzzy_prepare_query
+
     (clause,) = fuzzy_prepare_query("landuse=grass building=yes")
     groups = clause[3]
     assert groups == ((("landuse", "grass"),), (("building", "yes"),))
@@ -189,11 +202,11 @@ def test_a_query_token_no_matched_row_carries_is_named():
     # A junk token dilutes the token-bag ratio and never disqualifies, so a glued
     # spelling still binds.
     from maps.query.text_match import unmatched_query_tokens
+
     rows = _rows("Ford Focus car", "Vauxhall car", "car amenity parking")
     assert unmatched_query_tokens("car withcolor", rows) == ["withcolor"]
     # the remaining glued spellings
-    assert unmatched_query_tokens("house onBeche Road",
-                                  _rows("Beche Road house")) == ["onbeche"]
+    assert unmatched_query_tokens("house onBeche Road", _rows("Beche Road house")) == ["onbeche"]
     # a clean query, and an attribute the rows DO carry, stay silent
     assert unmatched_query_tokens("car", rows) == []
     assert unmatched_query_tokens("car parking", rows) == []
@@ -204,18 +217,17 @@ def test_a_query_token_no_matched_row_carries_is_named():
     assert unmatched_query_tokens("houses", _rows("terraced house")) == []
     assert unmatched_query_tokens("buildings", _rows("building yes")) == []
     # ONE word per prefix family: 'lots'/'lot' is one problem, not two
-    assert unmatched_query_tokens("parking lots",
-                                  _rows("amenity parking")) == ["lot"]
+    assert unmatched_query_tokens("parking lots", _rows("amenity parking")) == ["lot"]
     # and every real glue catch survives the loosening
-    assert unmatched_query_tokens("S andG Cycles",
-                                  _rows("S G Cycles")) == ["andg"]
-    assert unmatched_query_tokens("house onCastle Street",
-                                  _rows("Castle Street house")) == ["oncastle"]
+    assert unmatched_query_tokens("S andG Cycles", _rows("S G Cycles")) == ["andg"]
+    assert unmatched_query_tokens("house onCastle Street", _rows("Castle Street house")) == [
+        "oncastle"
+    ]
 
 
 def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
-    from maps.query.text_match import (
-        COLORS, _colors_read, unmatched_query_tokens as U)
+    from maps.query.text_match import COLORS, _colors_read, unmatched_query_tokens as U
+
     coloured = _rows("car", "car", colour="gray 0.55 / black 0.30")
 
     # The read is the closed PALETTE, word by word: a shade prefix and an
@@ -233,14 +245,10 @@ def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
     # that suppressed everything fails the second and the third.
     assert len(COLORS) == 15, sorted(COLORS)
     _other = {w: ("purple" if w != "purple" else "green") for w in COLORS}
-    read = [w for w in COLORS
-            if U(f"{w} car", _rows("car", colour=f"{w} 0.60")) == []]
+    read = [w for w in COLORS if U(f"{w} car", _rows("car", colour=f"{w} 0.60")) == []]
     colourless = [w for w in COLORS if U(f"{w} car", _rows("car")) == [w]]
-    other = [w for w in COLORS
-             if U(f"{w} car",
-                  _rows("car", colour=f"{_other[w]} 0.60")) == [w]]
-    for got, why in ((read, "read"), (colourless, "colourless"),
-                     (other, "read as another colour")):
+    other = [w for w in COLORS if U(f"{w} car", _rows("car", colour=f"{_other[w]} 0.60")) == [w]]
+    for got, why in ((read, "read"), (colourless, "colourless"), (other, "read as another colour")):
         assert sorted(got) == sorted(COLORS), (why, sorted(set(COLORS) - set(got)))
 
     # A colour the rows were NOT perceived as is the note's most useful
@@ -260,15 +268,15 @@ def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
     assert U("gray car", _rows("car", colour="")) == ["gray"]
     # A find is unscoped over priors AND detections, so a mixed set is the
     # common case: one red detection does not vouch for 'gray'.
-    assert U("gray car", _rows("car", "car")
-             + _rows("car", colour="red 0.60")) == ["gray"]
+    assert U("gray car", _rows("car", "car") + _rows("car", colour="red 0.60")) == ["gray"]
 
     # Suppression is EXACT-WORD, never the prefix relation is_carried
     # uses: real glue is untouched, and a compound that merely STARTS
     # with a palette word is still glue.
     assert U("car withcolor", coloured) == ["withcolor"]
-    assert U("house onCastle Street",
-             _rows("Castle Street house", colour="gray 0.5")) == ["oncastle"]
+    assert U("house onCastle Street", _rows("Castle Street house", colour="gray 0.5")) == [
+        "oncastle"
+    ]
     assert U("S andG Cycles", _rows("S G Cycles", colour="red 0.6")) == ["andg"]
     assert U("greenhouse car", _rows("car", colour="green 0.6")) == ["greenhouse"]
     # A PLURAL of the palette word itself is one word, not an escape hatch
@@ -276,8 +284,7 @@ def test_a_palette_word_the_rows_were_perceived_as_is_not_flagged():
     assert U("grays car", coloured) == []
     assert U("gray cars", coloured) == []
     assert U("Green Street", _rows("Green Street highway residential")) == []
-    assert U("Green Street", _rows("Castle Street highway",
-                                   colour="gray 0.55")) == ["green"]
+    assert U("Green Street", _rows("Castle Street highway", colour="gray 0.55")) == ["green"]
 
 
 def test_find_query_returns_the_match_set_best_first():
@@ -294,10 +301,15 @@ def test_find_query_returns_the_match_set_best_first():
         {"fid": "b_f", "name": "Pine Street", "xy": [50.0, 0.0], "class": "building"},
         {"fid": "b_g", "name": "Elm Street", "xy": [60.0, 0.0], "class": "building"},
     ]
-    out = run_program([], [dict(a) for a in anchors], {"ops": [
-        {"ref": "r0", "op": "find",
-         "args": {"query": "Earl Street"}},
-    ]})
+    out = run_program(
+        [],
+        [dict(a) for a in anchors],
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {"query": "Earl Street"}},
+            ]
+        },
+    )
     rows = out["results"]["r0"]
     # The result IS the match set (len = match count), best-first, ordered;
     # the sub-threshold row stays out (a query-less find browses it).
@@ -314,10 +326,15 @@ def test_find_query_returns_the_match_set_best_first():
 
 
 def test_find_query_no_match_returns_empty_miss_affordance():
-    out = run_program([], [{"fid": "b_a", "name": "Earl Street", "xy": [9.0, 9.0], "class": "building"}], {"ops": [
-        {"ref": "r0", "op": "find",
-         "args": {"query": "zxqv wqzzk"}},
-    ]})
+    out = run_program(
+        [],
+        [{"fid": "b_a", "name": "Earl Street", "xy": [9.0, 9.0], "class": "building"}],
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {"query": "zxqv wqzzk"}},
+            ]
+        },
+    )
     rows = out["results"]["r0"]
     assert rows.kind == "miss", rows.kind
     assert len(rows) == 0, rows
@@ -325,7 +342,9 @@ def test_find_query_no_match_returns_empty_miss_affordance():
 
 def test_a_find_refusal_advertises_only_the_args_find_reads():
     with pytest.raises(ProgramError) as e:
-        run_program([], [{"fid": "a0", "xy": [0.0, 0.0], "name": "x"}],
-                    {"ops": [{"ref": "r0", "op": "find",
-                              "args": {"query": "a;b"}}]})
+        run_program(
+            [],
+            [{"fid": "a0", "xy": [0.0, 0.0], "name": "x"}],
+            {"ops": [{"ref": "r0", "op": "find", "args": {"query": "a;b"}}]},
+        )
     assert "color=" not in str(e.value) and "provenance" not in str(e.value)

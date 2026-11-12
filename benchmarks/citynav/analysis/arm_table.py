@@ -43,16 +43,30 @@ COLUMNS = (
 )
 
 
-_METRIC_KEYS = ("SR", "SR_pct", "OSR", "OSR_pct", "SR_by_shape", "SR_by_shape_pct", "SR_by_radius",
-                "SR_by_radius_pct", "precise_shape_n", "precise_radius_n", "SR_n", "NE_mean", "NE_med")
+_METRIC_KEYS = (
+    "SR",
+    "SR_pct",
+    "OSR",
+    "OSR_pct",
+    "SR_by_shape",
+    "SR_by_shape_pct",
+    "SR_by_radius",
+    "SR_by_radius_pct",
+    "precise_shape_n",
+    "precise_radius_n",
+    "SR_n",
+    "NE_mean",
+    "NE_med",
+)
 
 
 def _mean(vals: list) -> float | None:
     return round(float(np.mean(vals)), 4) if vals else None
 
 
-def arm_row(root: Path, *, allow_partial: bool = False,
-            attempts: tuple[dict, _rows.ReadStats] | None = None) -> dict:
+def arm_row(
+    root: Path, *, allow_partial: bool = False, attempts: tuple[dict, _rows.ReadStats] | None = None
+) -> dict:
     """One arm's summary; an arm with no scored episode still gets its row.
     ``attempts`` is the root's ``rows.load_attempts`` result when the caller
     already read it.
@@ -68,8 +82,7 @@ def arm_row(root: Path, *, allow_partial: bool = False,
     row: dict = {
         "root": str(root),
         "label": root.name,
-        "effort": (manifest.get("search_env_flags") or {}).get(
-            "SEARCH_SAMPLING_REASONING_EFFORT"),
+        "effort": (manifest.get("search_env_flags") or {}).get("SEARCH_SAMPLING_REASONING_EFFORT"),
         "criterion": criterion_label(run_criterion(recorded), root) if recorded else None,
         "n": len(scored),
         "no_metrics": stats.no_metrics,
@@ -87,7 +100,9 @@ def arm_row(root: Path, *, allow_partial: bool = False,
     for k in ("SR", "OSR"):
         row[k] = _mean([m[k] for m in scored if m.get(k) is not None])
     for kind in ("shape", "radius"):
-        vals = [m["SR"] for m in scored if m.get("precise_target") == kind and m.get("SR") is not None]
+        vals = [
+            m["SR"] for m in scored if m.get("precise_target") == kind and m.get("SR") is not None
+        ]
         row[f"precise_{kind}_n"] = len(vals)
         row[f"SR_by_{kind}"] = _mean(vals)
     for k in ("SR", "OSR", "SR_by_shape", "SR_by_radius"):
@@ -143,9 +158,7 @@ def render(rows: list[dict]) -> None:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("roots", nargs="+", type=Path, help="run roots, one per arm")
-    ap.add_argument(
-        "--json", action="store_true", help="emit the rows as JSON instead of a table"
-    )
+    ap.add_argument("--json", action="store_true", help="emit the rows as JSON instead of a table")
     _rows.add_allow_partial(ap)
     args = ap.parse_args(argv)
     rows = table(args.roots, allow_partial=args.allow_partial)

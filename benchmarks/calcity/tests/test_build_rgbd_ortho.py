@@ -25,8 +25,18 @@ def _raster(path: Path, px: float = PX, seed: int = 0) -> np.ndarray:
     lf = build_local_frame(BBOX)
     H, W = grid_shape(lf, px)
     rgb = np.random.default_rng(seed).integers(1, 256, (H, W, 3), dtype=np.uint8)
-    with rasterio.open(path, "w", driver="GTiff", width=W, height=H, count=3, dtype="uint8", crs=lf.crs_utm,
-                       transform=from_origin(lf.origin_e, lf.origin_n + lf.height_m, px, px), compress="deflate") as dst:
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        width=W,
+        height=H,
+        count=3,
+        dtype="uint8",
+        crs=lf.crs_utm,
+        transform=from_origin(lf.origin_e, lf.origin_n + lf.height_m, px, px),
+        compress="deflate",
+    ) as dst:
         for b in range(3):
             dst.write(rgb[..., b], b + 1)
     return rgb
@@ -61,8 +71,17 @@ def test_build_block_writes_the_pair_the_loader_reads_at_the_rasters_cell(tmp_pa
 def test_a_raster_off_the_blocks_grid_is_refused_by_name(tmp_path: Path):
     lf = build_local_frame(BBOX)
     H, W = grid_shape(lf, PX)
-    with rasterio.open(tmp_path / "wrong.tif", "w", driver="GTiff", width=W + 3, height=H, count=3, dtype="uint8",
-                       crs=lf.crs_utm, transform=from_origin(lf.origin_e, lf.origin_n + lf.height_m, PX, PX)) as dst:
+    with rasterio.open(
+        tmp_path / "wrong.tif",
+        "w",
+        driver="GTiff",
+        width=W + 3,
+        height=H,
+        count=3,
+        dtype="uint8",
+        crs=lf.crs_utm,
+        transform=from_origin(lf.origin_e, lf.origin_n + lf.height_m, PX, PX),
+    ) as dst:
         dst.write(np.zeros((3, H, W + 3), np.uint8))
     with pytest.raises(ValueError, match="the block's frame at that cell"):
         build_block(tmp_path / "root", "patch", BBOX, tmp_path / "wrong.tif")

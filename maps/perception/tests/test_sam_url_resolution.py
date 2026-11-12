@@ -17,7 +17,9 @@ from maps.settings import DEFAULT_SAM_SERVER_URL, from_environ, sam_endpoints
 @pytest.mark.parametrize("blank", ["", " ", " , "])
 def test_a_blank_sam_url_is_refused_by_the_client_and_by_discovery(blank):
     # A reasoner nothing answers: discovery must refuse before probing it.
-    settings = from_environ({"SAM_SERVER_URL": blank, "SEARCH_REASONER_URL": "http://127.0.0.1:9/v1"})
+    settings = from_environ(
+        {"SAM_SERVER_URL": blank, "SEARCH_REASONER_URL": "http://127.0.0.1:9/v1"}
+    )
     with pytest.raises(ValueError, match="SAM_SERVER_URL is empty"):
         sam_endpoints(settings.endpoint)
     with pytest.raises(endpoint_spec.EndpointDiscoveryError, match="SAM_SERVER_URL is empty"):
@@ -27,7 +29,9 @@ def test_a_blank_sam_url_is_refused_by_the_client_and_by_discovery(blank):
 def test_an_unset_sam_url_is_the_default_replica():
     assert sam_endpoints(from_environ({}).endpoint) == [DEFAULT_SAM_SERVER_URL]
     assert sam_endpoints(from_environ({"SAM_SERVER_URL": "http://a:1/, http://b:2"}).endpoint) == [
-        "http://a:1", "http://b:2"]
+        "http://a:1",
+        "http://b:2",
+    ]
 
 
 def test_the_flown_station_s_sam_variable_alone_is_refused_not_defaulted():

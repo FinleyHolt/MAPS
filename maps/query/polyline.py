@@ -25,8 +25,11 @@ def _dp(pts: list, tol: float) -> list:
         worst_i, worst_d = i0, -1.0
         for i in range(i0 + 1, i1):
             px, py = pts[i]
-            d = (math.hypot(px - x0, py - y0) if span == 0.0
-                 else abs(dy * px - dx * py + x1 * y0 - y1 * x0) / span)
+            d = (
+                math.hypot(px - x0, py - y0)
+                if span == 0.0
+                else abs(dy * px - dx * py + x1 * y0 - y1 * x0) / span
+            )
             if d > worst_d:
                 worst_i, worst_d = i, d
         if worst_d > tol:
@@ -42,8 +45,7 @@ def simplify_ring(loop, *, tolerance: float, max_points: int) -> list:
     The budget goes where the curvature is; index-subsampling would cut
     corners into chords across the interior.
     """
-    pts = [(float(p[0]), float(p[1])) for p in loop
-           if isinstance(p, (list, tuple)) and len(p) == 2]
+    pts = [(float(p[0]), float(p[1])) for p in loop if isinstance(p, (list, tuple)) and len(p) == 2]
     if len(pts) < 3:
         return [[p[0], p[1]] for p in pts]
     if pts[0] != pts[-1]:
@@ -66,11 +68,10 @@ def clip_t(p0, p1, box):
     bx0, by0, bx1, by1 = box
     dx, dy = x1 - x0, y1 - y0
     t0, t1 = 0.0, 1.0
-    for p, q in ((-dx, x0 - bx0), (dx, bx1 - x0),
-                 (-dy, y0 - by0), (dy, by1 - y0)):
+    for p, q in ((-dx, x0 - bx0), (dx, bx1 - x0), (-dy, y0 - by0), (dy, by1 - y0)):
         if p == 0.0:
             if q < 0.0:
-                return None          # parallel to this edge and outside it
+                return None  # parallel to this edge and outside it
             continue
         r = q / p
         if p < 0.0:
@@ -92,8 +93,7 @@ def clip_ring_to_box(loop, box) -> list:
     Edge-by-edge, so no edge is synthesised along the box as polygon clipping
     would; a stroke buffer is the caller's.
     """
-    pts = [(float(p[0]), float(p[1])) for p in loop
-           if isinstance(p, (list, tuple)) and len(p) == 2]
+    pts = [(float(p[0]), float(p[1])) for p in loop if isinstance(p, (list, tuple)) and len(p) == 2]
     if len(pts) < 3:
         return []
     bx0, by0, bx1, by1 = (float(v) for v in box)

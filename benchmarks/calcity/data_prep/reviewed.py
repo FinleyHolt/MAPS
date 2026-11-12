@@ -50,7 +50,12 @@ def reviewed_episode_ids(split_file: Path) -> list[str]:
 
 
 def main() -> int:
-    sys.stdout.write("".join(f"{eid}\n" for eid in reviewed_episode_ids(calcity_bench(os.environ).split_path("calcity"))))
+    sys.stdout.write(
+        "".join(
+            f"{eid}\n"
+            for eid in reviewed_episode_ids(calcity_bench(os.environ).split_path("calcity"))
+        )
+    )
     return 0
 
 

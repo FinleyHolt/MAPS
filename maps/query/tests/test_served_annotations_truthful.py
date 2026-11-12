@@ -1,4 +1,5 @@
 """Served truth: every served note/annotation states the stored fact."""
+
 from __future__ import annotations
 
 import pytest
@@ -8,12 +9,21 @@ from maps.query.program import run_program
 
 
 def _prior(fid, x, y, name=None, tags=None):
-    return {"fid": fid, "name": name, "xy": [float(x), float(y)],
-            "centerline": None, "tags": tags or {}, "color": "",
-            "search_text": " ".join(
-                [name or ""] + [f"{str(k).replace('_', ' ')} "
-                                f"{str(v).replace('_', ' ')}"
-                                for k, v in (tags or {}).items()]).lower()}
+    return {
+        "fid": fid,
+        "name": name,
+        "xy": [float(x), float(y)],
+        "centerline": None,
+        "tags": tags or {},
+        "color": "",
+        "search_text": " ".join(
+            [name or ""]
+            + [
+                f"{str(k).replace('_', ' ')} {str(v).replace('_', ' ')}"
+                for k, v in (tags or {}).items()
+            ]
+        ).lower(),
+    }
 
 
 def _grass_world():
@@ -26,10 +36,15 @@ def _grass_world():
 
 
 def _find(world, query):
-    out = run_program([], world, {"ops": [
-        {"ref": "r0", "op": "find",
-         "args": {"query": query}},
-    ]})
+    out = run_program(
+        [],
+        world,
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {"query": query}},
+            ]
+        },
+    )
     return out, compact_results(out["results"])["r0"]
 
 
@@ -56,25 +71,44 @@ def test_head_banner_endorses_only_a_name_tier_head():
 # F2: ONE truth for [x,y] compare labels
 # ---------------------------------------------------------------------------
 
+
 def test_bare_xy_literal_attaches_the_xy_family():
-    out = run_program([], _grass_world(), {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0", "refs": [[5.0, 5.0]]}},
-    ]})
+    out = run_program(
+        [],
+        _grass_world(),
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {}},
+                {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": [[5.0, 5.0]]}},
+            ]
+        },
+    )
     row = out["results"]["r1"][0]
     for col in ("distance to xy", "center distance to xy", "bearing from xy"):
         assert col in row, f"{col} missing: {sorted(row)}"
 
 
 def test_labeled_xy_literal_is_the_named_columns_path():
-    out = run_program([], _grass_world(), {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-        {"ref": "r1", "op": "compare",
-         "args": {"items": "r0",
-                  "refs": [{"ref": [5.0, 5.0], "as": "gate"},
-                           {"ref": [25.0, 5.0], "as": "corner"}]}},
-    ]})
+    out = run_program(
+        [],
+        _grass_world(),
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {}},
+                {
+                    "ref": "r1",
+                    "op": "compare",
+                    "args": {
+                        "items": "r0",
+                        "refs": [
+                            {"ref": [5.0, 5.0], "as": "gate"},
+                            {"ref": [25.0, 5.0], "as": "corner"},
+                        ],
+                    },
+                },
+            ]
+        },
+    )
     row = out["results"]["r1"][0]
     assert "distance to gate" in row and "distance to corner" in row
     assert "distance to xy" not in row
@@ -83,6 +117,7 @@ def test_labeled_xy_literal_is_the_named_columns_path():
 # ---------------------------------------------------------------------------
 # F6: palette-word zero-match affords the color path
 # ---------------------------------------------------------------------------
+
 
 def test_color_word_miss_names_the_color_column_path():
     """The COLUMN, not the op that attaches it."""
@@ -94,8 +129,9 @@ def test_color_word_miss_names_the_color_column_path():
     assert "find{" not in hint and "score_by" not in hint
 
 
-@pytest.mark.parametrize("query, column", [("zzqx OR white", "color_white"),
-                                           ("silver", "color_gray")])
+@pytest.mark.parametrize(
+    "query, column", [("zzqx OR white", "color_white"), ("silver", "color_gray")]
+)
 def test_a_colour_word_in_a_clause_or_a_synonym_names_the_canonical_column(query, column):
     _, env = _find(_grass_world(), query)
     assert env["len"] == 0

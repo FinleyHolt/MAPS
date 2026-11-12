@@ -12,8 +12,8 @@ def test_fills_enclosed_holes_and_keeps_the_frame_border_black():
     rgb = np.full((h, w, 3), 120, np.uint8)
     height = np.full((h, w), 7.0, np.float32)
     alpha = np.full((h, w), 255, np.uint8)
-    alpha[:, :3] = 0                     # no-data reaching the frame edge
-    alpha[18:22, 18:22] = 0              # a hole enclosed by coverage
+    alpha[:, :3] = 0  # no-data reaching the frame edge
+    alpha[18:22, 18:22] = 0  # a hole enclosed by coverage
     rgb[alpha == 0] = 0
     height[alpha == 0] = 0.0
     before = (rgb.copy(), height.copy(), alpha.copy())
@@ -28,4 +28,4 @@ def test_fills_enclosed_holes_and_keeps_the_frame_border_black():
     covered = before[2] > 0
     assert np.array_equal(out_rgb[covered], before[0][covered])
     for a, b in zip((rgb, height, alpha), before):
-        assert np.array_equal(a, b)      # inputs are not mutated
+        assert np.array_equal(a, b)  # inputs are not mutated

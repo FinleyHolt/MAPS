@@ -15,10 +15,13 @@ ORTHO_RAMP = False
 def _crop(ortho_dir, boundary):
     xs = [p[0] for p in boundary]
     ys = [p[1] for p in boundary]
-    req = {"center_fid": "f0", "center_xy": [(min(xs) + max(xs)) / 2,
-                                             (min(ys) + max(ys)) / 2],
-           "center_label": "f0", "center_boundary": boundary,
-           "marks": []}
+    req = {
+        "center_fid": "f0",
+        "center_xy": [(min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2],
+        "center_label": "f0",
+        "center_boundary": boundary,
+        "marks": [],
+    }
     recs = render_candidate_crops([req], map_name=MAP, rgbd_dir=ortho_dir)
     assert len(recs) == 1, recs
     return recs[0]
@@ -46,14 +49,23 @@ def test_a_subject_inside_its_frame_is_not_flagged(ortho_dir):
 def test_the_caption_states_the_extent_and_calls_the_ink_a_fragment():
     from maps.mission.picture_requests import look_vision_text
 
-    text = look_vision_text([{
-        "center_fid": "f0", "center_label": "f0",
-        "context_m": 100.0, "side_px": 1000,
-        "world_window": [0.0, 0.0, 100.0, 100.0],
-        "subject_in_window": True, "subject_centroid_in_window": True,
-        "subject_on_data": True, "window_valid_frac": 1.0,
-        "subject_extent_m": [900.0, 1200.0], "subject_outline_cut": True,
-        "legend": [{"digit": 1, "label": "f0", "role": "center"}],
-    }])
+    text = look_vision_text(
+        [
+            {
+                "center_fid": "f0",
+                "center_label": "f0",
+                "context_m": 100.0,
+                "side_px": 1000,
+                "world_window": [0.0, 0.0, 100.0, 100.0],
+                "subject_in_window": True,
+                "subject_centroid_in_window": True,
+                "subject_on_data": True,
+                "window_valid_frac": 1.0,
+                "subject_extent_m": [900.0, 1200.0],
+                "subject_outline_cut": True,
+                "legend": [{"digit": 1, "label": "f0", "role": "center"}],
+            }
+        ]
+    )
     assert "900 x 1200 m" in text, text
     assert "fragment" in text, text

@@ -10,6 +10,7 @@ Orientation is load-bearing: ortho rows run north-down while bake cell rows run
 south-up, so an unflipped reduce passes every shape check and silently keeps
 the wrong half of every block.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,7 +37,10 @@ def _poly(x0: float, y0: float, x1: float, y1: float) -> dict:
 RECORDS = [
     ({"landuse": "grass", "osm_id": "w_all"}, _poly(0.1, 0.1, 7.9, 7.9)),
     ({"building": "yes", "osm_id": "w_south"}, _poly(0.1, 0.1, 7.9, 3.9)),
-    ({"building": "yes", "osm_id": "w_straddle", "name": "Straddle House"}, _poly(0.1, 0.1, 3.9, 5.9)),
+    (
+        {"building": "yes", "osm_id": "w_straddle", "name": "Straddle House"},
+        _poly(0.1, 0.1, 3.9, 5.9),
+    ),
 ]
 
 
@@ -50,8 +54,13 @@ def _bake(tmp_path, monkeypatch, *, imagery: bool) -> dict:
         rgb = np.zeros((80, 80, 3), dtype=np.uint8)
         rgb[:40, :] = 90  # raster row 0 is y_max: the NORTH half has imagery
         write_rasters(tmp_path / "rasters", BLOCK, rgb, np.zeros((80, 80), dtype=np.float32))
-    bake_block(BLOCK, RECORDS, tiles, rgbd_dir=tmp_path / "rasters",
-               bounds=None if imagery else WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0))
+    bake_block(
+        BLOCK,
+        RECORDS,
+        tiles,
+        rgbd_dir=tmp_path / "rasters",
+        bounds=None if imagery else WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0),
+    )
     rows = json.loads((tiles / f"{BLOCK}_features.json").read_text())["prior"]
     return {r["osm_id"]: r for r in rows}
 
@@ -77,9 +86,12 @@ def test_no_imagery_keeps_every_rasterized_cell(tmp_path, monkeypatch) -> None:
 
 def test_an_unreadable_ortho_refuses_the_bake(monkeypatch, tmp_path) -> None:
     """A block whose imagery cannot be read has no coverage to clip to."""
+
     def unreadable(*_a, **_k):
         raise OSError("truncated raster")
 
     monkeypatch.setattr(camera_model, "load_ortho_or_rasters", unreadable)
     with pytest.raises(BakeError, match="truncated raster"):
-        _cell_coverage(BLOCK, WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0), (4, 4), 2.0, tmp_path)
+        _cell_coverage(
+            BLOCK, WorldBounds(x_min=0.0, y_min=0.0, x_max=8.0, y_max=8.0), (4, 4), 2.0, tmp_path
+        )

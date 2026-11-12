@@ -9,12 +9,19 @@ from maps.mission.tests.fakes import ORTHO_MAP as MAP
 def test_framed_crop_rotates(ortho_dir):
     # frame_up rides the request; the framed crop's pixels differ from the
     # unframed render of the identical window.
-    req = {"center_fid": "c1", "center_xy": [60.0, 140.0],
-           "center_label": "car c1", "center_boundary": None, "marks": []}
+    req = {
+        "center_fid": "c1",
+        "center_xy": [60.0, 140.0],
+        "center_label": "car c1",
+        "center_boundary": None,
+        "marks": [],
+    }
     base = render_candidate_crops([req], map_name=MAP, rgbd_dir=ortho_dir)[0]
     framed = render_candidate_crops(
         [{**req, "frame_up": [1.0, 0.0], "frame_note": "image-up = east"}],
-        map_name=MAP, rgbd_dir=ortho_dir)[0]
+        map_name=MAP,
+        rgbd_dir=ortho_dir,
+    )[0]
     assert framed["frame_up"] == [1.0, 0.0]
     assert framed["frame_note"] == "image-up = east"
     assert framed["jpeg"] != base["jpeg"]
@@ -31,6 +38,7 @@ def test_frame_up_angle_sign_lock():
     import cv2
 
     from maps.render.look_render import frame_up_angle_deg
+
     assert abs(frame_up_angle_deg(0.0, 1.0)) < 1e-9
     assert abs(abs(frame_up_angle_deg(0.0, -1.0)) - 180.0) < 1e-9
     assert abs(frame_up_angle_deg(1.0, 0.0) - 90.0) < 1e-9
@@ -42,8 +50,13 @@ def test_frame_up_angle_sign_lock():
 def test_a_turned_crop_over_full_coverage_counts_no_missing_data(ortho_dir):
     # The black corners a turn leaves are outside the window, not raster
     # no-data: the valid fraction reads the window itself.
-    req = {"center_fid": "c1", "center_xy": [100.0, 100.0],
-           "center_label": "car c1", "center_boundary": None, "marks": [],
-           "frame_up": [0.7071, 0.7071]}
+    req = {
+        "center_fid": "c1",
+        "center_xy": [100.0, 100.0],
+        "center_label": "car c1",
+        "center_boundary": None,
+        "marks": [],
+        "frame_up": [0.7071, 0.7071],
+    }
     rec = render_candidate_crops([req], map_name=MAP, rgbd_dir=ortho_dir)[0]
     assert rec["window_valid_frac"] == 1.0, rec["window_valid_frac"]

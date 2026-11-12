@@ -60,7 +60,16 @@ class Twin:
     the map carries none (:func:`map_render.terrain`).
     """
 
-    def __init__(self, *, tiles_dir, map_name: str, ortho, sensor, start_xy: tuple[float, float], agl_m: float) -> None:
+    def __init__(
+        self,
+        *,
+        tiles_dir,
+        map_name: str,
+        ortho,
+        sensor,
+        start_xy: tuple[float, float],
+        agl_m: float,
+    ) -> None:
         self.tiles_dir, self.map_name, self.sensor = Path(tiles_dir), map_name, sensor
         self.floor_msl_m = FLOOR_MSL_M[map_name]
         self.terrain = map_render.terrain(map_name, str(self.tiles_dir))
@@ -126,15 +135,28 @@ class Twin:
             return None
         alt = self.ground((x, y)) + self.agl_m + C12_LEVER_M[2]
         utc = (EPOCH + dt.timedelta(seconds=t)).isoformat()
-        return Pose(lat=lonlat[1], lon=lonlat[0], alt_msl_m=alt, track_deg=heading_deg,
-                    speed_mps=C12_SPEED_MPS, utc=utc, heading_deg=heading_deg,
-                    attitude="fusion")
+        return Pose(
+            lat=lonlat[1],
+            lon=lonlat[0],
+            alt_msl_m=alt,
+            track_deg=heading_deg,
+            speed_mps=C12_SPEED_MPS,
+            utc=utc,
+            heading_deg=heading_deg,
+            attitude="fusion",
+        )
 
     def _record(self) -> None:
         pose = self._pose_at_track(self.t, *self.xy, self.heading_deg)
         if pose is not None:
-            self.rows.append({"seq": len(self.rows), "log_time": int(round(self.t * 1e9)), "t_host": self.t,
-                              "pose": pose_tag(pose)})
+            self.rows.append(
+                {
+                    "seq": len(self.rows),
+                    "log_time": int(round(self.t * 1e9)),
+                    "t_host": self.t,
+                    "pose": pose_tag(pose),
+                }
+            )
 
     def pose(self, t: float | None = None) -> Pose | None:
         t = self.t if t is None else float(t)
@@ -144,7 +166,9 @@ class Twin:
         i = max(0, min(len(track) - 2, int(t * RING_HZ)))
         (t0, x0, y0, h0), (t1, x1, y1, h1) = track[i], track[i + 1]
         w = min(max((t - t0) / (t1 - t0), 0.0), 1.0)
-        return self._pose_at_track(t, x0 + (x1 - x0) * w, y0 + (y1 - y0) * w, h1 if w >= 0.5 else h0)
+        return self._pose_at_track(
+            t, x0 + (x1 - x0) * w, y0 + (y1 - y0) * w, h1 if w >= 0.5 else h0
+        )
 
     def index(self, since: int | None = None) -> list[dict[str, Any]]:
         return [dict(r) for r in self.rows if since is None or r["log_time"] >= since]
@@ -159,15 +183,25 @@ class Twin:
             self.last_error = f"no frame {seq} in the ring"
             return None
         pose = tag_pose(row["pose"])
-        cam_xy, cam_alt, yaw = camera_pose_local(pose, self.tiles_dir, self.map_name, lever=C12_LEVER_M)
+        cam_xy, cam_alt, yaw = camera_pose_local(
+            pose, self.tiles_dir, self.map_name, lever=C12_LEVER_M
+        )
         try:
-            rgb = self._render(self.sensor, cam_xy, cam_alt - self.ground(cam_xy), yaw,
-                               pose.roll_deg, -pose.pitch_deg)
+            rgb = self._render(
+                self.sensor,
+                cam_xy,
+                cam_alt - self.ground(cam_xy),
+                yaw,
+                pose.roll_deg,
+                -pose.pitch_deg,
+            )
         except ValueError as exc:
             self.last_error = f"frame {seq} reaches off the ortho: {exc}"
             return None
         out = BytesIO()
-        Image.fromarray(np.ascontiguousarray(rgb)).save(out, format="JPEG", quality=FRAME_JPEG_QUALITY)
+        Image.fromarray(np.ascontiguousarray(rgb)).save(
+            out, format="JPEG", quality=FRAME_JPEG_QUALITY
+        )
         self.last_error = ""
         return out.getvalue(), row["t_host"], row["log_time"], seq, row["pose"]
 
@@ -180,20 +214,48 @@ def _xy(text: str) -> tuple[float, float]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default="configs/calcity.yaml")
-    ap.add_argument("--split", default=None, help="the split the episode is read from (default: the Cal City bench's)")
-    ap.add_argument("--episode", required=True, help="the episode id; with --start-xy, an operator-authored mission's")
-    ap.add_argument("--ortho", required=True, type=Path, help="the raster directory the twin's frames are rendered off")
-    ap.add_argument("--instruction", default=None, help="the operator's words in place of the episode's")
-    ap.add_argument("--start-xy", type=_xy, default=None, help="x,y: fly a mission with no row from here, under --instruction")
-    ap.add_argument("--then", action="append", default=[], help="a tasking spoken after each report, in order")
+    ap.add_argument(
+        "--split",
+        default=None,
+        help="the split the episode is read from (default: the Cal City bench's)",
+    )
+    ap.add_argument(
+        "--episode",
+        required=True,
+        help="the episode id; with --start-xy, an operator-authored mission's",
+    )
+    ap.add_argument(
+        "--ortho",
+        required=True,
+        type=Path,
+        help="the raster directory the twin's frames are rendered off",
+    )
+    ap.add_argument(
+        "--instruction", default=None, help="the operator's words in place of the episode's"
+    )
+    ap.add_argument(
+        "--start-xy",
+        type=_xy,
+        default=None,
+        help="x,y: fly a mission with no row from here, under --instruction",
+    )
+    ap.add_argument(
+        "--then", action="append", default=[], help="a tasking spoken after each report, in order"
+    )
     ap.add_argument("--reasoning-effort", default=None)
-    ap.add_argument("--register", type=Path, default=None,
-                    help="the raster directory each frame is registered against; unset registers nothing")
+    ap.add_argument(
+        "--register",
+        type=Path,
+        default=None,
+        help="the raster directory each frame is registered against; unset registers nothing",
+    )
     ap.add_argument("--out", type=Path, default=Path("output/flight"))
     args = ap.parse_args(argv)
     if args.start_xy is not None and not args.instruction:
         ap.error("--start-xy flies an operator-authored mission: give its words with --instruction")
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s"
+    )
 
     bench = calcity_bench(os.environ)
     split = args.split or bench.default_split
@@ -203,22 +265,47 @@ def main(argv: list[str] | None = None) -> int:
     map_name = episode.map_name
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
-        print(f"no {map_name} raster under {args.ortho}: a raster directory holds {map_render.raster_pair(map_name)}",
-              file=sys.stderr)
+        print(
+            f"no {map_name} raster under {args.ortho}: a raster directory holds {map_render.raster_pair(map_name)}",
+            file=sys.stderr,
+        )
         return 2
     start_alt, ground_z = bench.engine.start_altitude_m(cfg, map_name, episode.start_z)
-    twin = Twin(tiles_dir=bench.tiles_dir, map_name=map_name, ortho=ortho, sensor=sensor, start_xy=episode.start_xy,
-                agl_m=start_alt - ground_z)
-    live = open_live(vehicle=twin, tiles_dir=bench.tiles_dir, map_name=map_name, sensor=sensor,
-                     register_raster=args.register)
+    twin = Twin(
+        tiles_dir=bench.tiles_dir,
+        map_name=map_name,
+        ortho=ortho,
+        sensor=sensor,
+        start_xy=episode.start_xy,
+        agl_m=start_alt - ground_z,
+    )
+    live = open_live(
+        vehicle=twin,
+        tiles_dir=bench.tiles_dir,
+        map_name=map_name,
+        sensor=sensor,
+        register_raster=args.register,
+    )
 
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sortie = args.out / stamp
     ep = open_episode_dir(sortie, episode_id=args.episode, benchmark=bench.name, run_no=1)
-    mission = Mission(bench=bench, episode_id=args.episode, split=split, config=args.config, workdir=ep.dir, live=live,
-                      instruction=args.instruction, recorder=ep.recorder, close_log=ep.close, run_id=stamp,
-                      run_no=1, start_xy=args.start_xy, reasoning_effort=args.reasoning_effort,
-                      agl_m=start_alt - ground_z)
+    mission = Mission(
+        bench=bench,
+        episode_id=args.episode,
+        split=split,
+        config=args.config,
+        workdir=ep.dir,
+        live=live,
+        instruction=args.instruction,
+        recorder=ep.recorder,
+        close_log=ep.close,
+        run_id=stamp,
+        run_no=1,
+        start_xy=args.start_xy,
+        reasoning_effort=args.reasoning_effort,
+        agl_m=start_alt - ground_z,
+    )
     converse(mission, args.then)
     print(summary_line(mission))
     return 0 if mission.status == STATE_ENDED else 1

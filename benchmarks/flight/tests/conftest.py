@@ -29,9 +29,16 @@ def make_twin(built):
         from benchmarks.flight.twin import Twin
 
         tiles, _raster, ortho, sensor = built
-        twin = Twin(tiles_dir=tiles, map_name="calcity", ortho=ortho, sensor=sensor, start_xy=start_xy,
-                    agl_m=world.AGL_M)
+        twin = Twin(
+            tiles_dir=tiles,
+            map_name="calcity",
+            ortho=ortho,
+            sensor=sensor,
+            start_xy=start_xy,
+            agl_m=world.AGL_M,
+        )
         return world.recording_legs(twin)
+
     return make
 
 
@@ -39,12 +46,19 @@ def make_twin(built):
 def make_live(built, monkeypatch):
     """A live source over ``vehicle``; with ``register`` it registers frames
     but its corrector is not started, so a test drives ``correct`` itself."""
+
     def make(vehicle, register=False):
         from benchmarks.flight.live_source import LiveSource, open_live
 
         tiles, raster, _ortho, sensor = built
         with monkeypatch.context() as m:
             m.setattr(LiveSource, "start_corrector", lambda self: None)
-            return open_live(vehicle=vehicle, tiles_dir=tiles, map_name="calcity", sensor=sensor,
-                             register_raster=raster if register else None)
+            return open_live(
+                vehicle=vehicle,
+                tiles_dir=tiles,
+                map_name="calcity",
+                sensor=sensor,
+                register_raster=raster if register else None,
+            )
+
     return make

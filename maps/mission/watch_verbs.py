@@ -21,17 +21,26 @@ def _named_feature_note(classes: list[str], names: set[str]) -> str | None:
     if not named:
         return None
     q = ", ".join(f"'{c}'" for c in named)
-    return (f"{q}: a NAMED feature on this map, already a world-state row "
-            f"-- the segmenter takes visual classes like 'house' or "
-            f"'pool'. Watched as said.")
+    return (
+        f"{q}: a NAMED feature on this map, already a world-state row "
+        f"-- the segmenter takes visual classes like 'house' or "
+        f"'pool'. Watched as said."
+    )
 
 
 class Watchlist:
     """The verbs that arm the segmenter: the watchlist (``look_for``) and the
     targeted boost (``look_for(..., at=)``)."""
 
-    def __init__(self, spec: MissionSpec, surface: Surface, rejections: Rejections,
-                 progress: Progress, *, boost_queue: Callable[[list, list], dict]):
+    def __init__(
+        self,
+        spec: MissionSpec,
+        surface: Surface,
+        rejections: Rejections,
+        progress: Progress,
+        *,
+        boost_queue: Callable[[list, list], dict],
+    ):
         self.spec = spec
         self.surface = surface
         self.rejections = rejections
@@ -59,9 +68,14 @@ class Watchlist:
         ack: dict = {"now": [f"{c} (target)" for c in self.classes]}
         if err:
             ack["error"] = err
-        names = {s for s in (
-            str(n.name or "").strip().lower()
-            for n in self.surface.ctx.graph.nodes.copy().values()) if s}
+        names = {
+            s
+            for s in (
+                str(n.name or "").strip().lower()
+                for n in self.surface.ctx.graph.nodes.copy().values()
+            )
+            if s
+        }
         note = _named_feature_note(list(adds), names)
         if note:
             ack["note"] = note
@@ -78,10 +92,12 @@ class Watchlist:
                 w = self._arm(adds)
                 res["watching"] = w.get("error") or w.get("now")
             if res.get("queued"):
-                res["note"] = ("boost queued -- extra segmentation at the "
-                               "asked spot fires on your next flight; the "
-                               "class is also on the standing watchlist for "
-                               "every later flight")
+                res["note"] = (
+                    "boost queued -- extra segmentation at the "
+                    "asked spot fires on your next flight; the "
+                    "class is also on the standing watchlist for "
+                    "every later flight"
+                )
             # Any accepted boost refreshes the surface and bumps its version,
             # as a flight does (a retro boost has ingested detections).
             self.surface.world_moved()

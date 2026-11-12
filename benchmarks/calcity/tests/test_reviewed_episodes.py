@@ -33,8 +33,15 @@ def test_the_rows_no_mask_can_score_leave_the_reviewed_set():
     object leave the set; the seven whose masks were corrected in review stay in it."""
     ids = set(reviewed_episode_ids(_SPLIT))
     assert ids.isdisjoint({"calcity::610#609", "calcity::633#632", "calcity::99#98"})
-    assert ids >= {"calcity::37#36", "calcity::49#48", "calcity::135#134", "calcity::621#620",
-                   "calcity::622#621", "calcity::770#769", "calcity::2546#2545"}
+    assert ids >= {
+        "calcity::37#36",
+        "calcity::49#48",
+        "calcity::135#134",
+        "calcity::621#620",
+        "calcity::622#621",
+        "calcity::770#769",
+        "calcity::2546#2545",
+    }
 
 
 def test_a_row_matches_only_within_the_tolerance(tmp_path, monkeypatch):
@@ -42,12 +49,22 @@ def test_a_row_matches_only_within_the_tolerance(tmp_path, monkeypatch):
 
     corpus = tmp_path / "c.json"
     gt = tmp_path / "gt.json"
-    row = {"area": "calcity", "descriptions": ["x"], "ann_ids": [0], "object_ids": [],
-           "marker_positions": [], "trajectory": [[0.0, 0.0, 125.0]]}
-    corpus.write_text(json.dumps([
-        {**row, "ann_ids": [0], "target_positions": [[10.15, 20.0, 0.0]]},
-        {**row, "ann_ids": [1], "target_positions": [[10.25, 20.0, 0.0]]},
-    ]))
+    row = {
+        "area": "calcity",
+        "descriptions": ["x"],
+        "ann_ids": [0],
+        "object_ids": [],
+        "marker_positions": [],
+        "trajectory": [[0.0, 0.0, 125.0]],
+    }
+    corpus.write_text(
+        json.dumps(
+            [
+                {**row, "ann_ids": [0], "target_positions": [[10.15, 20.0, 0.0]]},
+                {**row, "ann_ids": [1], "target_positions": [[10.25, 20.0, 0.0]]},
+            ]
+        )
+    )
     gt.write_text(json.dumps(["calcity::10.0:20.0"]))
     monkeypatch.setattr(reviewed, "GROUND_TRUTH", gt)
     assert reviewed_episode_ids(corpus) == ["calcity::0#0"]
@@ -62,10 +79,17 @@ def test_a_commit_inside_a_self_crossing_reviewed_mask_scores():
     from benchmarks.citynav.eval import score_arrival
 
     rows = json.loads(_SPLIT.read_text())
-    ep = next(e for e in (parse_episode(r, row_index=i) for i, r in enumerate(rows))
-              if e.episode_id == "calcity::175#174")
-    row = score_arrival(criterion="shape", final_pos_xy=(3740.64, 5826.91), target_xy=ep.target_xy,
-                        gt_polygon=ep.target_mask)
+    ep = next(
+        e
+        for e in (parse_episode(r, row_index=i) for i, r in enumerate(rows))
+        if e.episode_id == "calcity::175#174"
+    )
+    row = score_arrival(
+        criterion="shape",
+        final_pos_xy=(3740.64, 5826.91),
+        target_xy=ep.target_xy,
+        gt_polygon=ep.target_mask,
+    )
     assert row["SR"] == 1
 
 
@@ -80,5 +104,9 @@ def test_every_reviewed_row_names_its_intel_quality_or_none():
     rows = json.loads(_SPLIT.read_text())
     by_id = {e.episode_id: e for e in (parse_episode(r, row_index=i) for i, r in enumerate(rows))}
     assert Counter(by_id[e].intel_quality for e in reviewed_episode_ids(_SPLIT)) == {
-        "G": 593, "M": 89, "P": 7, None: 411}
+        "G": 593,
+        "M": 89,
+        "P": 7,
+        None: 411,
+    }
     assert {r.get("intel_quality") for r in rows} == {"G", "M", "P", None}

@@ -33,7 +33,6 @@ from typing import Any, Mapping
 import numpy as np
 
 
-
 @dataclass(frozen=True)
 class CameraIntrinsics:
     """A plain perspective pinhole: fields of view and pixel size."""
@@ -60,7 +59,9 @@ class CameraIntrinsics:
         return self.image_height / 2.0
 
 
-def mount_rotation_matrix(pitch_deg: float, roll_deg: float = 0.0, yaw_deg: float = 0.0) -> np.ndarray:
+def mount_rotation_matrix(
+    pitch_deg: float, roll_deg: float = 0.0, yaw_deg: float = 0.0
+) -> np.ndarray:
     """Body <- camera rotation for a mount at ``pitch_deg`` (positive-down),
     ``roll_deg`` (about body +X, positive = right side down) and ``yaw_deg``
     (about the camera's own optical axis, CW looking out).
@@ -219,9 +220,13 @@ def list_sensors() -> list[str]:
 
 _INTRINSIC_KEYS = tuple(f.name for f in fields(CameraIntrinsics))
 # Keys the flown boresight chains carry in their inline sensor that nothing reads.
-_IGNORED_KEYS = frozenset({"min_range_m", "depth_subsample", "body_offset_x", "body_offset_y", "body_offset_z"})
+_IGNORED_KEYS = frozenset(
+    {"min_range_m", "depth_subsample", "body_offset_x", "body_offset_y", "body_offset_z"}
+)
 # What an inline override may name: a registered base, the intrinsics, and SensorSpec's other fields.
-_INLINE_KEYS = frozenset({"base", *_INTRINSIC_KEYS, *(f.name for f in fields(SensorSpec)), *_IGNORED_KEYS}) - {"intrinsics"}
+_INLINE_KEYS = frozenset(
+    {"base", *_INTRINSIC_KEYS, *(f.name for f in fields(SensorSpec)), *_IGNORED_KEYS}
+) - {"intrinsics"}
 
 
 def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
@@ -235,9 +240,7 @@ def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
     if isinstance(spec, str):
         if spec in _REGISTRY:
             return _REGISTRY[spec]
-        raise ValueError(
-            f"Unknown sensor {spec!r}. Registered sensors: {list_sensors()}"
-        )
+        raise ValueError(f"Unknown sensor {spec!r}. Registered sensors: {list_sensors()}")
     if not isinstance(spec, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise TypeError(  # pyright: ignore[reportUnreachable]
             f"cfg.sensor must be str, dict, or None; got {type(spec)}"

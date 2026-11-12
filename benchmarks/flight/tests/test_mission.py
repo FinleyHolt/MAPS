@@ -19,11 +19,21 @@ def make_mission(built, bench, make_twin, make_live, tmp_path):
         live = make_live(twin)
         workdir = tmp_path / "sortie" / "run"
         workdir.mkdir(parents=True)
-        m = M.Mission(bench=bench, episode_id="calcity::t", split="calcity", config="configs/calcity.yaml", workdir=workdir,
-                      live=live, recorder=None, close_log=lambda: None, run_no=1,
-                      agl_m=world.AGL_M)
+        m = M.Mission(
+            bench=bench,
+            episode_id="calcity::t",
+            split="calcity",
+            config="configs/calcity.yaml",
+            workdir=workdir,
+            live=live,
+            recorder=None,
+            close_log=lambda: None,
+            run_no=1,
+            agl_m=world.AGL_M,
+        )
         m.map_name, m._tiles_dir = "calcity", built[0]
         return m, twin
+
     return make
 
 
@@ -38,7 +48,9 @@ def test_a_disc_area_is_half_the_observation_span_about_the_point(built):
     assert max(abs(complex(x - 600.0, y - 600.0)) for x, y in area) == pytest.approx(r)
 
 
-def test_a_flight_over_unflown_ground_posts_the_leg_and_serves_the_pass_that_held_it(built, make_mission):
+def test_a_flight_over_unflown_ground_posts_the_leg_and_serves_the_pass_that_held_it(
+    built, make_mission
+):
     m, twin = make_mission()
     h = world.hydrated(built[3])
     served = []
@@ -61,7 +73,9 @@ def test_ground_the_pass_holds_already_is_answered_without_a_leg(built, make_mis
     twin.post(legs.Leg(target="t", point=(600.0, 700.0), step=0))
     twin.sleep(10.0)
     posted = len(twin.legs)
-    m.legs.fly(world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
+    m.legs.fly(
+        world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"}
+    )
     assert len(twin.legs) == posted
     assert "no leg is flown" in _legs(m)[-1]
 
@@ -83,7 +97,10 @@ def test_a_pass_that_misses_a_side_is_short_and_is_asked_again_toward_it(built, 
     asked again moved east, and the second pass completes it."""
     m, twin = make_mission()
     footprint = [(600.0 + dx, 600.0 + dy) for dx in range(0, 401, 50) for dy in (-30, 0, 30)]
-    m.legs.fly(world.session(world.hydrated(built[3], cells=footprint), lambda item: {}), {"target_fid": "[600, 600]"})
+    m.legs.fly(
+        world.session(world.hydrated(built[3], cells=footprint), lambda item: {}),
+        {"target_fid": "[600, 600]"},
+    )
     first, again = twin.legs[0], twin.legs[1]
     assert (first.revision, again.revision) == (0, 1)
     assert again.point[0] > 700.0 and abs(again.point[1] - 600.0) < 1.0
@@ -96,7 +113,7 @@ def test_a_leg_whose_area_the_aircraft_never_reaches_is_lost(built, make_mission
     m, twin = make_mission()
     twin.post(legs.Leg(target="t", point=(600.0, 100.0), step=0))
     twin.route = []
-    twin.heading_deg = 180.0           # flying away from the area
+    twin.heading_deg = 180.0  # flying away from the area
     area_ll = m._area_lonlat([(600.0, 1100.0), (610.0, 1100.0), (600.0, 1110.0)])
     assert m.legs.wait_arrival((600.0, 1100.0), area=area_ll, timeout_s=5.0)[0] == "lost"
 
@@ -107,9 +124,15 @@ def test_a_report_banks_one_ledger_row_and_a_second_report_replaces_it(built, ma
     m.status, m.ended_by = M.STATE_AWAITING, "reply"
     m.bank()
     m.bank()
-    rows = [json.loads(line) for line in (m.workdir.parent / "episodes.jsonl").read_text().splitlines()]
+    rows = [
+        json.loads(line) for line in (m.workdir.parent / "episodes.jsonl").read_text().splitlines()
+    ]
     assert len(rows) == 1
-    assert rows[0]["episode_id"] == "calcity::t" and rows[0]["status"] == "ok" and rows[0]["workdir"] == "run"
+    assert (
+        rows[0]["episode_id"] == "calcity::t"
+        and rows[0]["status"] == "ok"
+        and rows[0]["workdir"] == "run"
+    )
 
 
 def test_a_track_fix_is_where_the_aircraft_was_at_its_stamp_under_a_timing_offset(make_mission):
@@ -127,7 +150,9 @@ def test_a_track_fix_is_where_the_aircraft_was_at_its_stamp_under_a_timing_offse
     m._record_track()
     first = json.loads((m.workdir.parent / TRACK_JSONL).read_text().splitlines()[0])
     pose = m.live.pose_now(m._t0)
-    assert first["t_unix"] == pytest.approx(dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3)
+    assert first["t_unix"] == pytest.approx(
+        dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3
+    )
     x, y = M.lonlat_to_local(m._tiles_dir, m.map_name, pose.lon, pose.lat)
     assert (first["x"], first["y"]) == pytest.approx((x, y), abs=0.01)
 
@@ -145,7 +170,9 @@ def test_a_start_without_a_fix_takes_its_utc_at_the_first_bank_with_one(make_mis
     m.status, m.ended_by = M.STATE_AWAITING, "reply"
     m.bank()
     row = json.loads((m.workdir.parent / "episodes.jsonl").read_text().splitlines()[0])
-    assert row["started_at_utc"] == pytest.approx(dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3)
+    assert row["started_at_utc"] == pytest.approx(
+        dt.datetime.fromisoformat(pose.utc).timestamp(), abs=1e-3
+    )
     assert (m.workdir.parent / TRACK_JSONL).read_text().strip()
 
 
@@ -162,7 +189,8 @@ def test_an_unknown_episode_is_refused_by_name(monkeypatch, bench):
 
 
 def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_from_the_new_pass(
-        built, make_mission):
+    built, make_mission
+):
     """The ring's index holds the area, but none of its frames comes over the
     link: the leg is flown, arrival waits for frames recorded after it was
     posted, and the observation is fused from those."""
@@ -173,16 +201,22 @@ def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_
     fetch = twin.frame
     twin.frame = lambda seq: None if seq < n_old else fetch(seq)
     served = []
-    m.legs.fly(world.session(world.hydrated(built[3]), lambda item: served.append(m.legs.held) or {}),
-                {"target_fid": "[600, 600]"})
+    m.legs.fly(
+        world.session(world.hydrated(built[3]), lambda item: served.append(m.legs.held) or {}),
+        {"target_fid": "[600, 600]"},
+    )
     assert len(twin.legs) == 2
     assert served[0] is not None, _legs(m)
     assert min(served[0][1]["mosaic"]["seqs"]) >= n_old
-    assert "is held by the pass (19/19 points), but no frame of it could be served" in _legs(m)[0], _legs(m)
+    assert (
+        "is held by the pass (19/19 points), but no frame of it could be served" in _legs(m)[0]
+    ), _legs(m)
     assert "arrived" in _legs(m)[-1]
 
 
-def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_read(built, make_mission):
+def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_read(
+    built, make_mission
+):
     m, twin = make_mission()
     twin.post(legs.Leg(target="t", point=(600.0, 700.0), step=0))
     m.live.ownship = lambda: None
@@ -191,7 +225,9 @@ def test_a_leg_arrives_on_the_recording_while_the_aircraft_s_own_pose_cannot_be_
 
 
 @pytest.mark.parametrize("stop_in_wait", [False, True])
-def test_a_stopped_mission_posts_no_leg_fetches_no_frame_and_flies_nothing(built, make_mission, stop_in_wait):
+def test_a_stopped_mission_posts_no_leg_fetches_no_frame_and_flies_nothing(
+    built, make_mission, stop_in_wait
+):
     """Stop before the flight, and Stop while its leg is out: after it nothing
     is posted, no frame is fetched, and the flight is not perceived."""
     m, twin = make_mission()
@@ -203,8 +239,10 @@ def test_a_stopped_mission_posts_no_leg_fetches_no_frame_and_flies_nothing(built
         m.legs.wait_arrival = lambda *a, **k: (m.stop(), wait(*a, **k))[1]
     else:
         m.stop()
-    out = m.legs.fly(world.session(world.hydrated(built[3]), lambda item: flown.append(item) or {}),
-                      {"target_fid": "[600, 600]"})
+    out = m.legs.fly(
+        world.session(world.hydrated(built[3]), lambda item: flown.append(item) or {}),
+        {"target_fid": "[600, 600]"},
+    )
     assert out == {"error": "the mission is stopped"}
     assert len(twin.legs) == int(stop_in_wait) and fetched == [] and flown == []
 
@@ -216,7 +254,9 @@ def test_the_summary_line_counts_the_turns_the_row_counts(make_mission):
     assert f"{m.row()['turns_used']} turns" in M.summary_line(m) and m.row()["turns_used"] == 5
 
 
-def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(make_mission, caplog):
+def test_a_lost_leg_with_no_pose_read_says_so_rather_than_an_infinite_distance(
+    make_mission, caplog
+):
     m, _twin = make_mission()
     m.live.ownship = lambda: None
     area_ll = m._area_lonlat([(600.0, 1100.0), (610.0, 1100.0), (600.0, 1110.0)])
@@ -238,16 +278,25 @@ def test_a_stop_while_a_short_pass_is_read_posts_no_refly(built, make_mission):
             m.stop()
             return "short", {}
         return "cancel", None
+
     m.legs.wait_arrival = wait
-    out = m.legs.fly(world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
+    out = m.legs.fly(
+        world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"}
+    )
     assert out == {"error": "the mission is stopped"}
     assert [leg.revision for leg in twin.legs] == [0]
 
 
 def test_a_short_pass_is_said_as_the_points_it_held():
     """17 of 19 points is said as 17/19, never rounded up to a share that reads as held."""
-    said = legs.Legs._held_words({"coverage": {"held": 17, "points": 19}, "mosaic": {"asked": 2},
-                                  "seq": 5, "off_nadir_deg": 3.1})
+    said = legs.Legs._held_words(
+        {
+            "coverage": {"held": 17, "points": 19},
+            "mosaic": {"asked": 2},
+            "seq": 5,
+            "off_nadir_deg": 3.1,
+        }
+    )
     assert "held 17/19 points of it in 2 frame(s)" in said and "90%" not in said
 
 
@@ -256,7 +305,9 @@ def test_a_stop_while_the_ring_is_asked_says_no_leg_is_flown(built, make_mission
     writes no row saying the leg is flown."""
     m, twin = make_mission()
     twin.index = lambda since=None: m.stop()
-    out = m.legs.fly(world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
+    out = m.legs.fly(
+        world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"}
+    )
     assert out == {"error": "the mission is stopped"}
     assert twin.legs == [] and not any("the leg is flown" in s for s in _legs(m)), _legs(m)
 
@@ -266,7 +317,12 @@ def test_a_lost_leg_after_a_short_pass_says_the_closest_the_leg_came(make_missio
     than 740 m and was lost: the leg row says the leg's closest, 100 m."""
     m, _twin = make_mission()
     offs = iter([100.0] + [400.0] * 6)
-    m.live.coverage = lambda area, after=None: {"fraction": 0.5, "held": 1, "points": 2, "best": [None, None]}
+    m.live.coverage = lambda area, after=None: {
+        "fraction": 0.5,
+        "held": 1,
+        "points": 2,
+        "best": [None, None],
+    }
     m.live.ownship = lambda: {"x": 600.0 + next(offs, 740.0), "y": 600.0, "agl_m": 900.0}
     m.legs.closest_m = float("inf")
     assert m.legs.wait_arrival((600.0, 600.0), area=[], timeout_s=60.0, reach_m=200.0)[0] == "short"
@@ -274,7 +330,9 @@ def test_a_lost_leg_after_a_short_pass_says_the_closest_the_leg_came(make_missio
     assert "(closest 100 m)" in m.legs.outcome_words("lost", "t at (600, 600)", None, 0.0)
 
 
-def test_the_mission_stamps_the_arm_s_reasoning_effort_as_its_requests_carry_it(make_mission, monkeypatch):
+def test_the_mission_stamps_the_arm_s_reasoning_effort_as_its_requests_carry_it(
+    make_mission, monkeypatch
+):
     m, _twin = make_mission()
     m.bench = m.bench.with_environ({"SEARCH_SAMPLING_REASONING_EFFORT": " high "})
     assert m._mission_stamp()["reasoning_effort"] == "high"
@@ -282,7 +340,9 @@ def test_the_mission_stamps_the_arm_s_reasoning_effort_as_its_requests_carry_it(
     assert m._mission_stamp()["reasoning_effort"] is None
 
 
-def test_a_short_pass_before_the_leg_is_logged_as_the_frames_that_held_it(built, make_mission, caplog):
+def test_a_short_pass_before_the_leg_is_logged_as_the_frames_that_held_it(
+    built, make_mission, caplog
+):
     """The pass before the leg held 3 of the area's points in 2 frames out of
     the 40 the ring scored: the log line counts the 2 that held them."""
     from benchmarks.flight.live_source import coverage_record
@@ -292,5 +352,9 @@ def test_a_short_pass_before_the_leg_is_logged_as_the_frames_that_held_it(built,
     m.legs.coverage_before_leg = lambda area: (coverage_record(best, 40), None)
     m.legs.post_and_wait = lambda *a: None
     caplog.set_level("INFO", logger=legs.log.name)
-    m.legs.fly(world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"})
-    assert "the pass holds 3/19 points of [600, 600] at (600, 600) in 2 frames" in caplog.text, caplog.text
+    m.legs.fly(
+        world.session(world.hydrated(built[3]), lambda item: {}), {"target_fid": "[600, 600]"}
+    )
+    assert "the pass holds 3/19 points of [600, 600] at (600, 600) in 2 frames" in caplog.text, (
+        caplog.text
+    )

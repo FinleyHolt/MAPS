@@ -33,10 +33,26 @@ from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.run_record.config import load_config
-from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
-                                                   ConversationLog)
-from benchmarks.run_record.episodes import MANIFEST_NAME, STATUS_INFRA, STATUS_OK, upsert_row, write_episode_json
-from benchmarks.run_record.run_manifest import arm_env_stamp, build_manifest, emit_or_verify, settle_effort
+from benchmarks.run_record.episode_workdir import (
+    CONVERSATION_JSONL,
+    FRAMES_JSONL,
+    OBSERVATIONS_DIR,
+    TRACK_JSONL,
+    ConversationLog,
+)
+from benchmarks.run_record.episodes import (
+    MANIFEST_NAME,
+    STATUS_INFRA,
+    STATUS_OK,
+    upsert_row,
+    write_episode_json,
+)
+from benchmarks.run_record.run_manifest import (
+    arm_env_stamp,
+    build_manifest,
+    emit_or_verify,
+    settle_effort,
+)
 from maps.llm import endpoint_spec
 from maps.llm.http import CallCanceled
 from maps.llm.model_cards import check_effort, effort
@@ -55,7 +71,10 @@ STATE_AWAITING = "awaiting_tasking"
 STATE_ENDED = "ended"
 STATE_FAILED = "failed"
 
-def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[float, float] | None = None):
+
+def resolve_episode(
+    bench: Bench, episode_id: str, split: str, start_xy: tuple[float, float] | None = None
+):
     """The row of ``bench``'s split named ``episode_id``; with ``start_xy``, a
     mission flown under the operator's own words: the map its id names, the
     start given, and no target."""
@@ -68,8 +87,16 @@ def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[f
     return engine.parse_episode(found[1], row_index=found[0])
 
 
-def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: float,
-            start_xy: tuple[float, float] | None = None, workdir: Path | None = None) -> Hydrated:
+def hydrate(
+    *,
+    bench: Bench,
+    episode_id: str,
+    split: str,
+    config: str,
+    agl_m: float,
+    start_xy: tuple[float, float] | None = None,
+    workdir: Path | None = None,
+) -> Hydrated:
     """The engine for one mission, built by the bench's engine
     (``EpisodeEngine.build_episode``), at the operator's start and at
     ``agl_m``, the crew's commanded height above ground: the one height the
@@ -78,9 +105,15 @@ def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: fl
     engine = bench.engine
     cfg = load_config(config)
     episode = resolve_episode(bench, episode_id, split, start_xy)
-    h = engine.build_episode(cfg, episode, engine.load_assets(bench, episode.map_name), bench,
-                             settings=from_environ(bench.environ), workdir=workdir,
-                             routing_key=episode_id)
+    h = engine.build_episode(
+        cfg,
+        episode,
+        engine.load_assets(bench, episode.map_name),
+        bench,
+        settings=from_environ(bench.environ),
+        workdir=workdir,
+        routing_key=episode_id,
+    )
     h.state.altitude_m = h.ground_z_m + float(agl_m)
     return h
 
@@ -99,10 +132,24 @@ class _StampedLog(ConversationLog):
 class Mission:
     """A mission in the seat: its thread, its tasking queue, its record."""
 
-    def __init__(self, *, bench: Bench, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
-                 recorder: Any, close_log, agl_m: float, instruction: str | None = None,
-                 run_id: str | None = None, run_no: int | None = None,
-                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        bench: Bench,
+        episode_id: str,
+        split: str,
+        config: str,
+        workdir: Path,
+        live: LiveSource,
+        recorder: Any,
+        close_log,
+        agl_m: float,
+        instruction: str | None = None,
+        run_id: str | None = None,
+        run_no: int | None = None,
+        start_xy: tuple[float, float] | None = None,
+        reasoning_effort: str | None = None,
+    ) -> None:
         #: The bench the mission flies: its split, its bake, its engine.
         self.bench = bench
         self.episode_id = episode_id
@@ -160,9 +207,15 @@ class Mission:
         #: What this run has captured, the imagery ``look`` crops.
         self._imagery = RunImagery()
         #: Each flight's leg on the aircraft, and the pass the flight in progress held.
-        self.legs = Legs(live=live, transcript=self.transcript, cancel=self._cancel, agl_m=self.agl_m,
-                         to_lonlat=self._area_lonlat, keep_observation=self._downlink,
-                         flights_flown=lambda: len(self.flights))
+        self.legs = Legs(
+            live=live,
+            transcript=self.transcript,
+            cancel=self._cancel,
+            agl_m=self.agl_m,
+            to_lonlat=self._area_lonlat,
+            keep_observation=self._downlink,
+            flights_flown=lambda: len(self.flights),
+        )
 
         prov = git_provenance()
         self.git_commit: str | None = prov.get("git_commit")
@@ -208,14 +261,18 @@ class Mission:
 
     def _area_lonlat(self, area: list[tuple[float, float]]) -> list[tuple[float, float]]:
         """``area`` in WGS84, the form the recording is asked in."""
-        return [local_to_lonlat(self._tiles_dir, self.map_name, float(x), float(y)) for x, y in area]
+        return [
+            local_to_lonlat(self._tiles_dir, self.map_name, float(x), float(y)) for x, y in area
+        ]
 
     def _downlink(self, obs) -> str | None:
         """The observation as ``observations/<sha256>.jpg``, its sha; None (logged) when it could not be written."""
         from PIL import Image  # noqa: PLC0415
 
         out = BytesIO()
-        Image.fromarray(np.ascontiguousarray(obs.rgb)).save(out, format="JPEG", quality=OBSERVATION_JPEG_QUALITY)
+        Image.fromarray(np.ascontiguousarray(obs.rgb)).save(
+            out, format="JPEG", quality=OBSERVATION_JPEG_QUALITY
+        )
         jpeg = out.getvalue()
         sha = hashlib.sha256(jpeg).hexdigest()
         try:
@@ -229,15 +286,26 @@ class Mission:
 
     def _note_frame(self, last: dict[str, Any], obs) -> None:
         """One ``frames.jsonl`` row: the observation, keyed to the recording by its newest frame."""
-        row = {"log_time": last.get("log_time"), "seq": last.get("seq"), "t_host": last.get("t_host"),
-               "utc": last.get("utc"), "age_s": last.get("age_s"), "attitude": last.get("attitude"),
-               "pose_xy": [float(obs.pose_xy[0]), float(obs.pose_xy[1])], "altitude_m": float(obs.altitude_m),
-               "corners_xy": last.get("corners_xy"), "boresight": last.get("boresight"),
-               "off_nadir_deg": last.get("off_nadir_deg"),
-               "registration": last.get("registration"), "mosaic": last.get("mosaic"),
-               "observation": last.get("observation"), "flight": len(self.flights),
-               "world_window": [float(v) for v in obs.world_window], "shape": [int(v) for v in obs.rgb.shape[:2]],
-               "t_s": self.elapsed_s()}
+        row = {
+            "log_time": last.get("log_time"),
+            "seq": last.get("seq"),
+            "t_host": last.get("t_host"),
+            "utc": last.get("utc"),
+            "age_s": last.get("age_s"),
+            "attitude": last.get("attitude"),
+            "pose_xy": [float(obs.pose_xy[0]), float(obs.pose_xy[1])],
+            "altitude_m": float(obs.altitude_m),
+            "corners_xy": last.get("corners_xy"),
+            "boresight": last.get("boresight"),
+            "off_nadir_deg": last.get("off_nadir_deg"),
+            "registration": last.get("registration"),
+            "mosaic": last.get("mosaic"),
+            "observation": last.get("observation"),
+            "flight": len(self.flights),
+            "world_window": [float(v) for v in obs.world_window],
+            "shape": [int(v) for v in obs.rgb.shape[:2]],
+            "t_s": self.elapsed_s(),
+        }
         try:
             with (self.workdir / FRAMES_JSONL).open("a", encoding="utf-8") as f:
                 f.write(json.dumps(row, default=str) + "\n")
@@ -266,7 +334,9 @@ class Mission:
         self.started_at = time.time()
         self._t0 = self._vehicle.now()
         self.started_at_utc = self._utc_now()
-        self._thread = threading.Thread(target=self._run, name=f"mission-{self.episode_id}", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name=f"mission-{self.episode_id}", daemon=True
+        )
         self._thread.start()
 
     def _run(self) -> None:
@@ -275,14 +345,23 @@ class Mission:
         engine = self.bench.engine
         try:
             self._set(STATE_FLYING)
-            endpoint_spec.install_spec(endpoint_spec.discover_from_settings(from_environ(self.bench.environ)))
+            endpoint_spec.install_spec(
+                endpoint_spec.discover_from_settings(from_environ(self.bench.environ))
+            )
             self.bench = settle_effort(self.bench)
             if self.reasoning_effort:
                 check_effort(endpoint_spec.spec().model_id, self.reasoning_effort)
             self._write_manifests()
 
-            h = hydrate(bench=self.bench, episode_id=self.episode_id, split=self.split, config=self.config,
-                        start_xy=self._start_xy, agl_m=self.agl_m, workdir=self.workdir)
+            h = hydrate(
+                bench=self.bench,
+                episode_id=self.episode_id,
+                split=self.split,
+                config=self.config,
+                start_xy=self._start_xy,
+                agl_m=self.agl_m,
+                workdir=self.workdir,
+            )
             self.hydrated = h
             instruction = self.instruction or h.episode.description
             # The override IS the operator's instruction, so the episode
@@ -308,8 +387,13 @@ class Mission:
                     log.warning("live observation refused: %s", self.live.last_refusal)
                     return None
                 obs, last = held
-                log.info("live frame seq %s log_time %s age %.2fs attitude %s", last.get("seq"),
-                         last.get("log_time"), last.get("age_s", 0.0), last.get("attitude"))
+                log.info(
+                    "live frame seq %s log_time %s age %.2fs attitude %s",
+                    last.get("seq"),
+                    last.get("log_time"),
+                    last.get("age_s", 0.0),
+                    last.get("attitude"),
+                )
                 self._note_frame(last, obs)
                 self._imagery.add(obs)
                 return obs
@@ -321,8 +405,13 @@ class Mission:
             session.mission_spec.fly = functools.partial(self.legs.fly, session)
             session.mission_spec.held_now = functools.partial(self.legs.held_now, h)
             heard = dict(transcript=self.transcript, retask=self._next_tasking)
-            reply, conversation = session.run(instruction, cancel_event=self._cancel, diag=self._turn_diag,
-                                              reasoning_effort=self.reasoning_effort, **heard)
+            reply, conversation = session.run(
+                instruction,
+                cancel_event=self._cancel,
+                diag=self._turn_diag,
+                reasoning_effort=self.reasoning_effort,
+                **heard,
+            )
             self._record_reply(reply)
 
             # THE REPLY IS A REPORT, NOT AN ENDING: park and wait for the
@@ -350,7 +439,9 @@ class Mission:
                 log.exception("mission %s failed", self.episode_id)
                 error = f"{type(exc).__name__}: {exc}"
                 # A run that has reported stands at its report, whatever failed after it.
-                self._set(STATE_FAILED, error=error, infra=not self.replies and engine.is_infra_fault(exc))
+                self._set(
+                    STATE_FAILED, error=error, infra=not self.replies and engine.is_infra_fault(exc)
+                )
         finally:
             self.bank()
             self.close_log()
@@ -366,22 +457,45 @@ class Mission:
         """The sortie's ``run_manifest.json`` (by its first mission) and this
         mission's own in its workdir; a failure is logged."""
         sortie = self.workdir.parent
-        common = dict(bench=self.bench, config_path=Path(self.config), split=self.split, sample_seed=None,
-                      limit=None, allowlist_path=None)
+        common = dict(
+            bench=self.bench,
+            config_path=Path(self.config),
+            split=self.split,
+            sample_seed=None,
+            limit=None,
+            allowlist_path=None,
+        )
         try:
             if not (sortie / MANIFEST_NAME).exists():
-                emit_or_verify(sortie, build_manifest(out_root=sortie, episodes=[], **common), log=log.info)
-            emit_or_verify(self.workdir, build_manifest(out_root=self.workdir, episodes=[self.episode_id],
-                                                        mission=self._mission_stamp(), **common), log=log.info)
+                emit_or_verify(
+                    sortie, build_manifest(out_root=sortie, episodes=[], **common), log=log.info
+                )
+            emit_or_verify(
+                self.workdir,
+                build_manifest(
+                    out_root=self.workdir,
+                    episodes=[self.episode_id],
+                    mission=self._mission_stamp(),
+                    **common,
+                ),
+                log=log.info,
+            )
         except Exception:  # noqa: BLE001 -- a mission without a manifest still flies
             log.exception("run_manifest not written for %s", self.workdir)
 
     def _mission_stamp(self) -> dict[str, Any]:
         """The mission's grain of the run manifest: which mission, and the
         reasoning effort its requests carry."""
-        return {"episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no,
-                "reasoning_effort": effort(self.reasoning_effort if self.reasoning_effort is not None
-                                           else self.bench.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", ""))}
+        return {
+            "episode_id": self.episode_id,
+            "run_id": self.run_id,
+            "run_no": self.run_no,
+            "reasoning_effort": effort(
+                self.reasoning_effort
+                if self.reasoning_effort is not None
+                else self.bench.environ.get("SEARCH_SAMPLING_REASONING_EFFORT", "")
+            ),
+        }
 
     def turns(self) -> int:
         """Model turns taken: the conversations that have ended plus the turn the one in flight is on."""
@@ -427,20 +541,33 @@ class Mission:
         episode = self.hydrated.episode if self.hydrated else None
         with self._lock:
             visited = [[float(episode.start_xy[0]), float(episode.start_xy[1])]] if episode else []
-            scored = self.flights[:self._scored_flights]
+            scored = self.flights[: self._scored_flights]
             visited += [[float(f["resolved_xy"][0]), float(f["resolved_xy"][1])] for f in scored]
             infra, ended_by, error, turns = self.infra, self.ended_by, self.error, self.turns()
         return {
-            "episode_id": self.episode_id, "run_id": self.run_id, "run_no": self.run_no, "split": self.split,
-            "map_name": self.map_name, "description": self.instruction, "reasoning_effort": self.reasoning_effort,
-            "start_xy": visited[0] if episode else None, "visited_xy": visited,
+            "episode_id": self.episode_id,
+            "run_id": self.run_id,
+            "run_no": self.run_no,
+            "split": self.split,
+            "map_name": self.map_name,
+            "description": self.instruction,
+            "reasoning_effort": self.reasoning_effort,
+            "start_xy": visited[0] if episode else None,
+            "visited_xy": visited,
             # The bench's infra rule: only a serve fault is infra; any other failure is a scored miss.
             "status": STATUS_INFRA if infra else STATUS_OK,
-            "error": error, "ended_by": ended_by, "turns_used": turns, "flights_flown": len(scored),
-            "provenance": {"git_commit": self.git_commit, "git_dirty": self.git_dirty,
-                           "served_model": (endpoint_spec.spec().model_id if endpoint_spec.spec_installed()
-                                            else None),
-                           "bake_sha256": self.bench.bake_sha256()},
+            "error": error,
+            "ended_by": ended_by,
+            "turns_used": turns,
+            "flights_flown": len(scored),
+            "provenance": {
+                "git_commit": self.git_commit,
+                "git_dirty": self.git_dirty,
+                "served_model": (
+                    endpoint_spec.spec().model_id if endpoint_spec.spec_installed() else None
+                ),
+                "bake_sha256": self.bench.bake_sha256(),
+            },
             "search_env_flags": arm_env_stamp(self.bench),
             "ts": self.started_at,
             "started_at_utc": self.started_at_utc,
@@ -453,7 +580,11 @@ class Mission:
         since; a row that will not land is logged, never raised. A start
         without a fix takes its UTC at the first bank with one."""
         try:
-            if self.started_at_utc is None and self._t0 is not None and (utc := self._utc_now()) is not None:
+            if (
+                self.started_at_utc is None
+                and self._t0 is not None
+                and (utc := self._utc_now()) is not None
+            ):
                 # No fix at the start: the start's UTC is the first fix's, back through the seconds since.
                 self.started_at_utc = utc - self.elapsed_s()
             row = self.row()
@@ -479,13 +610,25 @@ class Mission:
         while (t := self._t0 + self._tracked * TRACK_PERIOD_S) <= self._vehicle.now() + 1e-9:
             self._tracked += 1
             pose = self.live.pose_now(t)
-            xy = None if pose is None else lonlat_to_local(self._tiles_dir, self.map_name, pose.lon, pose.lat)
+            xy = (
+                None
+                if pose is None
+                else lonlat_to_local(self._tiles_dir, self.map_name, pose.lon, pose.lat)
+            )
             if xy is not None:
-                lines.append(json.dumps({
-                    "t_unix": round(self.started_at_utc + (t - self._t0), 3), "x": round(xy[0], 2),
-                    "y": round(xy[1], 2), "alt_msl_m": round(pose.alt_msl_m, 2),
-                    "alt_agl_m": round(pose.alt_msl_m - self.live.ground_msl(xy), 2),
-                    "track_deg": round(pose.track_deg, 2), "ground_speed_mps": round(pose.speed_mps, 3)}))
+                lines.append(
+                    json.dumps(
+                        {
+                            "t_unix": round(self.started_at_utc + (t - self._t0), 3),
+                            "x": round(xy[0], 2),
+                            "y": round(xy[1], 2),
+                            "alt_msl_m": round(pose.alt_msl_m, 2),
+                            "alt_agl_m": round(pose.alt_msl_m - self.live.ground_msl(xy), 2),
+                            "track_deg": round(pose.track_deg, 2),
+                            "ground_speed_mps": round(pose.speed_mps, 3),
+                        }
+                    )
+                )
         if lines:
             with (self.workdir.parent / TRACK_JSONL).open("a", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
@@ -511,5 +654,7 @@ def converse(mission: Mission, taskings: list[str]) -> None:
 
 def summary_line(mission: Mission) -> str:
     """How a mission ended, in one line."""
-    return (f"{mission.workdir}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
-            f"{mission.turns()} turns" + (f", error {mission.error}" if mission.error else ""))
+    return (
+        f"{mission.workdir}: {mission.status}, ended by {mission.ended_by}, {len(mission.flights)} flights, "
+        f"{mission.turns()} turns" + (f", error {mission.error}" if mission.error else "")
+    )

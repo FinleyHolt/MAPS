@@ -34,9 +34,7 @@ def surface_from_ctx(ctx) -> dict:
     """The ``{cands, anchors, cell_m}`` surface of a :class:`QueryContext`'s
     graph."""
     cell_m = float(ctx.cell_size_m)
-    cands, anchors = build_surface_from_graph(
-        ctx.graph.nodes.items(), ctx.tile_origin_xy, cell_m
-    )
+    cands, anchors = build_surface_from_graph(ctx.graph.nodes.items(), ctx.tile_origin_xy, cell_m)
     return {"cands": cands, "anchors": anchors, "cell_m": cell_m}
 
 
@@ -89,10 +87,14 @@ class Surface:
         columns and the " (+N more)" past them."""
         c_n = len(self.ns.get("cands") or [])
         a_n = len(self.ns.get("anchors") or [])
-        cols = sorted({k for row in self.row_latest.values()
-                       for k, v in row.items()
-                       if k not in MODEL_UNSERVED_COLUMNS
-                       and v not in (None, "")})
+        cols = sorted(
+            {
+                k
+                for row in self.row_latest.values()
+                for k, v in row.items()
+                if k not in MODEL_UNSERVED_COLUMNS and v not in (None, "")
+            }
+        )
         more = f" (+{len(cols) - cap} more)" if len(cols) > cap else ""
         return c_n, a_n, cols[:cap], more
 
@@ -143,9 +145,10 @@ class Surface:
         if self.standing is None:
             return None, ""
         sv = self.viewpoints[self.standing]
-        return (list(sv["up_unit"]),
-                f"image-up = {sv['handle']}'s facing "
-                f"(bearing {sv['bearing_deg']})")
+        return (
+            list(sv["up_unit"]),
+            f"image-up = {sv['handle']}'s facing (bearing {sv['bearing_deg']})",
+        )
 
     def map_features(self) -> list[dict]:
         if self._map_feats_version != self.carry.version:
@@ -160,8 +163,15 @@ class Surface:
         # ponytail: end_N restarts per ends_of call, so the newest carried
         # row holding it wins; unique terminus fids if two ends_of sets must
         # be named by fid.
-        return next((r for rows in reversed(self.carry.rows.values())
-                     for r in rows or () if r.get("fid") == tok.strip()), None)
+        return next(
+            (
+                r
+                for rows in reversed(self.carry.rows.values())
+                for r in rows or ()
+                if r.get("fid") == tok.strip()
+            ),
+            None,
+        )
 
 
 class Stance:
@@ -173,22 +183,24 @@ class Stance:
 
     def stand(self, at_tok: str, facing_tok: str) -> dict:
         """stand(): mint a vN handle that becomes STANDING."""
+
         def refuse(why: str) -> dict:
             return self.rejections.error({}, f"the stance did not bind: {why}")
 
         at_xy = self.surface.point(at_tok)
         if at_xy is None:
-            return refuse(f"at {at_tok!r} is not a live surface fid or an "
-                          f"[x, y] world point")
+            return refuse(f"at {at_tok!r} is not a live surface fid or an [x, y] world point")
         compass = facing_tok.strip().lower()
         if compass in COMPASS_UNIT:
             up = list(COMPASS_UNIT[compass])
         else:
             f_xy = self.surface.point(facing_tok)
             if f_xy is None:
-                return refuse(f"facing {facing_tok!r} is not a live surface "
-                              f"fid, an [x, y] point, or one of "
-                              f"{'|'.join(COMPASS_UNIT)}")
+                return refuse(
+                    f"facing {facing_tok!r} is not a live surface "
+                    f"fid, an [x, y] point, or one of "
+                    f"{'|'.join(COMPASS_UNIT)}"
+                )
             dx = f_xy[0] - at_xy[0]
             dy = f_xy[1] - at_xy[1]
             n = (dx * dx + dy * dy) ** 0.5
@@ -197,11 +209,16 @@ class Stance:
             up = [dx / n, dy / n]
         staged = self.surface.adopt_viewpoint(at_xy, up)
         h = staged["handle"]
-        return {"stance": {
-            "staged": [{"handle": h, "at_xy": at_xy,
-                        "facing_bearing_deg": staged["bearing_deg"]}],
-            "note": (f"standing viewpoint = {h}: 'left of {h}'/'right of "
-                     f"{h}'/'ahead of {h}'/'behind {h}' ride every find "
-                     f"row; {h} is a point ref ('distance to {h}'); "
-                     "crops and maps render its facing up."),
-        }}
+        return {
+            "stance": {
+                "staged": [
+                    {"handle": h, "at_xy": at_xy, "facing_bearing_deg": staged["bearing_deg"]}
+                ],
+                "note": (
+                    f"standing viewpoint = {h}: 'left of {h}'/'right of "
+                    f"{h}'/'ahead of {h}'/'behind {h}' ride every find "
+                    f"row; {h} is a point ref ('distance to {h}'); "
+                    "crops and maps render its facing up."
+                ),
+            }
+        }

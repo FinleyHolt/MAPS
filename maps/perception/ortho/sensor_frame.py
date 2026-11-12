@@ -84,8 +84,13 @@ def ground_corners_xy(
         # The point at ground range along the ray fixes the ray; the ground
         # plane fixes where along it the corner lands.
         p1 = project_pixels_to_world(
-            reach, pose_xy=pose_xy, altitude_m=camera[2], yaw_deg=yaw_deg, sensor=sensor,
-            airframe_roll_deg=airframe_roll_deg, airframe_pitch_deg=airframe_pitch_deg,
+            reach,
+            pose_xy=pose_xy,
+            altitude_m=camera[2],
+            yaw_deg=yaw_deg,
+            sensor=sensor,
+            airframe_roll_deg=airframe_roll_deg,
+            airframe_pitch_deg=airframe_pitch_deg,
             origin_rc=(r, c),
         )[0, 0]
         ray = np.asarray(p1, dtype=np.float64) - camera
@@ -115,8 +120,12 @@ def render_frame(
     would misstate coverage.
     """
     corners = ground_corners_xy(
-        sensor, pose_xy, agl_m, yaw_deg,
-        airframe_roll_deg=airframe_roll_deg, airframe_pitch_deg=airframe_pitch_deg,
+        sensor,
+        pose_xy,
+        agl_m,
+        yaw_deg,
+        airframe_roll_deg=airframe_roll_deg,
+        airframe_pitch_deg=airframe_pitch_deg,
     )
     for x, y in corners:
         if not (bounds.x_min <= x <= bounds.x_max and bounds.y_min <= y <= bounds.y_max):
@@ -148,9 +157,7 @@ def source_map(src_px: np.ndarray, width: int, height: int) -> tuple[np.ndarray,
     inv = np.linalg.inv(
         np.asarray(cv2.getPerspectiveTransform(src_px, frame_corners_px(width, height)), np.float64)
     )
-    x, y = np.meshgrid(
-        np.arange(width, dtype=np.float64), np.arange(height, dtype=np.float64)
-    )
+    x, y = np.meshgrid(np.arange(width, dtype=np.float64), np.arange(height, dtype=np.float64))
     w = inv[2, 0] * x + inv[2, 1] * y + inv[2, 2]
     return (
         ((inv[0, 0] * x + inv[0, 1] * y + inv[0, 2]) / w).astype(np.float32),
@@ -198,9 +205,12 @@ def served_description(spec: SensorSpec, *, agl_m: float | None) -> str:
     if "{" not in spec.description:
         return spec.description
     if agl_m is None:
-        raise ValueError(f"{spec.name} states its footprint at the height the mission flies: "
-                         "no height above ground was given")
+        raise ValueError(
+            f"{spec.name} states its footprint at the height the mission flies: "
+            "no height above ground was given"
+        )
     w, h = footprint_m(spec, agl_m)
     gsd = w / spec.intrinsics.image_width
-    return spec.description.format(agl_ft=agl_m / 0.3048, w=w, h=h, gsd=gsd, px_5m=5.0 / gsd,
-                                   px_half_m=0.5 / gsd)
+    return spec.description.format(
+        agl_ft=agl_m / 0.3048, w=w, h=h, gsd=gsd, px_5m=5.0 / gsd, px_half_m=0.5 / gsd
+    )

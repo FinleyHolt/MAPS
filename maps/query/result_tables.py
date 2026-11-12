@@ -11,8 +11,7 @@ from maps.query import text_match as T
 
 
 # Row fields the executor resolves by fid and the model never reads.
-_MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask",
-                            "mask_centroid", "cells")
+_MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask", "mask_centroid", "cells")
 
 # Fields folded into the rendered color cell, never served raw.
 _RENDER_INPUT_ROW_FIELDS = ("color_shade", "color_flag")
@@ -34,14 +33,18 @@ def _render_color_cell(row):
     out = {k: v for k, v in row.items() if k not in _RENDER_INPUT_ROW_FIELDS}
     if has_color:
         conf = row.get("color_conf")
-        uncertain = ((isinstance(conf, (int, float)) and conf < _COLOR_CONF_FLOOR)
-                     or row.get("color_flag") == "look")
+        uncertain = (isinstance(conf, (int, float)) and conf < _COLOR_CONF_FLOOR) or row.get(
+            "color_flag"
+        ) == "look"
         shade = row.get("color_shade")
         # A palette mixture's second word is glass or shadow: only a
         # color-name read (shade set) serves it.
         out["color"] = color_words.compact_color_cell(
-            c, shade=shade if shade in ("dk", "lt") else None,
-            uncertain=uncertain, rich=shade is not None)
+            c,
+            shade=shade if shade in ("dk", "lt") else None,
+            uncertain=uncertain,
+            rich=shade is not None,
+        )
     return out
 
 
@@ -101,11 +104,13 @@ def _query_matched_census(counts: dict, query: str) -> dict:
         toks = set(T.fuzzy_normalize(key).split())
         toks |= {T.singularize(t) for t in toks}
         if toks & q_tokens or any(
-                len(ct) >= 4
-                # the length gap bounds the edit distance from below
-                and abs(len(qt) - len(ct)) <= 0.3 * max(len(qt), len(ct))
-                and 1.0 - T.edit_distance(qt, ct) / max(len(qt), len(ct)) >= 0.7
-                for qt in q_long for ct in toks):
+            len(ct) >= 4
+            # the length gap bounds the edit distance from below
+            and abs(len(qt) - len(ct)) <= 0.3 * max(len(qt), len(ct))
+            and 1.0 - T.edit_distance(qt, ct) / max(len(qt), len(ct)) >= 0.7
+            for qt in q_long
+            for ct in toks
+        ):
             matched[key] = n
     return _top(matched, 8)
 
@@ -126,8 +131,10 @@ def _census_note(rows, query: str) -> str:
             break
     qm = _query_matched_census(counts, query)
     qparts = ", ".join(f"{k}({v})" for k, v in qm.items())
-    note = (f"surface census -- tags sharing tokens with your query: "
-            f"{qparts or 'none'}; top tags overall: {parts or 'none'}")
+    note = (
+        f"surface census -- tags sharing tokens with your query: "
+        f"{qparts or 'none'}; top tags overall: {parts or 'none'}"
+    )
     if names:
         note += "; named e.g. " + ", ".join(repr(n) for n in names)
     return note + "."
@@ -148,21 +155,24 @@ def _cut_stands_at(v, body: list, capped: list) -> str | None:
     head = [x for x in map(score, capped) if x is not None]
     if len(head) < 2:
         return None
-    nxt = next((x for x in map(score, body[len(capped):])
-                if x is not None), None)
+    nxt = next((x for x in map(score, body[len(capped) :]) if x is not None), None)
     keys = [k for k in v.op_cols if isinstance(k, str)]
     what = " + ".join(f"'{k}'" for k in keys) or "this ordering"
     span = f"{min(head):.6g}..{max(head):.6g}"
     if nxt is None:
         return f"ranked on {what}: this head's score runs {span}"
-    return (f"ranked on {what}: this head's score runs {span}, and the next "
-            f"row scores {nxt:.6g}")
+    return f"ranked on {what}: this head's score runs {span}, and the next row scores {nxt:.6g}"
 
 
 # The grid's leading columns after ``fid``; attached columns follow in
 # first-seen order.
 _GRID_COL_PRIORITY = (
-    "class", "color", "name", "tags", "xy", "footprint_area_m2",
+    "class",
+    "color",
+    "name",
+    "tags",
+    "xy",
+    "footprint_area_m2",
 )
 
 # Repeat the header row every N data rows on a long dump.
@@ -173,23 +183,38 @@ _TAG_RENDER_HEAD = 12
 
 # Tag keys the grid does not render: postal and import keys find still
 # searches.
-_TAG_RENDER_DROP = frozenset({
-    "addr_postcode", "addr_city", "oneway", "ref_GB_uprn",
-    "tiger_reviewed", "tiger_cfcc", "tiger_source", "tiger_tlid",
-    "tiger_separated", "tiger_county", "calcity_object_id", "source_lanes",
-})
+_TAG_RENDER_DROP = frozenset(
+    {
+        "addr_postcode",
+        "addr_city",
+        "oneway",
+        "ref_GB_uprn",
+        "tiger_reviewed",
+        "tiger_cfcc",
+        "tiger_source",
+        "tiger_tlid",
+        "tiger_separated",
+        "tiger_county",
+        "calcity_object_id",
+        "source_lanes",
+    }
+)
 
 # Row fields the grid does not render.
-_GRID_COL_DROP = frozenset({
-    "axis_length_m", "color_conf", "name_match", "score",
-})
+_GRID_COL_DROP = frozenset(
+    {
+        "axis_length_m",
+        "color_conf",
+        "name_match",
+        "score",
+    }
+)
 
 # The column names the model never sees on any channel: the grid, the
 # library's Row, and the key echoes in refusals and notes.
 MODEL_UNSERVED_COLUMNS = (
-    _GRID_COL_DROP
-    | frozenset(_MODEL_HIDDEN_ROW_FIELDS)
-    | frozenset(_RENDER_INPUT_ROW_FIELDS))
+    _GRID_COL_DROP | frozenset(_MODEL_HIDDEN_ROW_FIELDS) | frozenset(_RENDER_INPUT_ROW_FIELDS)
+)
 
 
 def _is_gridable(v) -> bool:
@@ -198,9 +223,11 @@ def _is_gridable(v) -> bool:
         return True
     if isinstance(v, dict):
         return all(isinstance(x, (bool, int, float, str)) for x in v.values())
-    return (isinstance(v, (list, tuple)) and len(v) == 2
-            and all(isinstance(x, (int, float)) and not isinstance(x, bool)
-                    for x in v))
+    return (
+        isinstance(v, (list, tuple))
+        and len(v) == 2
+        and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)
+    )
 
 
 def _fmt_float(v: float) -> str:
@@ -234,12 +261,10 @@ def _grid_cell(v) -> str:
             return "-"
         s = "; ".join(f"{k}={val}" for k, val in _items[:_TAG_RENDER_HEAD])
         if len(_items) > _TAG_RENDER_HEAD:
-            s += (f"; +{len(_items) - _TAG_RENDER_HEAD} more tags "
-                  f"(full set on the node)")
+            s += f"; +{len(_items) - _TAG_RENDER_HEAD} more tags (full set on the node)"
         return s.replace("|", "/")
-    if (isinstance(v, (list, tuple)) and len(v) == 2
-            and all(isinstance(x, (int, float)) for x in v)):
-        return (f"{_fmt_float(float(v[0]))}, {_fmt_float(float(v[1]))}")
+    if isinstance(v, (list, tuple)) and len(v) == 2 and all(isinstance(x, (int, float)) for x in v):
+        return f"{_fmt_float(float(v[0]))}, {_fmt_float(float(v[1]))}"
     return str(v).replace("|", "/")
 
 
@@ -250,9 +275,14 @@ def _grid_columns(rows) -> list[str]:
     seen_set: set = set()
     for row in rows:
         for k, v in row.items():
-            if (k == "fid" or k in seen_set or k in _GRID_COL_DROP
-                    or v is None or v == ""
-                    or (isinstance(v, dict) and not v)):
+            if (
+                k == "fid"
+                or k in seen_set
+                or k in _GRID_COL_DROP
+                or v is None
+                or v == ""
+                or (isinstance(v, dict) and not v)
+            ):
                 continue
             if _is_gridable(v):
                 seen_set.add(k)
@@ -265,9 +295,11 @@ def _grid_columns(rows) -> list[str]:
         if c in _GRID_COL_PRIORITY or c in grouped:
             continue
         side = _column_ref(c, STANDING_SIDE_PREFIXES)
-        grouped += [c] if side is None else [
-            p + side[1] for p in STANDING_SIDE_PREFIXES
-            if p + side[1] in seen_set]
+        grouped += (
+            [c]
+            if side is None
+            else [p + side[1] for p in STANDING_SIDE_PREFIXES if p + side[1] in seen_set]
+        )
     return prio + grouped
 
 
@@ -285,8 +317,9 @@ def _render_grid_rows(rows, cols) -> str:
             lines.extend((header, sep))
         cells = [_grid_cell(row.get(k)) for k in cols]
         body = " | ".join(cells)
-        lines.append(f"| {row.get('fid') or '?'} | {body} |"
-                     if cols else f"| {row.get('fid') or '?'} |")
+        lines.append(
+            f"| {row.get('fid') or '?'} | {body} |" if cols else f"| {row.get('fid') or '?'} |"
+        )
     return "\n".join(lines)
 
 
@@ -294,12 +327,19 @@ def _render_grid_rows(rows, cols) -> str:
 # side prefixes may name a staged viewpoint handle; the library's rows read
 # them, and AUTOATTACH_PREFIXES, to name what writes a missing key.
 STANDING_SIDE_PREFIXES = ("left of ", "right of ", "ahead of ", "behind ")
-_COMPARE_COL_PREFIXES = ("distance to ", "center distance to ",
-                         "bearing from ", "facing ", "contains ",
-                         *STANDING_SIDE_PREFIXES,
-                         "east of ", "west of ", "north of ", "south of ")
-AUTOATTACH_PREFIXES = tuple(
-    p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
+_COMPARE_COL_PREFIXES = (
+    "distance to ",
+    "center distance to ",
+    "bearing from ",
+    "facing ",
+    "contains ",
+    *STANDING_SIDE_PREFIXES,
+    "east of ",
+    "west of ",
+    "north of ",
+    "south of ",
+)
+AUTOATTACH_PREFIXES = tuple(p for p in _COMPARE_COL_PREFIXES if p != "contains ") + ("color_",)
 
 
 def _column_ref(key, prefixes) -> "tuple[str, str] | None":
@@ -308,7 +348,7 @@ def _column_ref(key, prefixes) -> "tuple[str, str] | None":
     if isinstance(key, str):
         for p in prefixes:
             if key.startswith(p) and len(key) > len(p):
-                return p, key[len(p):]
+                return p, key[len(p) :]
     return None
 
 
@@ -361,7 +401,8 @@ def _budget_columns(proj, cols, op_cols) -> tuple[list, int]:
 _NO_ORDER_HINT = (
     "no ordering exists on this result, so it renders census + len and no "
     "fids: ordering it by an attached column renders the ordered rows of "
-    "THIS handle, and a name or color match returns matched rows directly.")
+    "THIS handle, and a name or color match returns matched rows directly."
+)
 
 
 def _table(head, rows, op_cols, legend) -> "str | None":
@@ -373,8 +414,11 @@ def _table(head, rows, op_cols, legend) -> "str | None":
     head["rows"] = _render_grid_rows(proj, cols)
     if legend:
         head["legend"] = legend.pop()
-    return (f"{n_cut} column(s) elided from this render to fit; "
-            "the set keeps them all") if n_cut else None
+    return (
+        (f"{n_cut} column(s) elided from this render to fit; the set keeps them all")
+        if n_cut
+        else None
+    )
 
 
 def _hint(v) -> str:
@@ -384,12 +428,12 @@ def _hint(v) -> str:
         return join_hints(*v.notes)
     if not v:
         return join_hints(
-            v.empty_condition
-            or "this call returned no rows: nothing met its condition.",
+            v.empty_condition or "this call returned no rows: nothing met its condition.",
             *v.notes,
-            "this retrieval searched every surface row (prior + runtime)"
-            " and matched nothing."
-            if v.kind == "miss" else "")
+            "this retrieval searched every surface row (prior + runtime) and matched nothing."
+            if v.kind == "miss"
+            else "",
+        )
     if not v.ordered:
         return join_hints(*v.notes, _NO_ORDER_HINT)
     return join_hints(*v.notes)
@@ -406,8 +450,12 @@ def _envelope(v, legend, cut=None) -> dict:
         head = {"len": 0, "items": [], **({"cut_stats": cut} if cut else {})}
     elif not v.ordered:
         counts, named = _census_counts(v)
-        head = {"len": len(v), "census": _top(counts, 12), "named": named,
-                **({"cut_stats": cut} if cut else {})}
+        head = {
+            "len": len(v),
+            "census": _top(counts, 12),
+            "named": named,
+            **({"cut_stats": cut} if cut else {}),
+        }
     elif v.name_set:
         # A name's ways tie, so a head would be an arbitrary prefix
         # served as a ranking: the shape renders instead.
@@ -434,9 +482,9 @@ def _envelope(v, legend, cut=None) -> dict:
                     f"literal ref keeps a real distance) -- omitted from "
                     f"this rendered head; they stay live in this set "
                     f"(full set intact), covers_window marks them "
-                    f"wherever they render.")
-        capped = (body[:BROAD_HEAD_ROWS] if len(v) > BROAD_DUMP_SOFT_ROWS
-                  else body)
+                    f"wherever they render."
+                )
+        capped = body[:BROAD_HEAD_ROWS] if len(v) > BROAD_DUMP_SOFT_ROWS else body
         more = None
         if len(capped) < len(body):
             more = join_hints(
@@ -444,18 +492,17 @@ def _envelope(v, legend, cut=None) -> dict:
                 f"the rest stay live in this set -- later ops on it "
                 f"read the FULL set, and more_of on it serves the next "
                 f"{BROAD_HEAD_ROWS}",
-                _cut_stands_at(v, body, capped))
-        head = {"len": len(v),
-                "fids": [str(r["fid"]) for r in capped if r.get("fid")]}
-        shown = join_hints(more, _table(head, capped, v.op_cols, legend),
-                           cover)
+                _cut_stands_at(v, body, capped),
+            )
+        head = {"len": len(v), "fids": [str(r["fid"]) for r in capped if r.get("fid")]}
+        shown = join_hints(more, _table(head, capped, v.op_cols, legend), cover)
         if shown:
             head["shown"] = shown
     hint = _hint(v)
     if hint:
         head["hint"] = hint
     if cut:
-        head["cut_stats"] = cut   # keeps its place where a branch set it
+        head["cut_stats"] = cut  # keeps its place where a branch set it
     return head
 
 
@@ -480,24 +527,31 @@ def compact_results(results: dict, *, answer_ref: str = "") -> dict:
                 sig = repr((sorted(e["census"].items()), e["named"]))
                 if sig in seen:
                     del e["census"], e["named"]
-                    e["census_ref"] = (
-                        f"census identical to {seen[sig]}'s (served once above)")
+                    e["census_ref"] = f"census identical to {seen[sig]}'s (served once above)"
                 else:
                     seen[sig] = str(k)
         return out
     v = results[answer_ref]
-    cut = None if v else next((s.cut_stats for s in results.values()
-                               if s.kind == "cut" and not s and s.cut_stats),
-                              None)
+    cut = (
+        None
+        if v
+        else next(
+            (s.cut_stats for s in results.values() if s.kind == "cut" and not s and s.cut_stats),
+            None,
+        )
+    )
     answer = _envelope(v, legend, cut)
     # The other ops are the call's own steps, refs the model never holds:
     # their hints ride unprefixed, each line once.
     own = str(answer.get("hint") or "").split("\n")
-    steps = dict.fromkeys(ln for k, v in results.items() if k != answer_ref
-                          if (h := _step_hint(v))
-                          for ln in str(h).split("\n"))
-    answer["hint"] = join_hints(answer.get("hint"),
-                                *(ln for ln in steps if ln not in own))
+    steps = dict.fromkeys(
+        ln
+        for k, v in results.items()
+        if k != answer_ref
+        if (h := _step_hint(v))
+        for ln in str(h).split("\n")
+    )
+    answer["hint"] = join_hints(answer.get("hint"), *(ln for ln in steps if ln not in own))
     if not answer["hint"]:
         del answer["hint"]
     return {answer_ref: answer}

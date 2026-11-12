@@ -61,13 +61,29 @@ class BenchMission:
     #: A bench flight is a teleport: no leg is ever waited on.
     waiting = None
 
-    def __init__(self, *, bench: Bench, episode: Any, split: str, config: str, objects_by_map: dict,
-                 sortie: Path, ep: OpenEpisode, reasoning_effort: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        bench: Bench,
+        episode: Any,
+        split: str,
+        config: str,
+        objects_by_map: dict,
+        sortie: Path,
+        ep: OpenEpisode,
+        reasoning_effort: str | None = None,
+    ) -> None:
         # The operator's effort is the arm's: the requests carry it and the row's flags record it.
         effort = (reasoning_effort or "").strip()
-        self.bench = bench.with_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort}) if effort else bench
+        self.bench = (
+            bench.with_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort}) if effort else bench
+        )
         self.episode, self.split, self.config = episode, split, config
-        self.episode_id, self.map_name, self.instruction = episode.episode_id, episode.map_name, episode.description
+        self.episode_id, self.map_name, self.instruction = (
+            episode.episode_id,
+            episode.map_name,
+            episode.description,
+        )
         self._objects = objects_by_map
         self.sortie, self.workdir, self._ep = Path(sortie), ep.dir, ep
         self.status = "flying"
@@ -84,7 +100,9 @@ class BenchMission:
         self._cancel = threading.Event()
         prov = git_provenance()
         self.git_commit, self.git_dirty = prov.get("git_commit"), prov.get("git_dirty")
-        self._thread = threading.Thread(target=self._run, name=f"bench-{self.episode_id}", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name=f"bench-{self.episode_id}", daemon=True
+        )
 
     # -- what the state document reads ---------------------------------------
 
@@ -107,7 +125,11 @@ class BenchMission:
         if self._session is None:
             return None
         h = self._session.h
-        return float(h.state.pose_xy[0]), float(h.state.pose_xy[1]), float(h.state.altitude_m) - float(h.ground_z_m)
+        return (
+            float(h.state.pose_xy[0]),
+            float(h.state.pose_xy[1]),
+            float(h.state.altitude_m) - float(h.ground_z_m),
+        )
 
     # -- the operator's channel ----------------------------------------------
 
@@ -143,9 +165,13 @@ class BenchMission:
 
         self._session = session
         try:
-            reply, conversation = session.run(session.h.episode.description, transcript=self.transcript,
-                                              cancel_event=self._cancel, retask=self._next_tasking,
-                                              diag=self._turn_diag)
+            reply, conversation = session.run(
+                session.h.episode.description,
+                transcript=self.transcript,
+                cancel_event=self._cancel,
+                retask=self._next_tasking,
+                diag=self._turn_diag,
+            )
             for turn in range(2, 1 << 30):
                 self._turns += int(reply.turns_used)
                 self._turn_diag.clear()
@@ -157,7 +183,9 @@ class BenchMission:
                 self.status = "flying"
                 reply = continue_mission(conversation, nxt, rid_tag=f"m{turn}")
         except CallCanceled:
-            return MissionReply(ended_by="stopped", turns_used=int(self._turn_diag.get("turns_used") or 0))
+            return MissionReply(
+                ended_by="stopped", turns_used=int(self._turn_diag.get("turns_used") or 0)
+            )
 
     def _run(self) -> None:
         try:
@@ -166,17 +194,38 @@ class BenchMission:
             bench = install_endpoint(self.bench, settings)
             if "SEARCH_BENCHMARK_NAME" not in bench.environ:
                 bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})
-            emit_or_verify(self.sortie, build_manifest(
-                bench=bench, out_root=self.sortie, config_path=Path(self.config), split=self.split, sample_seed=0,
-                limit=0, allowlist_path=None, episodes=[self.episode_id]), log=log.info)
+            emit_or_verify(
+                self.sortie,
+                build_manifest(
+                    bench=bench,
+                    out_root=self.sortie,
+                    config_path=Path(self.config),
+                    split=self.split,
+                    sample_seed=0,
+                    limit=0,
+                    allowlist_path=None,
+                    episodes=[self.episode_id],
+                ),
+                log=log.info,
+            )
             row = bench.engine.fly_attempt(
-                episode=self.episode, objects_by_map=self._objects, cfg=cfg, bench=bench, settings=settings,
-                split=self.split, recorder=self._ep.recorder, episode_dir=self.workdir,
-                routing_key=self.episode_id, converse=self._converse)
+                episode=self.episode,
+                objects_by_map=self._objects,
+                cfg=cfg,
+                bench=bench,
+                settings=settings,
+                split=self.split,
+                recorder=self._ep.recorder,
+                episode_dir=self.workdir,
+                routing_key=self.episode_id,
+                converse=self._converse,
+            )
             row["workdir"] = str(self.workdir.relative_to(self.sortie))
             append_row(self.sortie, row)
             self.row, self.ended_by, self.error = row, rows.ended_by(row), row.get("error")
-            self.status = "failed" if row.get("status") == STATUS_INFRA or not rows.metrics(row) else "ended"
+            self.status = (
+                "failed" if row.get("status") == STATUS_INFRA or not rows.metrics(row) else "ended"
+            )
         except Exception as exc:  # noqa: BLE001 -- the operator must see why
             log.exception("mission %s failed", self.episode_id)
             self.error, self.status = f"{type(exc).__name__}: {exc}", "failed"
@@ -187,4 +236,8 @@ class BenchMission:
 def with_words(episode: Any, instruction: str) -> Any:
     """``episode`` flown under the operator's edit of its words: the row's start and target, scored as the row is."""
     words = (instruction or "").strip()
-    return dataclasses.replace(episode, description=words) if words and words != episode.description else episode
+    return (
+        dataclasses.replace(episode, description=words)
+        if words and words != episode.description
+        else episode
+    )

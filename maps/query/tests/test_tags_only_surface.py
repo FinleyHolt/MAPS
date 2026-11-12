@@ -1,4 +1,5 @@
 """Tags-only world model: the retrieval surface speaks raw OSM tags."""
+
 from __future__ import annotations
 
 
@@ -9,10 +10,10 @@ from maps.query.surface import build_surface_from_graph
 from maps.world_state.graph import MapObject
 
 
-def _node(*, name=None, class_name="", tags=None, centroid=(0, 0),
-          provenance="prebaked"):
-    return MapObject(class_name=class_name, name=name, tags=tags or {},
-                     centroid=centroid, provenance=provenance)
+def _node(*, name=None, class_name="", tags=None, centroid=(0, 0), provenance="prebaked"):
+    return MapObject(
+        class_name=class_name, name=name, tags=tags or {}, centroid=centroid, provenance=provenance
+    )
 
 
 def _prior_surface():
@@ -20,11 +21,9 @@ def _prior_surface():
         ("prior_0", _node(tags={"amenity": "parking"}, centroid=(0, 0))),
         ("prior_1", _node(tags={"service": "parking_aisle"}, centroid=(0, 5))),
         ("prior_2", _node(tags={"parking": "surface"}, centroid=(0, 10))),
-        ("prior_3", _node(name="Elm Street",
-                          tags={"highway": "residential"}, centroid=(0, 15))),
+        ("prior_3", _node(name="Elm Street", tags={"highway": "residential"}, centroid=(0, 15))),
     ]
-    dets = [("detected_0", _node(class_name="car", centroid=(5, 5),
-                                 provenance="detected"))]
+    dets = [("detected_0", _node(class_name="car", centroid=(5, 5), provenance="detected"))]
     return build_surface_from_graph(dets + priors, (0.0, 0.0), 2.0)
 
 
@@ -40,10 +39,15 @@ def test_query_over_tags_reaches_key_and_value_matches():
     # ONE idiom: 'parking' reaches amenity=parking (value),
     # service=parking_aisle (value token) AND parking=surface (KEY).
     cands, anchors = _prior_surface()
-    out = run_program(cands, anchors, {"ops": [
-        {"ref": "r0", "op": "find",
-         "args": {"query": "parking"}},
-    ]})
+    out = run_program(
+        cands,
+        anchors,
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {"query": "parking"}},
+            ]
+        },
+    )
     rows = {r["fid"]: r for r in out["results"]["r0"]}
     for fid in ("prior_0", "prior_1", "prior_2"):
         assert rows[fid]["name_match"] >= T.FUZZY_THRESHOLD, (fid, rows[fid])
@@ -55,14 +59,25 @@ def test_query_over_tags_reaches_key_and_value_matches():
 def test_broad_dump_census_renders_tag_counts():
     # 60 tagged priors (past the census knee): the summarize envelope carries
     # tag key=value counts, not a class taxonomy.
-    priors = [(f"prior_{i}",
-               _node(tags={"building": "yes"} if i % 2 else
-                     {"highway": "residential"}, centroid=(i, 0)))
-              for i in range(60)]
+    priors = [
+        (
+            f"prior_{i}",
+            _node(
+                tags={"building": "yes"} if i % 2 else {"highway": "residential"}, centroid=(i, 0)
+            ),
+        )
+        for i in range(60)
+    ]
     cands, anchors = build_surface_from_graph(priors, (0.0, 0.0), 2.0)
-    out = run_program(cands, anchors, {"ops": [
-        {"ref": "r0", "op": "find", "args": {}},
-    ]})
+    out = run_program(
+        cands,
+        anchors,
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {}},
+            ]
+        },
+    )
     env = compact_results(out["results"])["r0"]
     assert env["len"] == 60
     assert "census" in env, env.keys()
@@ -73,10 +88,15 @@ def test_broad_dump_census_renders_tag_counts():
 
 def test_no_match_query_ships_surface_census_with_name_samples():
     cands, anchors = _prior_surface()
-    out = run_program(cands, anchors, {"ops": [
-        {"ref": "r0", "op": "find",
-         "args": {"query": "zzzqx"}},
-    ]})
+    out = run_program(
+        cands,
+        anchors,
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {"query": "zzzqx"}},
+            ]
+        },
+    )
     env = compact_results(out["results"])["r0"]
     assert env["len"] == 0
     hint = env.get("hint") or ""
@@ -87,10 +107,15 @@ def test_no_match_query_ships_surface_census_with_name_samples():
 
 def test_grid_renders_prior_tags_compact_kv():
     cands, anchors = _prior_surface()
-    out = run_program(cands, anchors, {"ops": [
-        {"ref": "r0", "op": "find",
-         "args": {"query": "parking"}},
-    ]})
+    out = run_program(
+        cands,
+        anchors,
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {"query": "parking"}},
+            ]
+        },
+    )
     env = compact_results(out["results"])["r0"]
     grid = str(env.get("legend")) + "\n" + str(env.get("rows"))
     assert "tags" in grid, grid

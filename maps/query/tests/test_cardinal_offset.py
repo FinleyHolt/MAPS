@@ -20,9 +20,13 @@ def test_straight_road_signs_both_ways():
 
 def test_self_approaching_road_abstains_where_min_gap_inverts():
     """THE counterexample: a U-shaped road with the point between its legs."""
-    u_road = np.vstack([road_ns(), road_ns(x=-200.0),
-                        np.column_stack([np.linspace(-200, 0, 201),
-                                         np.full(201, 500.0)])])
+    u_road = np.vstack(
+        [
+            road_ns(),
+            road_ns(x=-200.0),
+            np.column_stack([np.linspace(-200, 0, 201), np.full(201, 500.0)]),
+        ]
+    )
     inside = (-150.0, 0.0)
 
     d = np.hypot(u_road[:, 0] - inside[0], u_road[:, 1] - inside[1])
@@ -51,9 +55,12 @@ def test_closed_loop_inside_abstains_outside_decides():
 
 def test_cul_de_sac_bulb_abstains_stem_decides():
     th = np.linspace(0, 2 * np.pi, 361)
-    bulb = np.vstack([
-        np.column_stack([np.zeros(200), np.linspace(-400, 0, 200)]),
-        np.column_stack([100 * np.cos(th), 100 * np.sin(th) + 100])])
+    bulb = np.vstack(
+        [
+            np.column_stack([np.zeros(200), np.linspace(-400, 0, 200)]),
+            np.column_stack([100 * np.cos(th), 100 * np.sin(th) + 100]),
+        ]
+    )
     assert cardinal_offset(bulb, (0.0, 100.0), "east") is None
     assert cardinal_offset(bulb, (-300.0, -200.0), "west") == 300.0
 
@@ -74,6 +81,7 @@ def test_empty_reference_abstains_and_a_diagonal_refuses():
 
 def test_band_width_is_not_load_bearing(monkeypatch):
     from maps.query import spatial_math
+
     road = road_ns()
     got = set()
     for w in (50.0, 150.0, 1000.0):

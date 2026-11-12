@@ -28,8 +28,7 @@ OPS = {
 }
 
 
-def run_program(cands, anchors, program, seed_results=None,
-                staged=None, standing=None):
+def run_program(cands, anchors, program, seed_results=None, staged=None, standing=None):
     """Run ``{"ops": [{ref, op, args}, ...]}`` (dependency order) over the
     surface rows; returns ``{"results": {ref: rows}}``. A handle defined here
     shadows its ``seed_results`` entry; ``staged`` maps stand() handles to
@@ -42,10 +41,11 @@ def run_program(cands, anchors, program, seed_results=None,
         # A null arg is an absent one: a handle bound to a row without a fid
         # compiles to items=None.
         try:
-            cx.results[op["ref"]] = OPS[op["op"]](cx, _Args(
-                {k: v for k, v in op["args"].items() if v is not None}, cx))
+            cx.results[op["ref"]] = OPS[op["op"]](
+                cx, _Args({k: v for k, v in op["args"].items() if v is not None}, cx)
+            )
         except ProgramError as exc:
             exc.op = cx.op  # the caller's repeated-error class
-            exc.ref = op["ref"]   # the handle whose op refused
+            exc.ref = op["ref"]  # the handle whose op refused
             raise
     return {"results": cx.results}

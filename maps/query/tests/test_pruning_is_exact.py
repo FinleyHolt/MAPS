@@ -1,5 +1,6 @@
 """Every box prune in the exact-mask kernels returns what the unpruned scan returns,
 value and witness alike."""
+
 import numpy as np
 import pytest
 
@@ -20,8 +21,13 @@ def _shapes(seed, n, span=600):
             out.append([[(x, y), (x + rng.uniform(-80, 80), y + rng.uniform(-80, 80))]])
         else:
             out.append([[(x, y)]])
-    out += [ring(0, 0, 100, 100), ring(10, 10, 5, 5), ring(100, 0, 10, 10),
-            [[(-50, 50), (150, 50)]], ring(20, -20, 10, 300)]
+    out += [
+        ring(0, 0, 100, 100),
+        ring(10, 10, 5, 5),
+        ring(100, 0, 10, 10),
+        [[(-50, 50), (150, 50)]],
+        ring(20, -20, 10, 300),
+    ]
     return [G.mask_geom(s) for s in out]
 
 
@@ -37,12 +43,19 @@ def _parity(P, A, B):
 def test_containment_is_the_unpruned_parity_across_chunks_holes_and_edges(monkeypatch):
     g = G.mask_geom(ring(0, 0, 100, 100) + ring(40, 40, 20, 20))
     rng = np.random.default_rng(3)
-    edges = G.mask_geom([c for _ in range(200) for c in ring(
-        *rng.uniform(0, 500, size=2), *rng.uniform(5, 30, size=2))])
-    lattice = np.asarray([(x, y) for y in (0.0, 40.0, 50.0, 100.0, -1.0)
-                          for x in (-1.0, 0.0, 40.0, 50.0, 100.0)], dtype=float)
+    edges = G.mask_geom(
+        [
+            c
+            for _ in range(200)
+            for c in ring(*rng.uniform(0, 500, size=2), *rng.uniform(5, 30, size=2))
+        ]
+    )
+    lattice = np.asarray(
+        [(x, y) for y in (0.0, 40.0, 50.0, 100.0, -1.0) for x in (-1.0, 0.0, 40.0, 50.0, 100.0)],
+        dtype=float,
+    )
     P = np.vstack([lattice, rng.uniform(0, 500, size=(400, 2))])
-    monkeypatch.setattr(G, "_PAIR_CHUNK", len(edges["CA"]) * 4)   # many chunks
+    monkeypatch.setattr(G, "_PAIR_CHUNK", len(edges["CA"]) * 4)  # many chunks
     for geom in (g, edges):
         want = _parity(P, geom["CA"], geom["CB"])
         assert np.array_equal(G._inside_mask_arr(P, geom["CA"], geom["CB"]), want)
@@ -53,14 +66,17 @@ def test_the_pruned_point_to_segment_argmin_is_the_full_scan():
     rng = np.random.default_rng(7)
     pruned = 0
     for k in range(16):
-        n_p, n_s = (rng.integers(50, 400), rng.integers(300, 2000)) if k % 2 else \
-                   (rng.integers(2000, 6000), rng.integers(20, 120))
+        n_p, n_s = (
+            (rng.integers(50, 400), rng.integers(300, 2000))
+            if k % 2
+            else (rng.integers(2000, 6000), rng.integers(20, 120))
+        )
         P = rng.uniform(-500, 500, size=(int(n_p), 2))
         A = rng.uniform(-500, 500, size=(int(n_s), 2))
         B = A + rng.uniform(-40, 40, size=A.shape)
         assert G._min_pt_to_segs(P, A, B) == G._min_pt_to_segs_all(P, A, B)
         pruned += len(P) * len(A) > G._PRUNE_PAIRS
-    assert 0 < pruned < 16, pruned            # both paths exercised
+    assert 0 < pruned < 16, pruned  # both paths exercised
 
 
 def test_the_box_gated_gap_and_crossing_are_the_ungated_ones(monkeypatch):
@@ -80,8 +96,9 @@ def test_the_box_bound_never_exceeds_the_gap_and_an_unknown_box_prunes_nothing()
     for a in geoms[:20]:
         for b in geoms:
             assert G.bbox_gap(a, b) <= G.gap_witness(a, b)[0] + 1e-9
-        assert np.allclose(G.bbox_bounds(G.stack_bboxes(geoms), a),
-                           [G.bbox_gap(g, a) for g in geoms])
+        assert np.allclose(
+            G.bbox_bounds(G.stack_bboxes(geoms), a), [G.bbox_gap(g, a) for g in geoms]
+        )
     empty = G.mask_geom([])
     assert G.bbox_bounds(G.stack_bboxes([empty, geoms[0]]), geoms[1])[0] == 0.0
     assert G.bbox_gap(geoms[0], empty) == 0.0
@@ -97,8 +114,10 @@ def _plain(members, item):
 
 
 def _boxes(rng, n):
-    return [G.mask_geom(ring(*rng.uniform(0, 3000, size=2), *rng.uniform(4, 40, size=2)))
-            for _ in range(n)]
+    return [
+        G.mask_geom(ring(*rng.uniform(0, 3000, size=2), *rng.uniform(4, 40, size=2)))
+        for _ in range(n)
+    ]
 
 
 def test_set_gap_is_the_plain_member_scan_with_its_witness(monkeypatch):
@@ -115,10 +134,11 @@ def test_set_gap_is_the_plain_member_scan_with_its_witness(monkeypatch):
     def counting(a, b):
         calls[0] += 1
         return real(a, b)
+
     monkeypatch.setattr(G, "gap_witness", counting)
     got = [G.set_gap(members, G.stack_bboxes(members), item) for item in items]
     assert got == want
-    assert calls[0] < 0.25 * len(items) * len(members), calls[0]   # it pruned
+    assert calls[0] < 0.25 * len(items) * len(members), calls[0]  # it pruned
 
 
 @pytest.mark.parametrize("order", [0, 1])
@@ -128,5 +148,4 @@ def test_set_gap_keeps_the_earliest_member_on_a_tie_and_stops_at_contact(order):
     pair = pair[::-1] if order else pair
     assert G.set_gap(pair, G.stack_bboxes(pair), item) == _plain(pair, item)
     touching = [G.mask_geom(ring(5, 5, 10, 10)), G.mask_geom(ring(6, 6, 10, 10))]
-    assert G.set_gap(touching, G.stack_bboxes(touching), item) == \
-        G.gap_witness(touching[0], item)
+    assert G.set_gap(touching, G.stack_bboxes(touching), item) == G.gap_witness(touching[0], item)

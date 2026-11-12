@@ -6,6 +6,7 @@ leaves a low-confidence detection with no ``wt_`` id; a per-frame index in its
 place would re-home its graph node onto every later stop's unrelated detection
 carrying the same index.
 """
+
 from __future__ import annotations
 
 from maps.perception.detection import DetectedObject
@@ -15,10 +16,12 @@ from maps.mission.episode_world import EpisodeWorld
 
 def _det(xy, conf, idx):
     return DetectedObject(
-        world_xy=(float(xy[0]), float(xy[1])), label="parking",
-        confidence=conf, source_tier="sam",
-        metadata={"sam3_1_object_id": idx,
-                  "track_id": f"sam3_1_img_{idx}"})
+        world_xy=(float(xy[0]), float(xy[1])),
+        label="parking",
+        confidence=conf,
+        source_tier="sam",
+        metadata={"sam3_1_object_id": idx, "track_id": f"sam3_1_img_{idx}"},
+    )
 
 
 def test_a_low_conf_detection_still_earns_a_track_identity():
@@ -28,7 +31,7 @@ def test_a_low_conf_detection_still_earns_a_track_identity():
     tr = WorldTracker()
     a = _det((1805.0, 908.0), 0.41, 0)
     tr.update([a])
-    b = _det((2100.0, 908.0), 0.41, 0)     # same frame index, 295 m away
+    b = _det((2100.0, 908.0), 0.41, 0)  # same frame index, 295 m away
     tr.update([b])
     ta, tb = a.metadata.get("track_id"), b.metadata.get("track_id")
     assert ta and ta.startswith("wt_"), a.metadata

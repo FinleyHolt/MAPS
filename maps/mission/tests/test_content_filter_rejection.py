@@ -24,19 +24,28 @@ AZURE_FILTERED = (
 )
 
 
-@pytest.mark.parametrize("body", [AZURE_FILTERED, '{"error": {"code": "content_filter"}}',
-                                  '{"error": {"innererror": {"code": "ResponsibleAIPolicyViolation"}}}'])
+@pytest.mark.parametrize(
+    "body",
+    [
+        AZURE_FILTERED,
+        '{"error": {"code": "content_filter"}}',
+        '{"error": {"innererror": {"code": "ResponsibleAIPolicyViolation"}}}',
+    ],
+)
 def test_azure_s_filtered_prompt_is_recognised(body: str) -> None:
     assert _is_content_filter_rejection(_status_error(400, body))
 
 
-@pytest.mark.parametrize("err", [
-    _status_error(400, "Failed to parse tool call arguments against schema"),
-    _status_error(429, AZURE_FILTERED),
-    _status_error(500, "content_filter service unavailable"),
-    httpx.ConnectError("tunnel flap"),
-    ValueError("empty body"),
-])
+@pytest.mark.parametrize(
+    "err",
+    [
+        _status_error(400, "Failed to parse tool call arguments against schema"),
+        _status_error(429, AZURE_FILTERED),
+        _status_error(500, "content_filter service unavailable"),
+        httpx.ConnectError("tunnel flap"),
+        ValueError("empty body"),
+    ],
+)
 def test_everything_else_is_not_a_filter(err) -> None:
     assert not _is_content_filter_rejection(err)
 

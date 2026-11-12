@@ -103,8 +103,15 @@ def _post_segment(json_body: dict, endpoint: Endpoint = Endpoint()) -> dict | No
         url = _pick_url([u for u in eps if u not in failed] or eps)
         try:
             with requests.Session() as s:
-                resp = s.post(url + "/segment", json=json_body, headers={"Connection": "close"},
-                              timeout=(min(SEGMENT_CONNECT_TIMEOUT_S, left), min(SEGMENT_READ_TIMEOUT_S, left)))
+                resp = s.post(
+                    url + "/segment",
+                    json=json_body,
+                    headers={"Connection": "close"},
+                    timeout=(
+                        min(SEGMENT_CONNECT_TIMEOUT_S, left),
+                        min(SEGMENT_READ_TIMEOUT_S, left),
+                    ),
+                )
                 payload = resp.json() if resp.ok else None
         except requests.exceptions.ReadTimeout as e:
             last = e
@@ -135,10 +142,17 @@ def _post_segment(json_body: dict, endpoint: Endpoint = Endpoint()) -> dict | No
 # red and blue are the median SAM-mask interiors on the CityNav nadir orthos,
 # the rest ideal sRGB.
 _COLOR_PALETTE: dict[str, tuple[int, int, int]] = {
-    "white": (175, 183, 191), "black": (77, 86, 98), "gray": (121, 132, 145),
-    "red": (135, 78, 88), "blue": (75, 101, 136), "green": (45, 130, 70),
-    "yellow": (215, 205, 70), "orange": (220, 130, 45), "brown": (110, 75, 50),
-    "tan": (200, 180, 145), "gold": (200, 165, 70),
+    "white": (175, 183, 191),
+    "black": (77, 86, 98),
+    "gray": (121, 132, 145),
+    "red": (135, 78, 88),
+    "blue": (75, 101, 136),
+    "green": (45, 130, 70),
+    "yellow": (215, 205, 70),
+    "orange": (220, 130, 45),
+    "brown": (110, 75, 50),
+    "tan": (200, 180, 145),
+    "gold": (200, 165, 70),
 }
 
 
@@ -189,7 +203,11 @@ def _dominant_color(rgb: np.ndarray, region: MaskRegion) -> tuple[str, list[int]
     # the colour's reliability prior.
     d1, d2 = float(np.sqrt(dists[0][0])), float(np.sqrt(dists[1][0]))
     margin = (d2 - d1) / (d2 + d1) if (d1 + d2) > 0.0 else 0.0
-    prior = _COLOR_RELIABILITY_PRIOR_ACHROMATIC if name in _COLOR_ACHROMATIC else _COLOR_RELIABILITY_PRIOR_DEFAULT
+    prior = (
+        _COLOR_RELIABILITY_PRIOR_ACHROMATIC
+        if name in _COLOR_ACHROMATIC
+        else _COLOR_RELIABILITY_PRIOR_DEFAULT
+    )
     conf = round(max(0.0, min(1.0, margin * prior)), 3)
     return name, [int(med[0]), int(med[1]), int(med[2])], conf
 
@@ -253,7 +271,11 @@ def split_into_instances(
         if c.area < floor:
             continue  # speckle
         # Disjoint from its own primary, so a count >= 1 is ANOTHER detection's.
-        if coverage_count is not None and float((c.window(coverage_count)[c.crop] >= 1).mean()) > _INSTANCE_SPLIT_REDUNDANT_FRAC:
+        if (
+            coverage_count is not None
+            and float((c.window(coverage_count)[c.crop] >= 1).mean())
+            > _INSTANCE_SPLIT_REDUNDANT_FRAC
+        ):
             continue  # redundant sliver of an already-detected neighbor
         kept.append(c)
     return kept
@@ -370,28 +392,31 @@ class SamDetectClient:
                 kept.append((region, lab, sc))
         return kept
 
-    def segment(
-        self, obs: Observation, concepts: list[str]
-    ) -> list[DetectedObject]:
+    def segment(self, obs: Observation, concepts: list[str]) -> list[DetectedObject]:
         """Slicing-aided detection: ``/segment`` each ``_SAM_INPUT_SIZE`` tile
         1:1 (a smaller frame zero-padded bottom and right, its masks clipped),
         place the masks in the frame, dedup across tiles, decode the kept."""
         rgb = obs.rgb
         assert rgb is not None
         H, W = int(rgb.shape[0]), int(rgb.shape[1])
-        canvas = np.pad(rgb, ((0, max(0, _SAM_INPUT_SIZE - H)), (0, max(0, _SAM_INPUT_SIZE - W)), (0, 0)))
+        canvas = np.pad(
+            rgb, ((0, max(0, _SAM_INPUT_SIZE - H)), (0, max(0, _SAM_INPUT_SIZE - W)), (0, 0))
+        )
         bounds = self._tile_bounds(canvas.shape[0], canvas.shape[1])
 
         def _one_tile(bound) -> "list[tuple[MaskRegion, str, float]] | None":
             """One tile's ``(region, label, score)`` items, or ``None`` when its ``/segment`` failed."""
             r0, r1, c0, c1 = bound
             tile = np.ascontiguousarray(canvas[r0:r1, c0:c1], dtype=np.uint8)
-            payload = _post_segment({
-                "concepts": concepts,
-                "min_area_px": MIN_AREA_PX,
-                "max_per_image": MAX_PER_STEP,
-                "image_b64": base64.b64encode(_png_wire_bytes(tile)).decode("ascii"),
-            }, self.endpoint)
+            payload = _post_segment(
+                {
+                    "concepts": concepts,
+                    "min_area_px": MIN_AREA_PX,
+                    "max_per_image": MAX_PER_STEP,
+                    "image_b64": base64.b64encode(_png_wire_bytes(tile)).decode("ascii"),
+                },
+                self.endpoint,
+            )
             if payload is None:
                 return None
             tile_out = []
@@ -401,11 +426,13 @@ class SamDetectClient:
                     continue
                 tight = region.tightened()
                 lr0, lc0, lr1, lc1 = tight.bbox
-                tile_out.append((
-                    MaskRegion(tight.crop, (r0 + lr0, c0 + lc0, r0 + lr1, c0 + lc1), (H, W)),
-                    str(det["label"]),
-                    float(det["score"]),
-                ))
+                tile_out.append(
+                    (
+                        MaskRegion(tight.crop, (r0 + lr0, c0 + lc0, r0 + lr1, c0 + lc1), (H, W)),
+                        str(det["label"]),
+                        float(det["score"]),
+                    )
+                )
             return tile_out
 
         # One thread per tile (the servers' SAM_MAX_INFLIGHT gates the GPU);
@@ -433,7 +460,9 @@ class SamDetectClient:
             + (" -- WARNING: this frame is PARTIAL-BLIND" if n_failed else ""),
             flush=True,
         )
-        return self.detections(obs, [(region, lab, i, sc) for i, (region, lab, sc) in enumerate(kept)])
+        return self.detections(
+            obs, [(region, lab, i, sc) for i, (region, lab, sc) in enumerate(kept)]
+        )
 
     def detections(
         self,
@@ -455,11 +484,11 @@ class SamDetectClient:
             if region is None or region.area < MIN_AREA_PX:
                 return None
             comps = _connected_components(region)
-            return (det_idx, region, comps, str(label), int(obj_id), float(score)), max(comps, key=lambda c: c.area)
+            return (det_idx, region, comps, str(label), int(obj_id), float(score)), max(
+                comps, key=lambda c: c.area
+            )
 
-        with ThreadPoolExecutor(
-            max_workers=n_workers, thread_name_prefix="sam-decode"
-        ) as ex:
+        with ThreadPoolExecutor(max_workers=n_workers, thread_name_prefix="sam-decode") as ex:
             pass1 = list(ex.map(_decode_one, enumerate(masks)))
         for res in pass1:
             if res is None:
@@ -493,7 +522,11 @@ class SamDetectClient:
             if world_xy is None:
                 return None
             color, med, conf = _dominant_color(obs.rgb, region)
-            attrs = {"color": color, "color_rgb": f"{med[0]},{med[1]},{med[2]}", "color_conf": f"{conf:.3f}"}
+            attrs = {
+                "color": color,
+                "color_rgb": f"{med[0]},{med[1]},{med[2]}",
+                "color_conf": f"{conf:.3f}",
+            }
             # Unique per split component until the world tracker re-stamps it.
             suffix = f"_c{comp_idx}" if n_comp > 1 else ""
             track_id = f"sam3_1_img_{det_idx}{suffix}"
@@ -527,18 +560,12 @@ class SamDetectClient:
                 d = _pack(comp, det_idx, obj_id, score, label, comp_idx, n_comp)
                 if d is not None:
                     packs.append(d)
-            fallback = (
-                _pack(region, det_idx, obj_id, score, label, 0, 1)
-                if not packs
-                else None
-            )
+            fallback = _pack(region, det_idx, obj_id, score, label, 0, 1) if not packs else None
             return packs, fallback
 
         # ponytail: speculative pack past the cap; gate per-det submission
         # on cap if profiles show waste.
-        with ThreadPoolExecutor(
-            max_workers=n_workers, thread_name_prefix="sam-pack"
-        ) as ex:
+        with ThreadPoolExecutor(max_workers=n_workers, thread_name_prefix="sam-pack") as ex:
             pass2 = list(ex.map(_split_and_pack, decoded))
 
         out: list[DetectedObject] = []

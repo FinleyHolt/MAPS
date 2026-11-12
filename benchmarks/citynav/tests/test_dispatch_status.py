@@ -24,22 +24,33 @@ from maps.settings import Settings
 def light(monkeypatch):
     """Keep the dispatch off the split file and the git subprocess."""
     monkeypatch.setattr(dispatch, "arm_env_stamp", lambda bench: {"SEARCH_X": "1"})
-    monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags, **kw: {"commit": "abc", "search_env_flags": flags})
+    monkeypatch.setattr(
+        dispatch,
+        "_cached_run_provenance",
+        lambda flags, **kw: {"commit": "abc", "search_env_flags": flags},
+    )
 
 
 def _dispatch(tmp_path):
     return dispatch.dispatch_one(
-        episode=SimpleNamespace(episode_id="b::1#0"), idx=0, total=1, objects_by_map={},
-        cfg=SimpleNamespace(source_path="x.yaml"), bench=citynav_bench({}), settings=Settings(),
-        split="test", recorder=None, episode_dir=tmp_path,
+        episode=SimpleNamespace(episode_id="b::1#0"),
+        idx=0,
+        total=1,
+        objects_by_map={},
+        cfg=SimpleNamespace(source_path="x.yaml"),
+        bench=citynav_bench({}),
+        settings=Settings(),
+        split="test",
+        recorder=None,
+        episode_dir=tmp_path,
     )
 
 
 def _rec(ended_by: str = "reply") -> dict:
     return {
-        "episode_id": "b::1#0", "map_name": "b",
-        "metrics": {"NE": 3.0, "SR": 1, "steps_taken": 2,
-                    "mission": {"ended_by": ended_by}},
+        "episode_id": "b::1#0",
+        "map_name": "b",
+        "metrics": {"NE": 3.0, "SR": 1, "steps_taken": 2, "mission": {"ended_by": ended_by}},
     }
 
 
@@ -48,6 +59,7 @@ def test_a_method_exception_lands_a_scored_miss(tmp_path, light, monkeypatch, ms
     """An exception the method raised is its own failure: the row is
     ``ok`` with the error and traceback and no metrics, which every reader
     scores SR 0. Only an infrastructure fault re-queues."""
+
     def boom(*a, **k):
         raise RuntimeError(msg)
 
@@ -77,11 +89,14 @@ def test_a_serve_fault_is_infra_without_a_traceback(tmp_path, light, monkeypatch
     assert row["error"] == "RuntimeError: compile failed" and "traceback" not in row
 
 
-@pytest.mark.parametrize("exc", [
-    _status_error(400),
-    RuntimeError("CUDA out of memory"),
-    RuntimeError("upstream said: Connection refused"),
-])
+@pytest.mark.parametrize(
+    "exc",
+    [
+        _status_error(400),
+        RuntimeError("CUDA out of memory"),
+        RuntimeError("upstream said: Connection refused"),
+    ],
+)
 def test_a_refused_request_or_a_quoted_phrase_is_not_infra(exc):
     from benchmarks.citynav.run_benchmark.dispatch import _exc_is_transient_infra
 
@@ -143,10 +158,7 @@ def test_append_row_from_two_threads_writes_intact_lines(tmp_path):
         t.start()
     for t in threads:
         t.join()
-    rows = [
-        json.loads(ln)
-        for ln in (tmp_path / episodes.EPISODES_JSONL).read_text().splitlines()
-    ]
+    rows = [json.loads(ln) for ln in (tmp_path / episodes.EPISODES_JSONL).read_text().splitlines()]
     assert len(rows) == 2 * n
     assert {r["episode_id"] for r in rows} == {f"{t}{i}" for t in "ab" for i in range(n)}
 
@@ -158,15 +170,23 @@ def test_rows_are_strict_json(tmp_path):
 
     from benchmarks.run_record import episodes
 
-    row = {"episode_id": "e", "status": "ok", "sensor": {"max_range_m": float("inf")},
-           "metrics": {"NE": float("nan"), "SR": 1}, "visited_xy": [[1.0, float("-inf")]]}
+    row = {
+        "episode_id": "e",
+        "status": "ok",
+        "sensor": {"max_range_m": float("inf")},
+        "metrics": {"NE": float("nan"), "SR": 1},
+        "visited_xy": [[1.0, float("-inf")]],
+    }
     episodes.append_row(tmp_path, row)
     episodes.write_episode_json(tmp_path, row)
 
     def refuse(name):
         raise AssertionError(f"non-JSON constant {name} on disk")
 
-    for text in ((tmp_path / "episodes.jsonl").read_text(), (tmp_path / "episode.json").read_text()):
+    for text in (
+        (tmp_path / "episodes.jsonl").read_text(),
+        (tmp_path / "episode.json").read_text(),
+    ):
         parsed = json.loads(text, parse_constant=refuse)
         assert parsed["sensor"]["max_range_m"] is None
         assert parsed["metrics"] == {"NE": None, "SR": 1}

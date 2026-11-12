@@ -36,10 +36,15 @@ def test_an_episode_json_beside_the_ledger_is_not_an_attempt(tmp_path):
     landed = ledger_row("e::1#1", "20260725_110000", 1)
     write_ledger(root, landed)
     write_ledger(root / landed["workdir"], {**landed, "worker_id": None}, name="episode.json")
-    write_ledger(root / "w0/maps_20260725_110500_citynav_e__2_2",
-                 {"episode_id": "e::2#2", "status": "ok",
-                  "metrics": {"episode_id": "e::2#2", "SR": 1, "NE": 0.0}},
-                 name="episode.json")
+    write_ledger(
+        root / "w0/maps_20260725_110500_citynav_e__2_2",
+        {
+            "episode_id": "e::2#2",
+            "status": "ok",
+            "metrics": {"episode_id": "e::2#2", "SR": 1, "NE": 0.0},
+        },
+        name="episode.json",
+    )
 
     picked, stats = rows.load_attempts(root)
     assert set(picked) == {"e::1#1"}
@@ -48,8 +53,11 @@ def test_an_episode_json_beside_the_ledger_is_not_an_attempt(tmp_path):
 
 def test_a_root_without_a_ledger_is_refused(tmp_path):
     """No ledger, no run -- an episode.json alone is not one, nor is a mistyped root."""
-    write_ledger(tmp_path / "w0/maps_20260725_110000_citynav_e__1_1",
-                 ledger_row("e::1#1", "20260725_110000", 1), name="episode.json")
+    write_ledger(
+        tmp_path / "w0/maps_20260725_110000_citynav_e__1_1",
+        ledger_row("e::1#1", "20260725_110000", 1),
+        name="episode.json",
+    )
     for root in (tmp_path, tmp_path / "typo"):
         with pytest.raises(SystemExit, match=r": not a run root \(no episodes.jsonl\)"):
             load_run(root)
@@ -109,11 +117,18 @@ def test_the_report_counts_timeouts_and_infra_apart(tmp_path, capsys):
 
 def test_an_all_no_commit_run_scores_every_episode_a_miss(tmp_path, capsys):
     root = tmp_path / "run"
-    write_ledger(root, *[
-        {"episode_id": f"e::{i}#{i}", "worker_id": "w0", "status": "ok",
-         "workdir": f"w0/maps_2026072{i}_110000_citynav_e__{i}_{i}"}
-        for i in range(5)
-    ])
+    write_ledger(
+        root,
+        *[
+            {
+                "episode_id": f"e::{i}#{i}",
+                "worker_id": "w0",
+                "status": "ok",
+                "workdir": f"w0/maps_2026072{i}_110000_citynav_e__{i}_{i}",
+            }
+            for i in range(5)
+        ],
+    )
     assert load_run(root) == {f"e::{i}#{i}": {"SR": 0} for i in range(5)}
     report(root)
     assert "SR = 0/5" in capsys.readouterr().out
@@ -121,10 +136,13 @@ def test_an_all_no_commit_run_scores_every_episode_a_miss(tmp_path, capsys):
 
 def test_an_all_infra_run_refuses_and_names_what_it_read(tmp_path):
     root = tmp_path / "run"
-    write_ledger(root, *[
-        {"episode_id": f"e::{i}#{i}", "status": "infra", "error": "serve_down"}
-        for i in range(3)
-    ])
+    write_ledger(
+        root,
+        *[
+            {"episode_id": f"e::{i}#{i}", "status": "infra", "error": "serve_down"}
+            for i in range(3)
+        ],
+    )
     with pytest.raises(SystemExit) as excinfo:
         report(root)
     assert "infra: 3" in str(excinfo.value)
@@ -135,10 +153,13 @@ def test_an_all_infra_run_refuses_and_names_what_it_read(tmp_path):
 # Which criterion the report names
 # --------------------------------------------------------------------------
 
+
 def _scored(srs, **metrics) -> list[dict]:
     """One ledger row per entry of ``srs``, each scoring that SR with ``metrics``."""
-    return [ledger_row(f"e::{i}#{i}", "s", metrics={"SR": sr, "NE": 10.0, **metrics})
-            for i, sr in enumerate(srs)]
+    return [
+        ledger_row(f"e::{i}#{i}", "s", metrics={"SR": sr, "NE": 10.0, **metrics})
+        for i, sr in enumerate(srs)
+    ]
 
 
 def test_a_shape_bench_names_its_own_criterion(tmp_path, capsys):
@@ -146,8 +167,9 @@ def test_a_shape_bench_names_its_own_criterion(tmp_path, capsys):
     the report states it instead of inferring it from how many rows resolve
     a shape.
     """
-    write_ledger(tmp_path, *_scored([1, 1, 1, 0, 0], success_criterion="shape",
-                                    precise_target="shape"))
+    write_ledger(
+        tmp_path, *_scored([1, 1, 1, 0, 0], success_criterion="shape", precise_target="shape")
+    )
     report(tmp_path)
     out = capsys.readouterr().out
     assert "criterion: the target's own shape" in out, out
@@ -198,9 +220,13 @@ def test_a_root_with_no_recorded_metrics_claims_no_disc_sr(tmp_path, capsys):
 
 
 def test_failed_tiles_are_reported_beside_the_sr(tmp_path, capsys):
-    write_ledger(tmp_path, *(
-        ledger_row(eid, "s", metrics={"SR": 0, "NE": 10.0, "sam_tiles_failed": n})
-        for eid, n in (("a", 3), ("b", 0), ("c", 2))))
+    write_ledger(
+        tmp_path,
+        *(
+            ledger_row(eid, "s", metrics={"SR": 0, "NE": 10.0, "sam_tiles_failed": n})
+            for eid, n in (("a", 3), ("b", 0), ("c", 2))
+        ),
+    )
     report(tmp_path)
     out = capsys.readouterr().out
     assert "SAHI tiles failed = 5 over 2 of 3 scored episode(s)" in out, out
@@ -224,8 +250,10 @@ def test_a_root_with_no_scored_row_does_not_stop_the_roots_after_it(tmp_path, ca
     exit code says one was refused."""
     from benchmarks.citynav.analysis import run_report
 
-    empty = write_ledger(tmp_path / "empty", ledger_row("e::1#1", "20260725_110000", status="infra",
-                                                        error="reasoner_down_midrun"))
+    empty = write_ledger(
+        tmp_path / "empty",
+        ledger_row("e::1#1", "20260725_110000", status="infra", error="reasoner_down_midrun"),
+    )
     good = write_ledger(tmp_path / "good", ledger_row("e::2#2", "20260725_110100", 1))
     assert run_report.main([str(empty), str(good)]) == 1
     out = capsys.readouterr()
@@ -235,43 +263,80 @@ def test_a_root_with_no_scored_row_does_not_stop_the_roots_after_it(tmp_path, ca
 
 def test_the_provenance_line_orders_ties_by_name(tmp_path, capsys):
     root = tmp_path / "run"
-    write_ledger(root, *(
-        ledger_row(f"e::{i}#{i}", f"20260725_1{i}0000",
-                   metrics={"SR": 1, "NE": 1.0, "committed_provenance": prov})
-        for i, prov in enumerate(("point", "detection", "point", "detection", "landmark"))))
+    write_ledger(
+        root,
+        *(
+            ledger_row(
+                f"e::{i}#{i}",
+                f"20260725_1{i}0000",
+                metrics={"SR": 1, "NE": 1.0, "committed_provenance": prov},
+            )
+            for i, prov in enumerate(("point", "detection", "point", "detection", "landmark"))
+        ),
+    )
     report(root)
     assert "provenance: detection=2  point=2  landmark=1" in capsys.readouterr().out
 
 
 def _calcity_corpus(tmp_path, monkeypatch, *rows: tuple[str, str | None]) -> None:
     """A Cal City split of ``(description, intel_quality)`` rows, ids ``calcity::<i>#<i>``."""
-    corpus = [{"area": "calcity", "descriptions": [d], "ann_ids": [i], "target_positions": [[0.0, 0.0]],
-               "trajectory": [[0.0, 0.0, 100.0]], "intel_quality": q} for i, (d, q) in enumerate(rows)]
+    corpus = [
+        {
+            "area": "calcity",
+            "descriptions": [d],
+            "ann_ids": [i],
+            "target_positions": [[0.0, 0.0]],
+            "trajectory": [[0.0, 0.0, 100.0]],
+            "intel_quality": q,
+        }
+        for i, (d, q) in enumerate(rows)
+    ]
     (tmp_path / "calcity.json").write_text(json.dumps(corpus))
     monkeypatch.setenv("SEARCH_CALCITY_SPLITS", str(tmp_path))
 
 
 def test_the_by_class_lines_read_a_row_s_own_class_and_the_corpus_for_a_pick_without_one(
-        tmp_path, monkeypatch, capsys):
+    tmp_path, monkeypatch, capsys
+):
     """A recorded row's referent bucket and intel quality are its own keys; a pick without them
     takes its corpus row's, so a G episode that timed out with no record is a G miss, not a '?'
     one. A run whose every row carries its class needs no split on this machine."""
-    _calcity_corpus(tmp_path, monkeypatch, ("the red car", "G"), ("a building", "G"),
-                    ("the lot", "G"), ("a shed", None))
+    _calcity_corpus(
+        tmp_path,
+        monkeypatch,
+        ("the red car", "G"),
+        ("a building", "G"),
+        ("the lot", "G"),
+        ("a shed", None),
+    )
     root = tmp_path / "run"
-    write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1),
-                 ledger_row("calcity::1#1", "20260725_110001", 1,
-                            metrics={"SR": 1, "intel_quality": "P", "referent_bucket": "car"}),
-                 ledger_row("calcity::2#2", "20260725_110002", status="timed_out"),
-                 ledger_row("calcity::3#3", "20260725_110003", 0))
+    write_ledger(
+        root,
+        ledger_row("calcity::0#0", "20260725_110000", 1),
+        ledger_row(
+            "calcity::1#1",
+            "20260725_110001",
+            1,
+            metrics={"SR": 1, "intel_quality": "P", "referent_bucket": "car"},
+        ),
+        ledger_row("calcity::2#2", "20260725_110002", status="timed_out"),
+        ledger_row("calcity::3#3", "20260725_110003", 0),
+    )
     (root / "run_manifest.json").write_text(json.dumps({"split": "calcity"}))
     report(root)
     out = capsys.readouterr().out
     assert "by bucket: car:2/2(100%)   other:0/2(0%)" in out
     assert "by intel quality: G:1/2(50%)   P:1/1(100%)   ?:0/1(0%)" in out
     alone = tmp_path / "alone"
-    write_ledger(alone, ledger_row("calcity::9#9", "20260725_110000", 1,
-                                   metrics={"SR": 1, "intel_quality": "M", "referent_bucket": "building"}))
+    write_ledger(
+        alone,
+        ledger_row(
+            "calcity::9#9",
+            "20260725_110000",
+            1,
+            metrics={"SR": 1, "intel_quality": "M", "referent_bucket": "building"},
+        ),
+    )
     report(alone)
     out = capsys.readouterr().out
     assert "by bucket: building:1/1(100%)" in out and "by intel quality: M:1/1(100%)" in out
@@ -282,15 +347,23 @@ def test_a_split_that_is_not_the_run_s_corpus_prints_no_class_split(tmp_path, mo
     lacking one of the run's episodes (another corpus of the same name), says so instead of '?'."""
     _calcity_corpus(tmp_path, monkeypatch, ("the red car", None))
     root = tmp_path / "q"
-    write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1),
-                 ledger_row("calcity::7#1", "20260725_110001", 1))
+    write_ledger(
+        root,
+        ledger_row("calcity::0#0", "20260725_110000", 1),
+        ledger_row("calcity::7#1", "20260725_110001", 1),
+    )
     report(root)
     out = capsys.readouterr().out
     assert "by bucket" not in out and "intel quality" not in out
-    assert "by class: -- (2 of the run's 2 episodes are not in its split None on this machine)" in out
+    assert (
+        "by class: -- (2 of the run's 2 episodes are not in its split None on this machine)" in out
+    )
     (root / "run_manifest.json").write_text(json.dumps({"split": "calcity"}))
     report(root)
-    assert "by class: -- (1 of the run's 2 episodes are not in its split calcity" in capsys.readouterr().out
+    assert (
+        "by class: -- (1 of the run's 2 episodes are not in its split calcity"
+        in capsys.readouterr().out
+    )
     write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1))
     report(root)
     out = capsys.readouterr().out
@@ -311,8 +384,12 @@ def test_a_row_that_records_its_description_is_bucketed_by_it(tmp_path, monkeypa
     """A revised released root carries its own wording; the split row keeps the original."""
     _calcity_corpus(tmp_path, monkeypatch, ("a building", "G"))
     root = tmp_path / "revised"
-    write_ledger(root, ledger_row("calcity::0#0", "20260725_110000", 1, split="calcity",
-                                  description="the red car"))
+    write_ledger(
+        root,
+        ledger_row(
+            "calcity::0#0", "20260725_110000", 1, split="calcity", description="the red car"
+        ),
+    )
     report(root)
     out = capsys.readouterr().out
     assert "by bucket: car:1/1(100%)" in out and "by intel quality: G:1/1(100%)" in out

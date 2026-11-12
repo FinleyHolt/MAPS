@@ -78,8 +78,16 @@ class ChatServe(_Serve):
 
     path = "/chat/completions"
 
-    default = (200, {"choices": [{"message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}],
-                     "usage": {"prompt_tokens": 1, "completion_tokens": 1}}, {})
+    default = (
+        200,
+        {
+            "choices": [
+                {"message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}
+            ],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        },
+        {},
+    )
 
 
 class SegmentServe(_Serve):

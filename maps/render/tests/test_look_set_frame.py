@@ -1,4 +1,4 @@
-""""look at them." delivers ONE CROP PER ROW over the set in scope — end to end, real
+""" "look at them." delivers ONE CROP PER ROW over the set in scope — end to end, real
 pixels, through the mission loop."""
 
 from __future__ import annotations
@@ -12,16 +12,17 @@ from maps.mission.tests.fakes import cars, look_drive, run
 # The bounds are pixel counts; the fixture ortho below is 0.1 m/px.
 _MIN_M, _BUDGET_M = look_window_bounds_m(0.1)
 
+
 def test_the_set_look_delivers_one_crop_per_row(ortho_dir):
     cands = cars(6)
     results, reqs, recs, vision = look_drive(
-        [[run('a = find("car")')], [run("look(a)")], "over"],
-        cands, ortho_dir)
+        [[run('a = find("car")')], [run("look(a)")], "over"], cands, ortho_dir
+    )
 
     # ONE frame, not one crop per row: the set look is a relational read.
     assert len(reqs) == 1 and len(reqs[0]) >= 1, reqs
     req = reqs[0][0]
-    assert req["center_fid"] == "detected_0", req      # rank 0 owns the frame
+    assert req["center_fid"] == "detected_0", req  # rank 0 owns the frame
     # each request is its OWN subject: it marks itself and nothing else,
     # which is what makes badge->fid unambiguous by construction.
     assert [m["fid"] for m in req.get("marks") or []] == ["detected_0"], req
@@ -67,8 +68,8 @@ def test_over_budget_is_a_served_fact_not_a_silent_truncation(ortho_dir):
     # the rest were absent from the set.
     n = LOOK_MAX_BADGES + 11
     results, reqs, recs, vision = look_drive(
-        [[run('a = find("car")')], [run("look(a)")], "over"],
-        cars(n), ortho_dir)
+        [[run('a = find("car")')], [run("look(a)")], "over"], cars(n), ortho_dir
+    )
     # the cap that bites is the per-call CROP budget, not the badge cap
     assert len(reqs[0]) == 16, len(reqs[0])
     rec = recs[0][0]
@@ -76,16 +77,22 @@ def test_over_budget_is_a_served_fact_not_a_silent_truncation(ortho_dir):
     assert rec["marks_dropped"] == 0, rec
     note = " ".join(results[1]["crop"].get("ref_notes") or [])
     assert f"only the first 16 crops of this call rendered ({n - 16} item(s) dropped)" in note, note
-    assert note.count("16") == 2, note       # the cap is stated once
+    assert note.count("16") == 2, note  # the cap is stated once
 
 
-def test_a_spread_set_gets_a_crop_each_at_single_look_scale(
-        ortho_dir):
-    cands = [{"fid": f"detected_{i}", "xy": [12.5 + 400.0 * i, 12.5],
-              "class": "car", "search_text": "car"} for i in range(4)]
+def test_a_spread_set_gets_a_crop_each_at_single_look_scale(ortho_dir):
+    cands = [
+        {
+            "fid": f"detected_{i}",
+            "xy": [12.5 + 400.0 * i, 12.5],
+            "class": "car",
+            "search_text": "car",
+        }
+        for i in range(4)
+    ]
     results, reqs, recs, _vis = look_drive(
-        [[run('a = find("car")')], [run("look(a)")], "over"],
-        cands, ortho_dir)
+        [[run('a = find("car")')], [run("look(a)")], "over"], cands, ortho_dir
+    )
     assert len(reqs[0]) == len(cands), reqs
     for rec in recs[0]:
         assert len(rec["legend"]) == 1, rec["legend"]
@@ -94,13 +101,15 @@ def test_a_spread_set_gets_a_crop_each_at_single_look_scale(
     crop = results[1]["crop"]
     assert crop["delivered"] == len(cands), crop
 
+
 def test_the_one_id_look_is_the_request_it_always_was(ortho_dir):
     # The capability is ADDED, not swapped: a one-id look still emits the
     # single-item request with its own fid as the target and no mark set,
     # and render_candidate_crops is a pure function of that request — so
     # the delivered bytes are the ones it delivered before.
     results, reqs, recs, vision = look_drive(
-        [[run('look("detected_1")')], "over"], cars(6), ortho_dir)
+        [[run('look("detected_1")')], "over"], cars(6), ortho_dir
+    )
     (req,) = reqs[0]
     assert req["center_fid"] == "detected_1"
     # the target IS the center, so the ONE mark resolves onto the subject
@@ -108,15 +117,15 @@ def test_the_one_id_look_is_the_request_it_always_was(ortho_dir):
     assert [m["fid"] for m in req["marks"]] == ["detected_1"], req
     rec = recs[0][0]
     assert rec["context_m"] == _MIN_M, rec["context_m"]
-    assert rec["legend"] == [{"digit": 1, "label": "TARGET car detected_1",
-                              "role": "center"}], rec["legend"]
+    assert rec["legend"] == [{"digit": 1, "label": "TARGET car detected_1", "role": "center"}], rec[
+        "legend"
+    ]
     assert results[0]["crop"]["delivered"] == 1, results[0]
 
 
 def test_a_set_look_with_no_set_says_so_in_register(ortho_dir):
     """Looking at a name nothing bound renders nothing and says which name."""
-    results, reqs, _recs, _vision = look_drive(
-        [[run("look(a)")], "over"], cars(3), ortho_dir)
-    assert reqs == [], reqs           # nothing rendered
+    results, reqs, _recs, _vision = look_drive([[run("look(a)")], "over"], cars(3), ortho_dir)
+    assert reqs == [], reqs  # nothing rendered
     err = str(results[0].get("error"))
     assert "NameError" in err and "'a'" in err, results[0]

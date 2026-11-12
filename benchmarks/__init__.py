@@ -23,13 +23,18 @@ def git_provenance() -> dict:
     out: dict = {"git_commit": None, "git_dirty": None}
 
     def _git(*args):
-        return subprocess.run(["git", "-C", str(REPO_ROOT), *args],
-                              capture_output=True, text=True, timeout=5)
+        return subprocess.run(
+            ["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True, timeout=5
+        )
+
     try:
         head = _git("rev-parse", "--show-toplevel", "HEAD")
         lines = head.stdout.splitlines()
-        if head.returncode == 0 and len(lines) == 2 \
-                and pathlib.Path(lines[0]).resolve() == REPO_ROOT.resolve():
+        if (
+            head.returncode == 0
+            and len(lines) == 2
+            and pathlib.Path(lines[0]).resolve() == REPO_ROOT.resolve()
+        ):
             out["git_commit"] = lines[1]
             status = _git("status", "--porcelain")
             if status.returncode == 0:

@@ -70,7 +70,11 @@ def _held_points(cov: dict[str, Any] | None) -> dict[str, Any] | None:
     """A coverage answer as a run record states it: the share held, one flag per area point, the frames asked."""
     if not cov:
         return None
-    return {"fraction": cov["fraction"], "held": [b is not None for b in cov["best"]], "frames": cov["frames"]}
+    return {
+        "fraction": cov["fraction"],
+        "held": [b is not None for b in cov["best"]],
+        "frames": cov["frames"],
+    }
 
 
 def leg_span_m(h: Hydrated) -> float:
@@ -93,8 +97,13 @@ def leg_area(h: Hydrated, token: str, xy) -> list[tuple[float, float]]:
     x, y = float(xy[0]), float(xy[1])
     points = [(x, y)]
     for n, radius in ((6, r / 2.0), (12, r)):
-        points += [(x + radius * math.cos(2.0 * math.pi * k / n), y + radius * math.sin(2.0 * math.pi * k / n))
-                   for k in range(n)]
+        points += [
+            (
+                x + radius * math.cos(2.0 * math.pi * k / n),
+                y + radius * math.sin(2.0 * math.pi * k / n),
+            )
+            for k in range(n)
+        ]
     return points
 
 
@@ -102,9 +111,17 @@ class Legs:
     """The legs of one mission: each flight's leg posted to the vehicle and
     waited on, and the pass the flight in progress held."""
 
-    def __init__(self, *, live: LiveSource, transcript: list, cancel: threading.Event, agl_m: float,
-                 to_lonlat: Callable[[list], list], keep_observation: Callable[[Any], str | None],
-                 flights_flown: Callable[[], int]) -> None:
+    def __init__(
+        self,
+        *,
+        live: LiveSource,
+        transcript: list,
+        cancel: threading.Event,
+        agl_m: float,
+        to_lonlat: Callable[[list], list],
+        keep_observation: Callable[[Any], str | None],
+        flights_flown: Callable[[], int],
+    ) -> None:
         self.live = live
         self._vehicle = live.vehicle
         #: The mission's conversation log: a leg writes its ``waypoint`` and ``leg`` rows.
@@ -145,23 +162,38 @@ class Legs:
             held = self._held_frame(area_ll, xy) if _holds(cov) else None
             at = f"{token} at ({xy[0]:.0f}, {xy[1]:.0f})"
             if held is not None:
-                self._said(f"{at} is held by the pass already: {self._held_words(held[1])}; no leg is flown")
+                self._said(
+                    f"{at} is held by the pass already: {self._held_words(held[1])}; no leg is flown"
+                )
             elif not self._cancel.is_set():
                 # Frames recorded after this vehicle time are the leg's own; None counts the whole ring.
                 after = None
                 if unread is not None:
-                    log.warning("the leg to %s is posted unread: the recording did not answer in %d reads: %s",
-                                at, COVERAGE_TRIES, unread)
-                    self._said(f"{at} may be held by the pass already, but the recording could not be asked "
-                               f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown")
+                    log.warning(
+                        "the leg to %s is posted unread: the recording did not answer in %d reads: %s",
+                        at,
+                        COVERAGE_TRIES,
+                        unread,
+                    )
+                    self._said(
+                        f"{at} may be held by the pass already, but the recording could not be asked "
+                        f"in {COVERAGE_TRIES} reads ({unread}); the leg is flown"
+                    )
                 elif cov is not None and not _holds(cov):
-                    log.info("the pass holds %d/%d points of %s in %d frames, short of %.0f%%; the leg is flown",
-                             cov["held"], cov["points"], at, len({b[1] for b in cov["best"] if b}),
-                             100.0 * COVERED_FRACTION)
+                    log.info(
+                        "the pass holds %d/%d points of %s in %d frames, short of %.0f%%; the leg is flown",
+                        cov["held"],
+                        cov["points"],
+                        at,
+                        len({b[1] for b in cov["best"] if b}),
+                        100.0 * COVERED_FRACTION,
+                    )
                 elif cov is not None:
-                    self._said(f"{at} is held by the pass ({cov['held']}/{cov['points']} points), but no frame of "
-                               f"it could be served ({self.live.last_refusal or 'no reason recorded'}); "
-                               f"the leg is flown")
+                    self._said(
+                        f"{at} is held by the pass ({cov['held']}/{cov['points']} points), but no frame of "
+                        f"it could be served ({self.live.last_refusal or 'no reason recorded'}); "
+                        f"the leg is flown"
+                    )
                     # The ring already holds the area, so only a pass after the post can arrive.
                     after = self._vehicle.now()
                 ahead = [(float(x), float(y)) for x, y in (item.get("pass_ahead") or [])]
@@ -175,9 +207,16 @@ class Legs:
             # The fused pass is spent with the flight.
             self.held = None
 
-    def post_and_wait(self, token: str, at: str, xy: list[float], area: list[tuple[float, float]],
-                       area_ll: list[tuple[float, float]], ahead: list[tuple[float, float]],
-                       after: float | None) -> tuple[Any, dict[str, Any]] | None:
+    def post_and_wait(
+        self,
+        token: str,
+        at: str,
+        xy: list[float],
+        area: list[tuple[float, float]],
+        area_ll: list[tuple[float, float]],
+        ahead: list[tuple[float, float]],
+        after: float | None,
+    ) -> tuple[Any, dict[str, Any]] | None:
         """The leg posted for ``area`` and waited on (arrival counting the
         frames after ``after`` when given), a short pass asked again up to
         ``SHORT_PASS_REQUESTS`` times; then what the pass held,
@@ -190,48 +229,88 @@ class Legs:
         reach = max(math.dist(xy, p) for p in area)
         shorts = 0
         self.closest_m = float("inf")
-        self.waiting = {"n": step + 1, "flight": step, "target": token, "area": area_ll,
-                        "coverageFloor": COVERED_FRACTION, "coverage": None, "posted_at": self._vehicle.now()}
+        self.waiting = {
+            "n": step + 1,
+            "flight": step,
+            "target": token,
+            "area": area_ll,
+            "coverageFloor": COVERED_FRACTION,
+            "coverage": None,
+            "posted_at": self._vehicle.now(),
+        }
         while True:
-            outcome, last_cov = self.wait_arrival(xy, area=area_ll, timeout_s=ARRIVAL_TIMEOUT_S, after=after,
-                                                   reach_m=reach if shorts < SHORT_PASS_REQUESTS else None)
+            outcome, last_cov = self.wait_arrival(
+                xy,
+                area=area_ll,
+                timeout_s=ARRIVAL_TIMEOUT_S,
+                after=after,
+                reach_m=reach if shorts < SHORT_PASS_REQUESTS else None,
+            )
             if outcome != "short" or self._cancel.is_set():
                 break
             shorts += 1
             moved, note = self._short_pass(token, xy, area, last_cov, shorts)
-            self._post(Leg(target=token, point=(moved[0], moved[1]), step=step, area=area_ll,
-                           ahead=ahead, revision=shorts, note=note))
+            self._post(
+                Leg(
+                    target=token,
+                    point=(moved[0], moved[1]),
+                    step=step,
+                    area=area_ll,
+                    ahead=ahead,
+                    revision=shorts,
+                    note=note,
+                )
+            )
         waited = self._wait_departure(xy) if outcome == "arrived" else 0.0
         self.waiting = None
         if self._cancel.is_set():
             return None
         held = self._held_frame(area_ll, xy, after)
-        self.transcript.append({"kind": "leg", "said": self.outcome_words(outcome, at, held, waited),
-                                "area": area_ll, "coverageFloor": COVERED_FRACTION,
-                                "coverage": _held_points(last_cov)})
+        self.transcript.append(
+            {
+                "kind": "leg",
+                "said": self.outcome_words(outcome, at, held, waited),
+                "area": area_ll,
+                "coverageFloor": COVERED_FRACTION,
+                "coverage": _held_points(last_cov),
+            }
+        )
         return held
 
     def _post(self, leg: Leg) -> None:
         """Hand ``leg`` to the aircraft; a ``waypoint`` row says when and where, at the
         commanded height (what the measures' turn radius and height fallback read)."""
         self._vehicle.post(leg)
-        row = {"kind": "waypoint", "altitudeAglMeters": self.agl_m, "flight": leg.step, "n": leg.step + 1,
-               "label": leg.target, "coverageFloor": COVERED_FRACTION}
+        row = {
+            "kind": "waypoint",
+            "altitudeAglMeters": self.agl_m,
+            "flight": leg.step,
+            "n": leg.step + 1,
+            "label": leg.target,
+            "coverageFloor": COVERED_FRACTION,
+        }
         if (at := self._to_lonlat([leg.point])[0]) is not None:
             row["lon"], row["lat"] = at
         self.transcript.append(row)
 
-    def outcome_words(self, outcome: str, at: str, held: tuple[Any, dict[str, Any]] | None, waited: float) -> str:
+    def outcome_words(
+        self, outcome: str, at: str, held: tuple[Any, dict[str, Any]] | None, waited: float
+    ) -> str:
         """The ``leg`` row of a leg that arrived or was lost: what the pass
         held, and for an arrival whether the map registered it."""
         if outcome == "arrived":
             if held is None:
-                return (f"the leg to {at} arrived, but no frame of the pass could be served "
-                        f"({self.live.last_refusal or 'no reason recorded'}); the flight has no observation")
+                return (
+                    f"the leg to {at} arrived, but no frame of the pass could be served "
+                    f"({self.live.last_refusal or 'no reason recorded'}); the flight has no observation"
+                )
             reg = held[1].get("registration") or {}
             by = ", ".join(f"{n} {k}" for k, n in (reg.get("sources") or {}).items())
-            posed = (f"the map registered it{f' ({by})' if by else ''}" if reg.get("applied") else
-                     f"the map did not register it: {reg.get('why') or 'the corrector is not running'}")
+            posed = (
+                f"the map registered it{f' ({by})' if by else ''}"
+                if reg.get("applied")
+                else f"the map did not register it: {reg.get('why') or 'the corrector is not running'}"
+            )
             return f"the leg to {at} arrived; {waited:.1f} s later {self._held_words(held[1])}; {posed}"
         lost = f"the leg to {at} never arrived in {ARRIVAL_TIMEOUT_S:.0f} s ({self._closest_words()}); "
         if held is None:
@@ -240,7 +319,9 @@ class Legs:
 
     def _closest_words(self) -> str:
         """The nearest the pose came to the leg's point since the leg was posted, or that no pose was read."""
-        return f"closest {self.closest_m:.0f} m" if math.isfinite(self.closest_m) else "no pose read"
+        return (
+            f"closest {self.closest_m:.0f} m" if math.isfinite(self.closest_m) else "no pose read"
+        )
 
     def _said(self, text: str) -> None:
         """A ``leg`` row of the transcript: what the crew's side of a flight did."""
@@ -271,8 +352,12 @@ class Legs:
             if cov is not None:
                 return cov, None
             refusal = self.live.last_refusal or "no reason recorded"
-            log.warning("read %d of %d: the recording could not be asked whether it holds the area: %s",
-                        k, COVERAGE_TRIES, refusal)
+            log.warning(
+                "read %d of %d: the recording could not be asked whether it holds the area: %s",
+                k,
+                COVERAGE_TRIES,
+                refusal,
+            )
             if k < COVERAGE_TRIES:
                 self._vehicle.sleep(COVERAGE_RETRY_S)
                 if self._cancel.is_set():
@@ -281,14 +366,18 @@ class Legs:
 
     def held_now(self, h: Hydrated, stops: list) -> list[bool]:
         """Which of a pass's stops the recording holds already, off one index read (``MissionSpec.held_now``)."""
-        asked = {i: self._to_lonlat(leg_area(h, str(token), [float(xy[0]), float(xy[1])]))
-                 for i, (token, xy) in enumerate(stops) if xy is not None}
+        asked = {
+            i: self._to_lonlat(leg_area(h, str(token), [float(xy[0]), float(xy[1])]))
+            for i, (token, xy) in enumerate(stops)
+            if xy is not None
+        }
         covs = self.live.coverage_of_each(list(asked.values())) if asked else None
         held = dict(zip(asked, covs or []))
         return [_holds(held.get(i)) for i in range(len(stops))]
 
-    def _short_pass(self, token: str, xy, area: list[tuple[float, float]], cov: dict[str, Any],
-                    n: int) -> tuple[list[float], str]:
+    def _short_pass(
+        self, token: str, xy, area: list[tuple[float, float]], cov: dict[str, Any], n: int
+    ) -> tuple[list[float], str]:
         """Where a short pass is asked again, and the note for why: the area's
         centroid moved toward the unheld points' centroid (off ``cov``, the
         recording's answer that read the pass short) by the missing ground's
@@ -306,15 +395,24 @@ class Legs:
             extent = max(((p[0] - cx) * dx + (p[1] - cy) * dy) / span for p in unheld)
             shift = max(extent, span)
             moved = [cx + dx / span * shift, cy + dy / span * shift]
-        side = "N NE E SE S SW W NW".split()[round(math.degrees(math.atan2(dx, dy)) / 45.0) % 8] if span >= 1.0 else "-"
+        side = (
+            "N NE E SE S SW W NW".split()[round(math.degrees(math.atan2(dx, dy)) / 45.0) % 8]
+            if span >= 1.0
+            else "-"
+        )
         frames = len({b[1] for b in best if b is not None})
         held = sum(1 for b in best if b is not None)
-        said = (f"the pass over {token} at ({xy[0]:.0f}, {xy[1]:.0f}) held {held}/{len(area)} points of the area in "
-                f"{frames} frame(s), the {side} side missing; "
-                f"the leg is asked again {shift:.0f} m {side} of the point (re-fly {n} of {SHORT_PASS_REQUESTS})")
+        said = (
+            f"the pass over {token} at ({xy[0]:.0f}, {xy[1]:.0f}) held {held}/{len(area)} points of the area in "
+            f"{frames} frame(s), the {side} side missing; "
+            f"the leg is asked again {shift:.0f} m {side} of the point (re-fly {n} of {SHORT_PASS_REQUESTS})"
+        )
         log.info(said)
         self._said(said)
-        return moved, f"Re-fly {token}: the pass held {held}/{len(area)} points, the {side} side missing"
+        return (
+            moved,
+            f"Re-fly {token}: the pass held {held}/{len(area)} points, the {side} side missing",
+        )
 
     @staticmethod
     def _held_words(last: dict[str, Any]) -> str:
@@ -327,25 +425,38 @@ class Legs:
             frames = f" in {mosaic['asked']} frame(s)"
             if mosaic.get("fetch_failed"):
                 frames += f", {mosaic['fetch_failed']} of them not fetched"
-        return (f"the pass held {cov['held']}/{cov['points']} points of it{frames}, "
-                f"the nearest {last.get('seq')} at {last.get('off_nadir_deg')} deg off nadir")
+        return (
+            f"the pass held {cov['held']}/{cov['points']} points of it{frames}, "
+            f"the nearest {last.get('seq')} at {last.get('off_nadir_deg')} deg off nadir"
+        )
 
-    def _held_frame(self, area_ll: list[tuple[float, float]], xy, after: float | None = None
-                    ) -> tuple[Any, dict[str, Any]] | None:
+    def _held_frame(
+        self, area_ll: list[tuple[float, float]], xy, after: float | None = None
+    ) -> tuple[Any, dict[str, Any]] | None:
         """``(observation, record)`` of the ground the pass held over ``area_ll``
         (lon/lat; the frames after ``after`` when given); None when no frame held any."""
         obs = self.live.observe_area(area_ll, after)
         last, refusal = dict(self.live.last or {}), self.live.last_refusal
         if obs is None:
-            log.info("no frame in the recording held the area about (%.0f, %.0f): %s",
-                     float(xy[0]), float(xy[1]), refusal)
+            log.info(
+                "no frame in the recording held the area about (%.0f, %.0f): %s",
+                float(xy[0]),
+                float(xy[1]),
+                refusal,
+            )
             return None
         last["observation"] = self._keep_observation(obs)
         return obs, last
 
-    def wait_arrival(self, xy: Any, *, area: list[tuple[float, float]], timeout_s: float,
-                      reach_m: float | None = None, after: float | None = None
-                      ) -> tuple[str, dict[str, Any] | None]:
+    def wait_arrival(
+        self,
+        xy: Any,
+        *,
+        area: list[tuple[float, float]],
+        timeout_s: float,
+        reach_m: float | None = None,
+        after: float | None = None,
+    ) -> tuple[str, dict[str, Any] | None]:
         """``(outcome, the recording's last answer)``: ``arrived`` when the
         recording (the frames after ``after`` when given) holds ``area``;
         ``short`` when the pass came inside ``reach_m`` and left with the area
@@ -362,7 +473,11 @@ class Legs:
             # short pass and the timeout's start.
             cov = self.live.coverage(area, after)
             if self.waiting is not None:
-                self.waiting = {**self.waiting, "coverage": _held_points(cov), "closest_m": self.closest_m}
+                self.waiting = {
+                    **self.waiting,
+                    "coverage": _held_points(cov),
+                    "closest_m": self.closest_m,
+                }
             if _holds(cov):
                 return "arrived", cov
             fraction = float((cov or {}).get("fraction") or 0.0)
@@ -372,20 +487,36 @@ class Legs:
                 best = min(best, d)
                 self.closest_m = min(self.closest_m, d)
                 # Over the area and gone, with part of it held: a short pass.
-                if reach_m is not None and fraction > 0.0 and best <= reach_m and d > best + SHORT_PASS_LEAVE_M:
+                if (
+                    reach_m is not None
+                    and fraction > 0.0
+                    and best <= reach_m
+                    and d > best + SHORT_PASS_LEAVE_M
+                ):
                     if receding_since is None:
                         receding_since = self._vehicle.now()
                     if self._vehicle.now() - receding_since >= SHORT_PASS_LEAVE_S:
-                        log.info("short pass at (%.0f, %.0f): closest %.0f m, now %.0f m off, %.0f%% held",
-                                 float(xy[0]), float(xy[1]), best, d, 100.0 * fraction)
+                        log.info(
+                            "short pass at (%.0f, %.0f): closest %.0f m, now %.0f m off, %.0f%% held",
+                            float(xy[0]),
+                            float(xy[1]),
+                            best,
+                            d,
+                            100.0 * fraction,
+                        )
                         return "short", cov
                 else:
                     receding_since = None
                 if pose["agl_m"] < AIRBORNE_AGL_M:
                     t0 = self._vehicle.now()
             if self._vehicle.now() - t0 > timeout_s:
-                log.warning("no arrival at (%.0f, %.0f) in %.0f s, %s: the leg is lost",
-                            float(xy[0]), float(xy[1]), timeout_s, self._closest_words())
+                log.warning(
+                    "no arrival at (%.0f, %.0f) in %.0f s, %s: the leg is lost",
+                    float(xy[0]),
+                    float(xy[1]),
+                    timeout_s,
+                    self._closest_words(),
+                )
                 return "lost", cov
             self._vehicle.sleep(1.0)
         return "cancel", cov

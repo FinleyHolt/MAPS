@@ -9,7 +9,13 @@ import threading
 from maps.query import color_words
 from maps.query import text_match as T
 from maps.query.op_io import (
-    ProgramError, Result, _as_rows, _attach_standing_columns, _ordered, _quote)
+    ProgramError,
+    Result,
+    _as_rows,
+    _attach_standing_columns,
+    _ordered,
+    _quote,
+)
 from maps.query.result_tables import STANDING_SIDE_PREFIXES, _census_note
 
 
@@ -31,17 +37,28 @@ class _FindMemo(threading.local):
         if hit is None:
             if self.idf is None:
                 self.idf = T.token_idf(rows)
-            hit = [{**x, "name_match": round(T.find_score(
-                       q_data, x.get("search_text") or "", x.get("name"),
-                       x.get("tags"), idf=self.idf), 3)}
-                   for x in rows]
+            hit = [
+                {
+                    **x,
+                    "name_match": round(
+                        T.find_score(
+                            q_data,
+                            x.get("search_text") or "",
+                            x.get("name"),
+                            x.get("tags"),
+                            idf=self.idf,
+                        ),
+                        3,
+                    ),
+                }
+                for x in rows
+            ]
             # A query that is a tag value reaches every row carrying that
             # tag key, at T.TAG_FAMILY_SCORE, below every exact hit.
             fams = T.tag_family_keys(q_data, rows)
             if fams:
                 for r in hit:
-                    if (r["name_match"] < T.TAG_FAMILY_SCORE
-                            and (r.get("tags") or {}).keys() & fams):
+                    if r["name_match"] < T.TAG_FAMILY_SCORE and (r.get("tags") or {}).keys() & fams:
                         r["name_match"] = T.TAG_FAMILY_SCORE
             hit.sort(key=lambda x: x["name_match"], reverse=True)
             self.scored[query] = hit
@@ -96,8 +113,10 @@ def _miss_notes(query, q_data) -> tuple[str, list]:
     T.FUZZY_THRESHOLD on; a palette color word, which matches no row text,
     gets its column named."""
     tokens = sorted({t for cl in q_data for t in cl[1]})
-    cond = (f"find matched nothing: no row scored >= {T.FUZZY_THRESHOLD} "
-            f"against query {_quote(query)} (query tokens: {tokens}).")
+    cond = (
+        f"find matched nothing: no row scored >= {T.FUZZY_THRESHOLD} "
+        f"against query {_quote(query)} (query tokens: {tokens})."
+    )
     for cl in q_data:
         w = str(cl[0] or "").strip()
         if not w or " " in w:
@@ -107,7 +126,8 @@ def _miss_notes(query, q_data) -> tuple[str, list]:
             return cond, [
                 f"{_quote(w)} is a color word on the closed palette: color "
                 f"is not row text -- it rides the color_{canon} column, which "
-                f"attaches when the color word is named."]
+                f"attaches when the color word is named."
+            ]
     return cond, []
 
 
@@ -120,10 +140,12 @@ def _match_band(scored) -> tuple[int, int]:
     if not n_named:
         return n, 0
     # Only a proper name counts: a detection's class scores 1.0 too.
-    n_proper = sum(1 for r in scored if r["name_match"] >= T.NAME_TIER_FLOOR
-                   and str(r.get("name") or "").strip())
-    n_exact = n_named if n_proper else sum(
-        1 for r in scored if r["name_match"] > T.TOKEN_BAG_CEIL)
+    n_proper = sum(
+        1
+        for r in scored
+        if r["name_match"] >= T.NAME_TIER_FLOOR and str(r.get("name") or "").strip()
+    )
+    n_exact = n_named if n_proper else sum(1 for r in scored if r["name_match"] > T.TOKEN_BAG_CEIL)
     return n_exact, n - n_exact
 
 
@@ -132,8 +154,12 @@ def _is_name_set(matched) -> bool:
     _NAME_SET_SHAPE_ROWS, all exact, one non-empty name)."""
     exact = [r for r in matched if r.get("name_match", 0.0) >= T.NAME_TIER_FLOOR]
     names = {str(r.get("name") or "") for r in exact}
-    return (len(exact) > _NAME_SET_SHAPE_ROWS and len(exact) == len(matched)
-            and len(names) == 1 and bool(next(iter(names))))
+    return (
+        len(exact) > _NAME_SET_SHAPE_ROWS
+        and len(exact) == len(matched)
+        and len(names) == 1
+        and bool(next(iter(names)))
+    )
 
 
 def _tier(v) -> str:
@@ -149,29 +175,40 @@ def _match_notes(scored, n, band_cut) -> list:
     vals = [r["name_match"] for r in scored[:n]]
     rest = len(scored) - n - band_cut
     if vals[0] == vals[-1]:
-        order = (f"all equally good matches at match {vals[0]}, so this order "
-                 f"is arbitrary and ordering them by a cue column chooses it")
+        order = (
+            f"all equally good matches at match {vals[0]}, so this order "
+            f"is arbitrary and ordering them by a cue column chooses it"
+        )
     else:
         order = f"best-first, match {vals[0]}..{vals[-1]}"
         top_n = sum(1 for x in vals if x == vals[0])
         if top_n > 1:
-            order += (f"; the first {top_n} tie at match {vals[0]}, so their "
-                      "order among themselves is arbitrary and ordering them "
-                      "by a cue column chooses it")
-    notes = [f"{n} of {len(scored)} rows matched ({order}"
-             + (f"; {rest} sub-threshold row(s) NOT in this set" if rest else "")
-             + ")."]
+            order += (
+                f"; the first {top_n} tie at match {vals[0]}, so their "
+                "order among themselves is arbitrary and ordering them "
+                "by a cue column chooses it"
+            )
+    notes = [
+        f"{n} of {len(scored)} rows matched ({order}"
+        + (f"; {rest} sub-threshold row(s) NOT in this set" if rest else "")
+        + ")."
+    ]
     tiers = [_tier(x) for x in vals]
     n_ex, n_tg = tiers.count("exact"), tiers.count("tagged")
     if n_ex and n - n_ex:
-        notes.append(f"tiers: {n_ex} exact, {n_tg} tagged, {n - n_ex - n_tg} "
-                     "fuzzy -- .exact / .tagged / .fuzzy on this result hold "
-                     "each as a set.")
+        notes.append(
+            f"tiers: {n_ex} exact, {n_tg} tagged, {n - n_ex - n_tg} "
+            "fuzzy -- .exact / .tagged / .fuzzy on this result hold "
+            "each as a set."
+        )
     if band_cut:
-        notes.append(f"matched as a NAME: {band_cut} row(s) under the name "
-                     f"tier are a different feature and are NOT in this set.")
-    head = "; ".join(f"{r.get('fid')} {_match_label(r)} (match {r['name_match']})"
-                     for r in scored[:n][:4])
+        notes.append(
+            f"matched as a NAME: {band_cut} row(s) under the name "
+            f"tier are a different feature and are NOT in this set."
+        )
+    head = "; ".join(
+        f"{r.get('fid')} {_match_label(r)} (match {r['name_match']})" for r in scored[:n][:4]
+    )
     lead = "Best" if vals[0] >= T.NAME_TIER_FLOOR else "Head"
     notes.append(f"{lead}: {head}")
     return notes
@@ -181,19 +218,25 @@ def _name_cut(rows, want, query, idf) -> tuple[list, str | None]:
     """``name=``: the rows NAMED it, matched as a name, never fuzzily, and
     the note saying how many it kept. None raises."""
     nq = T.fuzzy_prepare_query(want)
-    named = [r for r in rows if isinstance(r, dict)
-             and T.find_score(nq, r.get("search_text") or "", r.get("name"),
-                              r.get("tags"), idf=idf)
-             >= T.NAME_TIER_FLOOR]
+    named = [
+        r
+        for r in rows
+        if isinstance(r, dict)
+        and T.find_score(nq, r.get("search_text") or "", r.get("name"), r.get("tags"), idf=idf)
+        >= T.NAME_TIER_FLOOR
+    ]
     if not named:
         raise ProgramError(
             f"nothing found is NAMED {_quote(want)} and matches {_quote(query)}"
             ". A name is matched as a NAME, never fuzzily -- check the "
-            f"spelling, or drop the class word and say find({_quote(want)}).")
+            f"spelling, or drop the class word and say find({_quote(want)})."
+        )
     if len(named) == len(rows):
         return named, None
-    return named, (f"name={_quote(want)} kept {len(named)} of {len(rows)} by "
-                   "NAME; the fuzz band does not apply to a name")
+    return named, (
+        f"name={_quote(want)} kept {len(named)} of {len(rows)} by "
+        "NAME; the fuzz band does not apply to a name"
+    )
 
 
 def _find(cx, a):
@@ -201,8 +244,8 @@ def _find(cx, a):
     query browses every row."""
     notes: list = []
     set_notes: list = []  # the notes about the matched rows
-    matched = False      # a query ran and matched (the rN is ordered)
-    name_set = False     # tied ways of one name: render the shape
+    matched = False  # a query ran and matched (the rN is ordered)
+    name_set = False  # tied ways of one name: render the shape
     empty_cond = None
     surface = rows = cx.cands + cx.anchors
     query = a.get("query")
@@ -210,8 +253,7 @@ def _find(cx, a):
     if fid_hit is not None:
         # The fuzzy scorer matches text, never ids.
         rows, matched = [fid_hit], True
-        notes.append(f"query {str(query).strip()!r} is a live fid -- that "
-                     "row returned directly.")
+        notes.append(f"query {str(query).strip()!r} is a live fid -- that row returned directly.")
     elif query:
         q_raw = str(query)
         if ";" in q_raw:
@@ -226,7 +268,8 @@ def _find(cx, a):
                 f"matched)."
                 " OSM multi-value tag VALUES use ';' "
                 "(cuisine=pizza;kebab) -- to match one, query that "
-                "single value ('cuisine=pizza').")
+                "single value ('cuisine=pizza')."
+            )
         q_data = T.fuzzy_prepare_query(q_raw)
         memo = _find_memo(cx.cands, cx.anchors)
         rows = memo.scored_rows(q_raw, q_data, surface)
@@ -244,9 +287,11 @@ def _find(cx, a):
             # Name the query words no matched row carries.
             dead = memo.dead_words(q_raw, rows)
             if dead:
-                notes.append("no matched row carries "
-                             + ", ".join(repr(t) for t in dead[:4])
-                             + " -- those words did not narrow anything")
+                notes.append(
+                    "no matched row carries "
+                    + ", ".join(repr(t) for t in dead[:4])
+                    + " -- those words did not narrow anything"
+                )
             if n <= 3:
                 notes.append(memo.census_note(q_raw, surface))
         want = str(a.get("name") or "").strip()
@@ -262,8 +307,9 @@ def _find(cx, a):
         op_cols = [f"{p}{h}" for p in STANDING_SIDE_PREFIXES]
     if not rows and query:
         return Result(kind="miss", notes=notes, empty_condition=empty_cond)
-    return Result(rows, ordered=matched, name_set=name_set, op_cols=op_cols,
-                  notes=notes, set_notes=set_notes)
+    return Result(
+        rows, ordered=matched, name_set=name_set, op_cols=op_cols, notes=notes, set_notes=set_notes
+    )
 
 
 def _stratum(cx, a):
@@ -276,7 +322,14 @@ def _stratum(cx, a):
             "these rows carry no match tiers: .exact/.tagged/.fuzzy come "
             "off a find's own result."
             " A pass's minted rows are all THE thing the "
-            "watchlist named; there is nothing to stratify.")
-    return Result((it for it in items
-                   if isinstance(v := it.get("name_match"), (int, float))
-                   and _tier(v) == tier), "cut", ordered=_ordered(items))
+            "watchlist named; there is nothing to stratify."
+        )
+    return Result(
+        (
+            it
+            for it in items
+            if isinstance(v := it.get("name_match"), (int, float)) and _tier(v) == tier
+        ),
+        "cut",
+        ordered=_ordered(items),
+    )

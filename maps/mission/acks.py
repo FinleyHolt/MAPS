@@ -15,12 +15,10 @@ def live_counts(c_n: int, a_n: int, sep: str = ",") -> str:
     return f"{c_n} detection fid(s){sep} {a_n} prior map row fid(s)"
 
 
-def add_note(d: dict, text: str, sep: str = " ", *,
-              before: bool = False) -> None:
+def add_note(d: dict, text: str, sep: str = " ", *, before: bool = False) -> None:
     """Join ``text`` onto ``d["note"]``, after it (or before it)."""
     old = d.get("note")
-    d["note"] = ((f"{text}{sep}{old}" if before else f"{old}{sep}{text}")
-                 if old else text)
+    d["note"] = (f"{text}{sep}{old}" if before else f"{old}{sep}{text}") if old else text
 
 
 def error_class_signature(err: str) -> str:
@@ -58,8 +56,7 @@ class Rejections:
             f" Live surface: {live_counts(c_n, a_n, ';')}.",
         ]
         if cols:
-            parts.append(
-                f" Columns computed on rows so far: {cols}{more}.")
+            parts.append(f" Columns computed on rows so far: {cols}{more}.")
         return "".join(parts)
 
     def _repeated_rejection_state(self, err: str, n: int, consec: int) -> str:
@@ -79,7 +76,8 @@ class Rejections:
             f"the same surface: re-issuing the same call unchanged "
             f"returns exactly this rejection. Live now: "
             f"{live_counts(c_n, a_n)}"
-            + (f"; columns computed on rows: {cols}{more}." if cols else "."))
+            + (f"; columns computed on rows: {cols}{more}." if cols else ".")
+        )
 
     def escalated(self, err: str, sig_of: str | None = None) -> str:
         """A repeated same-class error, escalating: verbatim first, then with

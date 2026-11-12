@@ -53,7 +53,9 @@ _FACING = re.compile(rf"\bfacing\s+({_COMPASS})\b", re.I)
 # house's facing too, but annotates the pool.
 _IS_HOUSE = re.compile(
     r"^\s*(a\s+|the\s+)?(small\s+|large\s+|little\s+|red[- ]roofed\s+|white\s+)*"
-    r"(house|home|building)\b", re.I)
+    r"(house|home|building)\b",
+    re.I,
+)
 
 _needs_bake = pytest.mark.skipif(
     not _PRIOR.is_file() or not _SPLIT.is_file(),
@@ -119,8 +121,7 @@ def test_the_ground_truth_population_is_still_there():
     """The vacuity floor: a scan that matches nothing would agree perfectly."""
     cases = _cases()
     assert len(cases) >= 20, f"only {len(cases)} labelled facing episodes found"
-    assert {e for e, _, _ in cases} >= {
-        "calcity::110#109", "calcity::195#193", "calcity::567#565"}
+    assert {e for e, _, _ in cases} >= {"calcity::110#109", "calcity::195#193", "calcity::567#565"}
 
 
 @_needs_bake
@@ -130,8 +131,8 @@ def test_the_world_frame_is_east_north():
     function unchanged and every served direction mirrored."""
     frame = json.loads(_META.read_text())["coordinate_frame"]
     assert frame["y_axis"] == "north"
-    assert G.bearing([0, 0], [0, 1]) == 0.0     # +y reads north
-    assert G.bearing([0, 0], [1, 0]) == 90.0    # +x reads east
+    assert G.bearing([0, 0], [0, 1]) == 0.0  # +y reads north
+    assert G.bearing([0, 0], [1, 0]) == 90.0  # +x reads east
 
 
 @_needs_bake
@@ -144,15 +145,19 @@ def test_the_served_facing_matches_the_annotators():
         if got != stated:
             wrong.append((episode, stated, got, road, round(gap, 1)))
     assert len(cases) - len(wrong) >= 22, (
-        f"{len(cases) - len(wrong)}/{len(cases)} agree; disagreements: {wrong}")
+        f"{len(cases) - len(wrong)}/{len(cases)} agree; disagreements: {wrong}"
+    )
 
 
 @_needs_bake
-@pytest.mark.parametrize("episode,expected", [
-    ("calcity::110#109", "west"),
-    ("calcity::195#193", "northwest"),
-    ("calcity::567#565", "north"),
-])
+@pytest.mark.parametrize(
+    "episode,expected",
+    [
+        ("calcity::110#109", "west"),
+        ("calcity::195#193", "northwest"),
+        ("calcity::567#565", "north"),
+    ],
+)
 def test_pinned_episodes_face_the_way_they_are_labelled(episode, expected):
     """Named instances, because a ratio floor cannot notice a derivation that
     quietly stops producing the hard cases (``195#193`` is the one diagonal)."""
@@ -178,21 +183,42 @@ def test_the_served_facing_column_matches_the_annotators():
     checked = 0
     for episode, stated, footprint in _cases():
         road, _gap, got = _faces(footprint, roads)
-        if got != stated:                 # a corner lot; another pin owns it
+        if got != stated:  # a corner lot; another pin owns it
             continue
-        house = {"fid": "detected_1", "name": "h", "class": "house",
-                 "xy": [sum(p[0] for p in footprint) / len(footprint),
-                        sum(p[1] for p in footprint) / len(footprint)],
-                 "mask": [list(footprint) + [footprint[0]]],
-                 "tags": {}, "search_text": "house"}
-        ref = {"fid": "prior_1", "name": road, "xy": chains[road][0][0],
-               "mask": chains[road], "tags": {"highway": "residential"},
-               "search_text": ""}
-        out = run_program([house], [ref], {"ops": [
-            {"ref": "r1", "op": "find", "args": {"query": "house"}},
-            {"ref": "r2", "op": "compare",
-             "args": {"items": "r1",
-                      "refs": [{"ref": ["prior_1"], "as": road}]}}]})
+        house = {
+            "fid": "detected_1",
+            "name": "h",
+            "class": "house",
+            "xy": [
+                sum(p[0] for p in footprint) / len(footprint),
+                sum(p[1] for p in footprint) / len(footprint),
+            ],
+            "mask": [list(footprint) + [footprint[0]]],
+            "tags": {},
+            "search_text": "house",
+        }
+        ref = {
+            "fid": "prior_1",
+            "name": road,
+            "xy": chains[road][0][0],
+            "mask": chains[road],
+            "tags": {"highway": "residential"},
+            "search_text": "",
+        }
+        out = run_program(
+            [house],
+            [ref],
+            {
+                "ops": [
+                    {"ref": "r1", "op": "find", "args": {"query": "house"}},
+                    {
+                        "ref": "r2",
+                        "op": "compare",
+                        "args": {"items": "r1", "refs": [{"ref": ["prior_1"], "as": road}]},
+                    },
+                ]
+            },
+        )
         row = out["results"]["r2"][0]
         key = next(k for k in row if k.startswith("facing "))
         assert row[key] == stated, (episode, road, row[key], stated)

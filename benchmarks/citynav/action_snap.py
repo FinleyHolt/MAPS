@@ -163,20 +163,14 @@ def snap_to_actions(start: Pose, end: Pose) -> tuple[list[CityNavAction], Pose]:
         xy_err = math.hypot(dx, dy)
         alt_err = end.altitude_m - pose.altitude_m
         xy_open = xy_err > SNAP_XY_TOL_M and not xy_stuck
-        bearing = (
-            bearing_deg((pose.x, pose.y), target_xy)
-            if xy_open
-            else pose.heading_deg
-        )
+        bearing = bearing_deg((pose.x, pose.y), target_xy) if xy_open else pose.heading_deg
         heading_err = _wrap_signed(bearing - pose.heading_deg)
 
         if not xy_open and abs(alt_err) <= SNAP_ALT_TOL_M:
             break
         heading_tol_deg = CRUISE_TOL_DEG if moved and xy_err > NEAR_M else ALIGN_TOL_DEG
         if xy_open and abs(heading_err) > heading_tol_deg:
-            if not _emit(
-                CityNavAction.TURN_LEFT if heading_err < 0 else CityNavAction.TURN_RIGHT
-            ):
+            if not _emit(CityNavAction.TURN_LEFT if heading_err < 0 else CityNavAction.TURN_RIGHT):
                 break
             continue
         if xy_open:
@@ -193,9 +187,7 @@ def snap_to_actions(start: Pose, end: Pose) -> tuple[list[CityNavAction], Pose]:
             moved = True
             continue
         if abs(alt_err) > SNAP_ALT_TOL_M:
-            if not _emit(
-                CityNavAction.ASCEND if alt_err > 0 else CityNavAction.DESCEND
-            ):
+            if not _emit(CityNavAction.ASCEND if alt_err > 0 else CityNavAction.DESCEND):
                 break
             continue
         break

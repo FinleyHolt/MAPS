@@ -71,13 +71,21 @@ def test_those_episodes_score_zero_when_nothing_flew(start_on_target):
         )
         mask = row["target_mask"]
         flown = cn_eval.score_arrival(
-            criterion="shape", final_pos_xy=start,
-            target_xy=target, pos_trajectory=[start, start], gt_polygon=mask)
+            criterion="shape",
+            final_pos_xy=start,
+            target_xy=target,
+            pos_trajectory=[start, start],
+            gt_polygon=mask,
+        )
         assert flown["SR"] == 1, (
-            f"row {idx}: the fixture must win when it flies, or the zero "
-            "below proves nothing"
+            f"row {idx}: the fixture must win when it flies, or the zero below proves nothing"
         )
         grounded = cn_eval.score_arrival(
-            criterion="shape", final_pos_xy=start,
-            target_xy=target, pos_trajectory=[start, start], flew=False, gt_polygon=mask)
+            criterion="shape",
+            final_pos_xy=start,
+            target_xy=target,
+            pos_trajectory=[start, start],
+            flew=False,
+            gt_polygon=mask,
+        )
         assert grounded["SR"] == 0, f"row {idx}: never flew, must not score"

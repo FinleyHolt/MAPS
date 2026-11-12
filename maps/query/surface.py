@@ -1,5 +1,6 @@
 """The ``(cands, anchors)`` surface the op program runs over: one row
 per graph node, detections as ``cands`` and priors as ``anchors``."""
+
 from __future__ import annotations
 
 import re
@@ -24,8 +25,9 @@ def _modal_attr(n, key):
 
 # Bake bookkeeping some bakes stamp on every row: never served, and never
 # searched (as stopwords on every row, ``osm_id`` would donate ``way``).
-_UNSERVED_TAGS = frozenset({
-    "source", "osm_id", "worldkit_layer", "worldkit_height_m", "source_tag"})
+_UNSERVED_TAGS = frozenset(
+    {"source", "osm_id", "worldkit_layer", "worldkit_height_m", "source_tag"}
+)
 
 
 def _row_tags(n) -> dict:
@@ -33,8 +35,11 @@ def _row_tags(n) -> dict:
     tags = n.tags or {}
     if not isinstance(tags, dict):
         return {}
-    return {str(k): v for k, v in tags.items()
-            if isinstance(v, str) and str(k).lower() not in _UNSERVED_TAGS}
+    return {
+        str(k): v
+        for k, v in tags.items()
+        if isinstance(v, str) and str(k).lower() not in _UNSERVED_TAGS
+    }
 
 
 def _anchor_search_text(n) -> str:
@@ -57,8 +62,7 @@ def _color_fields(n) -> dict:
     ``color_conf`` / ``color_shade`` / ``color_flag`` where perception set
     them."""
     color = _modal_attr(n, "color")
-    fields = {"color": color if color is not None
-              else _color_of(str(n.class_name or ""))}
+    fields = {"color": color if color is not None else _color_of(str(n.class_name or ""))}
     conf = _modal_attr(n, "color_conf")
     if conf is not None:
         try:
@@ -82,8 +86,10 @@ def _polyline_arc_midpoint(verts) -> list:
         if arcs[i + 1] >= half:
             seg = arcs[i + 1] - arcs[i]
             t = (half - arcs[i]) / seg if seg > 0 else 0.0
-            return [float(verts[i][0]) + t * (float(verts[i + 1][0]) - float(verts[i][0])),
-                    float(verts[i][1]) + t * (float(verts[i + 1][1]) - float(verts[i][1]))]
+            return [
+                float(verts[i][0]) + t * (float(verts[i + 1][0]) - float(verts[i][0])),
+                float(verts[i][1]) + t * (float(verts[i + 1][1]) - float(verts[i][1])),
+            ]
     return [float(verts[-1][0]), float(verts[-1][1])]
 
 
@@ -93,8 +99,7 @@ def representative_point(chains) -> list:
     midpoint of the longest chain (a mean over a bent way lies off it)."""
     geom = G.mask_geom(chains)
     if geom["closed"]:
-        c = G.loops_area_centroid([ch for ch in chains
-                                   if G.is_closed_chain(ch)])
+        c = G.loops_area_centroid([ch for ch in chains if G.is_closed_chain(ch)])
         if c is not None and bool(G.mask_contains(geom, [c])[0]):
             return _r2(c)
     return _r2(_polyline_arc_midpoint(max(chains, key=len)))
@@ -102,6 +107,7 @@ def representative_point(chains) -> list:
 
 # The row builders read the tile frame ``(tx, ty, cs)``: its origin and cell
 # size in metres.
+
 
 def _cell_xy(rc, frame) -> list:
     tx, ty, cs = frame
@@ -140,9 +146,15 @@ def _exact_chains(n, frame) -> list:
         return chains
     r0, c0 = cl[:, 0].min(), cl[:, 1].min()
     r1, c1 = cl[:, 0].max(), cl[:, 1].max()
-    return G.clip_chains_to_box(chains, (
-        tx + max(int(c0) - 1, 0) * cs, ty + max(int(r0) - 1, 0) * cs,
-        tx + (int(c1) + 2) * cs, ty + (int(r1) + 2) * cs))
+    return G.clip_chains_to_box(
+        chains,
+        (
+            tx + max(int(c0) - 1, 0) * cs,
+            ty + max(int(r0) - 1, 0) * cs,
+            tx + (int(c1) + 2) * cs,
+            ty + (int(r1) + 2) * cs,
+        ),
+    )
 
 
 def _masked(m) -> dict:
@@ -178,12 +190,16 @@ def _cand_row(f, n, frame):
     xy = _row_xy(n, mf.get("mask"), frame)
     if not xy:
         return None
-    return {"fid": str(f), "xy": xy, "centerline": None,
-            "cells": _cells(n),
-            "class": str(n.class_name or ""),
-            **_color_fields(n),
-            **mf,
-            "search_text": str(n.class_name or "").lower()}
+    return {
+        "fid": str(f),
+        "xy": xy,
+        "centerline": None,
+        "cells": _cells(n),
+        "class": str(n.class_name or ""),
+        **_color_fields(n),
+        **mf,
+        "search_text": str(n.class_name or "").lower(),
+    }
 
 
 def _anchor_row(f, n, frame):
@@ -195,16 +211,19 @@ def _anchor_row(f, n, frame):
         return None
     cl = [_cell_xy(p, frame) for p in n.centerline] if n.centerline else None
     axis = n.axis_length_m
-    row = {"fid": str(f), "name": n.name,
-           "xy": xy,
-           "centerline": cl,
-           "cells": _cells(n),
-           # Only a node with a centerline has an axis length.
-           "axis_length_m": round(float(axis), 2) if cl and axis is not None else None,
-           "tags": _row_tags(n),
-           **_color_fields(n),
-           **mf,
-           "search_text": _anchor_search_text(n)}
+    row = {
+        "fid": str(f),
+        "name": n.name,
+        "xy": xy,
+        "centerline": cl,
+        "cells": _cells(n),
+        # Only a node with a centerline has an axis length.
+        "axis_length_m": round(float(axis), 2) if cl and axis is not None else None,
+        "tags": _row_tags(n),
+        **_color_fields(n),
+        **mf,
+        "search_text": _anchor_search_text(n),
+    }
     if cl and len(cl) >= 2:
         row["end0_xy"], row["end1_xy"] = _r2(cl[0]), _r2(cl[-1])
     return row
@@ -261,8 +280,7 @@ def _fid_key(f):
     Numeric fid order is mint order."""
     s = str(f)
     head, _, tail = s.rpartition("_")
-    return ((head, 0, int(tail), "") if tail.isdigit()
-            else (s, 1, 0, s))
+    return (head, 0, int(tail), "") if tail.isdigit() else (s, 1, 0, s)
 
 
 def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
@@ -280,11 +298,23 @@ def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
     # a color, then the higher color_conf, then the lower fid.
     dups: dict = {}
     for c in cands:
-        dups.setdefault((round(float(c["xy"][0]), 1), round(float(c["xy"][1]), 1),
-                         c.get("class") or ""), []).append(c)
-    cands = sorted((min(g, key=lambda r: (not r.get("color"), -float(r.get("color_conf") or 0.0),
-                                          _fid_key(r["fid"])))
-                    for g in dups.values()), key=lambda c: _fid_key(c["fid"]))
+        dups.setdefault(
+            (round(float(c["xy"][0]), 1), round(float(c["xy"][1]), 1), c.get("class") or ""), []
+        ).append(c)
+    cands = sorted(
+        (
+            min(
+                g,
+                key=lambda r: (
+                    not r.get("color"),
+                    -float(r.get("color_conf") or 0.0),
+                    _fid_key(r["fid"]),
+                ),
+            )
+            for g in dups.values()
+        ),
+        key=lambda c: _fid_key(c["fid"]),
+    )
     anchors.sort(key=lambda a: _fid_key(a["fid"]))
     # A mask containing every row position is 0 m from every row:
     # ``covers_window`` lets compare state that once instead.
@@ -299,8 +329,7 @@ def build_surface_from_graph(nodes_iter, origin_xy, cell_m):
                 continue
             mx = [p[0] for lp in m for p in lp]
             my = [p[1] for lp in m for p in lp]
-            if (not mx or min(mx) > wx0 or max(mx) < wx1
-                    or min(my) > wy0 or max(my) < wy1):
+            if not mx or min(mx) > wx0 or max(mx) < wx1 or min(my) > wy0 or max(my) < wy1:
                 continue
             if bool(G.mask_contains(G.mask_geom(m), pts).all()):
                 r["covers_window"] = True

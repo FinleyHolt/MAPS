@@ -36,8 +36,16 @@ class Flights:
     flights (``explore``), the surface re-derived after each and the rows
     it added minted as a handle."""
 
-    def __init__(self, spec: MissionSpec, surface: Surface, rejections: Rejections,
-                 pictures: Pictures, progress: Progress, *, obs_span_m: float | None):
+    def __init__(
+        self,
+        spec: MissionSpec,
+        surface: Surface,
+        rejections: Rejections,
+        pictures: Pictures,
+        progress: Progress,
+        *,
+        obs_span_m: float | None,
+    ):
         self.spec = spec
         self.surface = surface
         self.rejections = rejections
@@ -47,8 +55,7 @@ class Flights:
         self._covered_fids: set = set()
         # A pass's stop spacing: half the footprint's long side, under the
         # short side for any sensor below 2:1, so stops overlap on both axes.
-        self._cover_spacing = (obs_span_m / 2.0
-                               if obs_span_m and obs_span_m > 0 else None)
+        self._cover_spacing = obs_span_m / 2.0 if obs_span_m and obs_span_m > 0 else None
 
     def _mint_rows(self, fids_before: set, what: str) -> tuple[str | None, str | None]:
         """The rows a flight or a pass added (the surface's rows not in
@@ -58,9 +65,11 @@ class Flights:
         if not new_rows:
             return None, None
         h = self.surface.carry.mint(new_rows)
-        return h, (f"{h} — the {len(new_rows)} rows this {what} added; "
-                   f"the handle is bound, so {h}, {h}[0] and "
-                   f"{h}.order(...) all reach them")
+        return h, (
+            f"{h} — the {len(new_rows)} rows this {what} added; "
+            f"the handle is bound, so {h}, {h}[0] and "
+            f"{h}.order(...) all reach them"
+        )
 
     def _pick_next(self, queue: list, cover: str | None) -> int:
         """The queue index to fly next: in a pass, a stop the recording
@@ -69,15 +78,21 @@ class Flights:
             return 0
         try:
             held = self.spec.held_now(
-                [(str(it.get("target_fid") or ""), self.surface.point(it.get("target_fid")))
-                 for it in queue])
+                [
+                    (str(it.get("target_fid") or ""), self.surface.point(it.get("target_fid")))
+                    for it in queue
+                ]
+            )
         except Exception as exc:  # noqa: BLE001 - the order is a convenience, never a fault
             log.warning("%s pass: held_now failed: %s", self.progress.rid_tag, summarise_exc(exc))
             return 0
         pick = next((i for i, h in enumerate(held) if h), 0)
         if pick:
-            log.info("%s pass: %s taken first, the recording holds it",
-                     self.progress.rid_tag, queue[pick].get("target_fid"))
+            log.info(
+                "%s pass: %s taken first, the recording holds it",
+                self.progress.rid_tag,
+                queue[pick].get("target_fid"),
+            )
         return pick
 
     def _snap_to_row(self, item: dict) -> str | None:
@@ -91,9 +106,12 @@ class Flights:
             # look_xy rounds by at most 0.005 m: a raw gap of 1.01 m or more
             # on either axis cannot snap
             xy = brow.get("xy")
-            if (not isinstance(xy, (list, tuple)) or len(xy) != 2
-                    or abs(float(xy[0]) - pt[0]) >= 1.01
-                    or abs(float(xy[1]) - pt[1]) >= 1.01):
+            if (
+                not isinstance(xy, (list, tuple))
+                or len(xy) != 2
+                or abs(float(xy[0]) - pt[0]) >= 1.01
+                or abs(float(xy[1]) - pt[1]) >= 1.01
+            ):
                 continue
             bxy = look_xy(brow)
             if bxy is None:
@@ -107,15 +125,13 @@ class Flights:
         item["target_fid"] = best
         return snap_from
 
-    def _after_flight(self, report: dict, fids_before: set,
-                      cover: str | None) -> None:
+    def _after_flight(self, report: dict, fids_before: set, cover: str | None) -> None:
         """A flight that flew: count it, record its stop, re-derive the
         surface, and (outside a pass) mint the rows it added."""
         self.progress.turn_flights += 1
         self.progress.flights += 1
         pxy = report["pose_xy"]
-        self.surface.stops[str(report["stop_id"]).strip().lower()] = [
-            float(pxy[0]), float(pxy[1])]
+        self.surface.stops[str(report["stop_id"]).strip().lower()] = [float(pxy[0]), float(pxy[1])]
         self.surface.world_moved()
         # The flight's new rows (the surface diff) mint a handle; a pass
         # mints once, around the whole of itself.
@@ -125,8 +141,7 @@ class Flights:
                 report["new_rows"] = note
         self.surface.preflight = False
 
-    def _fly_moves(self, accepted: list, item_errors: list,
-                   cover: str | None = None) -> list[dict]:
+    def _fly_moves(self, accepted: list, item_errors: list, cover: str | None = None) -> list[dict]:
         """Fly each entry in order and return the flight reports (a stop the
         backstop cut lands in ``item_errors``); after each flight the surface
         re-derives and the rows it added mint an rN handle. ``cover`` (an
@@ -140,34 +155,41 @@ class Flights:
             if cover is not None:
                 # The rest of the pass rides every stop, for the crew.
                 item["pass_ahead"] = [
-                    [float(xy[0]), float(xy[1])] for xy in
-                    (self.surface.point(it.get("target_fid")) for it in queue) if xy]
+                    [float(xy[0]), float(xy[1])]
+                    for xy in (self.surface.point(it.get("target_fid")) for it in queue)
+                    if xy
+                ]
             cut = self.progress.turn_flights >= self.spec.flight_budget
             if cut:
-                log.warning("%s flight backstop hit (%d flights)",
-                            self.progress.rid_tag, self.spec.flight_budget)
-            elif (self.spec.deadline_epoch is not None
-                    and time.time() >= self.spec.deadline_epoch):
+                log.warning(
+                    "%s flight backstop hit (%d flights)",
+                    self.progress.rid_tag,
+                    self.spec.flight_budget,
+                )
+            elif self.spec.deadline_epoch is not None and time.time() >= self.spec.deadline_epoch:
                 # The wall-clock backstop stops the flying only; the model
                 # keeps its turns and its own commit.
                 # ponytail: checked between stops, so one slow stop still
                 # overruns by its own duration.
                 if not clock_cut:
                     log.warning(
-                        "%s wall-clock backstop hit (%d flights, %.0f s past "
-                        "the deadline)", self.progress.rid_tag, self.progress.turn_flights,
-                        time.time() - self.spec.deadline_epoch)
+                        "%s wall-clock backstop hit (%d flights, %.0f s past the deadline)",
+                        self.progress.rid_tag,
+                        self.progress.turn_flights,
+                        time.time() - self.spec.deadline_epoch,
+                    )
                 cut = clock_cut = True
             if cut:
-                item_errors.append({"target_fid": item["target_fid"],
-                                     "error": "not flown."})
+                item_errors.append({"target_fid": item["target_fid"], "error": "not flown."})
                 continue
             snap_from = self._snap_to_row(item)
             fids_before = set(self.surface.rows)
             report = self.spec.fly(dict(item))
             if snap_from:
-                add_note(report, f"{snap_from} is {item['target_fid']}"
-                                  "'s own position -- flown as that fid.")
+                add_note(
+                    report,
+                    f"{snap_from} is {item['target_fid']}'s own position -- flown as that fid.",
+                )
             if "error" not in report:
                 # A pass renders no per-stop view.
                 if cover is None:
@@ -188,8 +210,7 @@ class Flights:
             return row_token(row), None
         if STOP_RE.fullmatch(tok.strip().lower()):
             known = ", ".join(sorted(self.surface.stops)) or "none yet"
-            return tok, (f"{tok} has not been flown; the flown stops are: "
-                         f"{known}")
+            return tok, (f"{tok} has not been flown; the flown stops are: {known}")
         return tok, None
 
     def go_to(self, tok: str) -> dict:
@@ -198,15 +219,17 @@ class Flights:
         if stop_err:
             return self.rejections.error({}, stop_err)
         rejected: list = []
-        flown = [_served_flight(r) for r in
-                 self._fly_moves([{"target_fid": tok.strip()}], rejected)]
+        flown = [
+            _served_flight(r) for r in self._fly_moves([{"target_fid": tok.strip()}], rejected)
+        ]
         mv: dict = {"flown": flown}
         if rejected:
             mv["rejected"] = rejected
         if all("error" in r for r in flown):
             # nothing flew: the failure is the result
-            msg = next((str(r["error"]) for r in flown + rejected
-                        if r.get("error")), "nothing flew")
+            msg = next(
+                (str(r["error"]) for r in flown + rejected if r.get("error")), "nothing flew"
+            )
             return self.rejections.error({"flown": mv}, msg)
         return {"flown": mv}
 
@@ -223,20 +246,25 @@ class Flights:
             if stop_err:
                 return self.rejections.error({}, stop_err)
             if HANDLE_RE.fullmatch(t):
-                raw_members.extend(row_token(r) for r in (
-                    self.surface.carry.read(t) or []) if r.get("fid"))
+                raw_members.extend(
+                    row_token(r) for r in (self.surface.carry.read(t) or []) if r.get("fid")
+                )
                 continue
             raw_members.append(t)
-        accepted = [{"target_fid": t.strip()}
-                     for t in dict.fromkeys(raw_members)]
+        accepted = [{"target_fid": t.strip()} for t in dict.fromkeys(raw_members)]
         if not accepted:
             return self.rejections.error({}, "nothing to cover")
         # The pass's members count as covered once it flies.
         covered = set(self._covered_fids)
         accepted, cov_note, subject, segs = cover_items(
-            accepted, said_to, spec=self.spec,
-            spacing=self._cover_spacing, rows=self.surface.rows,
-            covered=covered, pose_xy=self.surface.ctx.pose_xy)
+            accepted,
+            said_to,
+            spec=self.spec,
+            spacing=self._cover_spacing,
+            rows=self.surface.rows,
+            covered=covered,
+            pose_xy=self.surface.ctx.pose_xy,
+        )
         if not accepted:
             return self.rejections.error({}, cov_note)
         # One ack for the whole pass; the standing answer is its last stop.
@@ -249,12 +277,14 @@ class Flights:
             return self.rejections.error({"explored": {"error": err}}, err)
         self._covered_fids = covered
         mv: dict = {
-            "explored": subject, "stops": len(ok),
+            "explored": subject,
+            "stops": len(ok),
             "answer_if_you_reply_now": (
                 f"the last stop of the pass over {subject}; go_to() the row "
-                f"you mean before you reply"),
-            "new_detections": sum(int(r.get("new_detections") or 0)
-                                  for r in ok)}
+                f"you mean before you reply"
+            ),
+            "new_detections": sum(int(r.get("new_detections") or 0) for r in ok),
+        }
         h, note = self._mint_rows(before, "pass")
         if note is not None:
             mv["new_rows"] = note
@@ -266,8 +296,7 @@ class Flights:
             mv["segments"] = segs
         # A truncated pass reads as truncated.
         if mv["stops"] < len(accepted):
-            cov_note = (f"the pass ended after "
-                         f"{mv['stops']} of its stops.")
+            cov_note = f"the pass ended after {mv['stops']} of its stops."
         if cov_note:
             add_note(mv, cov_note, before=True)
         # THE PASS SHOWS ITS CATCH: one crop per row it added, pass order.
@@ -277,14 +306,12 @@ class Flights:
         if catch:
             cack = self.pictures.crops_of(
                 [str(r["fid"]) for r in catch],
-                preamble=("The pass's catch, one crop per "
-                          "row it added, in pass order: "))
+                preamble=("The pass's catch, one crop per row it added, in pass order: "),
+            )
             if not cack.get("error"):
-                mv["catch"] = {k: cack[k] for k in ("delivered", "not_drawn")
-                               if k in cack}
+                mv["catch"] = {k: cack[k] for k in ("delivered", "not_drawn") if k in cack}
                 if len(catch) < len(minted):
                     mv["catch"]["shown"] = (
-                        f"first {len(catch)} of "
-                        f"{len(minted)}"
-                        f" -- look({h}[a:b]) pages the rest")
+                        f"first {len(catch)} of {len(minted)} -- look({h}[a:b]) pages the rest"
+                    )
         return {"explored": mv}

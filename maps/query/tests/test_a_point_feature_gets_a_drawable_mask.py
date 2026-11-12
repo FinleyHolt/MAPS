@@ -1,4 +1,5 @@
 """A row's ``mask`` is what the picture DRAWS, so it has to be a shape."""
+
 from __future__ import annotations
 
 from maps.query.surface import build_surface_from_graph
@@ -17,9 +18,14 @@ _DRAWABLE_VERTS = 3
 def _point_node(x, y, name=None):
     """An OSM POI node: its exact contour IS the point it sits at."""
     cells = [(int(y // _CELL_M), int(x // _CELL_M))]
-    return MapObject(class_name="", name=name, tags={"amenity": "pharmacy"},
-                     centroid=cells[0], cells=cells,
-                     world_contour=[(float(x), float(y))])
+    return MapObject(
+        class_name="",
+        name=name,
+        tags={"amenity": "pharmacy"},
+        centroid=cells[0],
+        cells=cells,
+        world_contour=[(float(x), float(y))],
+    )
 
 
 def _way_node(ring, name=None):
@@ -27,11 +33,19 @@ def _way_node(ring, name=None):
     contour = [(float(x), float(y)) for x, y in ring]
     xs = [p[0] for p in contour]
     ys = [p[1] for p in contour]
-    cells = [(int(yy // _CELL_M), int(xx // _CELL_M))
-             for yy in range(int(min(ys)), int(max(ys)) + 1, 2)
-             for xx in range(int(min(xs)), int(max(xs)) + 1, 2)]
-    return MapObject(class_name="", name=name, tags={"building": "yes"},
-                     centroid=cells[0], cells=cells, world_contour=contour)
+    cells = [
+        (int(yy // _CELL_M), int(xx // _CELL_M))
+        for yy in range(int(min(ys)), int(max(ys)) + 1, 2)
+        for xx in range(int(min(xs)), int(max(xs)) + 1, 2)
+    ]
+    return MapObject(
+        class_name="",
+        name=name,
+        tags={"building": "yes"},
+        centroid=cells[0],
+        cells=cells,
+        world_contour=contour,
+    )
 
 
 def _row(node, fid="prior_1"):
@@ -55,8 +69,9 @@ def test_a_point_feature_serves_a_mask_a_picture_can_draw():
     # ONE CELL, so the served point cannot drift far from the vertex the
     # feature declared: half a cell diagonal is the whole budget.
     assert max(xs) - min(xs) <= _CELL_M + 1e-6, mask
-    assert (row["xy"][0] - 4659.6) ** 2 + (row["xy"][1] - 2965.7) ** 2 \
-        <= (_CELL_M * 0.75) ** 2, row["xy"]
+    assert (row["xy"][0] - 4659.6) ** 2 + (row["xy"][1] - 2965.7) ** 2 <= (_CELL_M * 0.75) ** 2, (
+        row["xy"]
+    )
 
 
 def test_a_real_ring_still_serves_its_exact_geometry():

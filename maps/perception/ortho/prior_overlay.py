@@ -13,9 +13,7 @@ from maps.perception.ortho.sensor_frame import frame_corners_px
 from maps.perception.mask_region import MaskRegion
 
 
-def _fill_region(
-    polys: "list[np.ndarray]", *, img_h: int, img_w: int
-) -> "MaskRegion | None":
+def _fill_region(polys: "list[np.ndarray]", *, img_h: int, img_w: int) -> "MaskRegion | None":
     """Fill pixel-space polygons into a region covering only what they touch.
 
     ``cv2.fillPoly`` clips to whatever array it is handed, so translating the
@@ -69,7 +67,9 @@ def _rasterize_cells_to_mask(
     dy = np.array([-half, -half, half, half], dtype=np.float64)
     xs = cx[:, None] + dx[None, :]
     ys = cy[:, None] + dy[None, :]
-    proj = np.stack([xs, ys, np.ones_like(xs)], axis=-1) @ world_to_px.astype(np.float64, copy=False).T
+    proj = (
+        np.stack([xs, ys, np.ones_like(xs)], axis=-1) @ world_to_px.astype(np.float64, copy=False).T
+    )
     denom = proj[..., 2]
     keep = np.all(np.isfinite(denom), axis=1) & ~np.any(np.abs(denom) < 1e-9, axis=1)
     quads = np.stack([proj[..., 0] / denom, proj[..., 1] / denom], axis=-1).astype(np.int32)
@@ -102,7 +102,9 @@ def build_prior_polys_ortho(
         for idx, feat in enumerate(feats):
             fid = f"{class_name}_{idx}"
             if fid in wanted:
-                mask = _rasterize_cells_to_mask(feat.get("cells") or [], bounds, world_to_px, img_h, img_w)
+                mask = _rasterize_cells_to_mask(
+                    feat.get("cells") or [], bounds, world_to_px, img_h, img_w
+                )
                 if mask is not None:
                     out.append((fid, mask))
     return sorted(out, key=lambda fm: fm[0])

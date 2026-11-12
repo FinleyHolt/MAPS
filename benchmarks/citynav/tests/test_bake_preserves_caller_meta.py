@@ -22,13 +22,25 @@ CALCITY_GEOREF = {
 
 
 def test_the_caller_frame_and_georef_follow_the_grid_and_nothing_else_does(tmp_path):
-    grid = {"grid_shape": [10, 10], "cell_size_m": 2.0,
-            "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 20.0, "y_max": 20.0}}
+    grid = {
+        "grid_shape": [10, 10],
+        "cell_size_m": 2.0,
+        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 20.0, "y_max": 20.0},
+    }
     frame = {"y_axis": "north"}
     (tmp_path / "calcity_meta.json").write_text(json.dumps({"provenance": {"prior": "stale"}}))
-    road = ({"name": "Road", "highway": "residential", "osm_id": "w1"},
-            {"type": "LineString", "coordinates": [[1.0, 5.0], [19.0, 5.0]]})
-    bake_block("calcity", [road], tmp_path, bounds=WorldBounds(x_min=0.0, y_min=0.0, x_max=20.0, y_max=20.0),
-               meta={"coordinate_frame": frame, "georef": CALCITY_GEOREF})
+    road = (
+        {"name": "Road", "highway": "residential", "osm_id": "w1"},
+        {"type": "LineString", "coordinates": [[1.0, 5.0], [19.0, 5.0]]},
+    )
+    bake_block(
+        "calcity",
+        [road],
+        tmp_path,
+        bounds=WorldBounds(x_min=0.0, y_min=0.0, x_max=20.0, y_max=20.0),
+        meta={"coordinate_frame": frame, "georef": CALCITY_GEOREF},
+    )
     out = (tmp_path / "calcity_meta.json").read_text()
-    assert out == json.dumps({**grid, "coordinate_frame": frame, "georef": CALCITY_GEOREF}, indent=2)
+    assert out == json.dumps(
+        {**grid, "coordinate_frame": frame, "georef": CALCITY_GEOREF}, indent=2
+    )

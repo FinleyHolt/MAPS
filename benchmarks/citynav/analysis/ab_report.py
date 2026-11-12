@@ -44,7 +44,7 @@ def _mcnemar(pairs: list[tuple[int, int]]) -> dict:
     if n <= 25:  # exact two-sided binomial (p=0.5)
         k = min(b, c)
         # P(X<=k) + P(X>=n-k), X~Binom(n,0.5); symmetric -> 2*sum_{i<=k} C(n,i)/2^n
-        tail = sum(math.comb(n, i) for i in range(k + 1)) / (2 ** n)
+        tail = sum(math.comb(n, i) for i in range(k + 1)) / (2**n)
         p = min(1.0, 2 * tail)
         return {"b_loss": b, "c_win": c, "p_value": round(p, 4), "method": "binomial_exact"}
     chi2 = max(abs(b - c) - 1, 0) ** 2 / n
@@ -88,14 +88,23 @@ def render(st: dict) -> str:
 def _run_provenance(run_root: Path) -> dict:
     """The first row's provenance (else {}) with the manifest's bake hash,
     and resume commits."""
-    prov = next((r["provenance"] for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL)
-                 if r.get("provenance")), None)
+    prov = next(
+        (
+            r["provenance"]
+            for r in _rows.iter_json_rows(run_root / _rows.EPISODES_JSONL)
+            if r.get("provenance")
+        ),
+        None,
+    )
     if not prov:
         return {}
     manifest = _rows.read_manifest(run_root)
     prov = dict(prov)
-    commits = {prov.get("git_commit"), manifest.get("git_commit"),
-               *(r.get("git_commit") for r in manifest.get("resumes") or [])} - {None}
+    commits = {
+        prov.get("git_commit"),
+        manifest.get("git_commit"),
+        *(r.get("git_commit") for r in manifest.get("resumes") or []),
+    } - {None}
     if len(commits) > 1:
         prov["resume_commits"] = sorted(commits)
     bake = (manifest.get("perception") or {}).get("bake_sha256")
@@ -140,10 +149,7 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     # Bake content tightens the name check where both sides recorded it.
     ba, bb = ga.get("bake_sha256"), gb.get("bake_sha256")
     if ba and bb and ba != bb:
-        fatal.append(
-            f"tile bake CONTENT differs at the same name:  "
-            f"A={ba[:12]}  B={bb[:12]}"
-        )
+        fatal.append(f"tile bake CONTENT differs at the same name:  A={ba[:12]}  B={bb[:12]}")
 
     arm: list[str] = []
     for key, label in (
@@ -157,12 +163,16 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
             arm.append(f"{label} differs:  A={va}  B={vb}")
     for side, prov in (("A", prov_a), ("B", prov_b)):
         if prov.get("resume_commits"):
-            arm.append(f"code (git_commit) differs across resumes of {side}:  {' '.join(prov['resume_commits'])}")
+            arm.append(
+                f"code (git_commit) differs across resumes of {side}:  {' '.join(prov['resume_commits'])}"
+            )
     fa, fb = prov_a.get("search_env_flags"), prov_b.get("search_env_flags")
     if fa is not None and fb is not None:
         ea, eb = (f.get("SEARCH_SAMPLING_REASONING_EFFORT") or "unset" for f in (fa, fb))
         if ea != eb:
-            arm.append(f"reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A={ea}  B={eb}")
+            arm.append(
+                f"reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A={ea}  B={eb}"
+            )
     return fatal, arm
 
 
@@ -171,11 +181,18 @@ def main() -> None:
     ap.add_argument("run_a", help="baseline run root")
     ap.add_argument("run_b", help="treatment run root")
     ap.add_argument("--label", default="A_vs_B")
-    ap.add_argument("--min-overlap-frac", type=float, default=0.8,
-                    help="refuse if shared/min(n_a,n_b) is below this (a seed or limit mismatch)")
+    ap.add_argument(
+        "--min-overlap-frac",
+        type=float,
+        default=0.8,
+        help="refuse if shared/min(n_a,n_b) is below this (a seed or limit mismatch)",
+    )
     ap.add_argument("--allow-low-overlap", action="store_true")
-    ap.add_argument("--allow-provenance-mismatch", action="store_true",
-                    help="permit comparing runs with different code/config/model (NOT a valid A/B)")
+    ap.add_argument(
+        "--allow-provenance-mismatch",
+        action="store_true",
+        help="permit comparing runs with different code/config/model (NOT a valid A/B)",
+    )
     _rows.add_allow_partial(ap)
     args = ap.parse_args()
 
@@ -184,8 +201,10 @@ def main() -> None:
     shared = sorted(set(a) & set(b))
     if not shared:
         raise SystemExit("no shared scored episodes between the two runs")
-    lab_a, lab_b = (criterion_label(run_criterion([run[e] for e in shared]), Path(p))
-                    for run, p in ((a, args.run_a), (b, args.run_b)))
+    lab_a, lab_b = (
+        criterion_label(run_criterion([run[e] for e in shared]), Path(p))
+        for run, p in ((a, args.run_a), (b, args.run_b))
+    )
     if lab_a != lab_b:
         raise SystemExit(
             f"INVALID A/B -- A is scored on {lab_a} and B on {lab_b}: the two numbers answer different questions."
@@ -201,7 +220,8 @@ def main() -> None:
         )
     if arm and not args.allow_provenance_mismatch:
         raise SystemExit(
-            "INVALID A/B -- runs are not comparable:\n  - " + "\n  - ".join(arm)
+            "INVALID A/B -- runs are not comparable:\n  - "
+            + "\n  - ".join(arm)
             + "\n(pass --allow-provenance-mismatch to override)"
         )
 
@@ -216,11 +236,9 @@ def main() -> None:
 
     pairs = [(int(bool(a[e].get("SR"))), int(bool(b[e].get("SR")))) for e in shared]
     print(render(ab_stats(pairs, label=args.label)))
-    print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  "
-          f"only_b={len(set(b) - set(a))}")
+    print(f"shared={len(shared)}  only_a={len(set(a) - set(b))}  only_b={len(set(b) - set(a))}")
     if arm and args.allow_provenance_mismatch:
-        print("WARNING comparing non-comparable runs (override active):\n  - "
-              + "\n  - ".join(arm))
+        print("WARNING comparing non-comparable runs (override active):\n  - " + "\n  - ".join(arm))
 
 
 if __name__ == "__main__":

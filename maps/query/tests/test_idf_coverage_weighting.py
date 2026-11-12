@@ -14,15 +14,18 @@ from maps.world_state.prior_graph import build_object_graph
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
-_TILES = (os.environ.get("SEARCH_CALCITY_TILES")
-          or os.path.join(_REPO, "benchmarks", "calcity", "tiles"))
+_TILES = os.environ.get("SEARCH_CALCITY_TILES") or os.path.join(
+    _REPO, "benchmarks", "calcity", "tiles"
+)
 
 
 def _find(rows, query):
     """The served find, over a prepared surface."""
-    out = run_program([], [dict(r) for r in rows],
-                      {"ops": [{"ref": "r0", "op": "find",
-                                "args": {"query": query}}]})
+    out = run_program(
+        [],
+        [dict(r) for r in rows],
+        {"ops": [{"ref": "r0", "op": "find", "args": {"query": query}}]},
+    )
     return out["results"]["r0"]
 
 
@@ -32,16 +35,15 @@ def _find(rows, query):
 
 
 def _row(fid, x, text, name=""):
-    return {"fid": fid, "name": name, "xy": [float(x), 0.0],
-            "tags": {}, "search_text": text}
+    return {"fid": fid, "name": name, "xy": [float(x), 0.0], "tags": {}, "search_text": text}
 
 
 # 60 rows spelling `way` and one spelling `hugo way`: the `hugo way` shape,
 # shrunk. Equal-weighted coverage gives every one of the 60 a ratio of 1/2,
 # clear of the 0.45 floor, and buries the row the query named.
-_STOPWORD_SURFACE = (
-    [_row(f"p_way_{i}", i * 10, "service way") for i in range(60)]
-    + [_row("p_hugo", 999, "hugo way", name="Hugo Way")])
+_STOPWORD_SURFACE = [_row(f"p_way_{i}", i * 10, "service way") for i in range(60)] + [
+    _row("p_hugo", 999, "hugo way", name="Hugo Way")
+]
 
 
 def test_a_common_word_cannot_carry_a_match_by_itself():
@@ -49,8 +51,7 @@ def test_a_common_word_cannot_carry_a_match_by_itself():
     # The vacuity floor for this pin: the surface really does spell `way` on
     # 60 rows, so a scorer that had already stopped matching them, and a
     # surface that never carried the word, both read as this test passing.
-    assert sum(1 for r in _STOPWORD_SURFACE
-               if "way" in r["search_text"]) == 61
+    assert sum(1 for r in _STOPWORD_SURFACE if "way" in r["search_text"]) == 61
     assert got == ["p_hugo"], got
     # ... and it is the WEIGHTING that dropped them, not a coverage floor:
     # unweighted, one of two words is exactly the 0.5 the threshold admits.
@@ -86,25 +87,25 @@ def test_a_word_no_row_can_cover_leaves_the_denominator():
 # a `.gitkeep` and no bake, so `isdir` is true on every checkout and the gate
 # would let the fixture raise instead of skipping.
 _META = os.path.join(_TILES, "calcity_meta.json")
-needs_bake = pytest.mark.skipif(not os.path.isfile(_META),
-                                reason="calcity tile bake absent")
+needs_bake = pytest.mark.skipif(not os.path.isfile(_META), reason="calcity tile bake absent")
 
 
 @pytest.fixture(scope="module")
 def calcity_rows():
     meta = json.loads(open(_META).read())
     b = meta["bounds"]
-    graph = build_object_graph(json.loads(open(os.path.join(_TILES, "calcity_features.json")).read()),
-                               cell_size_m=float(meta["cell_size_m"]))
+    graph = build_object_graph(
+        json.loads(open(os.path.join(_TILES, "calcity_features.json")).read()),
+        cell_size_m=float(meta["cell_size_m"]),
+    )
     _cands, anchors = build_surface_from_graph(
-        graph.nodes.items(), (float(b["x_min"]), float(b["y_min"])),
-        float(meta["cell_size_m"]))
+        graph.nodes.items(), (float(b["x_min"]), float(b["y_min"])), float(meta["cell_size_m"])
+    )
     return anchors
 
 
 @needs_bake
-def test_the_surface_vocabulary_is_real_and_prices_common_words_low(
-        calcity_rows):
+def test_the_surface_vocabulary_is_real_and_prices_common_words_low(calcity_rows):
     idf = T.token_idf(calcity_rows)
     # VACUITY FLOOR. A df scan that found nothing would satisfy every ordering below by
     # vacuous truth.

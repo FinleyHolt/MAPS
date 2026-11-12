@@ -19,9 +19,7 @@ from maps.perception.geometry.sensor_spec import CameraIntrinsics, SensorSpec
 def _sensor(*, mount_pitch_deg: float, max_range_m: float = 200.0) -> SensorSpec:
     return SensorSpec(
         name="test_depth",
-        intrinsics=CameraIntrinsics(
-            hfov_deg=90.0, vfov_deg=60.0, image_width=64, image_height=48
-        ),
+        intrinsics=CameraIntrinsics(hfov_deg=90.0, vfov_deg=60.0, image_width=64, image_height=48),
         mount_pitch_deg=mount_pitch_deg,
         max_range_m=max_range_m,
     )

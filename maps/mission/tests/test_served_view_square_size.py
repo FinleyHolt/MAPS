@@ -1,4 +1,5 @@
 """The served prompt states ONE view-square size, and the sensor rig owns it."""
+
 from __future__ import annotations
 
 import re
@@ -10,7 +11,8 @@ from maps.mission.served_text import served_system_prompt
 
 def _served() -> str:
     return served_system_prompt(
-        served_description(resolve_sensor("oryx_orx32_25mm_nadir"), agl_m=914.4))
+        served_description(resolve_sensor("oryx_orx32_25mm_nadir"), agl_m=914.4)
+    )
 
 
 def test_the_prompt_states_no_view_square_size_of_its_own():

@@ -24,12 +24,18 @@ ORTHO_N = 2800
 
 def _lattice(n: int, span_m: float, cx: float = 260.0, cy: float = 260.0):
     """``n`` marks on a square lattice whose bbox side is ``span_m``."""
-    side = int(n ** 0.5) + 1
+    side = int(n**0.5) + 1
     step = span_m / max(1, side - 1)
-    return [{"fid": f"detected_{i}",
-             "xy": [cx + step * (i % side - (side - 1) / 2.0),
-                    cy + step * (i // side - (side - 1) / 2.0)]}
-            for i in range(n)]
+    return [
+        {
+            "fid": f"detected_{i}",
+            "xy": [
+                cx + step * (i % side - (side - 1) / 2.0),
+                cy + step * (i // side - (side - 1) / 2.0),
+            ],
+        }
+        for i in range(n)
+    ]
 
 
 def _render(ortho_dir, set_span_m: float, obs_span_m: float | None, n: int = 24):
@@ -39,8 +45,9 @@ def _render(ortho_dir, set_span_m: float, obs_span_m: float | None, n: int = 24)
         "center_xy": pts[0]["xy"],
         "center_label": "car",
         "center_boundary": None,
-        "marks": [{"fid": p["fid"], "xy": p["xy"], "label": "car",
-                   "is_target": False} for p in pts],
+        "marks": [
+            {"fid": p["fid"], "xy": p["xy"], "label": "car", "is_target": False} for p in pts
+        ],
     }
     if obs_span_m is not None:
         req["obs_span_m"] = obs_span_m
@@ -50,6 +57,7 @@ def _render(ortho_dir, set_span_m: float, obs_span_m: float | None, n: int = 24)
 
 def _delivered_px(rec) -> tuple[int, int]:
     import cv2
+
     img = cv2.imdecode(np.frombuffer(rec["jpeg"], np.uint8), cv2.IMREAD_COLOR)
     return int(img.shape[1]), int(img.shape[0])
 
@@ -68,7 +76,9 @@ def test_the_observation_ceiling_clamps_the_window_and_drops_badges(ortho_dir):
     assert free["context_m"] > 40.0, free["context_m"]
     assert _BUDGET_M > free["context_m"], free["context_m"]  # not the budget
     assert 0 < len(capped["legend"]) < len(free["legend"]), (
-        len(capped["legend"]), len(free["legend"]))
+        len(capped["legend"]),
+        len(free["legend"]),
+    )
 
     assert capped["context_m"] == 40.0, capped["context_m"]
     # the served text names every row the ceiling pushed out of frame
@@ -91,8 +101,7 @@ def test_a_nonpositive_span_is_not_a_ceiling(ortho_dir):
     # carries no observation ceiling and the budget alone clamps.
     free = _render(ortho_dir, 80.0, None)
     negative = _render(ortho_dir, 80.0, -187.6)
-    assert negative["context_m"] == free["context_m"], (
-        negative["context_m"], free["context_m"])
+    assert negative["context_m"] == free["context_m"], (negative["context_m"], free["context_m"])
     assert len(negative["legend"]) == len(free["legend"])
 
 

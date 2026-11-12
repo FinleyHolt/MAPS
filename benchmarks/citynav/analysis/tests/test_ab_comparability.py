@@ -11,8 +11,9 @@ from __future__ import annotations
 from benchmarks.citynav.analysis.ab_report import comparability_issues
 
 
-def _prov(*, sha="abc123", tiles="tiles/citynav_2m_osmv2", split="val_seen",
-          model="qwen36-35b-a3b") -> dict:
+def _prov(
+    *, sha="abc123", tiles="tiles/citynav_2m_osmv2", split="val_seen", model="qwen36-35b-a3b"
+) -> dict:
     return {
         "git_commit": sha,
         "config_sha256": "cfg0",
@@ -22,8 +23,10 @@ def _prov(*, sha="abc123", tiles="tiles/citynav_2m_osmv2", split="val_seen",
     }
 
 
-_CALCITY = {"split": "calcity",
-            "search_env_flags": {"SEARCH_CITYNAV_TILES": "/a/benchmarks/calcity/tiles"}}
+_CALCITY = {
+    "split": "calcity",
+    "search_env_flags": {"SEARCH_CITYNAV_TILES": "/a/benchmarks/calcity/tiles"},
+}
 _SHA_A, _SHA_B = "5fee5f556bc1b4" + "0" * 50, "a8389803eb2322" + "0" * 50
 
 
@@ -124,12 +127,20 @@ def test_an_unstamped_bake_does_not_become_fatal():
 
 def test_the_served_alias_is_not_the_served_build():
     """One served alias can name two quantizations; the build is an arm."""
-    gt = {"split": "train_seen",
-          "search_env_flags": {"SEARCH_CITYNAV_TILES": "/x/tiles/citynav_2m_osmv3"}}
-    a = {**gt, "served_model": "inkling-small",
-         "served_build": "thinkingmachines/Inkling-Small-NVFP4"}
-    b = {**gt, "served_model": "inkling-small",
-         "served_build": "RedHatAI/Inkling-Small-FP8-dynamic"}
+    gt = {
+        "split": "train_seen",
+        "search_env_flags": {"SEARCH_CITYNAV_TILES": "/x/tiles/citynav_2m_osmv3"},
+    }
+    a = {
+        **gt,
+        "served_model": "inkling-small",
+        "served_build": "thinkingmachines/Inkling-Small-NVFP4",
+    }
+    b = {
+        **gt,
+        "served_model": "inkling-small",
+        "served_build": "RedHatAI/Inkling-Small-FP8-dynamic",
+    }
     fatal, arm = comparability_issues(a, b)
     assert not fatal
     assert any("BUILD" in m for m in arm), arm
@@ -144,7 +155,9 @@ def test_a_reasoning_effort_difference_is_an_arm_key():
     a, b = _prov(), _prov()
     a["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.99"
     fatal, arm = comparability_issues(a, b)
-    assert fatal == [] and arm == ["reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A=0.99  B=unset"]
+    assert fatal == [] and arm == [
+        "reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A=0.99  B=unset"
+    ]
     b["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.99"
     assert comparability_issues(a, b) == ([], [])
 

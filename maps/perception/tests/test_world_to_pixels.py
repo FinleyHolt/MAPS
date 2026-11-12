@@ -24,9 +24,7 @@ def _sensor(*, max_range_m: float = float("inf")) -> SensorSpec:
     where a rotation error and a focal error diverge."""
     return SensorSpec(
         name="test_w2p",
-        intrinsics=CameraIntrinsics(
-            hfov_deg=90.0, vfov_deg=60.0, image_width=64, image_height=48
-        ),
+        intrinsics=CameraIntrinsics(hfov_deg=90.0, vfov_deg=60.0, image_width=64, image_height=48),
         mount_pitch_deg=90.0,
         max_range_m=max_range_m,
     )
@@ -78,9 +76,7 @@ def test_pinhole_relation_holds_independently():
     """
     sensor = SensorSpec(
         name="test_square",
-        intrinsics=CameraIntrinsics(
-            hfov_deg=90.0, vfov_deg=90.0, image_width=64, image_height=64
-        ),
+        intrinsics=CameraIntrinsics(hfov_deg=90.0, vfov_deg=90.0, image_width=64, image_height=64),
         mount_pitch_deg=90.0,
         max_range_m=float("inf"),
     )
@@ -115,9 +111,7 @@ def test_round_trip_every_heading(yaw_deg):
     assert err < floor, f"yaw={yaw_deg}: {err} px, float32 floor {floor} px"
 
 
-@pytest.mark.parametrize(
-    ("roll_deg", "pitch_deg"), [(12.0, 0.0), (-25.0, 4.0)]
-)
+@pytest.mark.parametrize(("roll_deg", "pitch_deg"), [(12.0, 0.0), (-25.0, 4.0)])
 def test_round_trip_airframe_tilt(roll_deg, pitch_deg):
     """Banked and pitched frames must invert too. The calibration passes are
     flown wings-level, but the vision correction runs on every frame."""

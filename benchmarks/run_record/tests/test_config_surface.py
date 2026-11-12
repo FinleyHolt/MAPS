@@ -11,13 +11,21 @@ from benchmarks.run_record.config import load_config, resolve_config
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 CITYNAV = {
-    "altitude_cap_m": 200.0, "max_steps": 200,
-    "sensor": "nadir_1008_90", "spawn": "episode", "spawn_seed": 0,
-    "start_altitude_agl_m": None, "success_radius_m": 20.0,
+    "altitude_cap_m": 200.0,
+    "max_steps": 200,
+    "sensor": "nadir_1008_90",
+    "spawn": "episode",
+    "spawn_seed": 0,
+    "start_altitude_agl_m": None,
+    "success_radius_m": 20.0,
 }
 CALCITY = {
-    **CITYNAV, "altitude_cap_m": 1000.0, "max_steps": 100000,
-    "sensor": "oryx_orx32_25mm_nadir", "spawn": "uniform", "spawn_seed": 1234,
+    **CITYNAV,
+    "altitude_cap_m": 1000.0,
+    "max_steps": 100000,
+    "sensor": "oryx_orx32_25mm_nadir",
+    "spawn": "uniform",
+    "spawn_seed": 1234,
     "start_altitude_agl_m": 914.4,
 }
 
@@ -42,23 +50,29 @@ def _over(tmp_path: Path, body: str) -> Path:
 
 
 def test_base_resolves_relative_to_the_file_and_merges(tmp_path):
-    _write(tmp_path, "a/base.yaml", f"base: {(REPO_ROOT / 'configs/citynav.yaml').resolve()}\n"
-           "spawn_seed: 5\n")
+    _write(
+        tmp_path,
+        "a/base.yaml",
+        f"base: {(REPO_ROOT / 'configs/citynav.yaml').resolve()}\nspawn_seed: 5\n",
+    )
     p = _write(tmp_path, "a/b/arm.yaml", "base: ../base.yaml\nmax_steps: 7\n")
     data, _ = resolve_config(p)
     assert data["spawn_seed"] == 5 and data["max_steps"] == 7
     assert data["sensor"] == "nadir_1008_90"
 
 
-@pytest.mark.parametrize("body,needle", [
-    ("bogus: 1\n", "unknown config key(s) ['bogus']"),
-    ("max_steps: 2.5\n", "max_steps must be int"),
-    ("max_steps: 0\n", "max_steps must be > 0"),
-    ("max_steps: true\n", "max_steps must be int"),
-    ("spawn: random\n", "spawn must be one of"),
-    ("sensor: no_such_sensor\n", ".yaml: sensor: "),
-    ('sensor: ""\n', "sensor must be a registered sensor"),
-])
+@pytest.mark.parametrize(
+    "body,needle",
+    [
+        ("bogus: 1\n", "unknown config key(s) ['bogus']"),
+        ("max_steps: 2.5\n", "max_steps must be int"),
+        ("max_steps: 0\n", "max_steps must be > 0"),
+        ("max_steps: true\n", "max_steps must be int"),
+        ("spawn: random\n", "spawn must be one of"),
+        ("sensor: no_such_sensor\n", ".yaml: sensor: "),
+        ('sensor: ""\n', "sensor must be a registered sensor"),
+    ],
+)
 def test_a_bad_key_or_value_is_refused_with_its_name(tmp_path, body, needle):
     with pytest.raises(ValueError) as e:
         resolve_config(_over(tmp_path, body))
@@ -92,9 +106,15 @@ def test_a_blocks_cell_size_is_its_bakes(tmp_path, monkeypatch):
     from benchmarks.citynav.paths import citynav_bench
     from benchmarks.citynav.run_benchmark import assets
 
-    (tmp_path / "blk_meta.json").write_text(json.dumps({
-        "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 30.0, "y_max": 30.0},
-        "grid_shape": [10, 10], "cell_size_m": 3.0}))
+    (tmp_path / "blk_meta.json").write_text(
+        json.dumps(
+            {
+                "bounds": {"x_min": 0.0, "y_min": 0.0, "x_max": 30.0, "y_max": 30.0},
+                "grid_shape": [10, 10],
+                "cell_size_m": 3.0,
+            }
+        )
+    )
     (tmp_path / "blk_features.json").write_text("{}")
     bench = citynav_bench({"SEARCH_CITYNAV_TILES": str(tmp_path)})
     assert assets.load_episode_assets(bench, "blk").cell_size_m == 3.0

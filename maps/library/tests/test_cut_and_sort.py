@@ -5,8 +5,7 @@ from __future__ import annotations
 import pytest
 
 from maps.library.op_compiler import CodeError
-from maps.mission.tests.fakes import (
-    drive, quiet_env, raising_ops_of_block, run, tool_results)
+from maps.mission.tests.fakes import drive, quiet_env, raising_ops_of_block, run, tool_results
 
 
 def _ops(src: str) -> list[dict]:
@@ -26,10 +25,8 @@ def _cut(ops: list[dict]) -> dict:
 
 
 def test_ddwithin_cuts_the_distance_column_at_the_stated_metres():
-    ops = _ops('r1 = find("car")\n'
-               'r2 = r1.filter(near="Poppy Boulevard", dwithin=25)\n')
-    assert [o["op"] for o in ops] == ["find", "compare", "filter_items"], \
-        [o["op"] for o in ops]
+    ops = _ops('r1 = find("car")\nr2 = r1.filter(near="Poppy Boulevard", dwithin=25)\n')
+    assert [o["op"] for o in ops] == ["find", "compare", "filter_items"], [o["op"] for o in ops]
     a = _cut(ops)
     assert a["op"] == "le", a
     assert a["value"] == 25.0, a
@@ -37,8 +34,7 @@ def test_ddwithin_cuts_the_distance_column_at_the_stated_metres():
 
 
 def test_within_still_cuts_at_contact():
-    ops = _ops('r1 = find("car")\n'
-               'r2 = r1.filter(within="Poppy Boulevard")\n')
+    ops = _ops('r1 = find("car")\nr2 = r1.filter(within="Poppy Boulevard")\n')
     a = _cut(ops)
     assert (a["op"], a["value"]) == ("le", 0), a
 
@@ -46,18 +42,24 @@ def test_within_still_cuts_at_contact():
 def test_a_whole_class_is_one_place_to_measure_from():
     """The union reading, end to end: ``near=`` takes the find, not a row index of it,
     and still compiles to a single distance cut."""
-    ops = _ops('houses = find("house")\n'
-               'cars = find("car")\n'
-               'outside = cars.filter(near=houses, dwithin=25)\n')
-    assert [o["op"] for o in ops] == \
-        ["find", "find", "compare", "filter_items"], [o["op"] for o in ops]
+    ops = _ops(
+        'houses = find("house")\n'
+        'cars = find("car")\n'
+        "outside = cars.filter(near=houses, dwithin=25)\n"
+    )
+    assert [o["op"] for o in ops] == ["find", "find", "compare", "filter_items"], [
+        o["op"] for o in ops
+    ]
     assert _cut(ops)["value"] == 25.0
 
 
 def test_a_float_gap_survives_as_a_float():
-    assert _cut(_ops('r1 = find("car")\n'
-                     'r2 = r1.filter(near="Poppy Boulevard", dwithin=7.5)\n')
-                )["value"] == 7.5
+    assert (
+        _cut(_ops('r1 = find("car")\nr2 = r1.filter(near="Poppy Boulevard", dwithin=7.5)\n'))[
+            "value"
+        ]
+        == 7.5
+    )
 
 
 # --------------------------------------------------------------------------
@@ -65,46 +67,53 @@ def test_a_float_gap_survives_as_a_float():
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("src,phrase", [
-    ('r1 = find("car")\nr2 = r1.filter(within="A", near="B")\n',
-     "not both"),
-    ('r1 = find("car")\nr2 = r1.filter()\n',
-     "filter needs what to cut against"),
-    ('r1 = find("car")\nr2 = r1.filter(within="A", dwithin=25)\n',
-     "dwithin= is the gap of a near= cut"),
-    ('r1 = find("car")\nr2 = r1.filter(east_of="A", dwithin=25)\n',
-     "dwithin= is the gap of a near= cut"),
-    ('r1 = find("car")\nr2 = r1.filter(facing="A", direction="south", dwithin=25)\n',
-     "dwithin= is the gap of a near= cut"),
-    ('r1 = find("car")\nr2 = r1.filter(near="A")\n',
-     "needs the gap to keep"),
-    ('r1 = find("car")\nr2 = r1.filter(near="A", dwithin="soon")\n',
-     "not a number"),
-    ('r1 = find("car")\nr2 = r1.filter(near="A", dwithin=-5)\n',
-     "cannot be negative"),
-    ('r1 = find("car")\nr2 = r1.filter(lambda r: True, north_of="A")\n',
-     "not both"),
-])
+@pytest.mark.parametrize(
+    "src,phrase",
+    [
+        ('r1 = find("car")\nr2 = r1.filter(within="A", near="B")\n', "not both"),
+        ('r1 = find("car")\nr2 = r1.filter()\n', "filter needs what to cut against"),
+        (
+            'r1 = find("car")\nr2 = r1.filter(within="A", dwithin=25)\n',
+            "dwithin= is the gap of a near= cut",
+        ),
+        (
+            'r1 = find("car")\nr2 = r1.filter(east_of="A", dwithin=25)\n',
+            "dwithin= is the gap of a near= cut",
+        ),
+        (
+            'r1 = find("car")\nr2 = r1.filter(facing="A", direction="south", dwithin=25)\n',
+            "dwithin= is the gap of a near= cut",
+        ),
+        ('r1 = find("car")\nr2 = r1.filter(near="A")\n', "needs the gap to keep"),
+        ('r1 = find("car")\nr2 = r1.filter(near="A", dwithin="soon")\n', "not a number"),
+        ('r1 = find("car")\nr2 = r1.filter(near="A", dwithin=-5)\n', "cannot be negative"),
+        ('r1 = find("car")\nr2 = r1.filter(lambda r: True, north_of="A")\n', "not both"),
+    ],
+)
 def test_the_refusal_names_the_exit(src, phrase):
     with pytest.raises(CodeError) as e:
         _ops(src)
     assert phrase in str(e.value), str(e.value)
 
 
-_CUTS = ("near=/within=/dwithin=/facing= with direction=, "
-         "east_of=/north_of=/south_of=/west_of=")
+_CUTS = "near=/within=/dwithin=/facing= with direction=, east_of=/north_of=/south_of=/west_of="
 _PRED_OR_CUT = f"filter takes a predicate OR {_CUTS}, not both"
 
 
 def test_an_unknown_filter_keyword_reads_the_same_cut_list_as_the_predicate_refusal():
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = r1.filter(beside="A")\n')
-    assert f"filter takes {_CUTS} or a predicate; beside= is none of them." in str(e.value), str(e.value)
+    assert f"filter takes {_CUTS} or a predicate; beside= is none of them." in str(e.value), str(
+        e.value
+    )
 
 
 def test_a_bare_filter_reads_one_refusal_on_every_receiver():
-    for src in ('r1 = find("car")\nr2 = r1.filter()\n', 'r2 = a.filter()\n',
-                'r2 = a.filter(lambda r: True).filter()\n'):
+    for src in (
+        'r1 = find("car")\nr2 = r1.filter()\n',
+        "r2 = a.filter()\n",
+        "r2 = a.filter(lambda r: True).filter()\n",
+    ):
         with pytest.raises(CodeError) as e:
             raising_ops_of_block(src, bound={"a": "detected_1"})
         assert "filter needs what to cut against" in str(e.value), (src, str(e.value))
@@ -112,6 +121,7 @@ def test_a_bare_filter_reads_one_refusal_on_every_receiver():
 
 def test_a_predicate_and_a_cut_kwarg_read_one_refusal_on_every_receiver():
     from maps.library.rows import Row, RowList
+
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = r1.filter(lambda r: True, facing="A")\n')
     assert _PRED_OR_CUT in str(e.value), str(e.value)
@@ -122,12 +132,19 @@ def test_a_predicate_and_a_cut_kwarg_read_one_refusal_on_every_receiver():
         assert str(e.value) == _PRED_OR_CUT, str(e.value)
 
 
-
-@pytest.mark.parametrize("call", [
-    '.filter("x")', '.order("x")', '.order(direction="north", reverse=True)',
-    '.order(lambda r: 1, nearest="A")', '.order(direction="north", nearest="A")'])
+@pytest.mark.parametrize(
+    "call",
+    [
+        '.filter("x")',
+        '.order("x")',
+        '.order(direction="north", reverse=True)',
+        '.order(lambda r: 1, nearest="A")',
+        '.order(direction="north", nearest="A")',
+    ],
+)
 def test_a_row_and_a_list_refuse_a_cut_or_sort_with_the_sets_own_text(call):
     from maps.library.rows import Row, RowList
+
     with pytest.raises(CodeError) as e:
         _ops(f'r1 = find("car")\nr1{call}\n')
     on_set = str(e.value)
@@ -154,18 +171,19 @@ def test_a_gapless_near_cut_points_at_an_ordering_the_surface_accepts():
 
 def test_order_refuses_two_keys_because_a_table_sorts_by_one():
     with pytest.raises(CodeError) as e:
-        _ops('r1 = find("car")\n'
-             'r2 = r1.order(nearest="Poppy Boulevard", color="red")\n')
+        _ops('r1 = find("car")\nr2 = r1.order(nearest="Poppy Boulevard", color="red")\n')
     assert "ONE key" in str(e.value), str(e.value)
     # and the refusal names the exit: cut on one, order by the other
     assert ".filter(" in str(e.value), str(e.value)
 
 
 def test_a_cut_and_a_sort_chain_into_one_expression():
-    ops = _ops('cars = find("car")\n'
-               'houses = find("house")\n'
-               'best = cars.filter(near=houses, dwithin=25)'
-               '.order(nearest="Poppy Boulevard")\n')
+    ops = _ops(
+        'cars = find("car")\n'
+        'houses = find("house")\n'
+        "best = cars.filter(near=houses, dwithin=25)"
+        '.order(nearest="Poppy Boulevard")\n'
+    )
     kinds = [o["op"] for o in ops]
     # the cut is compare+filter_items; the sort is the score_by after it
     assert kinds.count("filter_items") == 1, kinds
@@ -207,10 +225,11 @@ def test_colour_never_cuts_and_the_refusal_names_the_sort():
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = r1.filter(color="red")\n')
     msg = str(e.value)
-    assert "never CUTS" in msg and 'order(color=' in msg, msg
+    assert "never CUTS" in msg and "order(color=" in msg, msg
 
     # ...and a single Row cuts through the same guard, not a bare TypeError.
     from maps.library.rows import Row
+
     with pytest.raises(CodeError) as e:
         Row({"fid": "detected_1"}).filter(color="red")
     assert "never CUTS" in str(e.value), str(e.value)
@@ -230,7 +249,7 @@ def test_near_on_find_cuts_and_refuses_to_be_an_ordering():
         _ops('r1 = find("car", near="Poppy Boulevard")\n')
     msg = str(e.value)
     assert "CUTS" in msg and "dwithin=" in msg, msg
-    assert "nearest=" in msg, msg          # the refusal names the ordering
+    assert "nearest=" in msg, msg  # the refusal names the ordering
 
 
 def test_nearest_orders_and_drops_nothing():
@@ -243,8 +262,10 @@ def test_nearest_orders_and_drops_nothing():
 def test_the_two_spellings_are_one_cut_and_one_sort():
     """A cut and a sort in one find: near=/dwithin= drops, nearest= orders what
     survives."""
-    ops = _ops('r1 = find("car", near="Poppy Boulevard", dwithin=25,\n'
-               '         nearest="Poppy Boulevard")\n')
+    ops = _ops(
+        'r1 = find("car", near="Poppy Boulevard", dwithin=25,\n'
+        '         nearest="Poppy Boulevard")\n'
+    )
     kinds = [o["op"] for o in ops]
     assert "filter_items" in kinds and "score_by" in kinds, kinds
     assert kinds.index("filter_items") < kinds.index("score_by"), kinds
@@ -255,8 +276,9 @@ def test_a_row_serves_no_second_point_to_subtract():
     over a second point the model can difference by hand."""
     from maps.library.rows import Row
 
-    r = Row({"fid": "detected_1", "xy": [10.0, 20.0],
-             "mask_centroid": [11.0, 21.0], "class": "car"})
+    r = Row(
+        {"fid": "detected_1", "xy": [10.0, 20.0], "mask_centroid": [11.0, 21.0], "class": "car"}
+    )
     assert "mask_centroid" not in r.keys(), r.keys()
     assert r.get("mask_centroid") is None
     with pytest.raises(AttributeError):
@@ -272,18 +294,24 @@ def test_a_predicate_filter_is_not_a_one_way_door():
 
     class _MP:
         def rows_order(self, items, **kw):
-            seen.append(("order", list(items), kw)); return "ordered"
+            seen.append(("order", list(items), kw))
+            return "ordered"
 
         def rows_filter(self, items, **kw):
-            seen.append(("filter", list(items), kw)); return "cut"
+            seen.append(("filter", list(items), kw))
+            return "cut"
 
     mp = _MP()
-    rows = RowList([Row({"fid": "detected_1", "class": "car"}, mp=mp),
-                    Row({"fid": "detected_2", "class": "car"}, mp=mp)])
+    rows = RowList(
+        [
+            Row({"fid": "detected_1", "class": "car"}, mp=mp),
+            Row({"fid": "detected_2", "class": "car"}, mp=mp),
+        ]
+    )
 
     assert rows.order(color="red") == "ordered"
     assert seen[-1][0] == "order" and seen[-1][2] == {"nearest": None, "color": "red"}
-    assert len(seen[-1][1]) == 2          # the materialised subset, by row
+    assert len(seen[-1][1]) == 2  # the materialised subset, by row
 
     assert rows.filter(near="Poppy Boulevard", dwithin=25) == "cut"
     assert seen[-1][0] == "filter"
@@ -295,10 +323,18 @@ def test_a_predicate_filter_is_not_a_one_way_door():
 
 
 def test_an_empty_list_cuts_and_orders_to_an_empty_list():
-    _r, fr, _f, _d = drive([[run(
-        'p = find("car").filter(lambda r: r.get("class") == "pool")\n'
-        'x = p.order(nearest="prior_7").filter(near="prior_7", dwithin=5)\n'
-        'print("after", len(x))\n')], "done"])
+    _r, fr, _f, _d = drive(
+        [
+            [
+                run(
+                    'p = find("car").filter(lambda r: r.get("class") == "pool")\n'
+                    'x = p.order(nearest="prior_7").filter(near="prior_7", dwithin=5)\n'
+                    'print("after", len(x))\n'
+                )
+            ],
+            "done",
+        ]
+    )
     out = tool_results(fr)[0]
     assert "error" not in out and out["printed"] == "after 0", out
 
@@ -308,8 +344,8 @@ def test_ddwithin_cuts_against_whichever_anchor_was_named():
     past 500 -- coherent, unambiguous, and what anyone would write."""
     ops = _ops('r1 = find("parking", nearest="Willow Avenue", dwithin=500)\n')
     kinds = [o["op"] for o in ops]
-    assert "filter_items" in kinds, kinds          # it cut
-    assert "score_by" in kinds, kinds              # and it still ordered
+    assert "filter_items" in kinds, kinds  # it cut
+    assert "score_by" in kinds, kinds  # and it still ordered
     cut = [o for o in ops if o["op"] == "filter_items"][0]["args"]
     assert cut["value"] == 500.0, cut
 
@@ -345,10 +381,12 @@ def test_ddwithin_with_no_anchor_at_all_still_refuses_and_names_both():
 
 def test_a_set_handed_to_go_to_is_told_to_index_not_told_it_is_a_coordinate():
     from maps.library.rows import Row
+
     rows = [Row({"fid": "detected_68"}), Row({"fid": "detected_69"})]
     with pytest.raises(CodeError) as e:
-        _ops('go_to(x)\n')          # unbound -> different path; use the API
+        _ops("go_to(x)\n")  # unbound -> different path; use the API
     from maps.library import interpreter as ps
+
     mp = ps.MissionPython(quiet_env())
     with pytest.raises(CodeError) as e:
         mp.library.go_to(rows)
@@ -363,8 +401,7 @@ def test_a_set_handed_to_go_to_is_told_to_index_not_told_it_is_a_coordinate():
 
 
 def test_a_cardinal_cuts_on_a_set_in_hand_not_only_inside_find():
-    ops = _ops('r1 = find("house")\n'
-               'r2 = r1.filter(west_of="88th Street")\n')
+    ops = _ops('r1 = find("house")\nr2 = r1.filter(west_of="88th Street")\n')
     kinds = [o["op"] for o in ops]
     assert "compare" in kinds and "filter_items" in kinds, kinds
     cut = [o for o in ops if o["op"] == "filter_items"][0]["args"]
@@ -373,8 +410,9 @@ def test_a_cardinal_cuts_on_a_set_in_hand_not_only_inside_find():
 
 
 def test_cardinal_cuts_chain():
-    ops = _ops('r1 = find("house")\n'
-               'r2 = r1.filter(west_of="88th Street", north_of="Poppy Boulevard")\n')
+    ops = _ops(
+        'r1 = find("house")\nr2 = r1.filter(west_of="88th Street", north_of="Poppy Boulevard")\n'
+    )
     cuts = [o for o in ops if o["op"] == "filter_items"]
     assert len(cuts) == 2, [o["op"] for o in ops]
     assert all(c["args"]["op"] == "on_side" for c in cuts), cuts
@@ -382,16 +420,18 @@ def test_cardinal_cuts_chain():
 
 def test_a_cardinal_is_its_own_cut_and_says_so_beside_a_gap():
     with pytest.raises(CodeError) as e:
-        _ops('r1 = find("house")\n'
-             'r2 = r1.filter(near="A", dwithin=25, west_of="B")\n')
+        _ops('r1 = find("house")\nr2 = r1.filter(near="A", dwithin=25, west_of="B")\n')
     assert "ONE relation at a time" in str(e.value), str(e.value)
 
 
-@pytest.mark.parametrize("src", [
-    'r1 = find("house", within=25)\n',
-    'r1 = find("house")\nr2 = r1.filter(within=25)\n',
-    'r1 = find("house")\nr2 = r1.filter(within=25.0)\n',
-])
+@pytest.mark.parametrize(
+    "src",
+    [
+        'r1 = find("house", within=25)\n',
+        'r1 = find("house")\nr2 = r1.filter(within=25)\n',
+        'r1 = find("house")\nr2 = r1.filter(within=25.0)\n',
+    ],
+)
 def test_a_distance_in_within_is_refused_and_names_dwithin(src):
     with pytest.raises(CodeError) as e:
         _ops(src)
@@ -405,8 +445,7 @@ def test_the_two_spellings_still_do_their_own_jobs():
     correct spelling."""
     touch = _cut(_ops('r1 = find("house")\nr2 = r1.filter(within="G Ave")\n'))
     assert touch["op"] == "le" and touch["value"] == 0, touch
-    gap = _cut(_ops('r1 = find("house")\n'
-                    'r2 = r1.filter(near="G Ave", dwithin=25)\n'))
+    gap = _cut(_ops('r1 = find("house")\nr2 = r1.filter(near="G Ave", dwithin=25)\n'))
     assert gap["op"] == "le" and gap["value"] == 25, gap
 
 

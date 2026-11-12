@@ -91,9 +91,7 @@ def parse_override(raw: str) -> EndpointOverride:
             f"SEARCH_ENDPOINT_SPEC_OVERRIDE={raw!r} is malformed; expected "
             f"'<model_id>:<max_model_len>'"
         )
-    return EndpointOverride(
-        model_id=model_id.strip(), max_model_len=int(window.strip())
-    )
+    return EndpointOverride(model_id=model_id.strip(), max_model_len=int(window.strip()))
 
 
 @dataclass(frozen=True)
@@ -112,8 +110,7 @@ class EndpointSpec:
     def input_budget(self) -> int:
         """Compaction ceiling: a prompt under it plus ``max_output_tokens``
         fits the served window."""
-        return (self.max_model_len - self.max_output_tokens
-                - _WINDOW_MARGIN_TOKENS)
+        return self.max_model_len - self.max_output_tokens - _WINDOW_MARGIN_TOKENS
 
 
 #: One full turn at the 40,000-token output pin, decoded at ~20 tok/s under a
@@ -130,7 +127,7 @@ def reasoner_timeout_s(raw: str = "") -> float:
     ``threading.TIMEOUT_MAX`` raises."""
     if not raw:
         return REASONER_TIMEOUT_DEFAULT_S
-    value = float(raw)   # loud on garbage, deliberately
+    value = float(raw)  # loud on garbage, deliberately
     if not 0 < value <= threading.TIMEOUT_MAX:
         raise ValueError(
             f"SEARCH_REASONER_TIMEOUT_S={raw!r} is not a positive number of "
@@ -155,14 +152,19 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
                 body = resp.read()
             break
         except (OSError, ValueError, http.client.HTTPException) as exc:
-            if isinstance(exc, ValueError) or (isinstance(exc, urllib.error.HTTPError) and exc.code < 500
-                                               and exc.code not in TRANSIENT_CLIENT_STATUS):
+            if isinstance(exc, ValueError) or (
+                isinstance(exc, urllib.error.HTTPError)
+                and exc.code < 500
+                and exc.code not in TRANSIENT_CLIENT_STATUS
+            ):
                 raise EndpointDiscoveryError(f"endpoint refused: GET {url} failed ({exc})") from exc
             if attempt == _PROBE_TRIES:
                 raise EndpointUnreachable(
                     f"endpoint unreachable: GET {url} failed ({exc}) after {_PROBE_TRIES} tries"
                 ) from exc
-            log.warning("discovery: GET %s failed (%s); asking again in %.0f s", url, exc, _PROBE_RETRY_S)
+            log.warning(
+                "discovery: GET %s failed (%s); asking again in %.0f s", url, exc, _PROBE_RETRY_S
+            )
             time.sleep(_PROBE_RETRY_S)
     try:
         return json.loads(body)
@@ -208,8 +210,13 @@ def _facts_from_endpoint(
             # deployment the alias names: the listing answering the key is
             # the live check, and an alias it does not deploy is refused on
             # the first request.
-            log.info("discovery: %s answers with %d listed models; %r is a deployment name, "
-                     "confirmed by the first request", models_url(base_url, endpoint), len(ids), override.model_id)
+            log.info(
+                "discovery: %s answers with %d listed models; %r is a deployment name, "
+                "confirmed by the first request",
+                models_url(base_url, endpoint),
+                len(ids),
+                override.model_id,
+            )
             return override.model_id, override.max_model_len
         # The override never bypasses the live check: the pinned id must be
         # among the served ids.
@@ -219,7 +226,9 @@ def _facts_from_endpoint(
                 f"but {models_url(base_url, endpoint)} serves {ids}: the pin does "
                 f"not match the live endpoint"
             )
-        served_len = next(m for m in models if m.get("id") == override.model_id).get("max_model_len")
+        served_len = next(m for m in models if m.get("id") == override.model_id).get(
+            "max_model_len"
+        )
         if served_len and int(served_len) != override.max_model_len:
             raise EndpointDiscoveryError(
                 f"SEARCH_ENDPOINT_SPEC_OVERRIDE pins max_model_len="
@@ -269,8 +278,11 @@ def _probe_sam_health(urls: tuple[str, ...]) -> None:
             )
     if len(failures) == len(urls):
         # Unreachable only when no replica refused: a down serve, not a config error.
-        cls = EndpointUnreachable if all(isinstance(e, EndpointUnreachable) for e in failures) \
+        cls = (
+            EndpointUnreachable
+            if all(isinstance(e, EndpointUnreachable) for e in failures)
             else EndpointDiscoveryError
+        )
         raise cls(f"service 'sam' failed its /health probe: {'; '.join(map(str, failures))}")
 
 
@@ -280,13 +292,30 @@ _TEMPLATE_PROBE = {
     "messages": [
         {"role": "system", "content": "s"},
         {"role": "user", "content": "u"},
-        {"role": "assistant", "content": "", "reasoning_content": "r", "tool_calls": [
-            {"id": "c0", "type": "function", "function": {"name": "run", "arguments": {"code": "c"}}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "r",
+            "tool_calls": [
+                {
+                    "id": "c0",
+                    "type": "function",
+                    "function": {"name": "run", "arguments": {"code": "c"}},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "c0", "content": "t"},
     ],
-    "tools": [{"type": "function", "function": {
-        "name": "run", "description": "d",
-        "parameters": {"type": "object", "properties": {"code": {"type": "string"}}}}}],
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "run",
+                "description": "d",
+                "parameters": {"type": "object", "properties": {"code": {"type": "string"}}},
+            },
+        }
+    ],
 }
 
 
@@ -303,8 +332,12 @@ def _require_tokenizer(model_id: str, override: str = "") -> str:
     except RuntimeError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     try:
-        tok.apply_chat_template(_TEMPLATE_PROBE["messages"], tools=_TEMPLATE_PROBE["tools"],
-                                add_generation_prompt=True, tokenize=False)
+        tok.apply_chat_template(
+            _TEMPLATE_PROBE["messages"],
+            tools=_TEMPLATE_PROBE["tools"],
+            add_generation_prompt=True,
+            tokenize=False,
+        )
     except Exception as exc:  # noqa: BLE001 - any render failure refuses the tokenizer
         raise EndpointDiscoveryError(
             f"tokenizer {tokenizer_name!r} for served model {model_id!r} cannot render its chat "
@@ -357,7 +390,6 @@ def discover(
         model_id, max_model_len = _facts_from_endpoint(url, override, settings.endpoint)
         if sam_urls:
             _probe_sam_health(sam_urls)
-
 
     try:
         card_for(model_id)  # the sampling envelope: refused at startup, not mid-mission
@@ -430,8 +462,7 @@ def install_spec(new_spec: EndpointSpec) -> None:
             )
         elif _SPEC != new_spec:
             raise EndpointDiscoveryError(
-                f"divergent second install_spec: installed={_SPEC} "
-                f"new={new_spec}"
+                f"divergent second install_spec: installed={_SPEC} new={new_spec}"
             )
 
 

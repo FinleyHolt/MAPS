@@ -13,16 +13,23 @@ def _arm(effort: str) -> Sampling:
     return from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort}).sampling
 
 
-@pytest.mark.parametrize("model, top_k, extra", [
-    ("qwen38-flash-next-nvfp4", 20, {}),
-    ("gemma4-26b-a4b-nvfp4", 64, {"presence_penalty": 1.0}),
-    ("gemma4-26b-a4b-gguf", 64, {}),
-])
+@pytest.mark.parametrize(
+    "model, top_k, extra",
+    [
+        ("qwen38-flash-next-nvfp4", 20, {}),
+        ("gemma4-26b-a4b-nvfp4", 64, {"presence_penalty": 1.0}),
+        ("gemma4-26b-a4b-gguf", 64, {}),
+    ],
+)
 def test_the_envelope_is_the_cards_flat_top_level_keys(model, top_k, extra) -> None:
     # A key added or removed here changes every reasoner call.
     assert sampling_kwargs(model) == {
-        "temperature": 1.0, "top_p": 0.95, "top_k": top_k, "chat_template_kwargs": {"enable_thinking": True},
-        **extra}
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": top_k,
+        "chat_template_kwargs": {"enable_thinking": True},
+        **extra,
+    }
 
 
 def test_reasoning_effort_rides_as_the_string_given() -> None:
@@ -43,10 +50,12 @@ def test_none_on_the_gemma_26b_card_sends_its_template_switch_off() -> None:
     kw = sampling_kwargs("gemma4-26b-a4b-nvfp4", "none")
     assert kw["chat_template_kwargs"] == {"enable_thinking": False}
     assert "reasoning_effort" not in kw and kw["presence_penalty"] == 1.0
-    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", sampling=_arm("none"))["chat_template_kwargs"] == {
-        "enable_thinking": False}
-    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", "high", _arm("none"))["chat_template_kwargs"] == {
-        "enable_thinking": True}
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", sampling=_arm("none"))[
+        "chat_template_kwargs"
+    ] == {"enable_thinking": False}
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", "high", _arm("none"))[
+        "chat_template_kwargs"
+    ] == {"enable_thinking": True}
 
 
 def test_vision_content_helpers_build_openai_parts() -> None:
@@ -54,7 +63,10 @@ def test_vision_content_helpers_build_openai_parts() -> None:
     assert image["type"] == "image_url"
     assert image["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert image["image_url"]["detail"] == "high"
-    assert build_vision_user_content("look", [b"jpeg", b""]) == [{"type": "text", "text": "look"}, image]
+    assert build_vision_user_content("look", [b"jpeg", b""]) == [
+        {"type": "text", "text": "look"},
+        image,
+    ]
 
 
 def test_a_served_name_with_no_card_is_refused_with_the_names_there_are() -> None:
@@ -65,4 +77,8 @@ def test_a_served_name_with_no_card_is_refused_with_the_names_there_are() -> Non
 
 def test_the_deepseek_card_sends_its_recommended_envelope() -> None:
     assert sampling_kwargs("deepseek-v4.1-flash-1017") == {
-        "temperature": 1.0, "top_p": 1.0, "top_k": -1, "chat_template_kwargs": {"enable_thinking": True}}
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "top_k": -1,
+        "chat_template_kwargs": {"enable_thinking": True},
+    }

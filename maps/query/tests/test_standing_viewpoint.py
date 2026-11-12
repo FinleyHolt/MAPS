@@ -1,4 +1,5 @@
 """The staged-viewpoint surface in the executor (act.stage's vN handles)."""
+
 from __future__ import annotations
 
 from maps.query.op_io import _attach_standing_columns
@@ -10,10 +11,10 @@ _V1 = {"handle": "v1", "from_xy": [0.0, 0.0], "up_unit": [1.0, 0.0]}
 _STAGED = {"v1": _V1}
 
 _CANDS = [
-    {"fid": "c_e", "xy": [10.0, 0.0], "class": "car"},    # dead ahead
-    {"fid": "c_w", "xy": [-10.0, 0.0], "class": "car"},   # behind
-    {"fid": "c_n", "xy": [0.0, 10.0], "class": "car"},    # viewer's LEFT
-    {"fid": "c_s", "xy": [0.0, -10.0], "class": "car"},   # viewer's RIGHT
+    {"fid": "c_e", "xy": [10.0, 0.0], "class": "car"},  # dead ahead
+    {"fid": "c_w", "xy": [-10.0, 0.0], "class": "car"},  # behind
+    {"fid": "c_n", "xy": [0.0, 10.0], "class": "car"},  # viewer's LEFT
+    {"fid": "c_s", "xy": [0.0, -10.0], "class": "car"},  # viewer's RIGHT
 ]
 
 
@@ -41,10 +42,12 @@ def test_attach_copies_rows_never_mutates_the_surface():
 
 def test_standing_columns_ride_every_find_result():
     out = run_program(
-        [dict(c) for c in _CANDS], [],
-        {"ops": [{"ref": "r0", "op": "find",
-                  "args": {}}]},
-        staged=_STAGED, standing="v1")
+        [dict(c) for c in _CANDS],
+        [],
+        {"ops": [{"ref": "r0", "op": "find", "args": {}}]},
+        staged=_STAGED,
+        standing="v1",
+    )
     rows = _rows_by_fid(out["results"]["r0"])
     assert rows["c_n"]["left of v1"] == 10.0
     assert rows["c_s"]["right of v1"] == 10.0
@@ -52,13 +55,16 @@ def test_standing_columns_ride_every_find_result():
 
 def test_staged_handle_ref_attaches_the_stance_columns():
     out = run_program(
-        [dict(c) for c in _CANDS], [],
-        {"ops": [
-            {"ref": "r0", "op": "find", "args": {}},
-            {"ref": "r1", "op": "compare",
-             "args": {"items": "r0", "refs": ["v1"]}},
-        ]},
-        staged=_STAGED)
+        [dict(c) for c in _CANDS],
+        [],
+        {
+            "ops": [
+                {"ref": "r0", "op": "find", "args": {}},
+                {"ref": "r1", "op": "compare", "args": {"items": "r0", "refs": ["v1"]}},
+            ]
+        },
+        staged=_STAGED,
+    )
     rows = _rows_by_fid(out["results"]["r1"])
     assert rows["c_e"]["distance to v1"] == 10.0
     assert rows["c_e"]["ahead of v1"] == 10.0
@@ -70,9 +76,8 @@ def test_no_stage_means_no_columns_anywhere():
     # The vacuity floor: without staged/standing the surface is untouched
     # and the columns exist nowhere (offline-teacher byte parity).
     out = run_program(
-        [dict(c) for c in _CANDS], [],
-        {"ops": [{"ref": "r0", "op": "find",
-                  "args": {}}]})
+        [dict(c) for c in _CANDS], [], {"ops": [{"ref": "r0", "op": "find", "args": {}}]}
+    )
     for r in out["results"]["r0"]:
         assert not any(k.endswith(" v1") for k in r)
 
@@ -81,31 +86,29 @@ def test_null_form_args_behave_as_absent():
     # The required-form schema fills unused slots with null; the executor
     # strips them, so the null form and the bare form are ONE program.
     out = run_program(
-        [{"fid": "c1", "xy": [1.0, 2.0], "class": "car",
-          "search_text": "car"}], [],
-        {"ops": [{"ref": "r0", "op": "find",
-                  "args": {"query": None,
-                           "color": None}}]})
+        [{"fid": "c1", "xy": [1.0, 2.0], "class": "car", "search_text": "car"}],
+        [],
+        {"ops": [{"ref": "r0", "op": "find", "args": {"query": None, "color": None}}]},
+    )
     assert len(out["results"]["r0"]) == 1
 
 
 def test_find_query_naming_a_fid_returns_that_row():
     out = run_program(
-        [{"fid": "detected_3", "xy": [1.0, 2.0], "class": "car",
-          "search_text": "car"}], [],
-        {"ops": [{"ref": "r0", "op": "find",
-                  "args": {"query": "detected_3"}}]})
+        [{"fid": "detected_3", "xy": [1.0, 2.0], "class": "car", "search_text": "car"}],
+        [],
+        {"ops": [{"ref": "r0", "op": "find", "args": {"query": "detected_3"}}]},
+    )
     rows = out["results"]["r0"]
     assert len(rows) == 1 and rows[0]["fid"] == "detected_3"
 
 
 def test_side_columns_render_contiguous_in_fixed_order():
     from maps.query.result_tables import _grid_columns
+
     rows = [
-        {"fid": "a", "xy": [1, 2], "right of v1": 3.0, "behind v1": 1.0,
-         "distance to lot": 9.0},
-        {"fid": "b", "xy": [2, 3], "left of v1": 4.0,
-         "distance to lot": 2.0, "ahead of v1": 6.0},
+        {"fid": "a", "xy": [1, 2], "right of v1": 3.0, "behind v1": 1.0, "distance to lot": 9.0},
+        {"fid": "b", "xy": [2, 3], "left of v1": 4.0, "distance to lot": 2.0, "ahead of v1": 6.0},
     ]
     cols = _grid_columns(rows)
     fam = [c for c in cols if c.endswith(" v1")]

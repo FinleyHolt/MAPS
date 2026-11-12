@@ -132,7 +132,9 @@ def _prewarm() -> None:
 
         rgb = np.zeros((720, 1280, 3), dtype=np.uint8)
         with _state_lock:
-            segment(rgb, ["car", "building", "road"], device=_DEVICE, min_area_px=32, max_per_image=4)
+            segment(
+                rgb, ["car", "building", "road"], device=_DEVICE, min_area_px=32, max_per_image=4
+            )
         log.info("prewarm: SAM 3.1 warm")
     except Exception as exc:  # noqa: BLE001
         log.warning("prewarm failed (%s); continuing without warmup", exc)
@@ -189,7 +191,9 @@ def segment(req: SegmentRequest, _gate: None = Depends(_admission)) -> dict:
 def main() -> None:
     import uvicorn
 
-    ap = argparse.ArgumentParser(prog="python -m serving.sam_server", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(
+        prog="python -m serving.sam_server", description=__doc__.splitlines()[0]
+    )
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=int(os.environ.get("SAM_PORT", "8772")))
     args = ap.parse_args()

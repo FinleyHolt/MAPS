@@ -35,8 +35,7 @@ _OVERSIZE_REJECTION = (
 def _rejection_body(exc: BaseException, statuses) -> str:
     """The lowercased body of an HTTP rejection whose status is in
     ``statuses``; empty otherwise."""
-    if not (isinstance(exc, httpx.HTTPStatusError)
-            and exc.response.status_code in statuses):
+    if not (isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in statuses):
         return ""
     try:
         return exc.response.text.lower()
@@ -67,21 +66,31 @@ def _is_content_filter_rejection(exc: BaseException) -> bool:
 def _is_refused_request(exc: BaseException) -> bool:
     """Did the serve refuse what was sent (a 4xx outside
     ``TRANSIENT_CLIENT_STATUS``, which re-sending fails the same way)?"""
-    return (isinstance(exc, httpx.HTTPStatusError)
-            and 400 <= exc.response.status_code < 500
-            and exc.response.status_code not in TRANSIENT_CLIENT_STATUS)
+    return (
+        isinstance(exc, httpx.HTTPStatusError)
+        and 400 <= exc.response.status_code < 500
+        and exc.response.status_code not in TRANSIENT_CLIENT_STATUS
+    )
 
 
 # The rejections a retry would only repeat, in the order they are tested:
 # ``(test, ended_by, the log's why)``.
 _REFUSAL_ENDINGS = (
-    (_is_oversize_rejection, "oversize_rejection",
-     "request does not fit the served window -> mission ends (retry would "
-     "re-send the same bytes)"),
-    (_is_content_filter_rejection, "content_filter",
-     "the endpoint's content filter refused the prompt -> mission ends (a "
-     "retry re-sends the same prompt)"),
-    (_is_refused_request, "request_refused",
-     "the serve refused the request -> mission ends (a retry re-sends the "
-     "same request)"),
+    (
+        _is_oversize_rejection,
+        "oversize_rejection",
+        "request does not fit the served window -> mission ends (retry would "
+        "re-send the same bytes)",
+    ),
+    (
+        _is_content_filter_rejection,
+        "content_filter",
+        "the endpoint's content filter refused the prompt -> mission ends (a "
+        "retry re-sends the same prompt)",
+    ),
+    (
+        _is_refused_request,
+        "request_refused",
+        "the serve refused the request -> mission ends (a retry re-sends the same request)",
+    ),
 )

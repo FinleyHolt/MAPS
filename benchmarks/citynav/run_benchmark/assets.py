@@ -26,8 +26,11 @@ def assert_current_tile_schema(features: dict, source: str) -> None:
     one ``prior`` list of row dicts: a run against another bake still
     completes, with a wrong SR."""
     rows = features.get("prior", []) if isinstance(features, dict) else None
-    if (not isinstance(rows, list) or set(features) - {"prior"}
-            or not all(isinstance(r, dict) for r in rows)):
+    if (
+        not isinstance(rows, list)
+        or set(features) - {"prior"}
+        or not all(isinstance(r, dict) for r in rows)
+    ):
         raise RuntimeError(
             f"{source} is not the current tile bake (one 'prior' list of tag "
             "rows); grounding against it silently produces a wrong SR. Point "

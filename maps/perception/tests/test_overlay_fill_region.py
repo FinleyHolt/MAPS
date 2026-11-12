@@ -20,9 +20,7 @@ def _reference(polys) -> np.ndarray:
 
 
 def _quad(x0, y0, x1, y1):
-    return np.array(
-        [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], dtype=np.int32
-    )
+    return np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], dtype=np.int32)
 
 
 def _tri(pts):

@@ -83,15 +83,15 @@ def test_a_ring_row_carries_no_shape_key():
 
 def test_a_row_carries_each_measure_once():
     assert set(_score("ring", BOTH_YES)) == {"NE", "SR", "OSR", "spl_pos", "success_criterion"}
-    assert set(_score("shape", BOTH_YES)) == {
-        "NE", "SR", "success_criterion", "precise_target"}
+    assert set(_score("shape", BOTH_YES)) == {"NE", "SR", "success_criterion", "precise_target"}
 
 
 def test_a_shape_row_is_the_point_inside_the_mask_with_no_floor():
     """A 2 m strip is scored as drawn: a point 2 m off its edge misses."""
     strip = [(0.0, 0.0), (100.0, 0.0), (100.0, 2.0), (0.0, 2.0)]
-    row = cn_eval.score_arrival(criterion="shape", final_pos_xy=(50.0, 4.0), target_xy=(50.0, 1.0),
-                                gt_polygon=strip)
+    row = cn_eval.score_arrival(
+        criterion="shape", final_pos_xy=(50.0, 4.0), target_xy=(50.0, 1.0), gt_polygon=strip
+    )
     assert row["SR"] == 0
 
 
@@ -123,6 +123,11 @@ def test_a_never_flown_episode_scores_zero_under_either_mask():
 def test_a_flight_that_never_moved_scores_spl(trajectory):
     """A replay of under two poses (the commit within snap tolerance of the
     start) has flown no path: its SPL is its verdict, and it stays in the mean."""
-    row = cn_eval.score_arrival(criterion="ring", final_pos_xy=(0.0, 0.0), target_xy=(5.0, 0.0),
-                                pos_trajectory=trajectory, flew=True)
+    row = cn_eval.score_arrival(
+        criterion="ring",
+        final_pos_xy=(0.0, 0.0),
+        target_xy=(5.0, 0.0),
+        pos_trajectory=trajectory,
+        flew=True,
+    )
     assert row["spl_pos"] == 1.0

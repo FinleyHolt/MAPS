@@ -11,8 +11,7 @@ from maps.query.op_io import ProgramError
 from maps.query.result_tables import compact_results, join_hints
 from maps.query.op_cut_and_sort import is_color_column_key
 from maps.query.program import run_program
-from maps.library.op_compiler import (
-    HANDLE_RE, HANDLE_WORD_RE, CodeError)
+from maps.library.op_compiler import HANDLE_RE, HANDLE_WORD_RE, CodeError
 
 
 # Served on a refused preflight program that names a color column: before
@@ -20,23 +19,29 @@ from maps.library.op_compiler import (
 PREFLIGHT_COLOR_NOTE = (
     "priors carry no perceived color before landing"
     ", so no color column attaches yet; color enriches per-stop "
-    "after arrival.")
+    "after arrival."
+)
 
 
 def _requests_color(op: dict) -> bool:
     """Whether this op names a color column (a filter key, a score_by
     emphasis key)."""
     args = op["args"]
-    return any(is_color_column_key(k) and k[len("color_"):].strip()
-               for k in [args.get("key")]
-               + [e["key"] for e in args.get("emphasis") or []])
+    return any(
+        is_color_column_key(k) and k[len("color_") :].strip()
+        for k in [args.get("key")] + [e["key"] for e in args.get("emphasis") or []]
+    )
 
 
-def run_ops(ops: list, *, namespace: dict,
-            raw_sink: dict | None = None,
-            seed_results: dict | None = None,
-            preflight: bool = False,
-            answer_ref: str = "") -> dict:
+def run_ops(
+    ops: list,
+    *,
+    namespace: dict,
+    raw_sink: dict | None = None,
+    seed_results: dict | None = None,
+    preflight: bool = False,
+    answer_ref: str = "",
+) -> dict:
     """Run one op list over the namespace's surface and compact the results
     for serving (``raw_sink["results"]`` gets them raw); a refused program
     returns ``{"error": ...}``."""
@@ -44,10 +49,14 @@ def run_ops(ops: list, *, namespace: dict,
     cands = ns.get("cands") or []
     anchors = ns.get("anchors") or []
     try:
-        out = run_program(cands, anchors, {"ops": ops},
-                           seed_results=seed_results,
-                           staged=ns.get("staged"),
-                           standing=ns.get("standing"))
+        out = run_program(
+            cands,
+            anchors,
+            {"ops": ops},
+            seed_results=seed_results,
+            staged=ns.get("staged"),
+            standing=ns.get("standing"),
+        )
     except ProgramError as exc:
         _err = str(exc)
         if raw_sink is not None:
@@ -86,8 +95,9 @@ def _refs_read(op: dict) -> set:
     """The handles an op's args read (``rN`` or ``rN[a:b]``)."""
     # A handle read is a whole JSON string, so an rN inside a longer string
     # (a name) does not count.
-    return set(re.findall(rf'"({HANDLE_RE.pattern})(?:\[[^"\]]*\])?"',
-                          json.dumps(op["args"], default=str))) - {op["ref"]}
+    return set(
+        re.findall(rf'"({HANDLE_RE.pattern})(?:\[[^"\]]*\])?"', json.dumps(op["args"], default=str))
+    ) - {op["ref"]}
 
 
 def program_reads(ops: list) -> set:
@@ -107,11 +117,11 @@ class Carry:
         # flight, a boost, a stance).
         self.version = 0
         self.rows: dict = {}
-        self._history: list = []          # every op, in execution order
-        self._reads: list = []            # per op: the handles its args name
-        self._producers: dict = {}        # ref -> indices into _history
-        self._armed = 0                   # the version _fresh is for
-        self._fresh: set = set()          # refs re-derived, or written, under it
+        self._history: list = []  # every op, in execution order
+        self._reads: list = []  # per op: the handles its args name
+        self._producers: dict = {}  # ref -> indices into _history
+        self._armed = 0  # the version _fresh is for
+        self._fresh: set = set()  # refs re-derived, or written, under it
         # A flight-minted handle records an event (the rows one flight added)
         # and never re-derives.
         self._events: set = set()
@@ -160,21 +170,22 @@ class Carry:
         ns = self.ns
         try:
             got = run_program(
-                ns.get("cands") or [], ns.get("anchors") or [],
+                ns.get("cands") or [],
+                ns.get("anchors") or [],
                 {"ops": [op for op in self._history if op["ref"] in need]},
                 # Seed everything else (a flight-minted handle has no op).
-                seed_results={h: v for h, v in self.rows.items()
-                              if h not in need},
-                staged=ns.get("staged"), standing=ns.get("standing"))
+                seed_results={h: v for h, v in self.rows.items() if h not in need},
+                staged=ns.get("staged"),
+                standing=ns.get("standing"),
+            )
         except Exception as exc:  # noqa: BLE001 - served on the read that asked
             bad = getattr(exc, "ref", None)
             hit = [r for r, c in closures.items() if c and (bad is None or bad in c)]
-            said = ", ".join(self.name(r) for r in
-                             sorted(hit, key=lambda r: self._producers[r][0]))
-            raise CodeError(f"{said} cannot be re-derived on the surface as "
-                            f"it stands: {exc}") from None
-        self.rows.update(
-            {k: v for k, v in got["results"].items() if k in need})
+            said = ", ".join(self.name(r) for r in sorted(hit, key=lambda r: self._producers[r][0]))
+            raise CodeError(
+                f"{said} cannot be re-derived on the surface as it stands: {exc}"
+            ) from None
+        self.rows.update({k: v for k, v in got["results"].items() if k in need})
         self._fresh.update(need)
 
     def read(self, ref):
@@ -209,6 +220,11 @@ class Carry:
     def alias(self, prev_ops, cur_ops) -> None:
         """A deduped emission: its refs take the rows the first run's refs
         hold now, and its own ops re-derive them from here on."""
-        self.record(cur_ops, {c["ref"]: self.rows[p["ref"]]
-                              for p, c in zip(prev_ops, cur_ops)
-                              if p["ref"] in self.rows})
+        self.record(
+            cur_ops,
+            {
+                c["ref"]: self.rows[p["ref"]]
+                for p, c in zip(prev_ops, cur_ops)
+                if p["ref"] in self.rows
+            },
+        )

@@ -56,23 +56,38 @@ def _picture() -> bytes:
 
 
 def _shape(out: dict) -> dict:
-    return {"kind": out["kind"], "finish_reason": out["finish_reason"],
-            "tool_calls": [c["function"] for c in out.get("tool_calls") or []],
-            "content": out["content"][:300]}
+    return {
+        "kind": out["kind"],
+        "finish_reason": out["finish_reason"],
+        "tool_calls": [c["function"] for c in out.get("tool_calls") or []],
+        "content": out["content"][:300],
+    }
 
 
-def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir: Path,
-                  settings: Settings = Settings()) -> dict:
+def _conversation(
+    spec: endpoint_spec.EndpointSpec,
+    effort: str | None,
+    workdir: Path,
+    settings: Settings = Settings(),
+) -> dict:
     # The mission stack loads transformers: not at --help.
     from maps.llm.flight_summary import summarize  # noqa: PLC0415
     from maps.mission.reasoner import Reasoner  # noqa: PLC0415
 
     # one prompt-cache key per conversation, as one per episode
-    reasoner = Reasoner(endpoint_spec=spec, settings=settings, workdir=workdir,
-                        routing_key=f"preflight-{workdir.name}", seed=1234, reasoning_effort=effort)
+    reasoner = Reasoner(
+        endpoint_spec=spec,
+        settings=settings,
+        workdir=workdir,
+        routing_key=f"preflight-{workdir.name}",
+        seed=1234,
+        reasoning_effort=effort,
+    )
     reasoner.append_vision_user(
         "Endpoint check. Name the colour of the square in this picture, then call run with the code "
-        "print('ok').", [_picture()])
+        "print('ok').",
+        [_picture()],
+    )
     first = reasoner.step_tool_call(SERVED_TOOLS)
     after_first = summarize(workdir / "flight", settings.endpoint.tokenizer_name)
     for call in first.get("tool_calls") or []:
@@ -82,10 +97,22 @@ def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir:
     reasoner.cancel_event = threading.Event()  # never set: the call streams, as a flight's does
     second = reasoner.step_tool_call(SERVED_TOOLS)
     meter = summarize(workdir / "flight", settings.endpoint.tokenizer_name)
-    out = {"first": _shape(first), "second": _shape(second),
-           "tokens": {k: meter[k] for k in ("prompt_tokens", "completion_tokens", "reasoning_tokens",
-                                            "cached_tokens", "cache_write_tokens")},
-           "served_model": meter["served_model"], "latency_s": meter["latency_s_sum"]}
+    out = {
+        "first": _shape(first),
+        "second": _shape(second),
+        "tokens": {
+            k: meter[k]
+            for k in (
+                "prompt_tokens",
+                "completion_tokens",
+                "reasoning_tokens",
+                "cached_tokens",
+                "cache_write_tokens",
+            )
+        },
+        "served_model": meter["served_model"],
+        "latency_s": meter["latency_s_sum"],
+    }
     if speaks_openai(spec.model_id):
         out["second_turn_cached_tokens"] = _second_turn_cached(after_first, meter)
     return out
@@ -109,8 +136,12 @@ def _second_turn_cached(after_first: dict, after_second: dict) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--effort", action="append", default=[],
-                    help="a reasoning effort to send; repeat for several conversations")
+    ap.add_argument(
+        "--effort",
+        action="append",
+        default=[],
+        help="a reasoning effort to send; repeat for several conversations",
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
@@ -120,9 +151,11 @@ def main(argv: list[str] | None = None) -> int:
     except endpoint_spec.EndpointDiscoveryError as exc:
         print(f"discovery refused: {exc}", file=sys.stderr)
         return 2
-    print(f"discovered {spec.model_id} at {spec.base_url}: window {spec.max_model_len}, "
-          f"input budget {spec.input_budget}, output cap {spec.max_output_tokens}, "
-          f"tokenizer {spec.tokenizer_name}")
+    print(
+        f"discovered {spec.model_id} at {spec.base_url}: window {spec.max_model_len}, "
+        f"input budget {spec.input_budget}, output cap {spec.max_output_tokens}, "
+        f"tokenizer {spec.tokenizer_name}"
+    )
 
     efforts = args.effort or [effort(None, settings.sampling)]
     failed = 0

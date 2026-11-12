@@ -35,8 +35,10 @@ def test_per_block_graph_has_no_cross_block_leakage():
 
     stem = tile_stem("birmingham_block_0")
     meta = json.loads(Path(f"{stem}_meta.json").read_text())
-    graph = build_object_graph(json.loads(Path(f"{stem}_features.json").read_text()),
-                               cell_size_m=float(meta["cell_size_m"]))
+    graph = build_object_graph(
+        json.loads(Path(f"{stem}_features.json").read_text()),
+        cell_size_m=float(meta["cell_size_m"]),
+    )
     ids = list(graph.nodes.keys())
     # The tags-only bake emits generic prior ids (road_0, building_3) with
     # CityRefer provenance in tags — never city/block-namespaced ids.
@@ -73,7 +75,12 @@ def test_a_missing_bake_names_its_maps_recipe(tmp_path, monkeypatch):
 
     (tmp_path / "calcity_meta.json").write_text("{}")
     bench = citynav_bench({"SEARCH_CITYNAV_TILES": str(tmp_path)})
-    with pytest.raises(FileNotFoundError, match=r"calcity_features\.json.*benchmarks\.calcity\.data_prep\.bake_tiles"):
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"calcity_features\.json.*benchmarks\.calcity\.data_prep\.bake_tiles",
+    ):
         assets.load_episode_assets(bench, "calcity")
-    with pytest.raises(FileNotFoundError, match=r"blk_meta\.json.*benchmarks/citynav/data_prep/bake_tiles\.sh"):
+    with pytest.raises(
+        FileNotFoundError, match=r"blk_meta\.json.*benchmarks/citynav/data_prep/bake_tiles\.sh"
+    ):
         assets.load_episode_assets(bench, "blk")

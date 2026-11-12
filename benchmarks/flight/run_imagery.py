@@ -27,7 +27,9 @@ DEFAULT_GSD_M = 0.10
 class RunImagery:
     def __init__(self) -> None:
         #: ``(rgb, alpha, (x0, y0, x1, y1), gsd_m)`` per product, in the order perceived.
-        self._products: list[tuple[np.ndarray, np.ndarray, tuple[float, float, float, float], float]] = []
+        self._products: list[
+            tuple[np.ndarray, np.ndarray, tuple[float, float, float, float], float]
+        ] = []
 
     @property
     def gsd_m(self) -> float:
@@ -38,8 +40,14 @@ class RunImagery:
         """One perceived observation: a north-up product on the map grid
         (``live_source.ortho_observation``), its ``world_window`` and alpha."""
         x0, y0, x1, y1 = (float(v) for v in obs.world_window)
-        self._products.append((np.ascontiguousarray(obs.rgb[..., :3], np.uint8), np.asarray(obs.alpha, np.uint8),
-                               (x0, y0, x1, y1), (x1 - x0) / obs.rgb.shape[1]))
+        self._products.append(
+            (
+                np.ascontiguousarray(obs.rgb[..., :3], np.uint8),
+                np.asarray(obs.alpha, np.uint8),
+                (x0, y0, x1, y1),
+                (x1 - x0) / obs.rgb.shape[1],
+            )
+        )
 
     def ortho(self, window: tuple[float, float, float, float]) -> dict[str, Any]:
         """The run's imagery over ``window`` as one north-up canvas at the
@@ -74,10 +82,22 @@ class RunImagery:
             if pc1 <= pc0 or pr1 <= pr0:
                 continue
             size = (c1 - c0, r1 - r0)
-            piece = cv2.resize(np.ascontiguousarray(prgb[pr0:pr1, pc0:pc1]), size, interpolation=cv2.INTER_LINEAR)
-            held = cv2.resize(np.ascontiguousarray(palpha[pr0:pr1, pc0:pc1]), size, interpolation=cv2.INTER_NEAREST)
+            piece = cv2.resize(
+                np.ascontiguousarray(prgb[pr0:pr1, pc0:pc1]), size, interpolation=cv2.INTER_LINEAR
+            )
+            held = cv2.resize(
+                np.ascontiguousarray(palpha[pr0:pr1, pc0:pc1]),
+                size,
+                interpolation=cv2.INTER_NEAREST,
+            )
             on = held > 0
             rgb[r0:r1, c0:c1][on] = piece[on]
             alpha[r0:r1, c0:c1][on] = 255
-        return {"rgb": rgb, "alpha": alpha, "height": np.zeros((h, w), np.float32),
-                "x_min": x0, "y_min": y0, "px_per_m": 1.0 / gsd}
+        return {
+            "rgb": rgb,
+            "alpha": alpha,
+            "height": np.zeros((h, w), np.float32),
+            "x_min": x0,
+            "y_min": y0,
+            "px_per_m": 1.0 / gsd,
+        }

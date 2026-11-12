@@ -17,18 +17,28 @@ from maps.query.polyline import clip_t
 
 # 8-point compass wedges over compass bearing (0=N, clockwise).
 _COMPASS8 = (
-    (22.5, "north"), (67.5, "northeast"), (112.5, "east"), (157.5, "southeast"),
-    (202.5, "south"), (247.5, "southwest"), (292.5, "west"), (337.5, "northwest"),
+    (22.5, "north"),
+    (67.5, "northeast"),
+    (112.5, "east"),
+    (157.5, "southeast"),
+    (202.5, "south"),
+    (247.5, "southwest"),
+    (292.5, "west"),
+    (337.5, "northwest"),
 )
 
 # The compass-word unit vectors, world frame (x east, y north): the eight
 # words :func:`_compass8` emits.
 _SQRT_HALF = math.sqrt(0.5)
 COMPASS_UNIT = {
-    "north": (0.0, 1.0), "northeast": (_SQRT_HALF, _SQRT_HALF),
-    "east": (1.0, 0.0), "southeast": (_SQRT_HALF, -_SQRT_HALF),
-    "south": (0.0, -1.0), "southwest": (-_SQRT_HALF, -_SQRT_HALF),
-    "west": (-1.0, 0.0), "northwest": (-_SQRT_HALF, _SQRT_HALF),
+    "north": (0.0, 1.0),
+    "northeast": (_SQRT_HALF, _SQRT_HALF),
+    "east": (1.0, 0.0),
+    "southeast": (_SQRT_HALF, -_SQRT_HALF),
+    "south": (0.0, -1.0),
+    "southwest": (-_SQRT_HALF, -_SQRT_HALF),
+    "west": (-1.0, 0.0),
+    "northwest": (-_SQRT_HALF, _SQRT_HALF),
 }
 
 # The four axis-aligned winds: :func:`cardinal_offset` bands on the
@@ -43,8 +53,10 @@ def cw(v):
 
 def cell_centre_xy(row, col, origin_xy, cell_m) -> tuple[float, float]:
     """The world x, y of grid cell ``(row, col)``'s centre."""
-    return (float(origin_xy[0]) + (int(col) + 0.5) * float(cell_m),
-            float(origin_xy[1]) + (int(row) + 0.5) * float(cell_m))
+    return (
+        float(origin_xy[0]) + (int(col) + 0.5) * float(cell_m),
+        float(origin_xy[1]) + (int(row) + 0.5) * float(cell_m),
+    )
 
 
 def _xy(p):
@@ -94,8 +106,8 @@ def cardinal_offset(cells_xy, at_xy, direction: str) -> float | None:
     d = str(direction or "").strip().lower()
     if d not in CARDINALS:
         raise ValueError(
-            f"cardinal_offset direction must be one of "
-            f"{sorted(CARDINALS)}; got {direction!r}")
+            f"cardinal_offset direction must be one of {sorted(CARDINALS)}; got {direction!r}"
+        )
     pts = np.asarray(cells_xy, dtype=float)
     if pts.ndim != 2 or pts.shape[0] == 0 or pts.shape[1] != 2:
         return None
@@ -148,8 +160,10 @@ def points_from_geoms(geoms):
 def arc_lengths(poly_en):
     out = [0.0]
     for i in range(len(poly_en) - 1):
-        out.append(out[-1] + math.hypot(poly_en[i + 1][0] - poly_en[i][0],
-                                        poly_en[i + 1][1] - poly_en[i][1]))
+        out.append(
+            out[-1]
+            + math.hypot(poly_en[i + 1][0] - poly_en[i][0], poly_en[i + 1][1] - poly_en[i][1])
+        )
     return out
 
 
@@ -181,7 +195,8 @@ def score_by(items, keys, weights) -> list[dict]:
     distinct = sorted(set(raws))
     dp = 4
     while dp < _SCORE_MAX_DP and any(
-            round(a, dp) == round(b, dp) for a, b in zip(distinct, distinct[1:])):
+        round(a, dp) == round(b, dp) for a, b in zip(distinct, distinct[1:])
+    ):
         dp += 1
     # + 0.0 turns a signed -0.0 into 0.0.
     out = [{**r, "score": round(s, dp) + 0.0} for r, s in zip(items, raws)]
@@ -227,7 +242,7 @@ def _shoelace(loops):
     """Shoelace sums ``(sum cross, sum (x1+x2) cross, sum (y1+y2) cross)``
     over the CLOSED chains; hole loops wind opposite and subtract."""
     sa = sx = sy = 0.0
-    for lp in (loops or []):
+    for lp in loops or []:
         if not is_closed_chain(lp):
             continue
         n = len(lp)
@@ -250,8 +265,7 @@ def loops_area_centroid(loops):
         pts = [p for lp in (loops or []) for p in lp]
         if not pts:
             return None
-        return [sum(float(p[0]) for p in pts) / len(pts),
-                sum(float(p[1]) for p in pts) / len(pts)]
+        return [sum(float(p[0]) for p in pts) / len(pts), sum(float(p[1]) for p in pts) / len(pts)]
     return [sx / (3.0 * sa), sy / (3.0 * sa)]
 
 
@@ -264,17 +278,18 @@ def loops_area(loops):
 def is_closed_chain(pts) -> bool:
     """A chain encloses iff it returns to its first vertex (every producer
     emits the closing vertex)."""
-    return (len(pts) >= 4
-            and float(pts[0][0]) == float(pts[-1][0])
-            and float(pts[0][1]) == float(pts[-1][1]))
+    return (
+        len(pts) >= 4
+        and float(pts[0][0]) == float(pts[-1][0])
+        and float(pts[0][1]) == float(pts[-1][1])
+    )
 
 
 def clip_chains_to_box(chains, box) -> list:
     """``chains`` cut to ``box`` = ``(x0, y0, x1, y1)``, one chain per run
     inside it: a crossing segment is cut at the edge, and a cut ring stays
     open rather than gaining a wall along the tile edge."""
-    x0, y0, x1, y1 = (float(box[0]), float(box[1]),
-                      float(box[2]), float(box[3]))
+    x0, y0, x1, y1 = (float(box[0]), float(box[1]), float(box[2]), float(box[3]))
 
     def inside(p):
         return x0 <= p[0] <= x1 and y0 <= p[1] <= y1
@@ -289,8 +304,10 @@ def clip_chains_to_box(chains, box) -> list:
             return [b[0], b[1]]
         # Clamped: a cut is on the boundary, and the interpolation can land a
         # few ULPs past it.
-        return [min(max(a[0] + (b[0] - a[0]) * t, x0), x1),
-                min(max(a[1] + (b[1] - a[1]) * t, y0), y1)]
+        return [
+            min(max(a[0] + (b[0] - a[0]) * t, x0), x1),
+            min(max(a[1] + (b[1] - a[1]) * t, y0), y1),
+        ]
 
     out: list = []
     for ch in chains or ():
@@ -365,7 +382,7 @@ def mask_geom(chains):
     B: list = []
     CA: list = []
     CB: list = []
-    for ch in (chains or []):
+    for ch in chains or []:
         pts = [(float(p[0]), float(p[1])) for p in ch]
         if not pts:
             continue
@@ -378,14 +395,22 @@ def mask_geom(chains):
                 CA.append(pts[i])
                 CB.append(pts[i + 1])
     Va = np.asarray(V, dtype=float).reshape(-1, 2)
-    return {"V": Va,
-            "BB": (float(Va[:, 0].min()), float(Va[:, 1].min()),
-                   float(Va[:, 0].max()), float(Va[:, 1].max())) if len(Va) else None,
-            "A": np.asarray(A, dtype=float).reshape(-1, 2),
-            "B": np.asarray(B, dtype=float).reshape(-1, 2),
-            "CA": np.asarray(CA, dtype=float).reshape(-1, 2),
-            "CB": np.asarray(CB, dtype=float).reshape(-1, 2),
-            "closed": bool(CA)}
+    return {
+        "V": Va,
+        "BB": (
+            float(Va[:, 0].min()),
+            float(Va[:, 1].min()),
+            float(Va[:, 0].max()),
+            float(Va[:, 1].max()),
+        )
+        if len(Va)
+        else None,
+        "A": np.asarray(A, dtype=float).reshape(-1, 2),
+        "B": np.asarray(B, dtype=float).reshape(-1, 2),
+        "CA": np.asarray(CA, dtype=float).reshape(-1, 2),
+        "CB": np.asarray(CB, dtype=float).reshape(-1, 2),
+        "closed": bool(CA),
+    }
 
 
 def bbox_gap(ga, gb) -> float:
@@ -419,10 +444,8 @@ def bbox_bounds(stacked: np.ndarray, g) -> np.ndarray:
     bb = g["BB"]
     if bb is None:
         return np.zeros(len(stacked), dtype=float)
-    dx = np.maximum(0.0, np.maximum(stacked[:, 0] - bb[2],
-                                    bb[0] - stacked[:, 2]))
-    dy = np.maximum(0.0, np.maximum(stacked[:, 1] - bb[3],
-                                    bb[1] - stacked[:, 3]))
+    dx = np.maximum(0.0, np.maximum(stacked[:, 0] - bb[2], bb[0] - stacked[:, 2]))
+    dy = np.maximum(0.0, np.maximum(stacked[:, 1] - bb[3], bb[1] - stacked[:, 3]))
     return np.nan_to_num(np.hypot(dx, dy), nan=0.0)
 
 
@@ -435,10 +458,12 @@ def _inside_mask_arr(P, A, B):
         return out
     # Only the points inside the loops' box: a point outside it crosses an
     # even number of edges.
-    inbox = ((P[:, 0] >= min(float(A[:, 0].min()), float(B[:, 0].min())))
-             & (P[:, 0] <= max(float(A[:, 0].max()), float(B[:, 0].max())))
-             & (P[:, 1] >= min(float(A[:, 1].min()), float(B[:, 1].min())))
-             & (P[:, 1] <= max(float(A[:, 1].max()), float(B[:, 1].max()))))
+    inbox = (
+        (P[:, 0] >= min(float(A[:, 0].min()), float(B[:, 0].min())))
+        & (P[:, 0] <= max(float(A[:, 0].max()), float(B[:, 0].max())))
+        & (P[:, 1] >= min(float(A[:, 1].min()), float(B[:, 1].min())))
+        & (P[:, 1] <= max(float(A[:, 1].max()), float(B[:, 1].max())))
+    )
     if not inbox.any():
         return out
     ylo = np.minimum(A[:, 1], B[:, 1])
@@ -447,7 +472,7 @@ def _inside_mask_arr(P, A, B):
     order = order[np.argsort(P[order, 1], kind="stable")]
     step = _chunk(len(A))
     for s in range(0, len(order), step):
-        idx = order[s:s + step]
+        idx = order[s : s + step]
         p = P[idx]
         lo, hi = float(p[:, 1].min()), float(p[:, 1].max())
         sel = (ylo <= hi) & (yhi > lo)
@@ -467,8 +492,7 @@ def _inside_mask_arr(P, A, B):
 
 def mask_contains(geom, pts):
     """Which ``pts`` lie inside the closed chains of a :func:`mask_geom`."""
-    P = np.asarray([[float(p[0]), float(p[1])] for p in pts],
-                   dtype=float).reshape(-1, 2)
+    P = np.asarray([[float(p[0]), float(p[1])] for p in pts], dtype=float).reshape(-1, 2)
     return _inside_mask_arr(P, geom["CA"], geom["CB"])
 
 
@@ -495,13 +519,19 @@ def _min_pt_to_segs_pruned(P, A, B):
     py0, py1 = float(P[:, 1].min()), float(P[:, 1].max())
     bx0, bx1 = float(sx0.min()), float(sx1.max())
     by0, by1 = float(sy0.min()), float(sy1.max())
-    bp = np.hypot(np.maximum(0.0, np.maximum(bx0 - P[:, 0], P[:, 0] - bx1)),
-                  np.maximum(0.0, np.maximum(by0 - P[:, 1], P[:, 1] - by1)))
-    bs = np.hypot(np.maximum(0.0, np.maximum(px0 - sx1, sx0 - px1)),
-                  np.maximum(0.0, np.maximum(py0 - sy1, sy0 - py1)))
+    bp = np.hypot(
+        np.maximum(0.0, np.maximum(bx0 - P[:, 0], P[:, 0] - bx1)),
+        np.maximum(0.0, np.maximum(by0 - P[:, 1], P[:, 1] - by1)),
+    )
+    bs = np.hypot(
+        np.maximum(0.0, np.maximum(px0 - sx1, sx0 - px1)),
+        np.maximum(0.0, np.maximum(py0 - sy1, sy0 - py1)),
+    )
     s0, p0 = int(bs.argmin()), int(bp.argmin())
-    ub = min(_min_pt_to_segs_all(P, A[s0:s0 + 1], B[s0:s0 + 1])[0],
-             _min_pt_to_segs_all(P[p0:p0 + 1], A, B)[0])
+    ub = min(
+        _min_pt_to_segs_all(P, A[s0 : s0 + 1], B[s0 : s0 + 1])[0],
+        _min_pt_to_segs_all(P[p0 : p0 + 1], A, B)[0],
+    )
     keep_p = np.flatnonzero(bp <= ub + BOUND_SLACK_M)
     keep_s = np.flatnonzero(bs <= ub + BOUND_SLACK_M)
     d, i, foot = _min_pt_to_segs_all(P[keep_p], A[keep_s], B[keep_s])
@@ -515,7 +545,7 @@ def _min_pt_to_segs_all(P, A, B):
     best_d2, best_i, best_foot = float("inf"), -1, None
     step = _chunk(len(A))
     for s in range(0, len(P), step):
-        d2, F = _pt_to_segs_grid(P[s:s + step], A, B)
+        d2, F = _pt_to_segs_grid(P[s : s + step], A, B)
         i, j = np.unravel_index(int(np.argmin(d2)), d2.shape)
         if float(d2[i, j]) < best_d2:
             best_d2 = float(d2[i, j])
@@ -557,8 +587,7 @@ def _proper_crossings(a1, b1, A2, B2):
     if not X.any():
         return X, None
     rxs = r1[:, None, 0] * r2[None, :, 1] - r1[:, None, 1] * r2[None, :, 0]
-    t = ((W1[..., 0] * r2[None, :, 1] - W1[..., 1] * r2[None, :, 0])
-         / np.where(rxs != 0.0, rxs, 1.0))
+    t = (W1[..., 0] * r2[None, :, 1] - W1[..., 1] * r2[None, :, 0]) / np.where(rxs != 0.0, rxs, 1.0)
     return X, a1[:, None, :] + t[..., None] * r1[:, None, :]
 
 
@@ -569,10 +598,12 @@ def _overlaps_box(A, B, C, D):
     xmax = max(float(C[:, 0].max()), float(D[:, 0].max()))
     ymin = min(float(C[:, 1].min()), float(D[:, 1].min()))
     ymax = max(float(C[:, 1].max()), float(D[:, 1].max()))
-    return ((np.maximum(A[:, 0], B[:, 0]) >= xmin)
-            & (np.minimum(A[:, 0], B[:, 0]) <= xmax)
-            & (np.maximum(A[:, 1], B[:, 1]) >= ymin)
-            & (np.minimum(A[:, 1], B[:, 1]) <= ymax))
+    return (
+        (np.maximum(A[:, 0], B[:, 0]) >= xmin)
+        & (np.minimum(A[:, 0], B[:, 0]) <= xmax)
+        & (np.maximum(A[:, 1], B[:, 1]) >= ymin)
+        & (np.minimum(A[:, 1], B[:, 1]) <= ymax)
+    )
 
 
 def _segments_cross(A1, B1, A2, B2):
@@ -591,7 +622,7 @@ def _segments_cross(A1, B1, A2, B2):
         A1, B1, A2, B2 = A1[k1], B1[k1], A2[k2], B2[k2]
     step = _chunk(len(A2))
     for k in range(0, len(A1), step):
-        X, P = _proper_crossings(A1[k:k + step], B1[k:k + step], A2, B2)
+        X, P = _proper_crossings(A1[k : k + step], B1[k : k + step], A2, B2)
         if P is not None:
             i, j = np.unravel_index(int(np.argmax(X)), X.shape)
             return float(P[i, j, 0]), float(P[i, j, 1])
@@ -636,9 +667,11 @@ def gap_witness(ga, gb):
         D = Va[:, None, :] - Vb[None, :, :]
         d2 = np.einsum("nmj,nmj->nm", D, D)
         i, j = np.unravel_index(int(np.argmin(d2)), d2.shape)
-        best = (math.sqrt(float(d2[i, j])),
-                (float(Va[i, 0]), float(Va[i, 1])),
-                (float(Vb[j, 0]), float(Vb[j, 1])))
+        best = (
+            math.sqrt(float(d2[i, j])),
+            (float(Va[i, 0]), float(Va[i, 1])),
+            (float(Vb[j, 0]), float(Vb[j, 1])),
+        )
     return best
 
 
@@ -673,8 +706,7 @@ def _segment_arrays(polys):
     A: list = []
     B: list = []
     for p in polys or []:
-        P = np.asarray([[float(q[0]), float(q[1])] for q in p],
-                       dtype=float).reshape(-1, 2)
+        P = np.asarray([[float(q[0]), float(q[1])] for q in p], dtype=float).reshape(-1, 2)
         # a non-finite vertex would poison every orientation cross-product
         P = P[np.isfinite(P).all(axis=1)]
         if len(P) >= 2:
@@ -700,18 +732,20 @@ def polyline_crossings(polys_a, polys_b):
     nearest = float("inf")
     step = _chunk(len(A2))
     for k in range(0, len(A1), step):
-        a1, b1 = A1[k:k + step], B1[k:k + step]
+        a1, b1 = A1[k : k + step], B1[k : k + step]
         d1, F1 = _pt_to_segs_grid(a1, A2, B2)
         d2, F2 = _pt_to_segs_grid(b1, A2, B2)
         d3, F3 = _pt_to_segs_grid(A2, a1, b1)
         d4, F4 = _pt_to_segs_grid(B2, a1, b1)
         d = np.sqrt(np.stack([d1, d2, d3.T, d4.T]))
-        w = np.stack([
-            (a1[:, None, :] + F1) * 0.5,
-            (b1[:, None, :] + F2) * 0.5,
-            (A2[None, :, :] + F3.transpose(1, 0, 2)) * 0.5,
-            (B2[None, :, :] + F4.transpose(1, 0, 2)) * 0.5,
-        ])
+        w = np.stack(
+            [
+                (a1[:, None, :] + F1) * 0.5,
+                (b1[:, None, :] + F2) * 0.5,
+                (A2[None, :, :] + F3.transpose(1, 0, 2)) * 0.5,
+                (B2[None, :, :] + F4.transpose(1, 0, 2)) * 0.5,
+            ]
+        )
         pick = np.argmin(d, axis=0)
         dmin = np.take_along_axis(d, pick[None], 0)[0]
         wmin = np.take_along_axis(w, pick[None, ..., None], 0)[0]
@@ -728,8 +762,7 @@ def polyline_crossings(polys_a, polys_b):
     if not hits:
         return [], nearest
     pts = np.round(np.concatenate(hits), 2)
-    return ([list(p) for p in sorted({(float(x), float(y)) for x, y in pts})],
-            nearest)
+    return ([list(p) for p in sorted({(float(x), float(y)) for x, y in pts})], nearest)
 
 
 def _collapse_collinear(corners):
@@ -759,7 +792,7 @@ def cells_boundary_loops(cells, origin_xy, cell_m):
     # clockwise in (row, col), so loops chain head to tail. Every corner
     # has as many edges in as out, so a chain from ``start`` closes there.
     edges: dict[tuple, list] = {}
-    for (r, c) in cs:
+    for r, c in cs:
         if (r - 1, c) not in cs:
             edges.setdefault((r, c), []).append((r, c + 1))
         if (r, c + 1) not in cs:
@@ -788,8 +821,7 @@ def cells_boundary_loops(cells, origin_xy, cell_m):
         return None
     tx, ty = float(origin_xy[0]), float(origin_xy[1])
     m = float(cell_m)
-    return [[[tx + c * m, ty + r * m] for (r, c) in (*lp, lp[0])]
-            for lp in loops]
+    return [[[tx + c * m, ty + r * m] for (r, c) in (*lp, lp[0])] for lp in loops]
 
 
 def mask_shape_features(cells, cell_m):

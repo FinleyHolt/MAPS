@@ -1,4 +1,5 @@
 """The stops an ``explore`` flies: ``EpisodeWorld.node_coverage_stops``."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -13,12 +14,14 @@ _MAX_STOPS = 1000
 def _cover(lp, fid, spacing_m, minor_spacing_m=1e9):
     """The stops as the mission asks for them; the default minor side is wider
     than any fixture, so the 1-D walk."""
-    return lp.node_coverage_stops(fid, spacing_m, max_stops=_MAX_STOPS,
-                                  minor_spacing_m=minor_spacing_m)
+    return lp.node_coverage_stops(
+        fid, spacing_m, max_stops=_MAX_STOPS, minor_spacing_m=minor_spacing_m
+    )
 
 
 def _loop_over(cells):
     """A EpisodeWorld whose one node carries these raster cells."""
+
     class _Node:
         pass
 
@@ -29,8 +32,10 @@ def _loop_over(cells):
 
 def _cell_centres(cells):
     """Where those raster cells sit in the world, rounded as a stop is."""
-    return {(round(0.0 + (int(c[1]) + 0.5) * _CELL_M),
-             round(0.0 + (int(c[0]) + 0.5) * _CELL_M)) for c in cells}
+    return {
+        (round(0.0 + (int(c[1]) + 0.5) * _CELL_M), round(0.0 + (int(c[0]) + 0.5) * _CELL_M))
+        for c in cells
+    }
 
 
 def _on_the_shape(stops, cells):
@@ -80,7 +85,7 @@ def test_the_stop_bound_binds_and_the_extremes_still_ride():
     # So the fixture is deliberately absurd -- 8 km walked at 4 m -- because what is
     # pinned is that the guard still HOLDS and still keeps the ends, not that any street
     # will ever meet it.
-    long_road = [[100, j] for j in range(0, 4000)]      # 8 km
+    long_road = [[100, j] for j in range(0, 4000)]  # 8 km
     lp = _loop_over(long_road)
     stops = _cover(lp, "prior_9", 4.0)
     assert len(stops) == _MAX_STOPS, len(stops)
@@ -102,9 +107,8 @@ def test_one_representation_covers_polygon_linestring_and_point_alike():
     on this bake), a node is one cell."""
     shapes = {
         "linestring": _ROAD,
-        "polygon": [[r, c] for r in range(100, 108)
-                    for c in range(50, 58)],              # a building
-        "point": [[100, 50]],                             # a node
+        "polygon": [[r, c] for r in range(100, 108) for c in range(50, 58)],  # a building
+        "point": [[100, 50]],  # a node
     }
     for name, cells in shapes.items():
         stops = _cover(_loop_over(cells), "prior_9", 20.0)
@@ -118,11 +122,16 @@ def test_nothing_from_the_vector_ring_leaks_into_the_stops():
     cells = [[100, j] for j in range(50, 60)]
     lp = _loop_over(cells)
     lp.state.runtime_graph.nodes["prior_9"].world_contour = [
-        [100.0, 200.0], [118.0, 200.0], [118.0, 202.0],
-        [2500.0, 202.0], [2500.0, 900.0], [100.0, 202.0]]
+        [100.0, 200.0],
+        [118.0, 200.0],
+        [118.0, 202.0],
+        [2500.0, 202.0],
+        [2500.0, 900.0],
+        [100.0, 202.0],
+    ]
     stops = _cover(lp, "prior_9", 20.0)
     assert stops and _on_the_shape(stops, cells), stops
-    assert all(p[0] <= 120 for p in stops), stops       # the cells stop at 119
+    assert all(p[0] <= 120 for p in stops), stops  # the cells stop at 119
 
 
 def test_a_fid_with_no_cells_has_nothing_to_cover():
@@ -147,7 +156,7 @@ def test_a_wide_shape_tiles_serpentine_at_the_short_side_pitch():
     stops = _cover(lp, "prior_9", 20.0, minor_spacing_m=40.0)
     assert stops and _on_the_shape(stops, block), stops
     bands = sorted({int(p[1] // 40) for p in stops})
-    assert len(bands) >= 3, stops       # 120 m of minor extent at 40 m pitch
+    assert len(bands) >= 3, stops  # 120 m of minor extent at 40 m pitch
 
 
 def test_the_serpentine_rows_alternate_so_the_pass_stays_one_line():
@@ -167,8 +176,7 @@ def test_the_serpentine_rows_alternate_so_the_pass_stays_one_line():
 
 def test_a_narrow_shape_keeps_the_one_dimensional_walk_exactly():
     lp = _loop_over(_ROAD)
-    assert (_cover(lp, "prior_9", 20.0, minor_spacing_m=240.0)
-            == _cover(lp, "prior_9", 20.0))
+    assert _cover(lp, "prior_9", 20.0, minor_spacing_m=240.0) == _cover(lp, "prior_9", 20.0)
 
 
 def test_a_set_pass_over_a_one_flight_budget_keeps_its_middle_stop():
@@ -177,14 +185,21 @@ def test_a_set_pass_over_a_one_flight_budget_keeps_its_middle_stop():
     from maps.mission.explore_stops import cover_items
 
     items, _note, _subject, segs = cover_items(
-        [{"target_fid": f"[{x}, 0]"} for x in (0, 100, 200)], "",
+        [{"target_fid": f"[{x}, 0]"} for x in (0, 100, 200)],
+        "",
         spec=SimpleNamespace(coverage_stops=None, flight_budget=1),
-        spacing=10.0, rows={}, covered=set(), pose_xy=(0.0, 0.0))
+        spacing=10.0,
+        rows={},
+        covered=set(),
+        pose_xy=(0.0, 0.0),
+    )
     assert items == [{"target_fid": "[100, 0]"}] and segs == 3
 
 
 def test_a_one_stop_bound_holds_on_a_serpentine_too():
     """Over the bound the stops thin on either branch; one stop is the middle."""
     block = [[i, j] for i in range(0, 60) for j in range(0, 60)]
-    stops = _loop_over(block).node_coverage_stops("prior_9", 20.0, max_stops=1, minor_spacing_m=40.0)
+    stops = _loop_over(block).node_coverage_stops(
+        "prior_9", 20.0, max_stops=1, minor_spacing_m=40.0
+    )
     assert len(stops) == 1 and _on_the_shape(stops, block), stops

@@ -80,6 +80,7 @@ IDENTITY_KEYS = (
 # arm, and ``perception.bake_sha256`` is its identity.
 _HOST_ARM_FLAGS = ("SEARCH_CITYNAV_TILES",)
 
+
 class ManifestIdentityError(RuntimeError):
     """A re-entering run's resolution contradicts the stored manifest."""
 
@@ -91,8 +92,7 @@ def arm_env_stamp(bench: Bench) -> dict:
     every row stamp this."""
     env = bench.environ
     stamp = {k: env[k] for k in ARM_ENV_FLAGS if env.get(k, "") != ""}
-    stamp.update({k: v for k, v in env.items()
-                  if k.startswith(ARM_ENV_PREFIXES) and v != ""})
+    stamp.update({k: v for k, v in env.items() if k.startswith(ARM_ENV_PREFIXES) and v != ""})
     if "SEARCH_CITYNAV_TILES" not in stamp:
         stamp["SEARCH_CITYNAV_TILES"] = str(bench.tiles_dir)
     return stamp
@@ -198,9 +198,7 @@ def build_manifest(
             "limit": limit,
             "allowlist": str(allowlist_path) if allowlist_path else None,
             "episodes_n": len(episodes),
-            "selection_sha": hashlib.sha1(
-                "\n".join(episodes).encode()
-            ).hexdigest()[:12],
+            "selection_sha": hashlib.sha1("\n".join(episodes).encode()).hexdigest()[:12],
         },
         "endpoints": endpoints,
         "perception": _perception_section(bench),

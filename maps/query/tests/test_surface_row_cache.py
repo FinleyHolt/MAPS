@@ -10,16 +10,20 @@ from maps.world_state.graph import MapObject
 
 def _node(r, c, name=None, provenance="prebaked", cls="building"):
     return MapObject(
-        class_name=cls, name=name, tags={"source": "osm"},
-        centroid=(int(r), int(c)), provenance=provenance,
-        cells=np.asarray([[r + i, c + j] for i in range(3) for j in range(4)],
-                         dtype=np.int32),
-        world_xy=[float(c) * 2.0, float(r) * 2.0])
+        class_name=cls,
+        name=name,
+        tags={"source": "osm"},
+        centroid=(int(r), int(c)),
+        provenance=provenance,
+        cells=np.asarray([[r + i, c + j] for i in range(3) for j in range(4)], dtype=np.int32),
+        world_xy=[float(c) * 2.0, float(r) * 2.0],
+    )
 
 
 def _graph(n=9, name_suffix=""):
-    return {f"building_{i}": _node(10 * i, 10 * i, name=f"b{i}{name_suffix}")
-            for i in range(1, n + 1)}
+    return {
+        f"building_{i}": _node(10 * i, 10 * i, name=f"b{i}{name_suffix}") for i in range(1, n + 1)
+    }
 
 
 def _build(nodes):
@@ -62,8 +66,7 @@ def test_replacing_every_node_object_still_hits_the_cache():
     _build(_graph())
     n_after_first = len(surface._ROW_CACHE)
     _build(_graph())  # a wholly separate set of node objects, same content
-    assert len(surface._ROW_CACHE) == n_after_first, (
-        n_after_first, len(surface._ROW_CACHE))
+    assert len(surface._ROW_CACHE) == n_after_first, (n_after_first, len(surface._ROW_CACHE))
     assert _build(_graph()) == ref
 
 
@@ -71,8 +74,7 @@ def test_a_changed_cells_array_is_not_reused():
     """Cells are the bulk of a node and the thing hashed by bytes."""
     nodes = _graph()
     _build(nodes)
-    nodes["building_2"].cells = np.asarray([[500, 500], [500, 501]],
-                                           dtype=np.int32)
+    nodes["building_2"].cells = np.asarray([[500, 500], [500, 501]], dtype=np.int32)
     assert _build(nodes) == _uncached(nodes)
 
 

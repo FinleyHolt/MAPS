@@ -2,6 +2,7 @@
 the interpreter executes compiles onto the ops the op program (``maps.query.program``)
 already runs. A :class:`Program` holds one call's ops; the loop grounds its
 named anchors and runs it."""
+
 from __future__ import annotations
 
 import re
@@ -21,8 +22,8 @@ CARDINAL_ORDER = tuple(sorted(_GEOM_CARDINALS))
 def split_diagonal(word: str):
     """A diagonal wind -> its two cardinals, or None. Derived, not listed."""
     for a in ("north", "south"):
-        if word.startswith(a) and word[len(a):] in ("east", "west"):
-            return a, word[len(a):]
+        if word.startswith(a) and word[len(a) :] in ("east", "west"):
+            return a, word[len(a) :]
     return None
 
 
@@ -31,8 +32,7 @@ def _winds_holding(cardinal_word: str) -> list:
     satisfied by south, southeast and southwest, since a house sits
     DIAGONALLY from the crossing it is on the corner of. Chaining the two
     cardinals of a diagonal takes the precision back."""
-    return sorted(w for w in COMPASS_UNIT
-                  if cardinal_word in (split_diagonal(w) or (w,)))
+    return sorted(w for w in COMPASS_UNIT if cardinal_word in (split_diagonal(w) or (w,)))
 
 
 # THE MOVING CALLS TAKE A THING, NEVER A COORDINATE: a point is an estimate read off a picture, and the rows carry
@@ -43,7 +43,8 @@ _ACT_NEEDS_A_THING = (
     " show_map(around=), stand(at=)."
     " To reach a part of something, look_for the class you "
     "want, explore the thing so the segmenter puts rows on it, then "
-    "{name}() the row you mean.")
+    "{name}() the row you mean."
+)
 
 
 def act_needs_a_thing(*, name: str, got: str) -> str:
@@ -56,7 +57,6 @@ class CodeError(ValueError):
     """A refusal the model can act on: what was said, and what is allowed."""
 
 
-
 def refuse_metres_in_within(v):
     """``within=`` takes a PLACE; a bare number is ``dwithin=`` (Shapely's
     names: ``a.within(b)`` is containment, ``dwithin(a, b, d)`` a
@@ -67,7 +67,8 @@ def refuse_metres_in_within(v):
         f"within= keeps what TOUCHES a place and {v!r} is a distance, not a "
         f"place. A gap in metres is dwithin=: "
         f"r1.filter(near=<place>, dwithin={v!r}) keeps what is that close, "
-        f"and r1.filter(within=<place>) keeps what touches it.")
+        f"and r1.filter(within=<place>) keeps what touches it."
+    )
 
 
 def bind_row(row: dict):
@@ -92,8 +93,7 @@ def row_token(row: dict) -> str:
 
 def _is_place_list(v) -> bool:
     """``near=[A, B]`` is TWO PLACES; ``near=[4630, 2965]`` is one point."""
-    return (isinstance(v, (list, tuple)) and len(v) >= 2
-            and not is_xy(v))
+    return isinstance(v, (list, tuple)) and len(v) >= 2 and not is_xy(v)
 
 
 # The token grammar, each matched whole: the fid families the world mints
@@ -101,8 +101,7 @@ def _is_place_list(v) -> bool:
 # viewpoint, a coverage stop, a terminus, and a result handle with or without
 # its window.
 _FID_N = "[0-9]+"
-FID_RE = re.compile(rf"(?:prior_|detected_|stop_|end_|v){_FID_N}",
-                    re.IGNORECASE)
+FID_RE = re.compile(rf"(?:prior_|detected_|stop_|end_|v){_FID_N}", re.IGNORECASE)
 VIEWPOINT_RE = re.compile(rf"v{_FID_N}")
 STOP_RE = re.compile(rf"stop_{_FID_N}")
 END_RE = re.compile(rf"end_{_FID_N}")
@@ -119,6 +118,7 @@ def fid_like(tok) -> bool:
 class Ref:
     """A whole result in an argument: its executor ref, and the label its
     columns carry (the model's own name for it)."""
+
     ref: str
     label: str
 
@@ -127,6 +127,7 @@ class Ref:
 class Bind:
     """One row in an argument: what it binds to (a fid, or the [x, y] of a
     computed row) and the label its columns carry."""
+
     bind: object
     label: str
 
@@ -188,12 +189,10 @@ class Program:
             # A ROW -- a point or a fid. The wrapper stops a bound fid being
             # read as a bare name and grounded again.
             b = v.bind
-            return {"ref": list(b) if isinstance(b, (list, tuple)) else b,
-                    "as": v.label}
+            return {"ref": list(b) if isinstance(b, (list, tuple)) else b, "as": v.label}
         if is_xy(v):
             # an inline point takes the same wrapper
-            return {"ref": [float(v[0]), float(v[1])],
-                    "as": f"{v[0]:g} {v[1]:g}"}
+            return {"ref": [float(v[0]), float(v[1])], "as": f"{v[0]:g} {v[1]:g}"}
         if isinstance(v, (list, tuple)):
             # AN ANCHOR MAY BE A SET OF OBJECTS. A set folds to its UNION --
             # ONE ref, ONE column, ONE cut; two cuts against two anchors is
@@ -201,28 +200,27 @@ class Program:
             if not v:
                 raise CodeError(
                     "an empty list names no place. Give the anchor: one "
-                    "fid, one handle, an [x, y], or a list of them.")
+                    "fid, one handle, an [x, y], or a list of them."
+                )
             if len(v) == 1:
-                return self.ref_of(v[0])     # [one thing] is the thing
+                return self.ref_of(v[0])  # [one thing] is the thing
             members, labels = [], []
             for m in v:
                 r = self.ref_of(m)
                 inner = r["ref"] if isinstance(r, dict) and "ref" in r else r
-                if isinstance(inner, list) and len(inner) == 1 \
-                        and isinstance(inner[0], str):
-                    inner = inner[0]         # a whole result: its rN
-                if not isinstance(inner, str) and not (
-                        isinstance(m, Bind) and is_xy(inner)):
+                if isinstance(inner, list) and len(inner) == 1 and isinstance(inner[0], str):
+                    inner = inner[0]  # a whole result: its rN
+                if not isinstance(inner, str) and not (isinstance(m, Bind) and is_xy(inner)):
                     # A union member rides its MASK, or a row with no fid
                     # its own point; a bare [x, y] names no thing.
                     raise CodeError(
                         f"a set anchor holds PLACES -- fids, handles, or "
                         f"results -- and {m!r} is a bare point. Name one "
                         f"point on its own (east_of=[x, y]), or name the "
-                        f"things: east_of=[\"prior_12\", \"prior_13\"].")
+                        f'things: east_of=["prior_12", "prior_13"].'
+                    )
                 members.append(inner)
-                labels.append(r["as"] if isinstance(r, dict) and "as" in r
-                              else inner)
+                labels.append(r["as"] if isinstance(r, dict) and "as" in r else inner)
             label = "_".join(str(x) for x in labels[:2])
             if len(labels) > 2:
                 label = f"{label}_plus{len(labels) - 2}"
@@ -230,8 +228,7 @@ class Program:
         # a quoted [x, y] token (a crossing's fid) is a point, not a name
         pt = parse_xy_token(v) if isinstance(v, str) else None
         if pt:
-            return {"ref": [float(pt[0]), float(pt[1])],
-                    "as": f"{pt[0]:g} {pt[1]:g}"}
+            return {"ref": [float(pt[0]), float(pt[1])], "as": f"{pt[0]:g} {pt[1]:g}"}
         return v
 
     def items_of(self, v):
@@ -240,9 +237,12 @@ class Program:
         got = self.ref_of(v)
         if isinstance(got, dict) and "ref" in got:
             got = got["ref"]
-        if (isinstance(got, list) and len(got) == 1
-                and isinstance(got[0], str)
-                and HANDLE_RE.fullmatch(got[0])):
+        if (
+            isinstance(got, list)
+            and len(got) == 1
+            and isinstance(got[0], str)
+            and HANDLE_RE.fullmatch(got[0])
+        ):
             return got[0]
         return got
 
@@ -255,21 +255,24 @@ class Program:
     def cut_le(self, items, anchor, value) -> str:
         """Keep the rows within ``value`` metres of ``anchor``: one compare
         and one ``le`` cut on the distance column it writes."""
-        cmp_ref = self.add("compare", {"items": items,
-                                       "refs": [self.ref_of(anchor)]})
-        return self.add("filter_items", {
-            "items": cmp_ref, "key": f"distance to {self.label(anchor)}",
-            "op": "le", "value": value})
+        cmp_ref = self.add("compare", {"items": items, "refs": [self.ref_of(anchor)]})
+        return self.add(
+            "filter_items",
+            {
+                "items": cmp_ref,
+                "key": f"distance to {self.label(anchor)}",
+                "op": "le",
+                "value": value,
+            },
+        )
 
     def window(self, ref: str, spec: str = "") -> str:
         """The IDENTITY WINDOW: ``filter_items`` truthy on ``xy`` drops
         nothing (every served row carries an xy), so it makes an existing
         result -- or a slice of one -- the answer of a program."""
-        return self.add("filter_items", {"items": f"{ref}{spec}", "key": "xy",
-                                         "op": "truthy"})
+        return self.add("filter_items", {"items": f"{ref}{spec}", "key": "xy", "op": "truthy"})
 
-    def relate(self, items, near=(), cards=(), color=None,
-               rank: bool = True) -> str:
+    def relate(self, items, near=(), cards=(), color=None, rank: bool = True) -> str:
         """One compare carrying every anchor, a cut per cardinal and, when
         ranking, one score_by for every ordering (a second sort would undo the
         first). A cardinal cuts and proximity to the same anchor orders; the
@@ -286,15 +289,14 @@ class Program:
             emphasis.append({"key": f"distance to {lab}", "w": -1})
         args = {"items": items, "refs": refs}
         if cards:
-            args["cardinals"] = [{"dir": d, "ref": self.label(a)}
-                                 for d, a in cards]
+            args["cardinals"] = [{"dir": d, "ref": self.label(a)} for d, a in cards]
         ref = self.add("compare", args)
         # `on_side` keeps the rows the column could not place -- unmeasured,
         # not refuted -- and conjoined constraints chain.
         for d, a in cards:
-            ref = self.add("filter_items", {
-                "items": ref, "key": f"{d} of {self.label(a)}",
-                "op": "on_side"})
+            ref = self.add(
+                "filter_items", {"items": ref, "key": f"{d} of {self.label(a)}", "op": "on_side"}
+            )
         if not rank:
             return ref
         return self.rank_color(ref, color, emphasis)
@@ -310,8 +312,12 @@ class Program:
     def anchor_names(self) -> list:
         """The bare NAMES in the ops' refs, in order: places to ground."""
         live = self.live | {op["ref"] for op in self.ops}
-        return [v for op in self.ops for v in op["args"].get("refs") or []
-                if isinstance(v, str) and v not in live and not fid_like(v)]
+        return [
+            v
+            for op in self.ops
+            for v in op["args"].get("refs") or []
+            if isinstance(v, str) and v not in live and not fid_like(v)
+        ]
 
     def ground(self, ties: dict) -> None:
         """Each named anchor -> its grounded fid, or its top-tie fids as the
@@ -323,8 +329,7 @@ class Program:
             for i, v in enumerate(refs):
                 if isinstance(v, str) and v not in live and not fid_like(v):
                     fids = ties[v]
-                    refs[i] = {"ref": fids[0] if len(fids) == 1 else fids,
-                               "as": v}
+                    refs[i] = {"ref": fids[0] if len(fids) == 1 else fids, "as": v}
 
 
 def _anchors(v) -> list:
@@ -337,14 +342,23 @@ def _metres(dwithin, example: str) -> float:
         return float(dwithin)
     except (TypeError, ValueError):
         raise CodeError(
-            f"dwithin= is a distance in metres and {dwithin!r} is not a "
-            f"number: {example}") from None
+            f"dwithin= is a distance in metres and {dwithin!r} is not a number: {example}"
+        ) from None
 
 
-def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
-                 dwithin=None, within=None, cards=(), color=None) -> str:
-    ref = p.add("find", {"query": query} if name is None
-                else {"query": query, "name": name})
+def compile_find(
+    p: Program,
+    query,
+    *,
+    name=None,
+    near=None,
+    nearest=None,
+    dwithin=None,
+    within=None,
+    cards=(),
+    color=None,
+) -> str:
+    ref = p.add("find", {"query": query} if name is None else {"query": query, "name": name})
     # ONE WORD, ONE OPERATION: near= reads like a filter, so it CUTS and
     # needs the gap to cut at; the ordering is nearest=, the word .order()
     # uses.
@@ -353,7 +367,8 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
             "near= CUTS and needs the gap to cut at: "
             "find(<thing>, near=<place>, dwithin=25) keeps what is "
             "that close and DROPS the rest. To rank without "
-            "dropping, say nearest=<place>.")
+            "dropping, say nearest=<place>."
+        )
     if dwithin is not None:
         # dwithin= CUTS AGAINST WHICHEVER ANCHOR WAS NAMED, near= or
         # nearest= -- there is one anchor either way.
@@ -363,7 +378,8 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
                 "dwithin= is the gap to cut at and needs the place "
                 "to measure from: find(<thing>, near=<place>, "
                 f"dwithin={dwithin!r}), or nearest=<place> to rank "
-                "against the same place while you cut.")
+                "against the same place while you cut."
+            )
         # A LIST in near= is one place, its union; in nearest= it ranks by
         # each member's distance.
         if anchor is nearest and _is_place_list(nearest):
@@ -371,21 +387,20 @@ def compile_find(p: Program, query, *, name=None, near=None, nearest=None,
                 "dwithin= cuts against ONE place, and a LIST in "
                 "nearest= ranks by several distances, so there is no "
                 "single gap to cut. Say near=<the set> to cut against "
-                "its nearest member, or cut once per anchor.")
-        wv = _metres(dwithin, "find(<thing>, near=<place>, dwithin=25). A "
-                     "PLACE to touch is within=.")
+                "its nearest member, or cut once per anchor."
+            )
+        wv = _metres(
+            dwithin, "find(<thing>, near=<place>, dwithin=25). A PLACE to touch is within=."
+        )
         if wv < 0:
-            raise CodeError(
-                f"dwithin= is a gap in metres and cannot be negative "
-                f"({dwithin!r}).")
+            raise CodeError(f"dwithin= is a gap in metres and cannot be negative ({dwithin!r}).")
         ref = p.cut_le(ref, anchor, wv)
     if within is not None:
         # within= CUTS: 0 m contact is a measured geometric fact, and it
         # stays its own compare + filter ahead of every ordering.
         ref = p.cut_le(ref, within, 0)
     if nearest is not None or cards:
-        return p.relate(ref, [] if nearest is None else _anchors(nearest),
-                        cards, color)
+        return p.relate(ref, [] if nearest is None else _anchors(nearest), cards, color)
     if color:
         return p.rank_color(ref, color)
     return ref
@@ -400,14 +415,23 @@ def compile_order(p: Program, items, *, nearest=None, color=None) -> str:
     return p.rank_color(items, color)
 
 
-def compile_filter(p: Program, items, *, within=None, near=None,
-                   dwithin=None, facing=None, direction=None,
-                   cards=()) -> str:
+def compile_filter(
+    p: Program,
+    items,
+    *,
+    within=None,
+    near=None,
+    dwithin=None,
+    facing=None,
+    direction=None,
+    cards=(),
+) -> str:
     items = p.items_of(items)
     if dwithin is not None and near is None:
         raise CodeError(
             "dwithin= is the gap of a near= cut: r1.filter(near=<place>, "
-            "dwithin=25); it rides no other relation.")
+            "dwithin=25); it rides no other relation."
+        )
     # WHICH WAY A THING FACES A PLACE is a CUT on the `facing <ref>` compass
     # word every compare stamps, and it needs the anchor. The word rides as
     # DATA in direction=; four cardinals, a diagonal is two of them CHAINED.
@@ -418,13 +442,15 @@ def compile_filter(p: Program, items, *, within=None, near=None,
                 "it faces: rows.filter(facing=<place>, "
                 'direction="south"). To RANK by a direction '
                 "instead, that is a global question and takes no "
-                'anchor: rows.order(direction="north").')
+                'anchor: rows.order(direction="north").'
+            )
         if direction is None:
             raise CodeError(
                 "facing= needs the way it faces: "
                 'rows.filter(facing=<place>, direction="south") '
                 "keeps the rows whose 'facing <place>' column "
-                f"reads south. One of {'|'.join(CARDINAL_ORDER)}.")
+                f"reads south. One of {'|'.join(CARDINAL_ORDER)}."
+            )
         w = str(direction).strip().lower()
         if w not in CARDINAL_ORDER:
             pair = split_diagonal(w)
@@ -434,33 +460,42 @@ def compile_filter(p: Program, items, *, within=None, near=None,
                     f"{pair[1]}, so it is two cuts and they "
                     f"chain: rows.filter(facing=<place>, "
                     f'direction="{pair[0]}").filter('
-                    f'facing=<place>, direction="{pair[1]}").')
+                    f'facing=<place>, direction="{pair[1]}").'
+                )
             raise CodeError(
                 f"{direction!r} is not a compass direction; "
                 f"direction= takes one of {'|'.join(CARDINAL_ORDER)} "
-                f"(a diagonal is those two, chained).")
+                f"(a diagonal is those two, chained)."
+            )
         if cards or within is not None or near is not None:
             raise CodeError(
                 "filter() cuts on ONE relation at a time: which "
                 "way a row faces is its own cut. Chain them -- "
-                'rows.filter(near=<place>, dwithin=25).filter('
+                "rows.filter(near=<place>, dwithin=25).filter("
                 f'facing=<place>, direction="{w}") -- so each '
-                "one says what it dropped.")
-        cmp_ref = p.add("compare", {"items": items,
-                                    "refs": [p.ref_of(facing)]})
+                "one says what it dropped."
+            )
+        cmp_ref = p.add("compare", {"items": items, "refs": [p.ref_of(facing)]})
         # in_or_blank over the winds that HOLD this cardinal, and the blank
         # stays kept: `facing <ref>` is ABSENT at contact, and a house
         # touching the road it fronts is the common case.
-        return p.add("filter_items", {
-            "items": cmp_ref, "key": f"facing {p.label(facing)}",
-            "op": "in_or_blank", "value": _winds_holding(w)})
+        return p.add(
+            "filter_items",
+            {
+                "items": cmp_ref,
+                "key": f"facing {p.label(facing)}",
+                "op": "in_or_blank",
+                "value": _winds_holding(w),
+            },
+        )
     if cards and (within is not None or near is not None):
         raise CodeError(
             "filter() cuts on ONE relation at a time: a cardinal is "
             "its own cut. Chain them -- "
             "rows.filter(near=<place>, dwithin=25).filter"
             f"({cards[0][0]}_of=<place>) -- so each one says what "
-            "it dropped.")
+            "it dropped."
+        )
     if cards:
         # A CARDINAL IS A CUT: a row the geometry cannot place keeps its
         # blank column and is KEPT.
@@ -469,17 +504,20 @@ def compile_filter(p: Program, items, *, within=None, near=None,
         raise CodeError(
             "filter() takes within= or near=, not both: within= "
             "keeps what TOUCHES a place, near= keeps what is "
-            "within a stated gap of one. Say the one you mean.")
+            "within a stated gap of one. Say the one you mean."
+        )
     if within is None and near is None:
         raise CodeError(
             "filter needs what to cut against: r1.filter(within=r0) "
             "keeps what touches r0, r1.filter(near=r0, dwithin=25) "
-            "keeps what is within 25 m of it.")
+            "keeps what is within 25 m of it."
+        )
     if near is not None and dwithin is None:
         raise CodeError(
             "near= needs the gap to keep: r1.filter(near=<place>, "
             "dwithin=<meters>). Without one there is no cut; to rank "
-            "by nearness, rows.order(nearest=<place>).")
+            "by nearness, rows.order(nearest=<place>)."
+        )
     # within= is the `distance to <anchor>` cut at 0 (contact); a stated gap
     # is the same cut at its value.
     value = 0
@@ -489,5 +527,6 @@ def compile_filter(p: Program, items, *, within=None, near=None,
             raise CodeError(
                 f"dwithin= is a gap in metres and cannot be negative "
                 f"({dwithin!r}). dwithin=0 is contact, which is "
-                "within=.")
+                "within=."
+            )
     return p.cut_le(items, within if within is not None else near, value)
