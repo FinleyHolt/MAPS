@@ -5,7 +5,9 @@
  * forth. The map's features draw on or off over it to inspect the
  * registration, and the observation the run committed over shows the
  * committed thing lassoed. The transcript stays the model's own words and
- * pictures; these are the operator's to look at.
+ * pictures; these are the operator's to look at. A run that recorded no
+ * observation (a bench run flies by teleport) pages the pictures the model
+ * was sent instead, in the order it was sent them.
  */
 
 import { useEffect, useState } from "react";
@@ -19,9 +21,17 @@ export function Viewer({ mission }: {
   mission: MissionState | null;
 }) {
   const shots = mission?.observations ?? [];
+  // The pictures the model was sent, turn by turn: what the book pages when no observation came down.
+  const sent = shots.length === 0
+    ? (mission?.transcript ?? []).flatMap((e) => (e.frames ?? []).map((sha) => ({ sha, turn: e.turn_idx })))
+    : [];
   // The page held, or null for the newest: a new arrival turns to it.
   const [held, setHeld] = useState<number | null>(null);
-  useEffect(() => { setHeld(null); }, [shots.length, mission?.path]);
+  useEffect(() => { setHeld(null); }, [shots.length, sent.length, mission?.path]);
+  // A finished run opens on its first picture; a live one follows the newest.
+  const j = sent.length === 0 ? -1
+    : held === null ? (mission?.status === "flying" ? sent.length - 1 : 0) : Math.min(held, sent.length - 1);
+  const picture = j >= 0 ? sent[j] : null;
   const i = held === null ? shots.length - 1 : Math.min(held, shots.length - 1);
   const shot = i >= 0 ? shots[i] : null;
   const [osm, setOsm] = useState(false);
@@ -39,17 +49,23 @@ export function Viewer({ mission }: {
   const drawn = osm && shot?.world_window && shot.shape && features
     ? framePrior(features, shot.world_window, shot.shape) : null;
   const committed = lasso && shot?.commit ? shot.commit : null;
-  const url = shot && mission
-    ? missionFile(mission, `observations/${committed ?? `${shot.sha}.jpg`}`) : null;
+  const url = !mission ? null
+    : shot ? missionFile(mission, `observations/${committed ?? `${shot.sha}.jpg`}`)
+    : picture ? missionFile(mission, `frames/${picture.sha}.jpg`) : null;
   const caption = shot
     ? `WAYPOINT ${i + 1} OF ${shots.length} · ${shot.target.toUpperCase()} AT (${shot.xy[0].toFixed(0)}, `
       + `${shot.xy[1].toFixed(0)}) · ${shot.looks} LOOK${shot.looks === 1 ? "" : "S"} FUSED · ${shot.ground_m2.toFixed(0)} M² · `
       + `${shot.placed}/${shot.looks} PLACED · T+${missionClock(shot.t_s)}${committed ? " · COMMITTED" : ""}${drawn ? " · OSM" : ""}`
-    : "";
+    : picture
+      ? `PICTURE ${j + 1} OF ${sent.length} · AS THE MODEL WAS SENT IT${picture.turn != null ? ` · MODEL TURN ${picture.turn + 1}` : ""}`
+      : "";
+  // One pager for either book.
+  const at = shot ? i : j;
+  const count = shot ? shots.length : sent.length;
   return (
     <section className="viewer" aria-label="The observations">
       <div className="viewer-body">
-        {url ? <img className="camera-image" src={url} alt={`waypoint ${i + 1} of ${shots.length}`} /> : null}
+        {url ? <img className="camera-image" src={url} alt={caption.toLowerCase()} /> : null}
         {drawn && shot?.shape ? (
           <svg className="camera-overlay" viewBox={`0 0 ${shot.shape[1]} ${shot.shape[0]}`}
                preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -62,20 +78,22 @@ export function Viewer({ mission }: {
                             stroke={f.colour} strokeWidth={2} vectorEffect="non-scaling-stroke" />)}
           </svg>
         ) : null}
-        <p className="viewer-title">Observations</p>
+        <p className="viewer-title">{picture ? "Pictures the model was sent" : "Observations"}</p>
         <div className="camera-controls">
-          <button type="button" className="camera-toggle" disabled={i <= 0}
-                  onClick={() => setHeld(Math.max(0, i - 1))} title="the observation before">
+          <button type="button" className="camera-toggle" disabled={at <= 0}
+                  onClick={() => setHeld(Math.max(0, at - 1))} title="the one before">
             ‹
           </button>
-          <button type="button" className="camera-toggle" disabled={i < 0 || i >= shots.length - 1}
-                  onClick={() => setHeld(Math.min(shots.length - 1, i + 1))} title="the observation after">
+          <button type="button" className="camera-toggle" disabled={at < 0 || at >= count - 1}
+                  onClick={() => setHeld(Math.min(count - 1, at + 1))} title="the one after">
             ›
           </button>
-          <button type="button" className="camera-toggle" aria-pressed={osm} onClick={() => setOsm((v) => !v)}
-                  title="The map's features drawn on the observation, to inspect its registration">
-            OSM {osm ? "ON" : "OFF"}
-          </button>
+          {shot ? (
+            <button type="button" className="camera-toggle" aria-pressed={osm} onClick={() => setOsm((v) => !v)}
+                    title="The map's features drawn on the observation, to inspect its registration">
+              OSM {osm ? "ON" : "OFF"}
+            </button>
+          ) : null}
           {shot?.commit ? (
             <button type="button" className="camera-toggle" aria-pressed={lasso} onClick={() => setLasso((v) => !v)}
                     title="What the run committed to, lassoed on this observation">
@@ -83,7 +101,7 @@ export function Viewer({ mission }: {
             </button>
           ) : null}
         </div>
-        {!shot ? (
+        {!shot && !picture ? (
           <p className="camera-annunciator">{emptyBook(mission)}</p>
         ) : null}
       </div>

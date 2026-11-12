@@ -648,6 +648,9 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
                if r["episode_id"] not in by_id and r["split"] in (None, split)}
         mine = [m for m in own.values()
                 if all(w in m["instruction"].lower() or w in m["episode_id"].lower() for w in words)]
+        # A row with a run under the output root lists ahead of the rest, so a reviewing station opens on its runs.
+        flown = {r["episode_id"] for r in station.runs()}
+        hits.sort(key=lambda e: e.episode_id not in flown)
         return {"split": split, "total": len(catalog) + len(own),
                 "missions": (mine + [station.entry(split, e) for e in hits])[:max(0, limit)]}
 

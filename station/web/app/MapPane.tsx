@@ -524,23 +524,29 @@ export function MapPane({ map: mapName, missionLabel, ownship, legs, flights, ta
     }
   }, [ownship, legs, styleReady, visible.trail]);
 
-  // What the map frames: the viewed map's basemap, else its working area,
-  // else the reviewed run's whole track (the twin flies on past its last
-  // waypoint, so a track can run far off the raster). Keyed on the map and
-  // the track, so the operator's own pan and zoom survive every seek in between.
+  // What the map frames: the reviewed run's track where it lies on the
+  // basemap, with room around it; else the basemap, its working area, or
+  // the track alone (the twin flies on past its last waypoint, so a track
+  // can run far off the raster, and the raster is then the better frame).
+  // Keyed on the map and the track, so the operator's own pan and zoom
+  // survive every seek in between.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     const points = legs?.flat() ?? [];
-    const box: [number, number, number, number] | null =
-      (location?.bounds as [number, number, number, number] | undefined)
-      ?? (area as [number, number, number, number] | null)
-      ?? (points.length
-        ? [Math.min(...points.map(([lon]) => lon)), Math.min(...points.map(([, lat]) => lat)),
-           Math.max(...points.map(([lon]) => lon)), Math.max(...points.map(([, lat]) => lat))]
-        : null);
+    const base = (location?.bounds as [number, number, number, number] | undefined)
+      ?? (area as [number, number, number, number] | null) ?? null;
+    const run: [number, number, number, number] | null = points.length
+      ? [Math.min(...points.map(([lon]) => lon)), Math.min(...points.map(([, lat]) => lat)),
+         Math.max(...points.map(([lon]) => lon)), Math.max(...points.map(([, lat]) => lat))]
+      : null;
+    const onBase = run !== null && base !== null
+      && run[0] >= base[0] && run[1] >= base[1] && run[2] <= base[2] && run[3] <= base[3];
+    const box = onBase || base === null ? run : base;
     if (!box) return;
-    map.fitBounds([[box[0], box[1]], [box[2], box[3]]], { padding: 48, animate: false });
+    // A run that barely moved still gets a neighbourhood: about 150 m either side at these latitudes.
+    const pad = onBase ? 0.0015 : 0;
+    map.fitBounds([[box[0] - pad, box[1] - pad], [box[2] + pad, box[3] + pad]], { padding: 48, animate: false });
   }, [legs, mapReady, location, area]);
 
   return (
