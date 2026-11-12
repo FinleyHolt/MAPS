@@ -3,6 +3,8 @@ override refuses a key it does not know."""
 
 from __future__ import annotations
 
+import pytest
+
 from maps.perception.geometry.sensor_spec import (
     _REGISTRY,
     resolve_sensor,
@@ -19,10 +21,16 @@ def test_every_registered_sensor_has_a_description() -> None:
 
 
 def test_resolve_sensor_refuses_an_unknown_override_key() -> None:
-    import pytest
-
     with pytest.raises(ValueError, match="unknown sensor override key"):
         resolve_sensor({"base": "nadir_1008_90", "hfov": 40.0})
+
+
+@pytest.mark.parametrize(
+    "key", ["min_range_m", "depth_subsample", "body_offset_x", "body_offset_y", "body_offset_z"]
+)
+def test_resolve_sensor_refuses_a_key_no_sensor_field_reads(key: str) -> None:
+    with pytest.raises(ValueError, match="unknown sensor override key"):
+        resolve_sensor({"base": "nadir_1008_90", key: 1.0})
 
 
 def test_nadir_description_warns_about_vertical_surfaces() -> None:

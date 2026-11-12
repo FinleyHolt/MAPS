@@ -53,9 +53,11 @@ class Surface:
         self._rebuild_rows()
         #: Each fid's latest result-enriched row, for the rejection census.
         self.row_latest: dict[str, dict] = {}
-        #: The result handles; ``carry.version`` is the surface version, bumped
-        #: by a flight, a boost and a stance.
-        self.carry = Carry(namespace, name=name_of_ref)
+        #: The surface version, bumped by a flight, a boost and a stance:
+        #: what a program's result, the dedup and the map features key on.
+        self.version = 0
+        #: The result handles, re-derived once per surface version.
+        self.carry = Carry(namespace, name=name_of_ref, surface_version=lambda: self.version)
         #: True until the first flight: before it no row carries a seen colour.
         self.preflight = preflight
         #: The mission's flown stops, ``{stop_id: [x, y]}``: each a sayable place.
@@ -73,7 +75,7 @@ class Surface:
         version."""
         self.ns.update(surface_from_ctx(self.ctx))
         self._rebuild_rows()
-        self.carry.version += 1
+        self.version += 1
 
     def _rebuild_rows(self) -> None:
         # cands win on fid collision.
@@ -136,7 +138,7 @@ class Surface:
         self.standing = h
         self.ns["staged"] = self.viewpoints
         self.ns["standing"] = h
-        self.carry.version += 1
+        self.version += 1
         return self.viewpoints[h]
 
     def standing_frame(self) -> tuple[list | None, str]:
@@ -151,8 +153,8 @@ class Surface:
         )
 
     def map_features(self) -> list[dict]:
-        if self._map_feats_version != self.carry.version:
-            self._map_feats_version = self.carry.version
+        if self._map_feats_version != self.version:
+            self._map_feats_version = self.version
             self._map_feats = map_features(self.ctx)
         return self._map_feats
 

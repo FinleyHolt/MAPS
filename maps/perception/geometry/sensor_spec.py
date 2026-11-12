@@ -220,14 +220,10 @@ def list_sensors() -> list[str]:
 
 
 _INTRINSIC_KEYS = tuple(f.name for f in fields(CameraIntrinsics))
-# Keys the flown boresight chains carry in their inline sensor that nothing reads.
-_IGNORED_KEYS = frozenset(
-    {"min_range_m", "depth_subsample", "body_offset_x", "body_offset_y", "body_offset_z"}
-)
 # What an inline override may name: a registered base, the intrinsics, and SensorSpec's other fields.
 _INLINE_KEYS = frozenset(
-    {"base", *_INTRINSIC_KEYS, *(f.name for f in fields(SensorSpec)), *_IGNORED_KEYS}
-) - {"intrinsics"}
+    {"base", *_INTRINSIC_KEYS, *(f.name for f in fields(SensorSpec) if f.name != "intrinsics")}
+)
 
 
 def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
@@ -255,7 +251,7 @@ def resolve_sensor(spec: str | Mapping[str, Any] | None) -> SensorSpec | None:
     base = _REGISTRY[base_name]
     over = {}
     for k, v in spec.items():
-        if k not in ("base", *_IGNORED_KEYS):
+        if k != "base":
             held = base.intrinsics if k in _INTRINSIC_KEYS else base
             want = type(getattr(held, k))  # the type the base value carries
             try:

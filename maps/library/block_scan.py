@@ -121,9 +121,12 @@ SAFE_BUILTINS = {
     )
 }
 
-# Pure, deterministic stdlib only: no I/O, no clock, no randomness --
-# anything ambient would break identical bytes -> identical trajectory, and
-# numpy-class C loops would bypass the trace-line liveness ceiling.
+# Pure stdlib with no I/O, clock or randomness, so a block reads nothing
+# ambient; iterating a set of strings still orders by the process's string
+# hash seed. The liveness ceilings (line count, wall clock) are checked per
+# Python line, so the work inside one C call (regex backtracking, pow,
+# sum(range(n))) runs past them, and a numpy-class module would make that
+# the common case.
 SAFE_MODULES = {
     m.__name__: m
     for m in (bisect, collections, functools, heapq, itertools, json, math, operator, re)

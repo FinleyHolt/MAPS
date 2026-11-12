@@ -79,7 +79,7 @@ class Programs:
         already ran under this version serves a note, never its rows again."""
         key = program_dedup_key(ops)
         prev = self._seen.get(key) if key is not None else None
-        if prev is not None and prev[0] == self.carry.version:
+        if prev is not None and prev[0] == self.surface.version:
             # A one-line reference, never a payload; the emission's own
             # labels alias the stored handles so nothing downstream can tell
             # it from a re-run.
@@ -126,7 +126,7 @@ class Programs:
             self.rejections.end_streak()
             self._dedup_key, self._dedup_n = None, 0
             if key is not None:
-                self._seen[key] = (self.carry.version, self.progress.turn_idx, ops)
+                self._seen[key] = (self.surface.version, self.progress.turn_idx, ops)
             self.carry.record(ops, raw_sink["results"])
             for rows in raw_sink["results"].values():
                 for row in rows:
