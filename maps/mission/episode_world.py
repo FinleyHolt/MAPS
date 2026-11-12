@@ -201,8 +201,7 @@ class EpisodeWorld:
     @property
     def state(self) -> _State:
         if self._state is None:
-            # The text keeps the class's former name: a failed run's row can carry it.
-            raise RuntimeError("SearchLoop.start must be called before update.")
+            raise RuntimeError("EpisodeWorld.start must be called before use.")
         return self._state
 
     def boost_queue(self, concepts, where) -> dict:
