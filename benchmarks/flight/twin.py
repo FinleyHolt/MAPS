@@ -261,7 +261,11 @@ def main(argv: list[str] | None = None) -> int:
     split = args.split or bench.default_split
     cfg = load_config(args.config)
     sensor = resolve_sensor(cfg.sensor)
-    episode = resolve_episode(bench, args.episode, split, args.start_xy)
+    try:
+        episode = resolve_episode(bench, args.episode, split, args.start_xy)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     map_name = episode.map_name
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:

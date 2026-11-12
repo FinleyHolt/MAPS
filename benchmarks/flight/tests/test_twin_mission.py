@@ -745,3 +745,10 @@ def test_a_pass_flies_first_the_stop_the_recording_holds(calcity, serves, tmp_pa
     sortie = next((tmp_path / "flown").iterdir())
     (row,) = [json.loads(line) for line in (sortie / "episodes.jsonl").read_text().splitlines()]
     assert row["visited_xy"][-2:] == [shed, church]
+
+
+def test_an_unknown_episode_is_one_line_on_stderr(calcity, tmp_path, capsys):
+    from benchmarks.flight import twin
+
+    code = twin.main(["--episode", "nope", "--ortho", str(calcity.rgbd), "--out", str(tmp_path)])
+    assert code != 0 and capsys.readouterr().err.strip() == "calcity holds no episode nope"
