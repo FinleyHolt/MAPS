@@ -169,8 +169,8 @@ class Names:
         self._nodes: dict | None = None
 
     def begin_block(self, code: str) -> None:
+        """A block arrives: ``code`` is its source."""
         self.code = code
-        self._block_codes = set()
         self._nodes = None
 
     def running(self, block_codes: set) -> None:
