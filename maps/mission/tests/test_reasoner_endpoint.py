@@ -27,3 +27,11 @@ def test_the_reasoner_posts_to_its_spec_with_the_env_key(monkeypatch, env_key, s
     r.append_user("find it")
     r.step_tool_call([])
     assert seen == {"url": "http://spec.example/v1", "key": sent_key}
+
+
+def test_the_reasoner_repr_hides_the_key():
+    """The bearer stays in the settings, whose repr leaves it out."""
+    r = ra.Reasoner(
+        endpoint_spec=TEST_SPEC, settings=from_environ({"SEARCH_REASONER_API_KEY": "sk-secret"})
+    )
+    assert "sk-secret" not in repr(r)

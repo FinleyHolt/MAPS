@@ -136,9 +136,6 @@ class Reasoner:
     settings: Settings = Settings()
     workdir: Path | None = None
     routing_key: str | None = None
-    #: The reasoner's bearer and the per-call timeout: the settings' unless given.
-    api_key: str | None = None
-    timeout: float | None = None
     seed: int | None = None
     messages: list[dict] = field(default_factory=list)
     sensor_description: str = ""
@@ -153,11 +150,13 @@ class Reasoner:
         """The served model id."""
         return self.endpoint_spec.model_id
 
+    @property
+    def timeout(self) -> float:
+        """The per-call transport timeout the settings name."""
+        return reasoner_timeout_s(self.settings.endpoint.reasoner_timeout_s)
+
     def __post_init__(self) -> None:
-        if self.api_key is None:
-            self.api_key = self.settings.endpoint.reasoner_api_key
-        if self.timeout is None:
-            self.timeout = reasoner_timeout_s(self.settings.endpoint.reasoner_timeout_s)
+        self.timeout  # noqa: B018 -- a timeout that cannot apply fails the construction
         system = served_system_prompt(self.sensor_description)
         if not self.messages and system:
             self.messages.append({"role": "system", "content": system})
@@ -200,7 +199,7 @@ class Reasoner:
         """
         resp = chat_completions_raw(
             self.endpoint_spec.base_url,
-            self.api_key,
+            self.settings.endpoint.reasoner_api_key,
             workdir=self.workdir,
             routing_key=self.routing_key,
             endpoint=self.settings.endpoint,
