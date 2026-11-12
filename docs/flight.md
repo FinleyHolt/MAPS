@@ -20,7 +20,8 @@ measures.
 
 | Component | Role |
 |---|---|
-| `Mission` (`benchmarks/flight/mission.py`) | Hydrates the engine as the bench does and holds the conversation open across operator taskings. A flight is a leg the aircraft flies, arrived when the recording holds the area it was flown for. |
+| `Mission` (`benchmarks/flight/mission.py`) | Hydrates the engine as the bench does, holds the conversation open across operator taskings, and writes the run's record. |
+| `Legs` (`benchmarks/flight/legs.py`) | Flight on the aircraft: the leg posted for an area, arrived when the recording holds that area, a short pass asked again, and the pass served as the flight's observation. |
 | `Vehicle` (`benchmarks/flight/vehicle.py`) | Boundary to the aircraft: `post(leg)`, `pose(t)`, `index(since)`, `frame(seq)`, `now()`, `sleep(s)`. |
 | `LiveSource` (`benchmarks/flight/live_source.py`) | Turns the recorded frames into the observation the model reads: coverage, per-frame registration, the pose-graph corrector, compositing, and the mosaic fit. |
 

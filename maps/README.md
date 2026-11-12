@@ -45,16 +45,18 @@ Paths are relative to `maps/`.
 
 | Concept | Module |
 |---|---|
-| Mission conversation: one persistent reasoner, one served tool, the turn loop, operator taskings | `mission/loop.py` |
-| Verbs a library call runs on: grounding and running a program, flying, pictures, the watchlist | `mission/program_verbs.py`, `mission/fly_verbs.py`, `mission/picture_verbs.py`, `mission/watch_verbs.py`, `mission/surface_state.py`, `mission/acks.py` |
+| Mission conversation: one persistent reasoner, one served tool, the turn loop, operator taskings, the composition of the verbs | `mission/loop.py` |
+| Surface a mission reads: its rows by fid, the result handles, the place a token names, the standing viewpoint and `stand` | `mission/surface_state.py` (`Surface`, `Stance`) |
+| Verbs a library call runs on: grounding and running a program, flying, pictures, the watchlist | `mission/program_verbs.py` (`Programs`), `mission/fly_verbs.py` (`Flights`), `mission/picture_verbs.py` (`Pictures`), `mission/watch_verbs.py` (`Watchlist`) |
+| Refusals a verb serves, through the escalating repeat breaker | `mission/acks.py` (`Rejections`) |
 | Turns that aren't a reply and the nudge each draws; request failures that end a mission | `mission/reply_repair.py`, `mission/serve_refusals.py` |
-| Result handles: the op-program runner, each handle re-derived over the current surface | `library/result_handles.py` |
+| Result handles: the op-program runner, each handle re-derived over the current surface, the rN names | `library/result_handles.py` |
 | What a look and a map render, and the captions their pictures carry | `mission/picture_requests.py` |
 | Stops of an explore over a place or a set | `mission/explore_stops.py` |
 | Request each turn sends: model, messages, tools, `max_tokens` | `mission/reasoner.py` |
 | Served text: system turn, the `run` tool's description and schema | `mission/served_text.py` |
 | Printing the served contract | `mission/contract.py` |
-| Library the model writes against: executing a block, the calls, rows, `.filter` and `.order` | `library/interpreter.py`, `library/block_scan.py`, `library/block_ceilings.py`, `library/calls.py`, `library/call_arguments.py`, `library/rows.py` |
+| Library the model writes against: executing a block (`MissionPython`), the calls and how one call runs (`Library`), the model's names for its sets (`Names`), rows, `.filter` and `.order` | `library/interpreter.py`, `library/block_scan.py`, `library/block_ceilings.py`, `library/calls.py`, `library/call_arguments.py`, `library/rows.py` |
 | Compiling library calls onto ops | `library/op_compiler.py` |
 | Classes the segmenter watches | `perception/watchlist.py`, `mission/episode_world.py` (`declare_mission_concepts`) |
 | Surface the op program runs over: one row per graph node, its served point, mask, and colour fields | `query/surface.py` |

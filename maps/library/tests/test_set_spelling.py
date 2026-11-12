@@ -1,5 +1,5 @@
 """Every set is named to the model by its own spelling, never by an executor
-ref it did not bind: one rule (MissionPython.spelling) for every served
+ref it did not bind: one rule (Names.spelling) for every served
 label."""
 from __future__ import annotations
 

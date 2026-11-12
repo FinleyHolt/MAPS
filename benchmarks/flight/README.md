@@ -20,7 +20,7 @@ episode engine through it.
 One flight runs through these steps, from the model's `go_to` or `explore`
 stop to the observation it reads:
 
-1. **Stop to leg.** `Mission._fly_live` (`mission.py`) resolves the stop to a
+1. **Stop to leg.** `Legs.fly` (`legs.py`) resolves the stop to a
    point, takes the area the leg is flown for (`leg_area`: the target's
    footprint, or a disc about a point), and asks the recording whether it
    holds that area already. When it does, no leg is flown.
@@ -40,7 +40,7 @@ stop to the observation it reads:
 4. **Arrival by coverage.** `LiveSource.coverage` reads the ring's index (one
    pose per frame, no pixels; `footprint.py`) and reports the share of the
    area's points that some frame holds. The leg has arrived at 90%
-   (`mission.COVERED_FRACTION`), or after `ARRIVAL_TIMEOUT_S` with what the
+   (`legs.COVERED_FRACTION`), or after `ARRIVAL_TIMEOUT_S` with what the
    pass held. When the index holds the area but none of its frames could be
    served, the leg is flown and only the frames recorded after it count.
 5. **Fusion.** `LiveSource.observe_area` fetches, for each area point, the

@@ -13,7 +13,11 @@ world state, perception, render, and LLM. For what each holds, see
 
 `maps` imports nothing from `benchmarks`. A bench or the flight harness hands
 the mission loop a `MissionSpec` (`maps/mission/spec.py`), and the loop calls
-back through it. `tests/test_layers.py` holds the import directions.
+back through it. Within `maps`, perception, the LLM transport and the world
+state import none of the other packages, the query imports none of them,
+the pictures read perception and the query, the library reads the query, and
+the mission composes them all. `tests/test_layers.py` holds the import
+directions.
 
 ## One mission, step by step
 
@@ -29,11 +33,14 @@ back through it. `tests/test_layers.py` holds the import directions.
 3. **Opening request.** `run_mission` (`maps/mission/loop.py`) sends the
    system turn and the operator's words with one tool, `run`
    (`maps/mission/served_text.py`). `maps/mission/reasoner.py` builds the
-   request and `maps/llm/http.py` sends it.
+   request and `maps/llm/http.py` sends it. The loop composes the mission's
+   verbs, each a component over one `Surface`
+   (`maps/mission/surface_state.py`).
 4. **Block of Python.** `MissionPython` (`maps/library/interpreter.py`) scans
    the model's block (`block_scan.py`, `block_ceilings.py`) and runs it in
-   the mission's one namespace. The library calls (`calls.py`) are that
-   namespace's builtins.
+   the mission's one namespace. The calls of `Library` (`calls.py`) are that
+   namespace's builtins, and each runs on one of the loop's verbs
+   (`MissionEnv`, `call_arguments.py`).
 5. **Reading call.** `find`, a `.filter`, an `.order`, `intersection`,
    `ends_of`, and `distance` compile (`maps/library/op_compiler.py`) onto the
    op program (`maps/query/program.py`), which runs over the surface
@@ -42,14 +49,15 @@ back through it. `tests/test_layers.py` holds the import directions.
    surface on every read, so a result bound before a flight holds that
    flight's rows after it.
 6. **Moving call.** `go_to` and `explore` call `MissionSpec.fly` once per
-   stop (`maps/mission/fly_verbs.py`, `explore_stops.py`). The engine's
+   stop (`Flights`, `maps/mission/fly_verbs.py`; `explore_stops.py`). The engine's
    `MissionSession.fly`
    (`benchmarks/citynav/run_benchmark/mission_engine.py`) resolves the stop,
    obtains an orthographic observation, sends it to the segmenter, folds the
    detections into the graph, and returns the flight report.
 7. **Picture call.** `look` crops the sensor's pixels at a row
    (`maps/render/look_render.py`). `show_map` draws the world state as a
-   schematic (`maps/render/map_render.py`). Both return as images in the next
+   schematic (`maps/render/map_render.py`). `Pictures`
+   (`maps/mission/picture_verbs.py`) queues both. Both return as images in the next
    request.
 8. **Receipt.** The tool result carries the block's printed lines, its last
    value as a table (`maps/query/result_tables.py`), each flight's report,
@@ -121,7 +129,7 @@ A flight happens in one of two ways.
 | Aspect | Bench | Flight |
 |---|---|---|
 | Entry | `benchmarks/citynav/bench_fullset.py`, `benchmarks/calcity/bench_fullset.py` | `benchmarks/flight/mission.py` (`Mission`), driven by the twin or the station |
-| Move | The pose is set to the stop. | A `Leg` is posted to the `Vehicle`; the leg has arrived when the recording holds the area it was flown for. |
+| Move | The pose is set to the stop. | A `Leg` is posted to the `Vehicle` (`benchmarks/flight/legs.py`); the leg has arrived when the recording holds the area it was flown for. |
 | Observation | A north-up crop of the block's raster under the pose (`maps/perception/observation.py`). | Camera frames fused into one north-up orthophoto (`benchmarks/flight/live_source.py`). |
 | After the observation | The same path: segment, fold, report. | The same path: segment, fold, report. |
 | Scoring | `benchmarks/citynav/eval.py`: CityNav replays the flights as its six discrete actions and scores the final pose within 20 m; Cal City scores the commit point inside the target's footprint. | `benchmarks/flight/measures.py` over the run's records. |
