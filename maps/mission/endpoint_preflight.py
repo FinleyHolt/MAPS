@@ -38,7 +38,6 @@ import threading
 from pathlib import Path
 
 from maps.llm import endpoint_spec
-from maps.llm.flight_summary import summarize
 from maps.llm.model_cards import check_effort, effort, speaks_openai
 from maps.mission.served_text import SERVED_TOOLS
 from maps.settings import Settings, from_process
@@ -64,6 +63,8 @@ def _shape(out: dict) -> dict:
 
 def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir: Path,
                   settings: Settings = Settings()) -> dict:
+    # The mission stack loads transformers: not at --help.
+    from maps.llm.flight_summary import summarize  # noqa: PLC0415
     from maps.mission.reasoner import Reasoner  # noqa: PLC0415
 
     # one prompt-cache key per conversation, as one per episode
