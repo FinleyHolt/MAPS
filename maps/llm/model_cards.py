@@ -46,9 +46,10 @@ CARDS: dict[str, dict[str, Any]] = {
     # Gemma 4, the family envelope (top_p 0.95, top_k 64) on every size,
     # `-it` throughout: the base checkpoints carry no chat template and no
     # tool-call surface. The GGUF alias is the same weights served by
-    # llama.cpp (flown aboard); a serve is not a model, and a run has to be
-    # able to name which one it got. The bench NVFP4 serve adds presence
-    # penalty 1.0, which breaks the 26B's thinking loops. Its template
+    # llama.cpp (the flights' serve, off board over the datalink); a serve is
+    # not a model, and a run has to be able to name which one it got. The
+    # bench NVFP4 serve adds presence penalty 1.0, which breaks the 26B's
+    # thinking loops. Its template
     # (chat_template.jinja of the NVFP4 build) reads `enable_thinking` and
     # never `reasoning_effort`: false leaves `<|think|>` out of the system turn
     # and prefills an empty thought channel, so `none` is that switch. The
