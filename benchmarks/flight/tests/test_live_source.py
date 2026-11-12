@@ -482,3 +482,16 @@ def test_at_one_angle_the_area_s_frame_stamped_later_is_fused_first():
     src._fused = lambda want, **_kw: asked.extend(want)
     src.observe_area([(0.0, 0.0), (1.0, 1.0)])
     assert asked == [(1.0, 3), (1.0, 900)]
+
+
+def test_the_datasheet_camera_is_warned_of_for_a_live_vehicle_alone(make_live, make_twin, caplog):
+    """The twin renders through the datasheet camera, so a run with no boresight.json warns
+    only for an aircraft whose calibration the integrator hands open_live."""
+    import logging
+    from types import SimpleNamespace
+
+    with caplog.at_level(logging.WARNING, logger="benchmarks.flight.live_source"):
+        make_live(make_twin())
+        assert "boresight" not in caplog.text
+        make_live(SimpleNamespace())
+        assert "no boresight.json" in caplog.text

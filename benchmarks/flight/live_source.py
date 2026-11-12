@@ -4,8 +4,9 @@
 the recording holds (the arrival rule); :meth:`LiveSource.observe_area` fuses
 the frames that saw it nearest nadir into one north-up orthophoto on the map
 grid, each frame registered into the pose graph as it arrives
-(:meth:`LiveSource.start_corrector`) and placed through the calibration
-(``boresight.json``; without one the datasheet camera flies).
+(:meth:`LiveSource.start_corrector`) and placed through the calibration:
+the ``boresight.json`` an integrator solves for a real aircraft and passes
+:func:`open_live` as ``boresight_path``, else the datasheet camera (the twin's).
 """
 
 from __future__ import annotations
@@ -894,11 +895,13 @@ def open_live(
     register_raster: str | Path | None = None,
 ) -> LiveSource:
     """A live source over ``vehicle``, failing on the ramp rather than on the
-    first flight. With ``register_raster`` (the raster each frame is
-    registered against) the corrector starts."""
+    first flight. ``boresight_path`` is the integrator's calibration of a real
+    aircraft; with ``register_raster`` (the raster each frame is registered
+    against) the corrector starts."""
     check_map(tiles_dir, map_name)
     boresight = Boresight.load(boresight_path) if boresight_path else Boresight(sensor=sensor)
-    if boresight_path is None:
+    # The twin (a simulated vehicle, ``on_sleep``) renders through the datasheet camera itself.
+    if boresight_path is None and getattr(vehicle, "on_sleep", None) is None:
         log.warning("live source: no boresight.json; flying the datasheet camera")
     register = None
     if register_raster is not None:
