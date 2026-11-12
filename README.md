@@ -104,8 +104,8 @@ and the driver's flags.
 
 ```mermaid
 flowchart LR
-  op([Operator's words]) --> loop
-  subgraph engine [maps/]
+  op(["Operator's words"]) --> loop
+  subgraph engine ["maps/"]
     loop["Mission conversation<br/>one model, one tool: run"]
     lib["Library<br/>Python namespace"]
     ws[("World state<br/>prior + detected rows")]
@@ -114,13 +114,13 @@ flowchart LR
     lib -- "find, filter, order" --> ws
     lib -- "look, show_map" --> ws
   end
-  osm[OSM prior bake] --> ws
+  osm["OSM prior bake"] --> ws
   lib -- "go_to, explore" --> fly{{"MissionSpec.fly"}}
   fly --> bench["Bench: crop of the block raster"]
   fly --> veh["Flight: Vehicle leg, fused frames"]
-  bench --> obs[Orthographic observation]
+  bench --> obs["Orthographic observation"]
   veh --> obs
-  obs --> sam[SAM 3.1]
+  obs --> sam["SAM 3.1"]
   sam -- "detections" --> ws
 ```
 
