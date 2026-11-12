@@ -20,12 +20,11 @@ start the two services ([`endpoints.md`](endpoints.md)).
 |---|---|---|---|---|
 | E2 | CityNav `test_unseen`, all 5,311 | Qwen 3.8 Flash Next at `low`, `medium`, `xhigh`; Inkling Small at 0.99; Gemma 4 26B-A4B; Gemma 4 E2B; Gemma 4 E4B | `configs/citynav.yaml`, `--split test_unseen` | `arm_table`, `run_report` |
 | E3 | Cal City, the 1,100 reviewed episodes | Inkling Small at 0.0, 0.1 ... 0.9 and 0.99 (11 rungs); Gemma 4 26B-A4B | `configs/calcity.yaml`, `--episode-allowlist` from `benchmarks.calcity.data_prep.reviewed` | `arm_table` |
-| E4 | CityNav `test_unseen`, 1,000 per arm (`--limit 1000`, seed 1234) | Per model: its ablation arms (below), each paired with the model's E2 root on the shared episodes | `configs/withhold/<arm>.yaml` | `arm_table`, `ab_report` |
 | E6 | The closed-loop flight: 87 runs on a C-12 over California City | The models and efforts flown | The flown sorties' own records | `benchmarks.flight.measures` |
 
 | Experiment | Requirement |
 |---|---|
-| E2, E4 | The CityNav data. |
+| E2 | The CityNav data. |
 | E3 | The Cal City raster and OSM bundle, which this repository doesn't ship. See [`data.md`](data.md#cal-city). |
 | E6 | The flight recordings and the analysts' adjudications, which aren't distributed. |
 
@@ -63,37 +62,12 @@ python -m benchmarks.calcity.bench_fullset \
   --episode-allowlist output/reviewed_episodes.txt --out-root output/e3/gemma4-26b-a4b
 ```
 
-### E4
-
-Fly one root per ablation arm, per model:
-
-```sh
-# inkling-small:     arms="mission_map system_turn look_for end_commit"
-# qwen38-flash-next: arms="prior look_for look images system_turn mission_map"
-# gemma4-26b-a4b:    arms="prior library seeing text loop images"
-for arm in $arms; do
-  SEARCH_SAMPLING_REASONING_EFFORT=<model's E2 effort> CITYNAV_BENCH_CONFIG=configs/withhold/$arm.yaml \
-    python -m benchmarks.citynav.bench_fullset --split test_unseen --limit 1000 --sample-seed 1234 \
-    --out-root output/e4/<model>/$arm
-done
-```
-
-- `configs/withhold/` holds one config per withhold (`maps/withhold.py`) and
-  one per family: `seeing` (look_for, look, images, map) and `text` (doc,
-  system_turn).
-- Under `end_commit`, the mission still ends on a plain reply and scores the
-  last flight. Only what the model is told about it is withheld.
-- The control is the model's E2 root (Inkling Small at 0.99, Qwen 3.8 Flash
-  Next at `xhigh`, Gemma 4 26B-A4B with none), whose 5,311 episodes hold each
-  arm's 1,000. `ab_report` pairs them on the shared episodes and refuses a
-  pair whose efforts differ.
-
 ## Read the results
 
 ```sh
 python -m benchmarks.citynav.analysis.arm_table output/e2/*            # SR, OSR, NE per arm
 python -m benchmarks.citynav.analysis.run_report output/e2/inkling-small-0.99   # one root in full
-python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/e4/<model>/<arm>
+python -m benchmarks.citynav.analysis.ab_report <root a> <root b>      # paired SR of two roots
 python -m benchmarks.citynav.analysis.spend <out-root>                 # a hosted endpoint's tokens and USD
 ```
 

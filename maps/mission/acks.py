@@ -6,7 +6,6 @@ from __future__ import annotations
 import re
 
 from maps.query.result_tables import MODEL_UNSERVED_COLUMNS
-from maps.withhold import withheld
 
 
 def _summarise_exc(exc: BaseException) -> str:
@@ -14,9 +13,8 @@ def _summarise_exc(exc: BaseException) -> str:
 
 
 def _live_counts(c_n: int, a_n: int, sep: str = ",") -> str:
-    """The census's fid counts; the prior term only when the prior is served."""
-    return f"{c_n} detection fid(s)" + (
-        "" if withheld("prior") else f"{sep} {a_n} prior map row fid(s)")
+    """The census's fid counts."""
+    return f"{c_n} detection fid(s){sep} {a_n} prior map row fid(s)"
 
 
 def _add_note(d: dict, text: str, sep: str = " ", *,

@@ -9,7 +9,6 @@ from maps.query.op_io import (
     ProgramError, Result, _as_rows, _contact_fact, _ordered, _present_keys_hint,
     _quote, _relate_ran)
 from maps.query.result_tables import _num
-from maps.withhold import withheld
 
 
 def is_color_column_key(k) -> bool:
@@ -159,7 +158,7 @@ def _filter_items(cx, a):
         }
         if not (len(on) - blank):
             stats["nothing_reads_those_words"] = (
-                f"no {'' if withheld('prior') else 'surveyed '}row reads "
+                f"no surveyed row reads "
                 f"any of {want} in {_quote(key)}; "
                 f"the rows kept are the ones the geometry never "
                 f"measured (a row TOUCHING the reference has no "
@@ -177,12 +176,10 @@ def _filter_items(cx, a):
         }
         if not (len(on) - blank):
             stats["nothing_on_that_side"] = (
-                ("no row lies on that side" if withheld("prior") else
-                 "the prior map holds nothing on that side")
-                + " -- what is there has to be SEEN"
-                + ("" if withheld("look_for") else
-                   ": look_for the class, then explore the place to "
-                   "segment it"))
+                "the prior map holds nothing on that side"
+                " -- what is there has to be SEEN"
+                ": look_for the class, then explore the place to "
+                "segment it")
     else:  # truthy
         on, stats = [it for it in items if it.get(key)], None
     # A cut that keeps every way of a name's tied set is still that set.

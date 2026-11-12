@@ -7,7 +7,6 @@ writes: the block interpreter, the calls and the rows they hand back),
 ``render`` (the look crop and the map schematic), ``world_state`` (the
 structured world-state graph), ``perception`` (the SAM 3.1 detection client,
 the nadir ortho crop and the colour read) and ``llm`` (the reasoner
-transport). ``withhold`` holds the bench ablation switches and ``xy_token``
-the ``[x, y]`` point grammar. The benchmarks and the flight harness live in
+transport). ``xy_token`` holds the ``[x, y]`` point grammar. The benchmarks and the flight harness live in
 ``benchmarks``.
 """

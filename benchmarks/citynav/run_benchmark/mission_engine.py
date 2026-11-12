@@ -245,15 +245,14 @@ class MissionSession:
             self.recorder.write_step(step=step_idx, detections=step_detections)
 
         # Prior colour enrichment: one frame, upserted onto the named priors.
-        if "prior" not in h.settings.withhold:
-            try:
-                for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
-                    world.upsert_prior_percept(pfid, pattrs, px=ppx)
-            except Exception as exc:  # noqa: BLE001 - colour enrichment never kills a flight
-                self.prior_enrich_fails += 1
-                if self.prior_enrich_fails == 1 or self.prior_enrich_fails % 50 == 0:
-                    log.warning("prior percept enrichment failed (n=%d) step=%d: %s",
-                                self.prior_enrich_fails, step_idx, exc, exc_info=exc)
+        try:
+            for pfid, pattrs, ppx in prior_percepts(obs, h, step_idx):
+                world.upsert_prior_percept(pfid, pattrs, px=ppx)
+        except Exception as exc:  # noqa: BLE001 - colour enrichment never kills a flight
+            self.prior_enrich_fails += 1
+            if self.prior_enrich_fails == 1 or self.prior_enrich_fails % 50 == 0:
+                log.warning("prior percept enrichment failed (n=%d) step=%d: %s",
+                            self.prior_enrich_fails, step_idx, exc, exc_info=exc)
 
         if self.observe is not None:
             # The frame's own pose fed the fold and the recorder; from here
@@ -285,12 +284,11 @@ class MissionSession:
             "new_detections": len(step_detections),
             **detected_digest(world.last_flight_detections()),
             # The commit is the last flight's target, verbatim.
-            **({} if "end_commit" in h.settings.withhold else {"answer_if_you_reply_now": token}),
+            "answer_if_you_reply_now": token,
             # The operator instruction rides every flight report.
             "cue": episode.description,
+            "watchlist": list(h.perception.concepts),
         }
-        if "look_for" not in h.settings.withhold:
-            report["watchlist"] = list(h.perception.concepts)
         return report
 
 

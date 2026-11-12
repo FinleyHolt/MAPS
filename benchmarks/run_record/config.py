@@ -11,7 +11,6 @@ left out; an absent one takes its ``RunConfig`` default.
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -22,8 +21,6 @@ from typing import Any, Callable
 
 from benchmarks import REPO_ROOT
 from maps.perception.geometry.sensor_spec import resolve_sensor
-from maps.settings import WITHHOLD_ENV, Settings, from_environ
-from maps.withhold import WITHHOLDS
 
 
 _NUM = (int, float)
@@ -59,9 +56,6 @@ _SCHEMA: dict[str, Any] = {
     "start_altitude_agl_m": ((*_NUM, _NONE), ((lambda v: v is None or v > 0), "null or > 0")),
     "altitude_cap_m": (_NUM, _POS),
     "sensor": ((str, dict), (_sensor_ok, "a registered sensor or an inline override")),
-    "withhold": (list, (
-        lambda v: all(isinstance(n, str) and n in WITHHOLDS for n in v) and len(set(v)) == len(v),
-        f"a list of distinct names from {sorted(WITHHOLDS)}")),
     "policy": (str, (_policy_ok, "the name of a baselines/<policy>/policy.py")),
 }
 # Keys a config may leave out.
@@ -85,9 +79,6 @@ class RunConfig:
     altitude_cap_m: float
     # A registered sensor name or an inline override (sensor_spec).
     sensor: str | dict
-    # Bench-only ablation withholds (maps.withhold); empty serves the
-    # flown text exactly.
-    withhold: list
     # A published method that chooses the stops in place of the mission
     # conversation (baselines/<policy>/policy.py); None flies the mission.
     policy: str | None = None
@@ -95,26 +86,11 @@ class RunConfig:
     source_path: str | None = None
 
 
-def engine_settings(cfg: RunConfig, environ: Mapping[str, str]) -> Settings:
-    """The engine's settings (``maps.settings``) for a run of ``cfg`` under
-    ``environ``, the run's environment (``Bench.environ``): what the
-    environment states, with the config's ``withhold`` in place of
-    ``SEARCH_WITHHOLD``. The config owns it: a value left in the shell never
-    stands."""
-    return dataclasses.replace(from_environ(environ), withhold=frozenset(cfg.withhold))
-
-
 def assert_flight_config(cfg: RunConfig, environ: Mapping[str, str]) -> None:
-    """The flight mission flies the flown engine: refuse a config, or an
-    environment (``environ``, the run's), that withholds any part of it or
+    """The flight mission flies the flown engine: refuse a config that
     names a baseline policy."""
     if cfg.policy is not None:
         raise ValueError(f"{cfg.source_path}: the flight mission flies MAPS; policy={cfg.policy!r} is a bench arm")
-    if cfg.withhold or environ.get(WITHHOLD_ENV, "").strip():
-        raise ValueError(
-            f"{cfg.source_path}: the flight mission serves the flown engine; "
-            f"withhold={cfg.withhold} {WITHHOLD_ENV}="
-            f"{environ.get(WITHHOLD_ENV, '')!r} is a bench ablation")
 
 
 def _locate(path: str | Path | None) -> Path:

@@ -34,7 +34,7 @@ from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
-from benchmarks.run_record.config import assert_flight_config, engine_settings, load_config
+from benchmarks.run_record.config import assert_flight_config, load_config
 from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
                                                    ConversationLog)
 from benchmarks.run_record.episodes import MANIFEST_NAME, STATUS_INFRA, STATUS_OK, upsert_row, write_episode_json
@@ -124,9 +124,9 @@ def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[f
 
 def flight_config(config: str, environ: Mapping[str, str]):
     """The config a flight flies under ``environ`` (the run's,
-    ``Bench.environ``), refused (before any sortie is written) when either
-    withholds a part of the flown engine; the loader refuses a missing or
-    unresolved sensor."""
+    ``Bench.environ``), refused (before any sortie is written) when it
+    names a baseline policy; the loader refuses a missing or unresolved
+    sensor."""
     cfg = load_config(str(config))
     assert_flight_config(cfg, environ)
     return cfg
@@ -145,7 +145,7 @@ def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: fl
     cfg = flight_config(config, bench.environ)
     episode = resolve_episode(bench, episode_id, split, start_xy)
     h = engine.build_episode(cfg, episode, engine.load_assets(bench, episode.map_name), bench,
-                             settings=engine_settings(cfg, bench.environ), workdir=workdir,
+                             settings=from_environ(bench.environ), workdir=workdir,
                              routing_key=episode_id, perception_factory=perception_factory)
     h.state.altitude_m = h.ground_z_m + float(agl_m)
     return h
@@ -644,7 +644,7 @@ class Mission:
             # carries no second copy: a flight echoes the description back as
             # the flight report's cue and hints the detector with it, and the
             # split's own sentence would serve an attribute the operator
-            # withheld. ponytail: stamp the episode rather than thread the
+            # left out. ponytail: stamp the episode rather than thread the
             # instruction through the flight.
             h.episode.description = instruction
             with self._lock:

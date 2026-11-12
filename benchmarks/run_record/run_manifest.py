@@ -216,8 +216,6 @@ def build_manifest(
         "out_root": str(out_root),
         **prov,
         "config_yaml": config_yaml,
-        # The arm's withholds (maps.withhold); readers group by it.
-        "withhold": list(resolved["withhold"]),
         "selection": {
             **({"arrivals": arrivals} if arrivals is not None else {"sample_seed": sample_seed}),
             "limit": limit,

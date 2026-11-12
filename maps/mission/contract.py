@@ -5,7 +5,6 @@ through (``served_text``); diff two shas by dumping at each.
 
   python -m maps.mission.contract
   python -m maps.mission.contract --sensor <rig> [--agl-m <m>]   # Cal City's height by default
-  python -m maps.mission.contract --withhold look,images
   python -m maps.mission.contract --rendered   # template bytes
 """
 
@@ -21,8 +20,7 @@ import yaml
 
 from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
 from maps.mission import served_text
-from maps.settings import Settings, from_process
-from maps.withhold import withheld, withholding
+from maps.settings import from_process
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
 _CALCITY = Path(__file__).resolve().parents[2] / "configs" / "calcity.yaml"
@@ -54,7 +52,7 @@ def surface_lines() -> list[str]:
     served call, then the ``Rows`` methods)."""
     from maps.library.interpreter import MissionPython
     from maps.library.rows import Rows
-    from maps.library.block_scan import served_calls
+    from maps.library.block_scan import _LIBRARY_CALLS
 
     def _params(fn) -> str:
         # A parameter that exists only to refuse (find's extra queries, a
@@ -67,13 +65,10 @@ def surface_lines() -> list[str]:
         return str(sig.replace(parameters=ps, return_annotation=sig.empty))[1:-1]
 
     out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
-           for call in served_calls()]
-    # A cut, a sort and a distance are methods on a result, which the
-    # ``library`` withhold hides.
-    if not withheld("library"):
-        out += [f"  <rows>.{name}({_params(getattr(Rows, name))})"
-                for name in ("filter", "order", "distance")]
-    return out
+           for call in _LIBRARY_CALLS]
+    # A cut, a sort and a distance are methods on a result.
+    return out + [f"  <rows>.{name}({_params(getattr(Rows, name))})"
+                  for name in ("filter", "order", "distance")]
 
 
 def dump_text(sensor: str | None = None, agl_m: float | None = None) -> str:
@@ -116,18 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default="inkling-small",
                     help="served-model alias for the --rendered tokenizer "
                          "(SEARCH_COMPACT_TOKENIZER_NAME overrides)")
-    ap.add_argument("--withhold", metavar="NAMES", default=None,
-                    help="dump what a bench arm withholding these serves "
-                         "(comma separated; maps.withhold)")
     args = ap.parse_args(argv)
-    # The one read of the environment: what a shell withholds, and the tokenizer it names.
-    settings = from_process()
-    names = settings.withhold if args.withhold is None else (n.strip() for n in args.withhold.split(",") if n.strip())
-    with withholding(names):
-        return _print(args, settings)
-
-
-def _print(args: argparse.Namespace, settings: Settings) -> int:
     if not args.rendered:
         sys.stdout.write(dump_text(sensor=args.sensor, agl_m=args.agl_m))
         return 0
@@ -136,7 +120,8 @@ def _print(args: argparse.Namespace, settings: Settings) -> int:
     from maps.llm.tokenizer import load_tokenizer
 
     c = assemble(sensor=args.sensor, agl_m=args.agl_m)
-    tok = load_tokenizer(args.model, settings.endpoint.tokenizer_name)
+    # The one read of the environment: the tokenizer it names.
+    tok = load_tokenizer(args.model, from_process().endpoint.tokenizer_name)
     rendered = tok.apply_chat_template(
         [{"role": "system", "content": c["system"]},
          {"role": "user", "content": _SAMPLE_INSTRUCTION}],

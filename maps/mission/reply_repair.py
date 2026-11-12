@@ -7,7 +7,6 @@ from __future__ import annotations
 import re
 
 from maps.library.block_scan import looks_like_code
-from maps.withhold import withheld
 
 
 # Consecutive zero-flight replies that end the mission: the first two draw
@@ -40,11 +39,10 @@ TRUNCATED_TURN_NUDGE = (
 #: in a row, after which it reads as an empty turn.
 TRUNCATED_TURN_STREAK = 3
 
-_CODE_REPLY = (
+CODE_REPLY_NUDGE = (
     "Your reply is code, but it arrived as plain text, not through the run "
     "tool, so nothing was executed. Send the block with the tool to run "
-    "it")
-CODE_REPLY_NUDGE = _CODE_REPLY + "; a plain reply in your own words ends the mission."
+    "it; a plain reply in your own words ends the mission.")
 
 MALFORMED_ENVELOPE_NUDGE = (
     "Your reply contains tool-call markup that did not parse as a native "
@@ -52,11 +50,11 @@ MALFORMED_ENVELOPE_NUDGE = (
     "the API's tool-call channel executes."
 )
 
-_GO_TO_FIRST = "If you know which one it is, go_to() it first, then reply."
 NO_FLIGHT_REPLY_NUDGE = (
     "Your reply ends the mission, and your answer is the row of your LAST "
     "flight -- but you have flown nowhere, so it answers nothing. Naming "
-    "the object commits nothing; only flying to it does. " + _GO_TO_FIRST)
+    "the object commits nothing; only flying to it does. "
+    "If you know which one it is, go_to() it first, then reply.")
 
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```\s*$")
 
@@ -75,7 +73,5 @@ def _not_a_reply(content: str) -> tuple[str, str, str] | None:
     if not content.strip():
         return "empty_turn", "EMPTY turn", EMPTY_TURN_NUDGE
     if _code_reply(content):
-        # The end_commit withhold says nothing of how the mission ends.
-        return "code_shaped_reply", "CODE-SHAPED reply turn", (
-            _CODE_REPLY + "." if withheld("end_commit") else CODE_REPLY_NUDGE)
+        return "code_shaped_reply", "CODE-SHAPED reply turn", CODE_REPLY_NUDGE
     return None

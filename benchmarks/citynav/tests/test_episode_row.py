@@ -109,7 +109,7 @@ def test_the_bench_resolves_its_sensor_as_the_flight_does(monkeypatch) -> None:
     from maps.perception.geometry.sensor_spec import resolve_sensor
 
     loop = SimpleNamespace(start=lambda g: None)
-    monkeypatch.setattr(er, "_episode_graph", lambda assets, settings: None)
+    monkeypatch.setattr(er, "_episode_graph", lambda assets: None)
     monkeypatch.setattr(er, "start_altitude_m", lambda cfg, m, z: (100.0, 0.0))
     monkeypatch.setattr(er, "make_perception", lambda settings: SimpleNamespace(set_concepts=None))
     monkeypatch.setattr(er, "EpisodeWorld", lambda *a, **kw: loop)

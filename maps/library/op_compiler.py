@@ -11,7 +11,6 @@ from maps.query.spatial_math import CARDINALS as _GEOM_CARDINALS
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.query.op_io import sanitize_token
 from maps.xy_token import format_xy_token, is_xy, parse_xy_token
-from maps.withhold import withheld
 
 # The four map-fixed directions, in the order their kwargs are read. Taken
 # from the executor's own table so the surface can never offer a direction
@@ -36,31 +35,21 @@ def _winds_holding(cardinal_word: str) -> list:
                   if cardinal_word in (split_diagonal(w) or (w,)))
 
 
-# THE MOVING CALLS TAKE A THING, NEVER A COORDINATE (outside the prior
-# withhold): a point is an estimate read off a picture, and the rows carry
+# THE MOVING CALLS TAKE A THING, NEVER A COORDINATE: a point is an estimate read off a picture, and the rows carry
 # measured positions. One refusal for every spelling of a point.
 _ACT_NEEDS_A_THING = (
-    "{name}() takes a THING on the map, not a coordinate ({got}).{points}")
-_ACT_REACH_A_PART = (
+    "{name}() takes a THING on the map, not a coordinate ({got})."
+    " Points are for RELATING and LOOKING -- near=, within=,"
+    " show_map(around=), stand(at=)."
     " To reach a part of something, look_for the class you "
     "want, explore the thing so the segmenter puts rows on it, then "
     "{name}() the row you mean.")
 
 
 def act_needs_a_thing(*, name: str, got: str) -> str:
-    """The refusal of a coordinate where a move takes a thing; its remedy
-    names look_for and explore, so a ``look_for`` or ``library`` withhold
-    serves the refusal alone, a ``look`` withhold says points are for
-    relating only, and a ``map`` or ``library`` withhold names none of its
-    calls."""
-    lib = withheld("library")
-    text = _ACT_NEEDS_A_THING + ("" if withheld("look_for") or lib else _ACT_REACH_A_PART)
-    uses = ("RELATING" if withheld("look") else "RELATING and LOOKING") if not lib \
-        else "LOOKING"
-    slots = ", ".join(s for s, w in (("near=, within=", "library"), ("show_map(around=)", "map"),
-                                     ("stand(at=)", "library")) if not withheld(w))
-    return text.format(name="go_to" if lib else name, got=got,
-                       points=f" Points are for {uses} -- {slots}." if slots else "")
+    """The refusal of a coordinate where a move takes a thing, with its
+    remedy."""
+    return _ACT_NEEDS_A_THING.format(name=name, got=got)
 
 
 class CodeError(ValueError):

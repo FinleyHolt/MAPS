@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from maps.mission.tests.fakes import drive, run, tool_results, withhold_for_test
+from maps.mission.tests.fakes import drive, run, tool_results
 
 # Colour never cuts, so this block is refused every time it is served.
 _COLOR_FILTER_BLOCK = ('a = find("car")\n'
@@ -80,17 +80,14 @@ def test_a_grounding_refusal_serves_no_op_signature():
     assert "not a query operator" in err and "signature" not in err, err
 
 
-def test_a_prior_withhold_census_counts_no_prior_rows(monkeypatch):
+def test_a_repeat_census_counts_the_prior_rows():
     blocks = ['a = find("cuisine=pizza;kebab")\na'] * 3 + [_COLOR_FILTER_BLOCK] * 3
     flown = json.dumps(drive_blocks(blocks))
     # the census on a rejection's 2nd and 3rd serve, and on a repeated dedup
     n = flown.count("prior map row fid(s)")
     assert n >= 3, flown
     assert all(m in flown for m in ("Live surface:", "rejected again", "still nothing new"))
-    withhold_for_test(monkeypatch, "prior")
-    served = json.dumps(drive_blocks(blocks))
-    assert served.count("detection fid(s)") == n, served
-    assert "prior map row" not in served, served
+    assert flown.count("detection fid(s)") == n, flown
 
 
 def test_an_escalation_after_an_unpunctuated_error_starts_a_new_sentence():

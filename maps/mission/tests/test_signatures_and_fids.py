@@ -1,18 +1,16 @@
-"""Doc-arm signatures, positional counts, five-digit fids, per-thread find memo."""
+"""Served signatures, positional counts, five-digit fids, per-thread find memo."""
 import inspect
 import threading
 
 
-from maps.mission.tests.fakes import withhold_for_test
-from maps.mission import served_text
+from maps.mission import contract
 from maps.library.interpreter import MissionPython
 
 
-def test_the_doc_withhold_serves_keyword_only_calls_as_keyword_only(monkeypatch):
-    """Under ``doc`` the run description is the calls' signatures; a call that
-    refuses positional arguments must not be served as taking them."""
-    withhold_for_test(monkeypatch, "doc")
-    doc = served_text.served_doc()
+def test_the_surface_serves_keyword_only_calls_as_keyword_only():
+    """The contract's surface is the calls' signatures; a call that refuses
+    positional arguments must not be served as taking them."""
+    doc = "\n".join(contract.surface_lines())
     for call in ("stand", "look"):
         sig = inspect.signature(getattr(MissionPython, f"_call_{call}"))
         if any(p.kind is p.KEYWORD_ONLY for p in sig.parameters.values()):
@@ -85,11 +83,10 @@ def test_a_five_digit_detection_fid_is_a_row_like_a_four_digit_one():
     assert "error" not in tool_results(fr)[0], tool_results(fr)
 
 
-def test_the_doc_withhold_serves_no_parameter_that_only_refuses(monkeypatch):
+def test_the_surface_serves_no_parameter_that_only_refuses():
     """find's extra queries, a cut's unknown keywords and show_map's missing
-    centre are refused, so the signatures the doc arm reads do not offer them."""
-    withhold_for_test(monkeypatch, "doc")
-    doc = served_text.served_doc()
+    centre are refused, so the signatures the surface reads do not offer them."""
+    doc = "\n".join(contract.surface_lines())
     assert "*more" not in doc and "**kw" not in doc, doc
     assert "around=None" not in doc, doc
 

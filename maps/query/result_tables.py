@@ -9,7 +9,6 @@ from collections import Counter
 from maps.query import color_words
 from maps.query import text_match as T
 from maps.render.look_render import LOOK_SET_ROWS
-from maps.withhold import withheld
 
 
 # Row fields the executor resolves by fid and the model never reads.
@@ -362,9 +361,6 @@ _NO_ORDER_HINT = (
     "no ordering exists on this result, so it renders census + len and no "
     "fids: ordering it by an attached column renders the ordered rows of "
     "THIS handle, and a name or color match returns matched rows directly.")
-# ... under the ``library`` withhold, where nothing orders or matches.
-_NO_ORDER_HINT_NO_LIBRARY = (_NO_ORDER_HINT.split(":", 1)[0]
-                             + ": print(<set>[i]) reads row i's columns.")
 
 
 def _table(head, rows, op_cols, legend) -> "str | None":
@@ -390,13 +386,11 @@ def _hint(v) -> str:
             v.empty_condition
             or "this call returned no rows: nothing met its condition.",
             *v.notes,
-            "this retrieval searched every surface row"
-            + ("" if withheld("prior") else " (prior + runtime)")
-            + " and matched nothing."
+            "this retrieval searched every surface row (prior + runtime)"
+            " and matched nothing."
             if v.kind == "miss" else "")
     if not v.ordered:
-        return join_hints(*v.notes, _NO_ORDER_HINT_NO_LIBRARY
-                          if withheld("library") else _NO_ORDER_HINT)
+        return join_hints(*v.notes, _NO_ORDER_HINT)
     return join_hints(*v.notes)
 
 
@@ -447,9 +441,8 @@ def _envelope(v, legend, cut=None) -> dict:
             more = join_hints(
                 f"showing the first {len(capped)} of {len(v)} row(s); "
                 f"the rest stay live in this set -- later ops on it "
-                + ("read the FULL set" if withheld("library") else
-                   f"read the FULL set, and more_of on it serves the next "
-                   f"{BROAD_HEAD_ROWS}"),
+                f"read the FULL set, and more_of on it serves the next "
+                f"{BROAD_HEAD_ROWS}",
                 _cut_stands_at(v, body, capped))
         head = {"len": len(v),
                 "fids": [str(r["fid"]) for r in capped if r.get("fid")]}

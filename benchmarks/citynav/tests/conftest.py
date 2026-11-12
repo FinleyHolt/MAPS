@@ -70,7 +70,7 @@ STUB_GRAPH = {
 def stub_session(monkeypatch: pytest.MonkeyPatch):
     """A ``MissionSession`` over a EpisodeWorld holding ``STUB_GRAPH``, a live
     ``observe`` frame and no render: ``make(**loop_overrides,
-    pose_xy=, rgb=, withhold=)``, ``withhold`` the parts its run withholds."""
+    pose_xy=, rgb=)``."""
     from types import SimpleNamespace
 
     from benchmarks.citynav.run_benchmark.episode_runner import EpisodeState
@@ -79,7 +79,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(me, "_write_tour_cursor", lambda *a, **k: None)
 
-    def make(*, pose_xy=(10.0, 20.0), rgb=None, withhold=(), **loop_overrides) -> me.MissionSession:
+    def make(*, pose_xy=(10.0, 20.0), rgb=None, **loop_overrides) -> me.MissionSession:
         loop = episode_world({
             fid: SimpleNamespace(world_xy=xy, provenance="detected" if prov == "detected" else "prebaked")
             for fid, (xy, prov) in STUB_GRAPH.items()})
@@ -95,7 +95,7 @@ def stub_session(monkeypatch: pytest.MonkeyPatch):
             sensor=None, tile_frame=None, ground_z_m=0.0, world=loop,
             # The bench as the test's environment places it, read when the session is made.
             bench=citynav_bench(os.environ),
-            settings=Settings(withhold=frozenset(withhold)), workdir=None, routing_key=None,
+            settings=Settings(), workdir=None, routing_key=None,
             perception=SimpleNamespace(detect=lambda obs: [], concepts=[]))
         return me.MissionSession(h, observe=lambda: frame)
 

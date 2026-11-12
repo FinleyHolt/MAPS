@@ -110,7 +110,7 @@ row stay the bench's. The bench reaches that method by name through a
 
 `configs/citynav.yaml` is the control config and declares every key. Another
 config names it with `base:` and holds only the keys it changes
-(`configs/calcity.yaml`, `configs/withhold/*.yaml`). The loader
+(`configs/calcity.yaml`). The loader
 (`benchmarks/run_record/config.py`) refuses unknown keys and checks every
 value by type and range.
 

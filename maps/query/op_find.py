@@ -11,7 +11,6 @@ from maps.query import text_match as T
 from maps.query.op_io import (
     ProgramError, Result, _as_rows, _attach_standing_columns, _ordered, _quote)
 from maps.query.result_tables import STANDING_SIDE_PREFIXES, _census_note
-from maps.withhold import withheld
 
 
 class _FindMemo(threading.local):
@@ -225,10 +224,9 @@ def _find(cx, a):
                 f"pairs in one query separated by a space ('a=b "
                 f"c=d' -- the exact-tag tier scores by pairs "
                 f"matched)."
-                + ("" if withheld("prior") else
-                   " OSM multi-value tag VALUES use ';' "
-                   "(cuisine=pizza;kebab) -- to match one, query that "
-                   "single value ('cuisine=pizza')."))
+                " OSM multi-value tag VALUES use ';' "
+                "(cuisine=pizza;kebab) -- to match one, query that "
+                "single value ('cuisine=pizza').")
         q_data = T.fuzzy_prepare_query(q_raw)
         memo = _find_memo(cx.cands, cx.anchors)
         rows = memo.scored_rows(q_raw, q_data, surface)
@@ -277,9 +275,8 @@ def _stratum(cx, a):
         raise ProgramError(
             "these rows carry no match tiers: .exact/.tagged/.fuzzy come "
             "off a find's own result."
-            + ("" if withheld("look_for") else
-               " A pass's minted rows are all THE thing the "
-               "watchlist named; there is nothing to stratify."))
+            " A pass's minted rows are all THE thing the "
+            "watchlist named; there is nothing to stratify.")
     return Result((it for it in items
                    if isinstance(v := it.get("name_match"), (int, float))
                    and _tier(v) == tier), "cut", ordered=_ordered(items))

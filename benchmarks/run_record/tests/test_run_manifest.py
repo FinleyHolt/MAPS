@@ -86,7 +86,6 @@ def test_required_fields_nonempty(stub_run):
     for keypath in (("config_sha256",), ("endpoints", "model_id"), ("perception", "bake_sha256")):
         assert run_manifest._get(m, keypath), f"measured field vanished: {keypath}"
     assert m["selection"]["episodes_n"] == 3
-    assert m["withhold"] == []
 
 
 @pytest.mark.skipif(not (REPO_ROOT / ".git").exists(), reason="a tree with no git checkout has no commit")

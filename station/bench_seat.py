@@ -30,10 +30,11 @@ from typing import Any
 from benchmarks import git_provenance
 from benchmarks.bench import Bench
 from benchmarks.run_record import rows
-from benchmarks.run_record.config import engine_settings, load_config
+from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, ConversationLog, OpenEpisode
 from benchmarks.run_record.episodes import STATUS_INFRA, append_row
 from benchmarks.run_record.run_manifest import build_manifest, emit_or_verify, install_endpoint
+from maps.settings import from_environ
 
 log = logging.getLogger("station.bench")
 
@@ -153,7 +154,7 @@ class BenchMission:
     def _run(self) -> None:
         try:
             cfg = load_config(self.config)
-            settings = engine_settings(cfg, self.bench.environ)
+            settings = from_environ(self.bench.environ)
             bench = install_endpoint(self.bench, settings, cfg.policy)
             if "SEARCH_BENCHMARK_NAME" not in bench.environ:
                 bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})

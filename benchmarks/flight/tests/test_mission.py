@@ -160,18 +160,6 @@ def test_an_unknown_episode_is_refused_by_name(monkeypatch, bench):
         mission.resolve_episode(bench, "calcity::9#9", "calcity")
 
 
-def test_the_flight_refuses_a_config_that_withholds_a_part(tmp_path, bench):
-    import pytest
-
-    from benchmarks.flight import mission
-
-    repo = __import__("pathlib").Path(__file__).resolve().parents[3]
-    arm = tmp_path / "arm.yaml"
-    arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nwithhold: [images]\n")
-    with pytest.raises(ValueError, match="bench ablation"):
-        mission.hydrate(bench=bench, episode_id="calcity::0#0", split="calcity", config=str(arm), agl_m=914.4)
-
-
 def test_ground_held_by_frames_that_cannot_be_fetched_is_flown_again_and_served_from_the_new_pass(
         built, make_mission):
     """The ring's index holds the area, but none of its frames comes over the

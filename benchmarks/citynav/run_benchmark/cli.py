@@ -21,8 +21,9 @@ from benchmarks.citynav.paths import selected_bench
 from benchmarks.citynav.run_benchmark.dispatch import dispatch_one
 from benchmarks.run_record import episodes
 from benchmarks.run_record import run_manifest as _rm
-from benchmarks.run_record.config import engine_settings, load_config
+from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import open_episode_dir
+from maps.settings import from_environ
 
 log = logging.getLogger("run_benchmark")
 
@@ -125,8 +126,8 @@ def main(bench: Bench | None = None) -> int:
 
     bench.assert_available()
     cfg = load_config(args.config)
-    # The engine's settings, built once: the run's environment, the config's withholds.
-    settings = engine_settings(cfg, bench.environ)
+    # The engine's settings, built once from the run's environment.
+    settings = from_environ(bench.environ)
     try:
         bench = _rm.install_endpoint(bench, settings, cfg.policy)
     except _rm.EndpointRefused as exc:

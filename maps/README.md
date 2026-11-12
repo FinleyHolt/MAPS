@@ -19,7 +19,6 @@ mission followed through these packages, see
 | `render/` | `look` crop, `show_map` schematic, and the marks drawn on them. | `render/look_render.py`, `render/map_render.py` |
 | `llm/` | Endpoint discovery, per-model sampling cards, the chat-completions transport, the hosted OpenAI wire. | `llm/model_cards.py`, `llm/endpoint_spec.py`, `llm/http.py` |
 | `settings.py` | Run settings, read from the environment once. | |
-| `withhold.py` | Parts a bench ablation arm withholds. | |
 | `xy_token.py` | `[x, y]` point grammar that every slot taking a fid or a point reads. | |
 
 ## Boundaries
@@ -29,12 +28,9 @@ mission followed through these packages, see
   move (resolve a stop, observe, segment, fold the detections into the graph)
   and returns the flight report the model reads.
 - `maps` reads the environment in one place, `settings.py`. An entry point
-  builds a `Settings` (endpoints, sampling, what a bench arm withholds) once
-  and hands it to `run_mission`, with the mission's own directory and routing
-  key.
-- The withheld set is fixed when a mission is built and bound for each of its
-  turns (`withhold.py`), so two missions in one process keep their own
-  settings, directory, and withholds.
+  builds a `Settings` (endpoints, sampling) once and hands it to
+  `run_mission`, with the mission's own directory and routing key, so two
+  missions in one process keep their own settings and directory.
 
 To print the served contract (the system turn and the tool schema the model
 receives):
@@ -69,7 +65,6 @@ Paths are relative to `maps/`.
 | Per-episode world: the one graph a mission reads and each flight's detections fold into | `mission/episode_world.py` |
 | `look` crop and `show_map` schematic | `render/look_render.py`, `render/map_render.py` |
 | Marks drawn on a picture, and the map's label rule and colours | `render/mark_overlay.py`, `render/osm_palette.py` |
-| Bench ablation withholds | `withhold.py` |
 | Run settings, read from the environment once | `settings.py` |
 | `[x, y]` point grammar that every slot taking a fid or a point reads | `xy_token.py` |
 | World-state graph: map features and detected nodes, their upsert, the context a query reads it through | `world_state/` |

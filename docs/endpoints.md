@@ -128,7 +128,6 @@ variables that locate each bench's data, see
 | `SEARCH_REASONER_MODELS_URL` | Client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | Client | Arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`). Discovery refuses a value the served model's card doesn't take. Unset sends none. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | Client | HF tokenizer repo, or a local checkpoint directory on an offline machine, replacing the model card's. |
-| `SEARCH_WITHHOLD` | Client | Comma list of withheld parts (`maps/withhold.py`). A bench config's `withhold` replaces it. |
 | `SAM_SERVER_URL` | Client | SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset. A set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
 | `SAM_PORT`, `SAM_DEVICE` | Serve | Port (8772), device. |
 | `SAM3_CHECKPOINT` | Serve | Local checkpoint file. |

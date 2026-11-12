@@ -125,13 +125,6 @@ def test_a_live_flight_is_served_at_the_target_it_asked_for(stub_session):
     assert "error" in session.fly({"target_fid": "nowhere"}) and len(flights) == 1
 
 
-def test_an_end_commit_withhold_flight_report_names_no_answer(stub_session):
-    session = stub_session(withhold=["end_commit"], update_perception=lambda **kw: [])
-    report = session.fly({"target_fid": "building_7"})
-    assert report["target"] == "building_7" and "answer_if_you_reply_now" not in report
-    assert session.flights[-1]["target"] == "building_7", "the commit is still the last flight"
-
-
 def test_a_live_flight_with_no_frame_says_the_recording_served_none(stub_session):
     session = stub_session()
     session.observe = lambda: None

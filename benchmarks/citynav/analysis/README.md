@@ -33,8 +33,6 @@ Run every command from the repository root.
 |---|---|---|---|
 | E2 SR and OSR per arm, CityNav `test_unseen`, 5,311 episodes | `SR_pct`, `OSR_pct`, `n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e2/*` |
 | E3 SR per effort rung and Gemma, Cal City reviewed 1,100 | `SR_pct` (shape criterion), `n` per arm | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e3/*` |
-| E4 SR with parts withheld, per model (each arm's `withhold:` list, names in `maps/withhold.py`) | `SR_pct` per arm, labelled `withhold=` and the arm's parts, comma-joined | `arm_table` | `python -m benchmarks.citynav.analysis.arm_table output/e4/<model>/*` |
-| E4 change in SR against the full harness, on the arm's 1,000 episodes | paired delta, its interval, flips | `ab_report` | `python -m benchmarks.citynav.analysis.ab_report output/e2/<model's E2 root> output/e4/<model>/<arm>` |
 | E6 closed loop: SR (the commit point inside the target's mask), OSR | `sr`, `osr` of the summary | `benchmarks.flight.measures` | `python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON>` |
 | E6 by intel quality: runs, SR, OSR | `by_intel_quality` | `benchmarks.flight.measures` | the E6 command; `--json` for the record |
 | E6 per flight: runs, efforts, SR, OSR | the summary and `by_effort` (per model and effort) over that flight's sorties | `benchmarks.flight.measures` | the E6 command with `--root` naming that flight's sorties |

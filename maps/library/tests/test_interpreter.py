@@ -694,7 +694,7 @@ def test_an_ordered_result_stays_subscriptable():
 
 
 def test_a_tied_views_repr_shows_its_shape_and_leaks_no_point():
-    """print(road) must not hand back what the head withholds."""
+    """print(road) must not hand back what the head leaves out."""
     from maps.library.interpreter import MissionPython
     from maps.library.rows import Rows
 

@@ -18,13 +18,12 @@ from maps.library.block_ceilings import (
     _block_ceilings, _block_line, _code_objects, _outer_block_line)
 from maps.library.block_scan import (
     BLOCK_FILENAME, _MOVED_TO_METHOD, _SAFE_BUILTINS, _SAFE_MODULES, _instrument,
-    _safe_import, _shadows, scan_block, served_calls)
+    _LIBRARY_CALLS, _safe_import, _shadows, scan_block)
 from maps.library.call_arguments import MissionEnv, _Stop, _no_such_fid
 from maps.library.calls import _LibraryCalls
 from maps.library.op_compiler import CodeError, fid_like
 from maps.library.rows import Row, Rows, _said
 from maps.query.row_geometry import SurfaceGeometry
-from maps.withhold import withheld
 
 
 # Liveness ceiling on one block's own lines (harness frames are untraced).
@@ -86,7 +85,7 @@ class MissionNamespace(dict):
         # refusal names the method.
         _moved = difflib.get_close_matches(k, tuple(_MOVED_TO_METHOD),
                                            n=1, cutoff=0.8)
-        if (k in _MOVED_TO_METHOD or _moved) and not withheld("library"):
+        if k in _MOVED_TO_METHOD or _moved:
             k = k if k in _MOVED_TO_METHOD else _moved[0]
             raise CodeError(
                 f"there is no {k}() here -- did you mean "
@@ -97,7 +96,7 @@ class MissionNamespace(dict):
         known = [n for n in self if isinstance(n, str)
                  and not n.startswith("__") and n not in _SAFE_MODULES]
         close = difflib.get_close_matches(
-            k, served_calls() + tuple(known), n=2, cutoff=0.6)
+            k, _LIBRARY_CALLS + tuple(known), n=2, cutoff=0.6)
         if close:
             raise CodeError(f"there is no {k} here -- did you mean "
                             + " or ".join(dict.fromkeys(close)) + "?")
@@ -117,7 +116,7 @@ class MissionPython(_LibraryCalls):
         self.ns.update(_SAFE_MODULES)
         # The mission calls are builtins, as len is: a name the model binds
         # over one shadows it until ``del`` gives the call back.
-        for name in served_calls():
+        for name in _LIBRARY_CALLS:
             self.ns["__builtins__"][name] = _said(getattr(self, f"_call_{name}"), name)
         # Model spelling for every ref it was shown rows under, so the
         # served envelope is keyed by the model's own name.
@@ -208,7 +207,7 @@ class MissionPython(_LibraryCalls):
                 line = _block_line(self._block_codes)
                 what = (str(e) if isinstance(e, CodeError)
                         else f"{type(e).__name__}: {e}")
-                if isinstance(e, NameError) and e.name in served_calls():
+                if isinstance(e, NameError) and e.name in _LIBRARY_CALLS:
                     # a call name resolves through the builtins, so only a
                     # del of it misses
                     what = (f"nothing is bound over {e.name} to del; "
@@ -218,7 +217,7 @@ class MissionPython(_LibraryCalls):
                                      if isinstance(n, ast.Call)
                                      and isinstance(n.func, ast.Name)
                                      and n.lineno <= line <= n.end_lineno
-                                     and n.func.id in served_calls()
+                                     and n.func.id in _LIBRARY_CALLS
                                      and n.func.id in self.ns), None)
                     if shadowed:
                         what += f": {_shadows(shadowed)}"
@@ -235,10 +234,9 @@ class MissionPython(_LibraryCalls):
         if time.monotonic() > self._deadline:
             raise CodeError(
                 f"the block ran past {TRACE_DEADLINE_S:.0f} s -- a slow or "
-                + ("large query. Scope it tighter" if withheld("library") else
-                   "large query, most likely a find/near loop over the whole "
-                   "map. Scope it tighter (fewer rows, a smaller dwithin)")
-                + " or split it across turns.")
+                "large query, most likely a find/near loop over the whole "
+                "map. Scope it tighter (fewer rows, a smaller dwithin)"
+                " or split it across turns.")
 
     def _unbind_failed_assign(self, tree: ast.Module, line: int) -> None:
         """A rebind that failed UNBINDS the name: Python leaves the target

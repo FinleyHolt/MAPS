@@ -1,3 +1,0 @@
-# CityNav with the mission_map part withheld (maps/withhold.py).
-base: ../citynav.yaml
-withhold: [mission_map]

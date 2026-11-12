@@ -14,7 +14,6 @@ from maps.render.look_render import (
     look_xy,
     up_bearing_deg,
 )
-from maps.withhold import withheld
 from maps.xy_token import parse_xy_token
 
 # The server's per-request image cap.
@@ -256,8 +255,7 @@ def crop_requests(fids: list[str], marks: list | None, *, rows: dict, resolve,
             f"lies more than {float(obs_minor_m) / 2.0:.0f} m from every "
             "flown stop, outside the middle of every frame so far. A look "
             "shows ground within that reach of a stop"
-            + ("." if withheld("library") else
-               " -- explore the place so a pass covers it, then look."))
+            " -- explore the place so a pass covers it, then look.")
     return requests, skipped, ref_notes
 
 
@@ -388,33 +386,26 @@ def map_vision_text(maps: list[dict]) -> str:
     _dn = ("Detections are the bright class-colored shapes, each carrying a "
            "small dN chip -- dN is detection fid detected_N, so any "
            "one of them can be named. ")
-    if withheld("prior"):
-        base = (f"World-state maps -- everything detected so far, not a "
-                f"photograph; this run has no prior map, so dark is "
-                f"nothing recorded. {_dn}Nothing undetected has a shape "
-                f"here; what has been DETECTED is drawn where it "
-                f"was found. To see what is actually there, ")
-    else:
-        base = (f"World-state maps -- the survey plus everything detected "
-                f"so far, not a photograph: light-gray lines are roads, "
-                f"tan shapes are surveyed buildings, muted regions are "
-                f"landuse by class, dark is nothing recorded. {_dn}"
-                f"Surveyed buildings big enough "
-                f"at this zoom carry their own NNNN chip of bare digits "
-                f"(a map around a fid or with marks chips only its centre "
-                f"and marks): NNNN is "
-                f"prior fid prior_NNNN (narrow the window to chip more of "
-                f"them). A detection lying on a surveyed footprint shows "
-                f"tan hatching through its fill, and that survey's "
-                f"NNNN chip sits stacked under the dN chip -- "
-                f"co-location drawn, identity still the graph's call. "
-                f"The survey part does NOT have "
-                f"the shape of a cul-de-sac bulb, a driveway, a pool, a "
-                f"car, or anything built since the survey -- no zoom "
-                f"shows those; what has been DETECTED is drawn where it "
-                f"was found. To see what is actually there, ")
-    base += (f"{'fly: ' if withheld('look') else 'fly and look: '}"
-             f"the camera is the live check on this. One per item in "
+    base = (f"World-state maps -- the survey plus everything detected "
+            f"so far, not a photograph: light-gray lines are roads, "
+            f"tan shapes are surveyed buildings, muted regions are "
+            f"landuse by class, dark is nothing recorded. {_dn}"
+            f"Surveyed buildings big enough "
+            f"at this zoom carry their own NNNN chip of bare digits "
+            f"(a map around a fid or with marks chips only its centre "
+            f"and marks): NNNN is "
+            f"prior fid prior_NNNN (narrow the window to chip more of "
+            f"them). A detection lying on a surveyed footprint shows "
+            f"tan hatching through its fill, and that survey's "
+            f"NNNN chip sits stacked under the dN chip -- "
+            f"co-location drawn, identity still the graph's call. "
+            f"The survey part does NOT have "
+            f"the shape of a cul-de-sac bulb, a driveway, a pool, a "
+            f"car, or anything built since the survey -- no zoom "
+            f"shows those; what has been DETECTED is drawn where it "
+            f"was found. To see what is actually there, ")
+    base += ("fly and look: "
+             "the camera is the live check on this. One per item in "
              f"order: [{order}]. A white outline or ring marks the "
              f"centre; per-map legend:")
     for k, m in enumerate(maps):

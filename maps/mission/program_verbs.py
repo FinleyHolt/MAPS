@@ -12,7 +12,6 @@ from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS
 from maps.query.text_match import (
     FUZZY_THRESHOLD as _FUZZY_FLOOR, unmatched_query_tokens as
     _unmatched_query_tokens)
-from maps.withhold import withheld
 
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
@@ -21,9 +20,9 @@ from maps.withhold import withheld
 # of the moment it fires; the block may fly after it.
 _DEDUP_NOTE = (
     "no new information since turn {turn}: nothing had entered the world "
-    "between then and this call -- no flight{no_look_for} -- so this program "
+    "between then and this call -- no flight, no look_for(..., at=) -- so this program "
     "returned what it returned then, and it is not re-rendered. Its handles "
-    "stay live for later ops. Change the world (fly{look_for}) or "
+    "stay live for later ops. Change the world (fly, look_for(..., at=)) or "
     "ask something different."
 )
 _DEDUP_REPEAT_NOTE = (
@@ -55,9 +54,7 @@ class _ProgramVerbs:
     ack."""
 
     def _dispatch_program(self, ops, *, answer_ref=""):
-        # The ``loop`` withhold takes the identical-program note: every
-        # program runs and renders.
-        key = None if withheld("loop") else program_dedup_key(ops)
+        key = program_dedup_key(ops)
         prev = self._programs_seen.get(key) if key is not None else None
         if prev is not None and prev[0] == self.carry.version:
             # A one-line reference, never a payload; the emission's own
@@ -75,10 +72,7 @@ class _ProgramVerbs:
                 return {"note": _DEDUP_REPEAT_NOTE.format(
                     n=_ordinal(self._dedup_n),
                     counts=_live_counts(c_n, a_n), cols=cols_s)}
-            lf = not withheld("look_for")
-            return {"note": _DEDUP_NOTE.format(
-                turn=prev[1], no_look_for=", no look_for(..., at=)" if lf else "",
-                look_for=", look_for(..., at=)" if lf else "")}
+            return {"note": _DEDUP_NOTE.format(turn=prev[1])}
         raw_sink: dict = {}
         try:
             self.carry.ensure_fresh(program_reads(ops))
@@ -159,8 +153,7 @@ class _ProgramVerbs:
                     f"nothing named \"{what}\" is on "
                     f"this surface{self._closest_names(what)}; say it "
                     "differently, say a fid off a served row, or "
-                    + ("fly" if withheld("look_for") else "look_for + fly")
-                    + " more first"))
+                    "look_for + fly more first"))
             # every name keeps only its top name_match tie group
             top = rows[0].get("name_match")
             ties[q] = [str(r["fid"]) for r in rows
@@ -208,7 +201,7 @@ class _ProgramVerbs:
                     f"({h}.order(color=\"<colour>\"), "
                     f"{h}.order(nearest=\"<fid>\"), "
                     f"{h}.filter(within=\"<place>\"))"
-                    + ("." if withheld("look") else f" or look({h}).")))
+                    f" or look({h})."))
         out = self._dispatch_program(ops, answer_ref=str(answer or ""))
         if "error" in out:
             return {"error": out["error"]}
