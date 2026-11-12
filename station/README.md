@@ -42,8 +42,9 @@ its `SR` and `NE` on the row. A run opens as a review:
 A bench run's aircraft is placed at each stop and never flown between them,
 so the run has no `flight_track.jsonl`. The review draws `visited_xy` as the
 path and shows no scrubber. A bench run has no `observations/` folder: the
-picture book says so, and the pictures are in the transcript. A run folder
-copied without its `frames/` reviews as text.
+picture book pages the pictures the model was sent, in the order it was sent
+them, and the transcript shows each beside the turn that asked for it. A run
+folder copied without its `frames/` reviews as text.
 
 What a review needs:
 
@@ -146,7 +147,7 @@ score, and nothing placed on the map; the map's caption says so.
 | Transcript | The conversation as it happens: each `run` block's reasoning, code and printed receipt, the pictures the model was sent, and the report. On the twin, each leg posted and what the pass held. |
 | Chat box | Speaks to the mission in the seat: a tasking lands on the model's next turn, and an answer wakes a mission holding at its report. `+` ends the mission and empties the seat. |
 | Map | The viewed map's basemap, the aircraft and its trail, the target's footprint or centre, each stop, and the commit of a scored run. On the twin, each leg's area as a mask of the points the recording holds. |
-| Picture book | Cal City: each waypoint's observation as the model's segmenter received it, with the map's features drawn over it on request. A bench run has none. |
+| Picture book | Cal City: each waypoint's observation as the model's segmenter received it, with the map's features drawn over it on request. A bench run: the pictures the model was sent, in order. |
 | Scrubber | Under review of a run with a recorded track: the aircraft along it. |
 
 ## The requests
