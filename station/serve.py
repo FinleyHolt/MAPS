@@ -243,7 +243,9 @@ class Station:
         held = [s for s in self.bench.split_files if self.bench.split_path(s).is_file()]
         flown = sorted({r["split"] for r in self.runs() if r.get("split")} - set(held))
         why = self.why_not_flying()
-        return {"bench": self.bench.name, "split": self.split, "splits": held + flown, "map": self.map_name,
+        # The list opens on the split of the newest run under the output root, so its runs are in view.
+        shown = next((r["split"] for r in self.runs() if r.get("split") in held + flown), self.split)
+        return {"bench": self.bench.name, "split": shown, "splits": held + flown, "map": self.map_name,
                 "flies": why is None, "why": why,
                 # The twin flies the operator's own words from the map's centre; a bench episode is a row of its split.
                 "own_words": self.bench.name == "calcity"}
