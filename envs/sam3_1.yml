@@ -4,13 +4,14 @@
 # rasterio requires numpy>=2. The two talk over SAM_SERVER_URL.
 #
 # SAM 3.1 itself (`sam3`, imported by serving/sam_engine.py) is not on PyPI:
-# install it from Meta's SAM 3 source into this env. The checkpoint is gated
+# install it from Meta's SAM 3 source (github.com/facebookresearch/sam3; the
+# commit below is the one the serve is run against) into this env. The checkpoint is gated
 # on Hugging Face (facebook/sam3.1): approve it, export HF_TOKEN, and the
 # engine fetches it on first load (or point SAM3_CHECKPOINT at a local file).
 #
 #   micromamba env create -f envs/sam3_1.yml
 #   micromamba activate sam3_1
-#   pip install <SAM 3 source checkout>
+#   pip install git+https://github.com/facebookresearch/sam3@2814fa619404a722d03e9a012e083e4f293a4e53
 #   python -m serving.sam_server --port 8772     # from the repo root
 name: sam3_1
 channels:

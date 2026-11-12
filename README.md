@@ -78,7 +78,7 @@ Start the SAM serve in its own environment, from the repository root:
 
 ```sh
 micromamba env create -f envs/sam3_1.yml && micromamba activate sam3_1
-pip install <a checkout of Meta's SAM 3 source>
+pip install git+https://github.com/facebookresearch/sam3@2814fa619404a722d03e9a012e083e4f293a4e53
 HF_TOKEN=<your token> python -m serving.sam_server --port 8772
 ```
 
