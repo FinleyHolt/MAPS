@@ -168,9 +168,12 @@ For the code behind each part, see [`maps/README.md`](maps/README.md) and
 
 The flight harness reaches an aircraft through one protocol, `Vehicle`
 ([`benchmarks/flight/vehicle.py`](benchmarks/flight/vehicle.py)): post a leg,
-read poses, and read recorded frames. Implement it, and the mission, the
-observation chain, and the console run over your aircraft. The kinematic twin
-flies a Cal City mission through the same harness:
+read poses, and read recorded frames. Implement it, and the mission and the
+observation chain run over your aircraft. The harness keeps the C-12's
+antenna-to-camera lever arm and camera (`benchmarks/flight/airframe.py`), and
+the twin, the measures, and the station build the Cal City bench; the steps
+in [`docs/flight.md`](docs/flight.md#bring-your-own-aircraft) name each. The
+kinematic twin flies a Cal City mission through the same harness:
 
 ```sh
 python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcity::6#6' --ortho <root>/data/rgbd_upstream

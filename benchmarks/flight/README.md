@@ -40,8 +40,9 @@ stop to the observation it reads:
 4. **Arrival by coverage.** `LiveSource.coverage` reads the ring's index (one
    pose per frame, no pixels; `footprint.py`) and reports the share of the
    area's points that some frame holds. The leg has arrived at 90%
-   (`legs.COVERED_FRACTION`), or after `ARRIVAL_TIMEOUT_S` with what the
-   pass held. When the index holds the area but none of its frames could be
+   (`legs.COVERED_FRACTION`), or when one wait on it passes
+   `ARRIVAL_TIMEOUT_S`, with what the pass held. A short pass asked again
+   starts a new wait. When the index holds the area but none of its frames could be
    served, the leg is flown and only the frames recorded after it count.
 5. **Fusion.** `LiveSource.observe_area` fetches, for each area point, the
    frame that saw it nearest nadir. It places each frame by its pose (as the
@@ -57,13 +58,13 @@ stop to the observation it reads:
 
 | Input | Source |
 |---|---|
-| Calibration (boresight, GNSS bias, timing offset) | A `boresight.json`, applied in `live_source.py` alone. A run started with none flies the datasheet camera. |
+| Calibration (boresight, GNSS bias, timing offset) | `open_live`'s `boresight_path`, a `boresight.json` the integrator supplies, applied in `live_source.py` alone. The twin and the station pass none and fly the datasheet camera. |
 | Antenna-to-camera geometry of the C-12 | `airframe.py` |
 | Bake's local metres to WGS84 | `tile_georef.py` |
 | Ground under each frame | The block's bare-earth surface where the bake carries one: `<map>_dem.tif` beside `<map>_meta.json` (`map_render.terrain`, read through `map_render.ground_msl` by the twin and the live source). Otherwise the block's floor (`tile_georef.FLOOR_MSL_M`). |
 
-The flown bake carried Cal City's surface: USGS 3DEP 1/3 arc-second heights
-(NAVD88) on 10 m cells in EPSG:32611 over the bake's bounds. To make it from
+Cal City's surface is USGS 3DEP 1/3 arc-second heights (NAVD88) on 10 m
+cells in EPSG:32611 over the bake's bounds. To make it from
 the public 3DEP data, see
 [`docs/data.md`](../../docs/data.md#flight-harness-dem).
 
@@ -107,10 +108,17 @@ mission's height, and renders frames from the raster pair on request.
 
 | Flag | Description |
 |---|---|
+| `--episode <id>` | Episode to fly. Required. With `--start-xy`, the ID of a mission with no row. |
+| `--ortho <raster dir>` | Raster pair the frames are rendered from. Required. |
+| `--split <split>` | Split the episode is read from. Default: the Cal City bench's. |
+| `--instruction <words>` | Operator's words in place of the episode's. |
+| `--start-xy <x,y>` | Flies a mission with no row from this point in the bake's frame. Requires `--instruction`. |
 | `--then <tasking>` | Speaks a tasking after each report, in order. |
+| `--reasoning-effort <effort>` | Run's reasoning effort. |
 | `--register <raster dir>` | Registers each frame. |
+| `--out <dir>` | Where the sortie lands, as `<dir>/<UTC stamp>/`. Default `output/flight`. |
 
-The run lands under `output/flight/<UTC stamp>/` with the run records a flown
+The run lands under `<out>/<UTC stamp>/` with the run records a flown
 run carries, the ownship track (`flight_track.jsonl`,
 `Mission._record_track`) among them. `measures` scores it as it scores a
 flown sortie.
@@ -129,8 +137,11 @@ sortie-level files are in the sortie folder.
 |---|---|
 | `episode.json`, and one line of the sortie's `episodes.jsonl` | Ledger row. |
 | `conversation.jsonl` | Every transcript row, stamped `t_s`. |
+| `detections.jsonl` | One line per detection, stamped with its step. |
+| `frames/<sha>.jpg` | Every picture the model was sent. |
 | `frames.jsonl` | One row per observation. |
 | `observations/<sha>.jpg` | Observations. |
+| `run.log` | Process log while the mission runs. |
 | `flight/llm/transcript.jsonl` | Wire record. |
 | Sortie's `flight_track.jsonl` | Ownship track. |
 
@@ -146,8 +157,11 @@ rows. No measure or decision reads the following fields:
 ## Closed-loop measures
 
 ```sh
-python -m benchmarks.flight.measures --root <sorties>/* --truth <adjudications dir> <flight-week tasking JSON> [--json]
+python -m benchmarks.flight.measures --root <sorties>/* --truth <truth>... [--json]
 ```
+
+`--truth` takes directories of analysts' `<sortie>.json` entries, the tasking
+set's split JSON, or both.
 
 The command prints the totals, the totals by intel quality and by model and
 reasoning effort, the median turn radius the way back is flown at, then one
@@ -158,7 +172,7 @@ records.
 |---|---|
 | SR | The commit point lies inside the target's mask: the analyst's hand-drawn one, else the tasking set's footprint. |
 | NE | Distance from the commit point to the mask's centroid. |
-| OSR | The aircraft's path (its GNSS track or the centres of the observations it fused) came within one camera footprint width of the target. |
+| OSR | The aircraft's path (its GNSS track or the centres of the observations it fused) came within one camera footprint width of the target. The width is the C-12 camera's (`airframe.C12_SENSOR`) at the height of the closest approach. |
 | Time to identification, SPL, tokens | See the module's docstring. |
 
 | Run | Scoring |
