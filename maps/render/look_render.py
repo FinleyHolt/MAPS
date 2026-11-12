@@ -53,6 +53,16 @@ def look_window_bounds_m(gsd_m: float) -> tuple[float, float]:
     return LOOK_CTX_MIN_PX * g, LOOK_CTX_BUDGET_PX * g
 
 
+def _ring_area2(ring) -> float:
+    """Twice the area a closed ring encloses (the shoelace sum)."""
+    total = 0.0
+    for i in range(len(ring)):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % len(ring)]
+        total += x1 * y2 - x2 * y1
+    return abs(total)
+
+
 def subject_window_containment(
     world_window,
     subject_xy,
@@ -86,12 +96,7 @@ def subject_window_containment(
         poly = clipped
         if len(poly) < 3:
             return False, False
-    area = 0.0
-    for i in range(len(poly)):
-        x1, y1 = poly[i]
-        x2, y2 = poly[(i + 1) % len(poly)]
-        area += x1 * y2 - x2 * y1
-    return bool(abs(area) / 2.0 > 1e-9), False
+    return bool(_ring_area2(poly) / 2.0 > 1e-9), False
 
 
 def resolve_window_center(
@@ -259,9 +264,9 @@ def look_label(fid: str, row: object, *, is_target: bool) -> str:
         base = f"{cls} {fid}".strip()
     else:
         base = fid
-    _a = row.get("footprint_area_m2") if isinstance(row, dict) else None
-    if isinstance(_a, (int, float)) and not isinstance(_a, bool) and _a:
-        base = f"{base} — {float(_a):.0f} m2"
+    area_m2 = row.get("footprint_area_m2") if isinstance(row, dict) else None
+    if isinstance(area_m2, (int, float)) and not isinstance(area_m2, bool) and area_m2:
+        base = f"{base} — {float(area_m2):.0f} m2"
     return f"TARGET {base}" if is_target else base
 
 
@@ -279,18 +284,8 @@ def look_outline(row: object) -> list | None:
     m = row.get("mask") if isinstance(row, dict) else None
     if not (isinstance(m, list) and m):
         return None
-
-    def _area2(lp):
-        s = 0.0
-        n = len(lp)
-        for i in range(n):
-            x1, y1 = lp[i]
-            x2, y2 = lp[(i + 1) % n]
-            s += x1 * y2 - x2 * y1
-        return abs(s)
-
     loop = simplify_ring(
-        max(m, key=_area2), tolerance=LOOK_OUTLINE_TOL_M, max_points=LOOK_OUTLINE_MAX_VERTS
+        max(m, key=_ring_area2), tolerance=LOOK_OUTLINE_TOL_M, max_points=LOOK_OUTLINE_MAX_VERTS
     )
     return [[round(float(p[0]), 2), round(float(p[1]), 2)] for p in loop]
 
@@ -302,7 +297,7 @@ def render_candidate_crops(
     rgbd_dir: str,
     imagery=None,
 ) -> list[dict]:
-    """One crop record per request (``views.crop_requests``), in order: the
+    """One crop record per request (``picture_requests.crop_requests``), in order: the
     window is sized and centred here, then ``_crop_record`` renders it.
     ``imagery`` (``gsd_m`` and ``ortho(window)``) is the run's own captures
     in a flight mission; unset, the raster is the camera. A failed crop is
@@ -314,20 +309,20 @@ def render_candidate_crops(
     # The raster extent a near-edge window shifts inside (the run's imagery
     # has no edge). An unreadable ortho renders no crops, so the 0.1 m/px
     # fallback only sizes windows that then fail.
-    _wb = None
+    raster_bounds = None
     if imagery is not None:
-        _gsd = float(imagery.gsd_m)
+        gsd_m = float(imagery.gsd_m)
     else:
         try:
-            _wb = ortho_world_bounds(map_name, rgbd_dir=rgbd_dir)
+            raster_bounds = ortho_world_bounds(map_name, rgbd_dir=rgbd_dir)
         except Exception as exc:
             log.debug("look: no raster bounds for %s (%s); no edge-shift", map_name, exc)
         try:
-            _gsd = ortho_gsd_m(map_name, rgbd_dir=rgbd_dir)
+            gsd_m = ortho_gsd_m(map_name, rgbd_dir=rgbd_dir)
         except Exception as exc:
-            _gsd = 0.10
+            gsd_m = 0.10
             log.debug("look: no ortho gsd for %s (%s); sizing at 0.1 m/px", map_name, exc)
-    _min_m, _budget_m = look_window_bounds_m(_gsd)
+    floor_m, ceiling_m = look_window_bounds_m(gsd_m)
 
     out: list[dict] = []
     for req in requests:
@@ -336,35 +331,35 @@ def render_candidate_crops(
             continue
         true_x, true_y = float(cxy[0]), float(cxy[1])
         pts = [(true_x, true_y)]
-        for _m in req.get("marks") or []:
-            _mxy = _m.get("xy") if isinstance(_m, dict) else None
-            if isinstance(_mxy, (list, tuple)) and len(_mxy) == 2:
-                pts.append((float(_mxy[0]), float(_mxy[1])))
-            if isinstance(_m, dict):
-                pts += xy_list(_m.get("boundary"))
-        _xs = [p[0] for p in pts]
-        _ys = [p[1] for p in pts]
-        _hull = max(max(_xs) - min(_xs), max(_ys) - min(_ys)) if len(pts) > 1 else 0.0
-        _diag = 0.0
-        _bpts = xy_list(req.get("center_boundary"))
-        if len(_bpts) >= 2:
-            _bdx = max(p[0] for p in _bpts) - min(p[0] for p in _bpts)
-            _bdy = max(p[1] for p in _bpts) - min(p[1] for p in _bpts)
-            _diag = (_bdx * _bdx + _bdy * _bdy) ** 0.5
-        _is_point = not str(req.get("center_fid") or "").strip()
-        _floor = LOOK_POINT_CTX_M if (_is_point and _diag <= 0) else _min_m
-        _ctx = max(_floor, 3.0 * _diag, _hull + LOOK_CAR_MARGIN_M)
-        _span = req.get("obs_span_m")
-        if isinstance(_span, (int, float)) and _span > 0:
-            _ctx = min(_ctx, max(_min_m, float(_span)))
-        _ctx = min(_ctx, _budget_m)
-        half_ctx = _ctx / 2.0
+        for mark in req.get("marks") or []:
+            mark_xy = mark.get("xy") if isinstance(mark, dict) else None
+            if isinstance(mark_xy, (list, tuple)) and len(mark_xy) == 2:
+                pts.append((float(mark_xy[0]), float(mark_xy[1])))
+            if isinstance(mark, dict):
+                pts += xy_list(mark.get("boundary"))
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        hull_side_m = max(max(xs) - min(xs), max(ys) - min(ys)) if len(pts) > 1 else 0.0
+        subject_diag_m = 0.0
+        subject_pts = xy_list(req.get("center_boundary"))
+        if len(subject_pts) >= 2:
+            subject_dx = max(p[0] for p in subject_pts) - min(p[0] for p in subject_pts)
+            subject_dy = max(p[1] for p in subject_pts) - min(p[1] for p in subject_pts)
+            subject_diag_m = (subject_dx * subject_dx + subject_dy * subject_dy) ** 0.5
+        is_point = not str(req.get("center_fid") or "").strip()
+        min_ctx_m = LOOK_POINT_CTX_M if (is_point and subject_diag_m <= 0) else floor_m
+        ctx_m = max(min_ctx_m, 3.0 * subject_diag_m, hull_side_m + LOOK_CAR_MARGIN_M)
+        obs_span = req.get("obs_span_m")
+        if isinstance(obs_span, (int, float)) and obs_span > 0:
+            ctx_m = min(ctx_m, max(floor_m, float(obs_span)))
+        ctx_m = min(ctx_m, ceiling_m)
+        half_ctx = ctx_m / 2.0
         # the hull centre: the window is sized off the hull, so only its
         # centre is sure to contain it
         pose_x, pose_y = resolve_window_center(
             (true_x, true_y),
-            ((max(_xs) + min(_xs)) / 2.0, (max(_ys) + min(_ys)) / 2.0),
-            _wb,
+            ((max(xs) + min(xs)) / 2.0, (max(ys) + min(ys)) / 2.0),
+            raster_bounds,
             half_ctx,
             LOOK_CAR_MARGIN_M,
         )
@@ -374,7 +369,7 @@ def render_candidate_crops(
             map_name=map_name,
             true_xy=(round(true_x, 2), round(true_y, 2)),
             pose_xy=(round(pose_x, 2), round(pose_y, 2)),
-            ctx=_ctx,
+            ctx=ctx_m,
             rgbd_dir=rgbd_dir,
             imagery=imagery,
         )
@@ -396,14 +391,14 @@ def _crop_record(
     center_fid = str(req.get("center_fid") or "")
     center_label = str(req.get("center_label") or center_fid or "candidate")
     try:
-        _window = (pose_x - half_ctx, pose_y - half_ctx, pose_x + half_ctx, pose_y + half_ctx)
+        window = (pose_x - half_ctx, pose_y - half_ctx, pose_x + half_ctx, pose_y + half_ctx)
         oc = observation.crop_ortho_observation(
             map_name=map_name,
             pose_xy=(pose_x, pose_y),
             altitude_m=ground + half_ctx,
             ground_z=ground,
             rgbd_dir=rgbd_dir,
-            ortho=imagery.ortho(_window) if imagery is not None else None,
+            ortho=imagery.ortho(window) if imagery is not None else None,
         )
     except Exception as exc:
         log.warning("look: crop render failed at %s: %s", (true_x, true_y), exc)
@@ -411,19 +406,19 @@ def _crop_record(
     # north-up: row 0 is the window's max world y
     rgb = np.ascontiguousarray(oc["rgb"])
     validity = np.ascontiguousarray(oc["validity"])
-    _up = max(1, min(3, round(LOOK_TARGET_PX / max(1, rgb.shape[1]))))
-    if _up > 1:
+    upscale = max(1, min(3, round(LOOK_TARGET_PX / max(1, rgb.shape[1]))))
+    if upscale > 1:
         rgb = cv2.resize(
-            rgb, (rgb.shape[1] * _up, rgb.shape[0] * _up), interpolation=cv2.INTER_LANCZOS4
+            rgb, (rgb.shape[1] * upscale, rgb.shape[0] * upscale), interpolation=cv2.INTER_LANCZOS4
         )
     H, W = rgb.shape[:2]
     # A declared view (``frame_up``) rotates pixels and ink together; the
     # unrotated validity is the window's own data for the caption facts.
     # ponytail: whole-image warp (corners go black); a sqrt(2) over-crop
     # upgrade keeps full coverage if framed crops prove load-bearing.
-    _rotM, band_text = view_rotation(req.get("frame_up"), W, H)
-    if _rotM is not None:
-        rgb = cv2.warpAffine(rgb, _rotM, (W, H))
+    rotation, band_text = view_rotation(req.get("frame_up"), W, H)
+    if rotation is not None:
+        rgb = cv2.warpAffine(rgb, rotation, (W, H))
     x0, y0, x1, y1 = oc["world_window"]
     meta = {
         "center_fid": center_fid,
@@ -443,8 +438,8 @@ def _crop_record(
     meta.update(frame_echo(req))
     sx = (x1 - x0) or 1.0
     sy = (y1 - y0) or 1.0
-    _w2p = pixel_mapper(x0, y1, sx, sy, W, H, _rotM)
-    center_px = _w2p(true_x, true_y)
+    to_px = pixel_mapper(x0, y1, sx, sy, W, H, rotation)
+    center_px = to_px(true_x, true_y)
 
     marks = req.get("marks") or None
     target_px: tuple[float, float] | None = None
@@ -455,34 +450,34 @@ def _crop_record(
     # digits as the overlay draws them: 1 centre, 2 target, 3.. the rest;
     # marks past LOOK_MAX_BADGES are dropped and counted
     legend: list[dict] = [{"digit": 1, "label": center_label, "role": "center"}]
-    _dropped_marks = 0
-    shown, _marks_out_of_view, _marks_unbadged_in_frame = frame_marks(
-        marks, center_fid, _w2p, W, H, window=meta["world_window"]
+    marks_dropped = 0
+    shown, marks_out_of_view, marks_unbadged = frame_marks(
+        marks, center_fid, to_px, W, H, window=meta["world_window"]
     )
-    for mk, mfid, px, py in shown:
-        if bool(mk.get("is_target")) and target_px is None:
+    for mark, mark_fid, px, py in shown:
+        if bool(mark.get("is_target")) and target_px is None:
             target_px = (px, py)
-            target_label = str(mk.get("label") or mfid)
-            target_poly_px = frame_arcs(mk.get("boundary"), _w2p, W, H)
+            target_label = str(mark.get("label") or mark_fid)
+            target_poly_px = frame_arcs(mark.get("boundary"), to_px, W, H)
             legend.append({"digit": 2, "label": target_label, "role": "target"})
         elif len(neighbor_px) >= LOOK_MAX_BADGES - 2:
-            _dropped_marks += 1
+            marks_dropped += 1
         else:
             neighbor_px.append((px, py))
-            neighbor_polys_px.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
+            neighbor_polys_px.append(frame_arcs(mark.get("boundary"), to_px, W, H))
             legend.append(
                 {
                     "digit": 2 + len(neighbor_px),
-                    "label": str(mk.get("label") or mfid),
+                    "label": str(mark.get("label") or mark_fid),
                     "role": "context",
                 }
             )
 
     try:
-        jp = mark_overlay.render_look_overlay(
+        jpeg = mark_overlay.render_look_overlay(
             rgb,
             center_px=center_px,
-            center_poly_px=frame_arcs(req.get("center_boundary"), _w2p, W, H),
+            center_poly_px=frame_arcs(req.get("center_boundary"), to_px, W, H),
             target_px=target_px,
             target_poly_px=target_poly_px,
             neighbor_polys_px=neighbor_polys_px,
@@ -497,27 +492,29 @@ def _crop_record(
         return None
     # the caption's facts: is the subject in frame, how big, cut by the
     # frame, and on raster data (validity 0 renders black)
-    _sin, _cin = subject_window_containment(
+    subject_in, centroid_in = subject_window_containment(
         meta["world_window"], (true_x, true_y), req.get("center_boundary")
     )
-    meta["subject_in_window"] = _sin
-    meta["subject_centroid_in_window"] = _cin
-    _cb = xy_list(req.get("center_boundary"))
-    if len(_cb) >= 3:
-        _bx0, _bx1 = min(p[0] for p in _cb), max(p[0] for p in _cb)
-        _by0, _by1 = min(p[1] for p in _cb), max(p[1] for p in _cb)
-        meta["subject_extent_m"] = [round(_bx1 - _bx0, 1), round(_by1 - _by0, 1)]
-        meta["subject_outline_cut"] = bool(_bx0 < x0 or _bx1 > x1 or _by0 < y0 or _by1 > y1)
+    meta["subject_in_window"] = subject_in
+    meta["subject_centroid_in_window"] = centroid_in
+    subject_pts = xy_list(req.get("center_boundary"))
+    if len(subject_pts) >= 3:
+        sx0, sx1 = min(p[0] for p in subject_pts), max(p[0] for p in subject_pts)
+        sy0, sy1 = min(p[1] for p in subject_pts), max(p[1] for p in subject_pts)
+        meta["subject_extent_m"] = [round(sx1 - sx0, 1), round(sy1 - sy0, 1)]
+        meta["subject_outline_cut"] = bool(sx0 < x0 or sx1 > x1 or sy0 < y0 or sy1 > y1)
     else:
         meta["subject_extent_m"] = None
         meta["subject_outline_cut"] = False
-    _Hv, _Wv = validity.shape[:2]
+    valid_h, valid_w = validity.shape[:2]
     meta["window_valid_frac"] = round(float((validity > 0).mean()), 3) if validity.size else 0.0
-    _spx = int(min(max((true_x - x0) / sx * _Wv, 0.0), _Wv - 1))
-    _spy = int(min(max((y1 - true_y) / sy * _Hv, 0.0), _Hv - 1))
-    meta["subject_on_data"] = bool(validity[_spy, _spx] > 0) if (_cin and validity.size) else None
+    subject_col = int(min(max((true_x - x0) / sx * valid_w, 0.0), valid_w - 1))
+    subject_row = int(min(max((y1 - true_y) / sy * valid_h, 0.0), valid_h - 1))
+    meta["subject_on_data"] = (
+        bool(validity[subject_row, subject_col] > 0) if (centroid_in and validity.size) else None
+    )
     meta["legend"] = legend
-    meta["marks_dropped"] = _dropped_marks
-    meta["marks_out_of_view"] = _marks_out_of_view
-    meta["marks_unbadged_in_frame"] = _marks_unbadged_in_frame
-    return {"jpeg": bytes(jp), **meta}
+    meta["marks_dropped"] = marks_dropped
+    meta["marks_out_of_view"] = marks_out_of_view
+    meta["marks_unbadged_in_frame"] = marks_unbadged
+    return {"jpeg": bytes(jpeg), **meta}

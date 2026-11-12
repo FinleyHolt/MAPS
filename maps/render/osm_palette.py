@@ -31,8 +31,8 @@ _LABEL_TAG_KEYS = (
 )
 
 # 12 hue-bucket words (30 deg each, centered on 0=red) so a text legend can
-# name a digest-derived hue: the model reads "residential=teal" beside the
-# teal region. Coarse on purpose -- a schematic's legend, not a color science.
+# name a digest-derived hue: the model reads "residential=yellow-green" beside the
+# region painted that hue. Coarse on purpose -- a schematic's legend, not a color science.
 _HUE_WORDS = (
     "red",
     "orange",
@@ -75,7 +75,7 @@ def _hsv_rgb(label: str, s: float, v: float) -> tuple[int, int, int]:
 
 def color_word(label: str) -> str:
     """The hue-bucket word for a label's colour, for the map's text legend
-    ("residential=teal"). Derived from the SAME digest as the paint so word
+    ("residential=yellow-green"). Derived from the SAME digest as the paint so word
     and paint can never disagree."""
     return _HUE_WORDS[int(_hue(label) * 12.0) % 12]
 
@@ -86,22 +86,18 @@ def color_word(label: str) -> str:
 _ROAD_RGB = (208, 208, 208)
 _BUILDING_RGB = (206, 160, 102)
 
-# Tag keys that make a feature a ROAD / a BUILDING for painting purposes.
-# Everything else (landuse, natural, leisure, water, barriers, POIs) is
-# context and paints as an AREA.
-_ROAD_TAG_KEY = "highway"
-_BUILDING_TAG_KEY = "building"
-
 
 def osm_kind(tags: dict | None) -> str:
     """A prior's paint kind from its raw OSM tags: ``road`` | ``building``
     | ``area``. The label alone cannot carry this — ``highway=residential``
     (a street) and ``landuse=residential`` (a tract) both label
-    ``residential``."""
+    ``residential``. Everything that is neither a road nor a building
+    (landuse, natural, leisure, water, barriers, POIs) is context and paints
+    as an area."""
     t = tags or {}
-    if _ROAD_TAG_KEY in t:
+    if "highway" in t:
         return "road"
-    if _BUILDING_TAG_KEY in t:
+    if "building" in t:
         return "building"
     return "area"
 
