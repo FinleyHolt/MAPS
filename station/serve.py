@@ -73,6 +73,7 @@ from benchmarks.run_record.episode_workdir import (
 from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA, TOUR_CURSOR
 from benchmarks.run_record.rows import iter_json_rows
 from maps.llm import endpoint_spec, model_cards
+from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.settings import from_environ
 from station.bench_seat import END_WAIT_S, BenchMission, with_words
@@ -427,7 +428,7 @@ class Station:
         answer with no tool call) onto the transcript: every report but the last rides its
         ``mission_end`` row as ``said``, and the last is returned as the mission's report."""
         replies = []
-        for row in iter_json_rows(workdir / "flight" / "llm" / "transcript.jsonl"):
+        for row in iter_json_rows(workdir / "flight" / "llm" / TRANSCRIPT_JSONL):
             message = ((row.get("response") or {}).get("choices") or [{}])[0].get("message") or {}
             if (
                 row.get("kind") == "response"
