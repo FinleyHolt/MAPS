@@ -19,6 +19,7 @@ channels:
 dependencies:
   - python=3.12
   - pip
+  - setuptools<81   # sam3 imports pkg_resources, which setuptools 81 removed
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu128
       - torch>=2.3
@@ -28,6 +29,9 @@ dependencies:
       - numpy<2
       - pillow
       - opencv-python-headless>=4.8
+      - einops           # sam3 imports these without declaring them
+      - psutil
+      - pycocotools
       - fastapi==0.139.0
       - starlette>=0.49.1
       - uvicorn==0.50.2
