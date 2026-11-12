@@ -23,7 +23,7 @@ CARDS: dict[str, dict[str, Any]] = {
     # model card): a permissive envelope, not a card-derived one. The
     # template's `reasoning_effort` ({none:0.0, minimal:0.1, low:0.2,
     # medium:0.7, high:0.9, max:0.99}, or a raw float in [0.0, 0.99])
-    # DEFAULTS TO 0.9 when the request omits it — the expensive end.
+    # DEFAULTS TO 0.9 when the request omits it, the expensive end.
     "inkling-small": {
         "tokenizer": "thinkingmachines/Inkling-Small-NVFP4",
         "top_p": 0.95,
@@ -35,7 +35,7 @@ CARDS: dict[str, dict[str, Any]] = {
     # GatedDeltaNet + Qwen Sparse Attention, n-gram PLE, one MTP layer). Its
     # generation_config.json states temperature 1.0, top_p 0.95, top_k 20 and
     # nothing else; temperature is the caller's argument. The template's
-    # `reasoning_effort` DEFAULTS TO xhigh — the expensive end. The serve's
+    # `reasoning_effort` DEFAULTS TO xhigh, the expensive end. The serve's
     # --tool-call-parser qwen3_coder owns enforcement.
     "qwen38-flash-next-nvfp4": {
         "tokenizer": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
@@ -156,7 +156,7 @@ def check_effort(model_id: str | None, raw: str) -> None:
 def speaks_openai(model_id: str | None) -> bool:
     """Whether the served model takes OpenAI's chat-completions contract
     rather than a self-hosted chat template's. A name with no card reads
-    False, so a reader of an old record never raises on it."""
+    False, so any record's model name reads without raising."""
     return CARDS.get((model_id or "").strip().lower(), {}).get("wire") == "openai"
 
 

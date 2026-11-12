@@ -1,4 +1,4 @@
-"""The flight transcript stores the conversation once — deltas, not snapshots.
+"""The flight transcript stores the conversation once: each request writes its message delta.
 
 ``maps.llm.http`` appends three record kinds to
 ``flight/llm/transcript.jsonl``: ``params`` (one per distinct
@@ -84,7 +84,7 @@ def test_image_parts_become_sha_refs_and_no_data_urls_survive(tmp_path):
         },
     ]
     body = _body(msgs)
-    # Vacuity floor: the input really carries an image_url data part —
+    # Vacuity floor: the input really carries an image_url data part;
     # without this, a scrub that dropped the message entirely would pass.
     assert "data:image" in json.dumps(body)
 
@@ -97,7 +97,7 @@ def test_image_parts_become_sha_refs_and_no_data_urls_survive(tmp_path):
     assert part["type"] == "image_ref"
     assert part["sha256"] == hashlib.sha256(raw).hexdigest()
     assert part["bytes"] == len(raw)
-    # The caller's body is untouched — the scrub never mutates the wire dict.
+    # The caller's body is untouched: the scrub never mutates the wire dict.
     assert body["messages"][0]["content"][1]["type"] == "image_url"
 
 
