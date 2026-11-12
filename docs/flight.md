@@ -13,7 +13,7 @@ measures.
 |---|---|---|
 | Fly a mission without an aircraft | Twin. See [Fly the twin](#fly-the-twin). | The Cal City bake and raster pair ([`data.md`](data.md#cal-city)), a reasoner, and the SAM serve ([`endpoints.md`](endpoints.md)). |
 | Watch or re-task a twin mission in a browser, or review finished runs | Station. See [`station/README.md`](../station/README.md). | To fly: what the twin needs. To review: the run folders. |
-| Score runs | [`benchmarks/flight/measures.py`](../benchmarks/flight/measures.py). See [`experiments.md`](experiments.md#closed-loop-measures-e6). | Sortie folders and truth for their targets. |
+| Score runs | [`benchmarks/flight/measures.py`](../benchmarks/flight/measures.py). See [`experiments.md`](experiments.md#closed-loop-measures). | Sortie folders and truth for their targets. |
 | Fly your own aircraft | A `Vehicle`. See [Bring your own aircraft](#bring-your-own-aircraft). | Your aircraft, its camera recording, and a bake of your area. |
 
 ## Harness

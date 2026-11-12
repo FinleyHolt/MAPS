@@ -85,7 +85,7 @@ keys exactly:
 
 | Served model name | Model |
 |---|---|
-| `inkling-small`, `qwen38-flash-next-nvfp4`, `gemma4-26b-a4b-nvfp4` | Inkling Small, Qwen 3.8 Flash Next, and Gemma 4 26B-A4B, the models of E2 to E4. |
+| `inkling-small`, `qwen38-flash-next-nvfp4`, `gemma4-26b-a4b-nvfp4` | Inkling Small, Qwen 3.8 Flash Next, and Gemma 4 26B-A4B, the models of E2 and E3. |
 | `gemma4-e4b`, `gemma4-e2b` | Gemma 4 E4B and E2B (E2). |
 | `gemma4-26b-a4b-gguf` | Gemma 4 26B-A4B on the llama.cpp serve flown aboard. |
 | `kimi-k3.1-pro` | Kimi K3.1 Pro. |
