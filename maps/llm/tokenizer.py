@@ -3,13 +3,14 @@ sizing (the compactor) and reasoning-token counts (``flight_summary``)."""
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
-# Imported at module load: transformers' lazy module races when several
-# threads first import AutoTokenizer at once.
-from transformers import AutoTokenizer
-
 from maps.llm.model_cards import CARDS
+
+# transformers' lazy module races when several threads first import
+# AutoTokenizer at once, so the deferred import runs under one lock.
+_IMPORT_LOCK = threading.Lock()
 
 # A pure cache: a tokenizer is immutable once loaded, so one per repo serves
 # every mission in the process.
@@ -35,6 +36,8 @@ def load_tokenizer(model: str, tokenizer_name: str = ""):
     cached = _TOKENIZER_CACHE.get(hf_name)
     if cached is not None:
         return cached
+    with _IMPORT_LOCK:
+        from transformers import AutoTokenizer
     try:
         tok = AutoTokenizer.from_pretrained(hf_name)
     except Exception as exc:
