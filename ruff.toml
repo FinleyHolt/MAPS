@@ -1,4 +1,4 @@
-target-version = "py311"
+target-version = "py312"
 
 exclude = [
     # Vendored upstream CityNav rasterize (water-cookie/citynav, MIT), kept verbatim.
