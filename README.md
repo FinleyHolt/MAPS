@@ -50,7 +50,10 @@ unpacks to (the archive's own README gives the exact command):
 SEARCH_CALCITY_TILES=<folder>/bake python -m station.serve --bench calcity --out <folder>/runs --basemap <folder>/basemap.jpg
 ```
 
-Then open `http://127.0.0.1:8788`, pick a run and scrub through it.
+Then open `http://127.0.0.1:8788`. The missions with a recorded run lead
+the list: click the run count on a row, then the run, to read the model's
+reasoning and code turn by turn beside the pictures it was sent, its path
+on the map and its score.
 [`station/README.md`](station/README.md) describes the console.
 
 ## Run it on CityNav

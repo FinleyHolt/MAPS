@@ -37,5 +37,5 @@ test("a bench run's empty picture book points at the transcript; a flying twin's
   assert.match(emptyBook({ kind: "replay", status: "ended" }), /IN THE TRANSCRIPT/);
   assert.match(emptyBook({ kind: "bench", status: "flying" }), /IN THE TRANSCRIPT/);
   assert.match(emptyBook({ kind: "twin", status: "flying" }), /YET/);
-  assert.match(emptyBook(null), /YET/);
+  assert.match(emptyBook(null), /OPEN A RUN/);
 });

@@ -376,8 +376,9 @@ export function MissionConsole() {
   }, [draft]);
 
   const outage = armOutage(mission);
-  const emptySeatHint = about && !about.flies
-    ? `${about.why ?? "This station reviews runs only."} A row with finished runs expands to them, and a run opens as a review.`
+  const reviewOnly = about !== null && !about.flies;
+  const emptySeatHint = reviewOnly
+    ? `${runs.length} recorded run${runs.length === 1 ? "" : "s"} to review. A mission marked completed expands to its runs: click the run count on its row, then the run.`
     : ownWords
       ? "Click a mission: its words go in the box, its target on the map, and send flies it. Or type your own tasking: send flies it from the map centre, unscored."
       : "Click a mission: its words go in the box, its target on the map, and send flies it as the bench flies it. Edit the words to fly the same row under your own.";
@@ -423,8 +424,8 @@ export function MissionConsole() {
             : "no mission"}
         </span>
         <span className="station-spacer" />
-        <Readout label="turns" value={mission?.turns_used ?? 0} />
-        <Readout label="flights" value={mission?.flights_flown ?? 0} />
+        <Readout label="turns" value={activeMission?.turns_used ?? 0} />
+        <Readout label="flights" value={activeMission?.flights_flown ?? activeMission?.flights?.length ?? 0} />
         <span className="status-chip" data-status={replay ? "review" : mission?.status ?? "idle"}>
           {replay ? "Review" : STATUS_LABEL[mission?.status ?? "idle"] ?? mission?.status}
         </span>
@@ -637,8 +638,8 @@ export function MissionConsole() {
               ref={inputRef}
               className="chatbox-input"
               aria-label="Message the agent"
-              placeholder={startsPicked ? "The mission's words: edit them if you like, then send to fly it" : flying ? "Message the agent" : live ? "Answer the report, or click a mission" : ownWords ? "Click a mission, or type your own tasking" : "Click a mission"}
-              disabled={busy}
+              placeholder={reviewOnly ? "This station reviews recorded runs; it flies none" : startsPicked ? "The mission's words: edit them if you like, then send to fly it" : flying ? "Message the agent" : live ? "Answer the report, or click a mission" : ownWords ? "Click a mission, or type your own tasking" : "Click a mission"}
+              disabled={busy || reviewOnly}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {

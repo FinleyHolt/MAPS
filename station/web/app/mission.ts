@@ -176,6 +176,7 @@ export function emptyBook(mission: Pick<MissionState, "kind" | "status"> | null)
   if (mission && (mission.kind !== "twin" || mission.status === "ended" || mission.status === "failed")) {
     return "THIS RUN RECORDED NO OBSERVATIONS · THE PICTURES THE MODEL WAS SENT ARE IN THE TRANSCRIPT";
   }
+  if (mission === null) return "OPEN A RUN OR FLY A MISSION · ITS PICTURES LAND HERE";
   return "NO OBSERVATIONS YET · EACH WAYPOINT FLOWN OVER LANDS HERE AS ONE IMAGE";
 }
 
