@@ -65,6 +65,14 @@ class Engine:
 
         return mission_engine.MissionSession(h, recorder=recorder, observe=observe)
 
+    def load_objects(self, objects_json: Path) -> dict:
+        return adapter.load_objects(objects_json)
+
+    def fly_attempt(self, **attempt: Any) -> dict:
+        from benchmarks.citynav.run_benchmark import dispatch  # noqa: PLC0415  (the mission stack)
+
+        return dispatch.dispatch_one(idx=0, total=1, **attempt)
+
     def is_infra_fault(self, exc: BaseException) -> bool:
         from benchmarks.citynav.run_benchmark import dispatch  # noqa: PLC0415  (the mission stack)
 

@@ -87,6 +87,16 @@ class EpisodeEngine(Protocol):
 
     def open_session(self, h: Any, *, recorder: Any = None, observe: Any = None) -> Any: ...
 
+    def load_objects(self, objects_json: Path) -> dict:
+        """The scorer's answer key: map name -> its catalog objects (``id``, ``contour``)."""
+
+    def fly_attempt(self, **attempt: Any) -> dict:
+        """One attempt flown, scored and written as the bench's runner
+        dispatches it (its ``dispatch_one``, whose keywords these are), and
+        its row. ``converse`` drives the mission conversation over the
+        episode's session in place of the bench's one turn: the station's,
+        which holds the conversation open for an operator."""
+
     def is_infra_fault(self, exc: BaseException) -> bool: ...
 
 

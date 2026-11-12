@@ -262,16 +262,21 @@ def run_episode(
     settings: Settings,
     workdir: Path | None = None,
     routing_key: str | None = None,
+    converse: Callable[[MissionSession], Any] | None = None,
 ) -> dict:
     """Fly one episode of ``bench`` under ``settings`` and return its scored
     record; ``workdir`` is the attempt's directory and ``routing_key`` its
     router-affinity key. The whole episode runs under the set the run
-    withholds, so a baseline policy's calls read it as the mission's do."""
+    withholds, so a baseline policy's calls read it as the mission's do.
+    ``converse`` drives the mission conversation over the episode's session in
+    place of :func:`run_mission_episode` and returns its last reply (the
+    station's, which holds the conversation open for an operator); the build,
+    the replay and the scoring around it are this function's either way."""
     with withholding(settings.withhold):
-        return _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdir, routing_key)
+        return _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdir, routing_key, converse)
 
 
-def _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdir, routing_key) -> dict:
+def _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdir, routing_key, converse=None) -> dict:
     assets = load_episode_assets(bench, episode.map_name)
     log.info("tile_stem=%s map_name=%s", bench.tile_stem(episode.map_name), episode.map_name)
     if cfg.spawn == "uniform":
@@ -299,7 +304,7 @@ def _run_episode(episode, objects_by_map, cfg, bench, recorder, settings, workdi
     start_alt = float(state.altitude_m)
     if cfg.policy is None:
         session = MissionSession(h, recorder=recorder)
-        reply = run_mission_episode(session)
+        reply = (converse or run_mission_episode)(session)
         flights = session.flights
         own = {"mission": {"ended_by": reply.ended_by}}
     else:
