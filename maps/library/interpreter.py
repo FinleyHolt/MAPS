@@ -206,7 +206,7 @@ class MissionPython:
         except HARNESS_FAULTS:
             raise
         except Exception as e:
-            self._unbind_failed_assign(tree, outer_block_line())
+            self._unbind_failed_assign(tree, *outer_block_line())
             if not isinstance(e, _Stop):  # a _Stop's refusal is in the receipt
                 line = block_line(self._block_codes)
                 what = str(e) if isinstance(e, CodeError) else f"{type(e).__name__}: {e}"
@@ -253,12 +253,23 @@ class MissionPython:
                 " or split it across turns."
             )
 
-    def _unbind_failed_assign(self, tree: ast.Module, line: int) -> None:
+    def _unbind_failed_assign(self, tree: ast.Module, line: int, col: int | None) -> None:
         """A rebind that failed UNBINDS the name: Python leaves the target
         holding its OLD value when the right-hand side raises, and a stale
-        pick that stays bound is a wrong commit."""
+        pick that stays bound is a wrong commit. ``(line, col)`` is where the
+        block raised; ``col`` None matches by line alone."""
         for node in ast.walk(tree):
-            if isinstance(node, ast.Assign) and node.lineno <= line <= node.end_lineno:
+            if not isinstance(node, ast.Assign):
+                continue
+            if col is None:
+                failed = node.lineno <= line <= node.end_lineno
+            else:
+                failed = (
+                    (node.lineno, node.col_offset)
+                    <= (line, col)
+                    < (node.end_lineno, node.end_col_offset)
+                )
+            if failed:
                 for t in node.targets:
                     # ast.walk reaches Names inside tuple/list unpacking
                     # too -- `a, b = <raises>` must unbind BOTH.

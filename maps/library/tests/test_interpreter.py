@@ -1293,3 +1293,14 @@ def test_a_models_own_error_inside_a_flight_is_served():
 
     _reply, fr, _f, _d = drive([[run('go_to("prior_7")')], "done"], fly=fly)
     assert "line 1: KeyError" in (tool_results(fr)[0].get("error") or "")
+
+
+def test_a_failed_assignment_unbinds_only_its_own_targets_on_a_shared_line():
+    """``a = 5; b = 1 / 0``: b's assignment failed, a's stands."""
+    from maps.library.interpreter import MissionPython
+
+    mp = MissionPython(quiet_env())
+    mp.ns["b"] = "stale"
+    assert "ZeroDivisionError" in mp.run_block("a = 5; b = 1 / 0").get("error", "")
+    assert mp.run_block("print(a)").get("printed") == "5"
+    assert "its assignment failed" in mp.run_block("print(b)").get("error", "")
