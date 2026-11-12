@@ -162,7 +162,7 @@ def speaks_openai(model_id: str | None) -> bool:
 
 def effort(reasoning_effort: str | None = None, sampling: Sampling = Sampling()) -> str | None:
     """The reasoning effort a request carries: the mission's own word, else
-    the arm's (``sampling.reasoning_effort``, ``SEARCH_SAMPLING_REASONING_EFFORT``),
+    the run's (``sampling.reasoning_effort``, ``SEARCH_SAMPLING_REASONING_EFFORT``),
     stripped; empty is none."""
     raw = reasoning_effort if reasoning_effort is not None else sampling.reasoning_effort
     return raw.strip() or None

@@ -2,8 +2,7 @@
 
 A pinhole over flat ground is exactly a homography, so the four footprint
 corners plus ``cv2.getPerspectiveTransform`` are the perspective render;
-relief displacement is not modelled. Every function takes the ortho and its
-bounds as arguments.
+relief displacement is not modelled.
 """
 
 from __future__ import annotations

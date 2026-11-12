@@ -102,7 +102,7 @@ def _unique_label(label, used: set, fid=None) -> str:
 
 
 def _compare(cx, a):
-    """Attach each ref's relation columns (:data:`_TABLE_LEGEND`) to every
+    """Attach each ref's relation columns (:data:`result_tables._TABLE_LEGEND`) to every
     item row, in input order. A ref is a surface row, an [x, y], a staged
     viewpoint or a union ``{ref: [fid | rN | [x, y], ...]}`` measured as one
     place."""
