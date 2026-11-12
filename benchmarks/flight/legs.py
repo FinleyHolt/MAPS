@@ -290,8 +290,8 @@ class Legs:
             "label": leg.target,
             "coverageFloor": COVERED_FRACTION,
         }
-        if (at := self._to_lonlat([leg.point])[0]) is not None:
-            row["lon"], row["lat"] = at
+        if (lonlat := self._to_lonlat([leg.point])[0]) is not None:
+            row["lon"], row["lat"] = lonlat
         self.transcript.append(row)
 
     def outcome_words(
