@@ -125,7 +125,7 @@ variables that locate each bench's data, see
 | `SEARCH_ENDPOINT_SPEC_OVERRIDE` | Client | `<model_id>:<max_model_len>` for an endpoint whose `/v1/models` reports no window. |
 | `SEARCH_ENDPOINT_OFFLINE` | Client | `1`: nothing is probed and the override is the endpoint's spec. |
 | `SEARCH_REASONER_MODELS_URL` | Client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
-| `SEARCH_SAMPLING_REASONING_EFFORT` | Client | Arm's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`). Discovery refuses a value the served model's card doesn't take. Unset sends none. |
+| `SEARCH_SAMPLING_REASONING_EFFORT` | Client | Run's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`). Discovery refuses a value the served model's card doesn't take. Unset sends none. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | Client | HF tokenizer repo, or a local checkpoint directory on an offline machine, replacing the model card's. |
 | `SAM_SERVER_URL` | Client | SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset. A set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
 | `SAM_PORT`, `SAM_DEVICE` | Serve | Port (8772), device. |
@@ -151,7 +151,7 @@ under OpenAI's own chat-completions contract, with no chat template.
    python -m maps.mission.endpoint_preflight --effort none --effort medium --effort xhigh
    ```
 
-3. Fly an arm as any other. For example, the reviewed Cal City episodes at
+3. Fly a run as any other. For example, the reviewed Cal City episodes at
    one effort:
 
    ```sh
@@ -179,5 +179,5 @@ The card takes the efforts `none`, `low`, `medium`, `high`, `xhigh`, and
 | Reasoning | The thinking span doesn't come back in the clear. Each assistant turn carries the encrypted reasoning items its response returned, and the next request sends them back before that turn's calls, as a self-hosted chat template renders an earlier turn's `reasoning_content`. The compactor prices those items by the reasoning tokens that wrote them. The reasoning count is the provider's meter. |
 | Discovery | Azure's `/openai/v1/models` lists the resource's base models and leaves out its deployments. For this card, discovery takes the listing answering the key as the live check, and the first request is refused for a deployment name the resource doesn't carry. |
 | Rate limit | A Global Standard deployment's tokens-per-minute limit admits each request at its prompt plus `max_completion_tokens` (the output reserve, 40,000 tokens at the pinned window), whatever it bills. Size the limit to the bench's concurrency on that count. |
-| Window | The override pins the window Inkling Small is served with, so the compactor holds GPT-5.6 Sol to the same context budget as the other arms. The model's own window is 1,050,000 tokens. |
+| Window | The override pins the window Inkling Small is served with, so the compactor holds GPT-5.6 Sol to the same context budget as the other runs. The model's own window is 1,050,000 tokens. |
 | Prompt cache | Each request carries the episode's routing key as `prompt_cache_key`, and every turn's bytes open with the last turn's until an image eviction or a compaction fire rewrites an earlier message, so Azure's prompt cache serves the prefix. The preflight fails an effort whose second turn reads no cache hit. |

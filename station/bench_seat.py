@@ -73,7 +73,7 @@ class BenchMission:
         ep: OpenEpisode,
         reasoning_effort: str | None = None,
     ) -> None:
-        # The operator's effort is the arm's: the requests carry it and the row's flags record it.
+        # The operator's effort is the run's: the requests carry it and the row's flags record it.
         effort = (reasoning_effort or "").strip()
         self.bench = (
             bench.with_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort}) if effort else bench

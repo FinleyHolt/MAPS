@@ -7,7 +7,7 @@ from maps.llm.vision_content import build_image_part, build_vision_user_content
 from maps.settings import Sampling, from_environ
 
 
-def _arm(effort: str) -> Sampling:
+def _run_sampling(effort: str) -> Sampling:
     """The sampling of an environment whose SEARCH_SAMPLING_REASONING_EFFORT is ``effort``. A call
     that names no sampling reads an empty environment's, never the shell's."""
     return from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort}).sampling
@@ -33,15 +33,20 @@ def test_the_envelope_is_the_cards_flat_top_level_keys(model, top_k, extra) -> N
 
 
 def test_reasoning_effort_rides_as_the_string_given() -> None:
-    """The arm's effort is sent verbatim, never parsed into a number; unset or
-    empty sends no key; a mission's own effort wins, and None reads the arm's."""
+    """The run's effort is sent verbatim, never parsed into a number; unset or
+    empty sends no key; a mission's own effort wins, and None reads the run's."""
     assert "reasoning_effort" not in sampling_kwargs("inkling-small")
-    assert "reasoning_effort" not in sampling_kwargs("inkling-small", sampling=_arm(""))
-    for arm in ("high", "none", "0.99", "0.0"):
-        assert sampling_kwargs("inkling-small", sampling=_arm(arm))["reasoning_effort"] == arm
-    assert sampling_kwargs("inkling-small", "0.3", _arm("0.0"))["reasoning_effort"] == "0.3"
-    assert sampling_kwargs("inkling-small", None, _arm("0.0"))["reasoning_effort"] == "0.0"
-    assert "reasoning_effort" not in sampling_kwargs("inkling-small", "", _arm("0.0"))
+    assert "reasoning_effort" not in sampling_kwargs("inkling-small", sampling=_run_sampling(""))
+    for effort in ("high", "none", "0.99", "0.0"):
+        assert (
+            sampling_kwargs("inkling-small", sampling=_run_sampling(effort))["reasoning_effort"]
+            == effort
+        )
+    assert (
+        sampling_kwargs("inkling-small", "0.3", _run_sampling("0.0"))["reasoning_effort"] == "0.3"
+    )
+    assert sampling_kwargs("inkling-small", None, _run_sampling("0.0"))["reasoning_effort"] == "0.0"
+    assert "reasoning_effort" not in sampling_kwargs("inkling-small", "", _run_sampling("0.0"))
 
 
 def test_none_on_the_gemma_26b_card_sends_its_template_switch_off() -> None:
@@ -50,10 +55,10 @@ def test_none_on_the_gemma_26b_card_sends_its_template_switch_off() -> None:
     kw = sampling_kwargs("gemma4-26b-a4b-nvfp4", "none")
     assert kw["chat_template_kwargs"] == {"enable_thinking": False}
     assert "reasoning_effort" not in kw and kw["presence_penalty"] == 1.0
-    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", sampling=_arm("none"))[
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", sampling=_run_sampling("none"))[
         "chat_template_kwargs"
     ] == {"enable_thinking": False}
-    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", "high", _arm("none"))[
+    assert sampling_kwargs("gemma4-26b-a4b-nvfp4", "high", _run_sampling("none"))[
         "chat_template_kwargs"
     ] == {"enable_thinking": True}
 

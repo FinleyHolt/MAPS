@@ -48,9 +48,9 @@ from benchmarks.run_record.episodes import (
     write_episode_json,
 )
 from benchmarks.run_record.run_manifest import (
-    arm_env_stamp,
     build_manifest,
     emit_or_verify,
+    run_env_stamp,
     with_endpoint,
 )
 from maps.llm import endpoint_spec
@@ -156,7 +156,7 @@ class Mission:
         self.split = split
         self.config = config
         self.workdir = Path(workdir)
-        #: A string the serve accepts; None (or blank) flies the arm's.
+        #: A string the serve accepts; None (or blank) flies the run's.
         self.reasoning_effort = (reasoning_effort or "").strip() or None
         #: The height above ground the crew is commanded to fly.
         self.agl_m = float(agl_m)
@@ -567,7 +567,7 @@ class Mission:
                 ),
                 "bake_sha256": self.bench.bake_sha256(),
             },
-            "search_env_flags": arm_env_stamp(self.bench),
+            "search_env_flags": run_env_stamp(self.bench),
             "ts": self.started_at,
             "started_at_utc": self.started_at_utc,
             "elapsed_s": self.ended_s if self.ended_s is not None else self.elapsed_s(),

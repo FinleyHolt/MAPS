@@ -33,14 +33,14 @@ to resume its root.
 
 ### E2
 
-Fly each arm over the whole split:
+Fly each run over the whole split:
 
 ```sh
 SEARCH_SAMPLING_REASONING_EFFORT=xhigh \
   python -m benchmarks.citynav.bench_fullset --split test_unseen --out-root output/e2/qwen38-flash-next-xhigh
 ```
 
-For the other arms, change the effort (`low`, `medium`, or `0.99` with
+For the other runs, change the effort (`low`, `medium`, or `0.99` with
 Inkling Small served), or serve Gemma 4 26B-A4B, E2B, or E4B with no effort
 set.
 

@@ -545,7 +545,7 @@ def test_a_segmenter_that_never_answers_holds_every_launch(driver, monkeypatch) 
 
 
 def test_an_offline_run_launches_with_nothing_served(driver, monkeypatch) -> None:
-    """``SEARCH_ENDPOINT_OFFLINE=1`` pins a spec and serves nothing (the human arm): the
+    """``SEARCH_ENDPOINT_OFFLINE=1`` pins a spec and serves nothing (an offline run): the
     gate launches without asking either server."""
     monkeypatch.setenv("SEARCH_ENDPOINT_OFFLINE", "1")
     d = driver(selection=["ep0"])
@@ -644,7 +644,7 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(
 
 @pytest.mark.parametrize("dry", [[], ["--dry-run"]])
 def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch, capsys) -> None:
-    bad = tmp_path / "arm.yaml"
+    bad = tmp_path / "run.yaml"
     bad.write_text(f"base: {REPO / 'configs/citynav.yaml'}\nbogus: 1\n")
     monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(bad))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused config flew"))
@@ -656,7 +656,7 @@ def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch
 def test_a_config_that_is_not_yaml_is_refused_naming_its_file(
     tmp_path, monkeypatch, capsys
 ) -> None:
-    bad = tmp_path / "arm.yaml"
+    bad = tmp_path / "run.yaml"
     bad.write_text("max_steps: [1\n")
     monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(bad))
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run"]) == 2
@@ -725,7 +725,7 @@ def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(
 ) -> None:
     base = tmp_path / "base.yaml"
     base.write_text("max_steps: [1\n")
-    top = tmp_path / "arm.yaml"
+    top = tmp_path / "run.yaml"
     top.write_text("base: base.yaml\n")
     monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(top))
     assert bf.main(["--out-root", str(tmp_path / "r"), "--dry-run"]) == 2

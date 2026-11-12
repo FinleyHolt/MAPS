@@ -13,8 +13,8 @@ defaults to ``data/rgbd_upstream`` under the data root. A second raster of
 the block is a second directory, never an overwrite: the ortho loader
 (``maps.perception.ortho.camera_model``) keys its mmap cache on the directory
 alone and never checks the raster's freshness. The run stamps the resolved
-directory on every row (``run_manifest.ARM_ENV_FLAGS``), so two arms over two
-rasters read as two arms on one bake.
+directory on every row (``run_manifest.RUN_ENV_FLAGS``), so two runs over two
+rasters read as two runs on one bake.
 """
 
 from __future__ import annotations

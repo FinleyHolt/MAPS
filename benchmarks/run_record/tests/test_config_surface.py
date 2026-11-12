@@ -46,7 +46,7 @@ def _write(tmp_path: Path, name: str, text: str) -> Path:
 
 def _over(tmp_path: Path, body: str) -> Path:
     control = (REPO_ROOT / "configs" / "citynav.yaml").resolve()
-    return _write(tmp_path, "arm.yaml", f"base: {control}\n{body}")
+    return _write(tmp_path, "run.yaml", f"base: {control}\n{body}")
 
 
 def test_base_resolves_relative_to_the_file_and_merges(tmp_path):
@@ -55,7 +55,7 @@ def test_base_resolves_relative_to_the_file_and_merges(tmp_path):
         "a/base.yaml",
         f"base: {(REPO_ROOT / 'configs/citynav.yaml').resolve()}\nspawn_seed: 5\n",
     )
-    p = _write(tmp_path, "a/b/arm.yaml", "base: ../base.yaml\nmax_steps: 7\n")
+    p = _write(tmp_path, "a/b/run.yaml", "base: ../base.yaml\nmax_steps: 7\n")
     data, _ = resolve_config(p)
     assert data["spawn_seed"] == 5 and data["max_steps"] == 7
     assert data["sensor"] == "nadir_1008_90"

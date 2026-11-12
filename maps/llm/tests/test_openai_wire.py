@@ -45,8 +45,8 @@ def test_the_card_is_the_one_an_openai_wire_reader_keys_on() -> None:
 
 def test_no_sampling_envelope_and_no_template_kwargs_ride_the_request() -> None:
     assert sampling_kwargs(GPT) == {}
-    arm = from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "high"}).sampling
-    assert sampling_kwargs(GPT, sampling=arm) == {"reasoning_effort": "high"}
+    sampling = from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "high"}).sampling
+    assert sampling_kwargs(GPT, sampling=sampling) == {"reasoning_effort": "high"}
 
 
 @pytest.mark.parametrize("rung", ["none", "low", "medium", "high", "xhigh", "max"])

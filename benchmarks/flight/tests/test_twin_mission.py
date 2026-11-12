@@ -336,14 +336,14 @@ def test_a_config_the_loader_refuses_leaves_no_sortie(calcity, serves, tmp_path)
     from benchmarks.flight import twin
 
     repo = __import__("pathlib").Path(__file__).resolve().parents[3]
-    arm = tmp_path / "arm.yaml"
-    arm.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nbogus: 1\n")
+    config = tmp_path / "run.yaml"
+    config.write_text(f"base: {repo / 'configs' / 'calcity.yaml'}\nbogus: 1\n")
     out = tmp_path / "out"
     with pytest.raises(ValueError, match="unknown config key"):
         twin.main(
             [
                 "--config",
-                str(arm),
+                str(config),
                 "--episode",
                 "calcity::0#0",
                 "--ortho",
@@ -613,7 +613,7 @@ def test_an_authored_start_without_the_operators_words_is_refused(calcity, serve
 
 
 def test_the_mission_stamps_the_effort_its_requests_carry(calcity, serves, tmp_path, monkeypatch):
-    """The arm's effort rides the requests stripped; the mission's manifest
+    """The run's effort rides the requests stripped; the mission's manifest
     and its row's flags carry the same spelling."""
     from benchmarks.flight import twin
 
@@ -643,9 +643,9 @@ def test_the_mission_stamps_the_effort_its_requests_carry(calcity, serves, tmp_p
     assert row["provenance"]["served_model"] == "inkling-small"
 
 
-def test_a_blank_mission_effort_flies_the_arm_s(calcity, serves, tmp_path, monkeypatch):
+def test_a_blank_mission_effort_flies_the_run_s(calcity, serves, tmp_path, monkeypatch):
     """--reasoning-effort "" is no word of the mission's own: the requests
-    carry the arm's effort, as the manifest and row stamp it."""
+    carry the run's effort, as the manifest and row stamp it."""
     from benchmarks.flight import twin
 
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.9")

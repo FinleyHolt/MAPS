@@ -88,7 +88,7 @@ def test_a_converse_drives_the_conversation_and_the_bench_scores_what_it_flew(
 
 def test_the_engine_flies_an_attempt_as_the_runner_dispatches_it(monkeypatch, tmp_path) -> None:
     cfg = _stub_engine(monkeypatch, tmp_path)
-    monkeypatch.setattr(dispatch, "arm_env_stamp", lambda bench: {})
+    monkeypatch.setattr(dispatch, "run_env_stamp", lambda bench: {})
     monkeypatch.setattr(
         dispatch, "_cached_run_provenance", lambda flags, **kw: {"split": kw["split"]}
     )

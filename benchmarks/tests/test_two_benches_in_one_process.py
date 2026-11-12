@@ -16,7 +16,7 @@ from benchmarks.citynav.paths import citynav_bench
 from benchmarks.citynav.run_benchmark import episode_runner
 from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import mint_workdir
-from benchmarks.run_record.run_manifest import arm_env_stamp
+from benchmarks.run_record.run_manifest import run_env_stamp
 from maps.settings import from_environ
 
 BLOCK = "birmingham_block_0"
@@ -105,11 +105,11 @@ def test_each_bench_names_scores_and_stamps_its_own_runs(benches, tmp_path):
     assert "_citynav_" in mint_workdir(tmp_path, "e::1#1", benchmark=citynav.name).name
     assert "_calcity_" in mint_workdir(tmp_path, "e::1#1", benchmark=calcity.name).name
     # Each run records its own bake and raster: Cal City's under the shared runner's names, as a child inherits them.
-    assert arm_env_stamp(citynav) == {
+    assert run_env_stamp(citynav) == {
         "SEARCH_CITYNAV_TILES": str(citynav.tiles_dir),
         "SEARCH_CITYNAV_RGBD_DIR": str(citynav.rgbd_dir),
     }
-    assert arm_env_stamp(calcity) == {
+    assert run_env_stamp(calcity) == {
         "SEARCH_CITYNAV_TILES": str(calcity.tiles_dir),
         "SEARCH_CITYNAV_RGBD_DIR": str(calcity.rgbd_dir),
     }

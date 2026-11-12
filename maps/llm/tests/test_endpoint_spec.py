@@ -307,7 +307,7 @@ def test_parse_override():
 
 
 def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
-    """One closed connection while the arm's relay re-forms is not an
+    """One closed connection while a relayed link re-forms is not an
     unreachable endpoint: the probe asks again, and only a link that stays
     down is a verdict."""
     import io
@@ -330,7 +330,7 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
         return _Resp(b'{"data": []}')
 
     monkeypatch.setattr(E.urllib.request, "urlopen", flaky)
-    assert E._get_json("http://arm:18001/v1/models") == {"data": []}
+    assert E._get_json("http://serve:18001/v1/models") == {"data": []}
     assert len(calls) == 3
 
     calls.clear()
@@ -341,7 +341,7 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
 
     monkeypatch.setattr(E.urllib.request, "urlopen", dead)
     with pytest.raises(EndpointDiscoveryError, match="after 3 tries"):
-        E._get_json("http://arm:18001/v1/models")
+        E._get_json("http://serve:18001/v1/models")
     assert len(calls) == E._PROBE_TRIES
 
 
@@ -350,7 +350,7 @@ def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):
     [
         (lambda: urllib.error.HTTPError("u", 429, "Too Many Requests", None, None), True),
         (lambda: urllib.error.HTTPError("u", 401, "Unauthorized", None, None), False),
-        (lambda: ValueError("unknown url type: 'arm'"), False),
+        (lambda: ValueError("unknown url type: 'serve'"), False),
         (lambda: http.client.IncompleteRead(b'{"data":'), True),
     ],
     ids=["429", "401", "malformed url", "truncated body"],
@@ -369,17 +369,17 @@ def test_a_serve_that_is_busy_or_drops_its_body_is_unreachable_and_a_refusal_is_
 
     monkeypatch.setattr(E.urllib.request, "urlopen", failing)
     with pytest.raises(EndpointDiscoveryError) as err:
-        E._get_json("http://arm:18001/v1/models")
+        E._get_json("http://serve:18001/v1/models")
     assert isinstance(err.value, E.EndpointUnreachable) is unreachable
     assert len(calls) == (E._PROBE_TRIES if unreachable else 1)
 
 
 # --------------------------------------------------------------------------- #
-# The arm's reasoning effort is one the served card takes                     #
+# The run's reasoning effort is one the served card takes                     #
 # --------------------------------------------------------------------------- #
 
 
-def _arm(effort: str) -> Settings:
+def _run_settings(effort: str) -> Settings:
     """The settings of an environment whose SEARCH_SAMPLING_REASONING_EFFORT is ``effort``."""
     return from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": effort})
 
@@ -394,7 +394,7 @@ def _arm(effort: str) -> Settings:
 )
 def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
-    assert discover(_URL_A, settings=_arm(effort)).model_id == model_id
+    assert discover(_URL_A, settings=_run_settings(effort)).model_id == model_id
 
 
 @pytest.mark.parametrize(
@@ -411,4 +411,4 @@ def test_discovery_takes_an_effort_the_card_takes(monkeypatch, model_id, effort)
 def test_discovery_refuses_an_effort_the_card_does_not_take(monkeypatch, model_id, effort, named):
     _fake_http(monkeypatch, {f"{_URL_A}/models": _models_payload(model_id, 262144)})
     with pytest.raises(EndpointDiscoveryError, match=f"SEARCH_SAMPLING_REASONING_EFFORT.*{named}"):
-        discover(_URL_A, settings=_arm(effort))
+        discover(_URL_A, settings=_run_settings(effort))

@@ -84,7 +84,7 @@ The driver refuses or records faults as follows:
 
 | Path | Contents |
 |---|---|
-| `run_manifest.json` | Run identity: commit, resolved config, split and selection, served model, tile bake hash, arm flags. |
+| `run_manifest.json` | Run identity: commit, resolved config, split and selection, served model, tile bake hash, run flags. |
 | `episodes.jsonl` | One row per attempt, its scored `metrics` included. |
 | `summary.txt` | `analysis.run_report` over the root under the driver's infra lines, refreshed after every attempt. |
 | `driver.log` | Driver's own lines: each attempt's start and end, crashes, timeouts, aborts. |

@@ -2,7 +2,7 @@
 
 A corpus row is reviewed when its target position matches a position
 ``ground_truth.json`` lists within 0.2 m. On the shipped
-pair that is the 1,100-episode set the Cal City arms are scored on, pinned
+pair that is the 1,100-episode set the Cal City runs are scored on, pinned
 here by count and by the sha256 of the sorted ids.
 """
 

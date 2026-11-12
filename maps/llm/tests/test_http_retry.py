@@ -105,8 +105,8 @@ def test_an_arm_naming_no_effort_puts_no_effort_key_on_the_wire(monkeypatch, tra
     assert "reasoning_effort" not in quiet
     assert "reasoning_effort" not in json.dumps(quiet)
 
-    arm = from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "0.99"}).sampling
-    named = _posted_body(transport, **sampling_kwargs("inkling-small", sampling=arm))
+    sampling = from_environ({"SEARCH_SAMPLING_REASONING_EFFORT": "0.99"}).sampling
+    named = _posted_body(transport, **sampling_kwargs("inkling-small", sampling=sampling))
     assert named["reasoning_effort"] == "0.99"
     assert '"reasoning_effort": "0.99"' in json.dumps(named)
     assert {k: v for k, v in named.items() if k != "reasoning_effort"} == quiet
