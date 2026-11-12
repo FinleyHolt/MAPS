@@ -95,17 +95,6 @@ The driver refuses or records faults as follows:
 Read a root with [`analysis/`](analysis/README.md). Don't parse
 `episodes.jsonl` by hand.
 
-### Other methods
-
-A config's optional `policy: <name>` hands each built episode to another
-method in place of the mission conversation. The replay, the scorer, and the
-row stay the bench's. The bench reaches that method by name through a
-`baselines` package that this repository doesn't ship:
-
-- `baselines/<name>/policy.py` must exist.
-- `baselines.seam` supplies `fly(harness, name)` (returning `.flights` and
-  `.metrics`), `REASONING_EFFORT`, `dial_off(model_id)`, and `NoDialOff`.
-
 ## Configs
 
 `configs/citynav.yaml` is the control config and declares every key. Another

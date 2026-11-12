@@ -129,7 +129,7 @@ def main(bench: Bench | None = None) -> int:
     # The engine's settings, built once from the run's environment.
     settings = from_environ(bench.environ)
     try:
-        bench = _rm.install_endpoint(bench, settings, cfg.policy)
+        bench = _rm.install_endpoint(bench, settings)
     except _rm.EndpointRefused as exc:
         log.error("%s", exc)
         return 2

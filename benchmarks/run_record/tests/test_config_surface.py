@@ -58,8 +58,6 @@ def test_base_resolves_relative_to_the_file_and_merges(tmp_path):
     ("spawn: random\n", "spawn must be one of"),
     ("sensor: no_such_sensor\n", ".yaml: sensor: "),
     ('sensor: ""\n', "sensor must be a registered sensor"),
-    ("policy: no_such_method\n", "policy must be the name of a baselines/<policy>/policy.py"),
-    ("policy: 3\n", "policy must be str"),
 ])
 def test_a_bad_key_or_value_is_refused_with_its_name(tmp_path, body, needle):
     with pytest.raises(ValueError) as e:
@@ -71,21 +69,6 @@ def test_a_missing_key_is_refused(tmp_path):
     with pytest.raises(ValueError) as e:
         resolve_config(_write(tmp_path, "x.yaml", "sensor: nadir_1008_90\n"))
     assert "missing config key(s)" in str(e.value) and "'max_steps'" in str(e.value)
-
-
-def test_policy_is_the_one_key_a_config_may_leave_out():
-    """Absent, the bench flies the mission, and the resolved config carries no
-    ``policy`` key, so its ``config_sha256`` is the one a MAPS root records."""
-    assert load_config(REPO_ROOT / "configs" / "citynav.yaml").policy is None
-
-
-def test_the_flight_refuses_a_baseline_policy():
-    from benchmarks.run_record.config import assert_flight_config
-
-    cfg = load_config(REPO_ROOT / "configs" / "calcity.yaml")
-    cfg.policy = "visa"
-    with pytest.raises(ValueError, match="policy='visa' is a bench arm"):
-        assert_flight_config(cfg, {})
 
 
 def test_a_base_loop_is_refused(tmp_path):

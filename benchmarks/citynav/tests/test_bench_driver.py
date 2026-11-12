@@ -632,7 +632,7 @@ def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(refusal, 
 @pytest.mark.parametrize("dry", [[], ["--dry-run"]])
 def test_a_refused_config_exits_2_before_any_out_root(dry, tmp_path, monkeypatch, capsys) -> None:
     bad = tmp_path / "arm.yaml"
-    bad.write_text(f"base: {REPO / 'configs/citynav.yaml'}\npolicy: nope\n")
+    bad.write_text(f"base: {REPO / 'configs/citynav.yaml'}\nbogus: 1\n")
     monkeypatch.setenv("CITYNAV_BENCH_CONFIG", str(bad))
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a refused config flew"))
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2

@@ -41,7 +41,7 @@ from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, coverage_record, open_live, ortho_observation
 from benchmarks.flight.measures import frame_agl, run_bases, sortie_of
-from benchmarks.flight.mission import Mission, converse, flight_config, summary_line
+from benchmarks.flight.mission import Mission, converse, summary_line
 from benchmarks.flight.recorded_ring import RecordedRing, run_window
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, lonlat_to_local
 from benchmarks.run_record.config import load_config
@@ -545,7 +545,7 @@ def fly(rec: Recording, out: Path, bench: Bench, *, forced: bool = False, bank: 
             flags["SEARCH_SEED_BASE"] = str(rec.params["seed"])
     # The replay flies under the recorded arm's flags: its rows stamp them and its engine's settings read them.
     bench = bench.with_environ(flags)
-    flight_config(config, bench.environ)
+    load_config(config)
     row = rec.row
     episode_id, map_name = str(row["episode_id"]), rec.map_name
     script = None

@@ -22,7 +22,7 @@ import queue
 import threading
 import time
 from io import BytesIO
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +34,7 @@ from benchmarks.flight.live_source import LiveSource
 from benchmarks.flight.run_imagery import RunImagery
 from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local
 from benchmarks.flight.vehicle import Leg
-from benchmarks.run_record.config import assert_flight_config, load_config
+from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, OBSERVATIONS_DIR, TRACK_JSONL,
                                                    ConversationLog)
 from benchmarks.run_record.episodes import MANIFEST_NAME, STATUS_INFRA, STATUS_OK, upsert_row, write_episode_json
@@ -122,16 +122,6 @@ def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[f
     return engine.parse_episode(found[1], row_index=found[0])
 
 
-def flight_config(config: str, environ: Mapping[str, str]):
-    """The config a flight flies under ``environ`` (the run's,
-    ``Bench.environ``), refused (before any sortie is written) when it
-    names a baseline policy; the loader refuses a missing or unresolved
-    sensor."""
-    cfg = load_config(str(config))
-    assert_flight_config(cfg, environ)
-    return cfg
-
-
 def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: float,
             start_xy: tuple[float, float] | None = None, workdir: Path | None = None,
             perception_factory: Callable[[], Any] | None = None) -> Hydrated:
@@ -142,7 +132,7 @@ def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: fl
     ``workdir`` and its requests ride its episode id as their routing key.
     ``perception_factory`` builds the segmenter in place of the engine's own."""
     engine = bench.engine
-    cfg = flight_config(config, bench.environ)
+    cfg = load_config(config)
     episode = resolve_episode(bench, episode_id, split, start_xy)
     h = engine.build_episode(cfg, episode, engine.load_assets(bench, episode.map_name), bench,
                              settings=from_environ(bench.environ), workdir=workdir,

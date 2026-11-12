@@ -808,7 +808,7 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
                      "and --sample-seed")
     # The config is refused here, before an out-root exists or a serve is asked.
     try:
-        resolved = resolve_config(config)[0]
+        resolve_config(config)
     except (OSError, ValueError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
@@ -827,7 +827,7 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
         return driver.dry_run()
     # Once, so an unreachable or wrong serve fails here, before any worker spawns.
     try:
-        driver.bench = _rm.install_endpoint(bench, from_environ(bench.environ), resolved.get("policy"))
+        driver.bench = _rm.install_endpoint(bench, from_environ(bench.environ))
     except _rm.EndpointRefused as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2

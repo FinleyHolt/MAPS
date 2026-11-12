@@ -155,7 +155,7 @@ class BenchMission:
         try:
             cfg = load_config(self.config)
             settings = from_environ(self.bench.environ)
-            bench = install_endpoint(self.bench, settings, cfg.policy)
+            bench = install_endpoint(self.bench, settings)
             if "SEARCH_BENCHMARK_NAME" not in bench.environ:
                 bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})
             emit_or_verify(self.sortie, build_manifest(

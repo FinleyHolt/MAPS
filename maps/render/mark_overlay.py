@@ -9,8 +9,7 @@ import cv2
 import numpy as np
 
 
-#: The JPEG quality of every image the model is sent: the mission's crops and
-#: a ``policy:`` arm's frames.
+#: The JPEG quality of every image the model is sent.
 JPEG_QUALITY = 85
 
 _LABEL_FONT = cv2.FONT_HERSHEY_SIMPLEX

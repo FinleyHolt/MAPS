@@ -1,7 +1,6 @@
 """One episode's engine and, on the bench, its run: build the search stack
-(shared with the flight mission), fly the mission conversation (or the
-config's baseline ``policy``), replay the flown stops in the six-action
-alphabet, and score the final pose.
+(shared with the flight mission), fly the mission conversation, replay the
+flown stops in the six-action alphabet, and score the final pose.
 """
 
 from __future__ import annotations
@@ -9,7 +8,6 @@ from __future__ import annotations
 import dataclasses
 import functools
 import hashlib
-import importlib
 import logging
 import re
 from dataclasses import dataclass
@@ -293,17 +291,9 @@ def run_episode(
     start_pose_xyh = (float(state.pose_xy[0]), float(state.pose_xy[1]),
                       float(episode.start_heading_deg))
     start_alt = float(state.altitude_m)
-    if cfg.policy is None:
-        session = MissionSession(h, recorder=recorder)
-        reply = (converse or run_mission_episode)(session)
-        flights = session.flights
-        own = {"mission": {"ended_by": reply.ended_by}}
-    else:
-        # A published method chooses the stops; the replay, scoring and row
-        # are this function's. By name: benchmarks carries no static import
-        # of baselines.
-        flown = importlib.import_module("baselines.seam").fly(h, cfg.policy)
-        flights, own = flown.flights, flown.metrics
+    session = MissionSession(h, recorder=recorder)
+    reply = (converse or run_mission_episode)(session)
+    flights = session.flights
     if flights:
         visited = synthesize_compliant_trajectory(
             cfg=cfg, flights=flights, start_pose_xyh=start_pose_xyh, start_alt=start_alt,
@@ -339,8 +329,7 @@ def run_episode(
     scores["llm"] = (flight_summary.summarize(Path(workdir) / "flight", settings.endpoint.tokenizer_name)
                      if workdir else flight_summary.blank())
     scores["committed_provenance"] = last.get("provenance")
-    # The mission's ending, or the baseline's policy, commit tier and numbers.
-    scores.update(own)
+    scores["mission"] = {"ended_by": reply.ended_by}
     # SAHI tiles the segmenter could not answer: their objects are missing
     # from those frames, which the episode survives.
     scores["sam_tiles_failed"] = int(h.perception.sahi_tiles_failed)

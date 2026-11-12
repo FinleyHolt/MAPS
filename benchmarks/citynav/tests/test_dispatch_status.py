@@ -23,14 +23,14 @@ from maps.settings import Settings
 @pytest.fixture
 def light(monkeypatch):
     """Keep the dispatch off the split file and the git subprocess."""
-    monkeypatch.setattr(dispatch, "arm_stamp", lambda policy, bench: {"SEARCH_X": "1"})
+    monkeypatch.setattr(dispatch, "arm_env_stamp", lambda bench: {"SEARCH_X": "1"})
     monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags, **kw: {"commit": "abc", "search_env_flags": flags})
 
 
 def _dispatch(tmp_path):
     return dispatch.dispatch_one(
         episode=SimpleNamespace(episode_id="b::1#0"), idx=0, total=1, objects_by_map={},
-        cfg=SimpleNamespace(source_path="x.yaml", policy=None), bench=citynav_bench({}), settings=Settings(),
+        cfg=SimpleNamespace(source_path="x.yaml"), bench=citynav_bench({}), settings=Settings(),
         split="test", recorder=None, episode_dir=tmp_path,
     )
 

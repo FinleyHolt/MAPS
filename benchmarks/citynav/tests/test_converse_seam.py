@@ -36,7 +36,7 @@ def _stub_engine(monkeypatch, tmp_path):
     monkeypatch.setattr(er, "synthesize_compliant_trajectory", lambda *, flights, **kw: [(0.0, 0.0), tuple(flights[-1]["resolved_xy"])])
     monkeypatch.setattr(er.flight_summary, "summarize", lambda d, tokenizer_name="": {})
     return SimpleNamespace(spawn="dataset", start_altitude_agl_m=None, altitude_cap_m=1000.0, success_radius_m=20.0,
-                           policy=None, source_path=None)
+                           source_path=None)
 
 
 def _converse(session):
@@ -56,7 +56,7 @@ def test_a_converse_drives_the_conversation_and_the_bench_scores_what_it_flew(mo
 
 def test_the_engine_flies_an_attempt_as_the_runner_dispatches_it(monkeypatch, tmp_path) -> None:
     cfg = _stub_engine(monkeypatch, tmp_path)
-    monkeypatch.setattr(dispatch, "arm_stamp", lambda policy, bench: {})
+    monkeypatch.setattr(dispatch, "arm_env_stamp", lambda bench: {})
     monkeypatch.setattr(dispatch, "_cached_run_provenance", lambda flags, **kw: {"split": kw["split"]})
     row = ENGINE.fly_attempt(episode=parse_episode(_ROW, row_index=0), objects_by_map={}, cfg=cfg,
                              bench=citynav_bench({}), settings=Settings(), split="val_seen", recorder=None,
