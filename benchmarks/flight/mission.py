@@ -829,20 +829,15 @@ class Mission:
                 f.write("\n".join(lines) + "\n")
 
 
-def converse(mission: Mission, taskings: list[str], *, ended=None) -> None:
+def converse(mission: Mission, taskings: list[str]) -> None:
     """Fly ``mission`` to its end, speaking the next of ``taskings`` at each
-    report and stopping when none is left (or, with ``ended``, at the first
-    report after ``ended()``), then close the live source."""
+    report and stopping when none is left, then close the live source."""
     mission.start()
     pending, heard = list(taskings), 0
     while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
         if mission.status == STATE_AWAITING and mission.replies > heard:
             heard = mission.replies
-            if ended is not None:
-                if ended():
-                    mission.stop()
-                    break
-            elif pending:
+            if pending:
                 mission.tasking(pending.pop(0))
             else:
                 mission.stop()
