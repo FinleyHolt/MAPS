@@ -1169,3 +1169,30 @@ textarea {
   font-weight: 900;
   color: var(--color-ink);
 }
+
+/* Where a scored run committed, and the split the catalog shows. */
+.commit-pin {
+  padding: 1px 5px;
+  border: 1.5px solid var(--color-paper);
+  border-radius: 3px;
+  background: #141310;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  box-shadow: 0 1px 3px rgba(20, 19, 16, 0.4);
+  cursor: default;
+}
+
+.missions-split {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-rule);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-ink);
+}

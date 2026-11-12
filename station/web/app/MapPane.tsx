@@ -1,12 +1,18 @@
-/** The station's instrument: the mission over the basemap.
+/** The station's instrument: the mission over the basemap of its map.
+ *
+ * A bench has many maps. The pane is told which one the console is looking
+ * at and asks the station for that map's basemap and working area again
+ * whenever it changes; a map the station cannot place draws neither, and
+ * the caption says so.
  *
  * Uncovered ground reads as the paper no-data tone, never black: a black
  * map cannot be told apart from a dead one.
  *
  * It carries the aircraft (the ownship and the ground its camera covers),
  * where it has been (the live trail, or a reviewed run's whole track), the
- * waypoints of the mission's flights, the target footprint, and each leg's
- * area with what the passes hold of it.
+ * waypoints of the mission's flights, the target footprint (or its centre,
+ * where the run is scored to a point), where a scored run committed, and
+ * each leg's area with what the passes hold of it.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -102,7 +108,9 @@ const DEFAULT_VISIBLE: Visible = {
   ao: true,
 };
 
-export function MapPane({ missionLabel, ownship, legs, flights, target, leg, passes }: {
+export function MapPane({ map: mapName, missionLabel, ownship, legs, flights, target, targetPoint, commit, leg, passes }: {
+  // The map the console is looking at; null on a station with no catalog and nothing under review.
+  map: string | null;
   missionLabel: string | null;
   // Where the aircraft is. null before the first poll answers and with no
   // mission in the seat; a pose with no lon/lat draws nothing.
@@ -115,6 +123,10 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
   flights?: Flight[];
   // The target footprint, `[lon, lat]` ring. null draws none.
   target?: [number, number][] | null;
+  // The target's centre, where the GT label stands when there is no footprint.
+  targetPoint?: [number, number] | null;
+  // Where a scored run committed. null draws none.
+  commit?: [number, number] | null;
   // The leg the station is waiting on, with its area and the share the
   // passes hold of it. null draws no live mask.
   leg?: WaitingLeg | null;
@@ -128,9 +140,9 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
   const mapRef = useRef<MapLibreMap | null>(null);
   const ownshipMarkerRef = useRef<MapLibreMarker | null>(null);
   const targetMarkerRef = useRef<MapLibreMarker | null>(null);
+  const commitMarkerRef = useRef<MapLibreMarker | null>(null);
   const coverageLabelRef = useRef<MapLibreMarker | null>(null);
   const [location, setLocation] = useState<DisplayLocation | null>(null);
-  const [locationChecked, setLocationChecked] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   // Flips once the map instance exists. Every marker effect takes this in
   // its deps, so one that ran before the map's async init draws again.
@@ -140,47 +152,69 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
   const [styleReady, setStyleReady] = useState(false);
   const [visible, setVisible] = useState<Visible>(DEFAULT_VISIBLE);
 
+  // The viewed map's basemap and working area, asked for again when the map
+  // changes. The last map's are dropped at once: a mission drawn over
+  // another map's imagery would be placed wrongly, and looks right.
   useEffect(() => {
     let cancelled = false;
-    fetchLocation().then((loc) => {
-      if (!cancelled) {
-        setLocation(loc);
-        setLocationChecked(true);
-      }
+    setLocation(null);
+    setArea(null);
+    fetchLocation(mapName).then((loc) => {
+      if (!cancelled) setLocation(loc);
     });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // The working area, off `GET area`. A station that answers none leaves
-  // the layer off.
-  useEffect(() => {
-    let cancelled = false;
-    fetch("area")
+    fetch(mapName ? `area?map=${encodeURIComponent(mapName)}` : "area")
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
         if (!cancelled) setArea(Array.isArray(body?.bbox) && body.bbox.length === 4 ? body.bbox : null);
       })
       .catch(() => {
-        // No AO is a map with none declared, not a fault.
+        // No AO is a map the station cannot place, not a fault.
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mapName]);
+
+  // The basemap: the viewed map's tiles, swapped in place under every
+  // other layer, so nothing the mission drew is rebuilt.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+    if (map.getLayer("basemap")) map.removeLayer("basemap");
+    if (map.getSource("basemap")) map.removeSource("basemap");
+    if (!location) return;
+    map.addSource("basemap", {
+      type: "raster",
+      tiles: [tileUrl(location.tiles)],
+      tileSize: 256,
+      attribution: location.attribution,
+      minzoom: location.minzoom,
+      maxzoom: location.maxzoom,
+      bounds: location.bounds,
+    });
+    map.addLayer(
+      { id: "basemap", type: "raster", source: "basemap",
+        paint: { "raster-saturation": 0, "raster-contrast": 0, "raster-brightness-max": 1 } },
+      map.getStyle().layers.find((layer) => layer.id !== "no-data")?.id,
+    );
+  }, [location, styleReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleReady || !area) return;
-    const [west, south, east, north] = area;
+    if (!map || !styleReady) return;
+    const [west, south, east, north] = area ?? [0, 0, 0, 0];
     const data = {
-      type: "Feature" as const,
-      properties: {},
-      geometry: {
-        type: "LineString" as const,
-        coordinates: [[west, south], [east, south], [east, north], [west, north], [west, south]],
-      },
+      type: "FeatureCollection" as const,
+      features: area
+        ? [{
+            type: "Feature" as const,
+            properties: {},
+            geometry: {
+              type: "LineString" as const,
+              coordinates: [[west, south], [east, south], [east, north], [west, north], [west, south]],
+            },
+          }]
+        : [],
     };
     const source = map.getSource("ao") as GeoJSONSource | undefined;
     if (source) {
@@ -306,26 +340,54 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
     // finds.
     targetMarkerRef.current?.remove();
     targetMarkerRef.current = null;
-    if (!ring) return;
+    // The label stands on the footprint's centroid, or on the target's
+    // centre where the run draws no footprint.
+    const at: [number, number] | null = ring
+      ? [target!.reduce((a, q) => a + q[0], 0) / target!.length, target!.reduce((a, q) => a + q[1], 0) / target!.length]
+      : targetPoint ?? null;
+    if (!at) return;
     let cancelled = false;
     import("maplibre-gl").then((maplibre) => {
       if (cancelled) return;
-      const n = target!.length;
-      const lon = target!.reduce((a, q) => a + q[0], 0) / n;
-      const lat = target!.reduce((a, q) => a + q[1], 0) / n;
       const el = document.createElement("div");
       el.className = "gt-pin";
       el.textContent = "GT";
-      el.title = "the mission's ground truth: the footprint it is scored on";
+      el.title = ring
+        ? "the mission's ground truth: the target's footprint"
+        : "the mission's ground truth: the target's centre, which the run is measured to";
       targetMarkerRef.current?.remove();
       targetMarkerRef.current = new maplibre.Marker({ element: el, anchor: "bottom", offset: [0, -4] })
-        .setLngLat([lon, lat])
+        .setLngLat(at)
         .addTo(map);
     });
     return () => {
       cancelled = true;
     };
-  }, [target, styleReady]);
+  }, [target, targetPoint, styleReady]);
+
+  // Where a scored run committed: the point the bench judged it at.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    commitMarkerRef.current?.remove();
+    commitMarkerRef.current = null;
+    if (!commit) return;
+    let cancelled = false;
+    import("maplibre-gl").then((maplibre) => {
+      if (cancelled) return;
+      const el = document.createElement("div");
+      el.className = "commit-pin";
+      el.textContent = "COMMIT";
+      el.title = "where the run committed: the point it is scored at";
+      commitMarkerRef.current?.remove();
+      commitMarkerRef.current = new maplibre.Marker({ element: el, anchor: "top", offset: [0, 6] })
+        .setLngLat(commit)
+        .addTo(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [commit, mapReady]);
 
   // The waypoints: where each of the mission's flights ended, numbered in
   // flying order.
@@ -356,18 +418,22 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
     };
   }, [flights, mapReady, visible.waypoints]);
 
-  // Init once the container exists and `location` has answered (even with
-  // null: the map still mounts, on the no-data background).
+  // Init once the container exists, on the no-data background: the basemap
+  // is a layer of the viewed map's, added when its location answers.
   useEffect(() => {
-    if (!locationChecked || containerRef.current === null || mapRef.current) return;
+    if (containerRef.current === null || mapRef.current) return;
     let cancelled = false;
     import("maplibre-gl").then((maplibre) => {
       if (cancelled || containerRef.current === null) return;
       const map = new maplibre.Map({
         container: containerRef.current,
-        style: rasterStyle(location),
-        center: location ? [location.center.lon, location.center.lat] : [0, 0],
-        zoom: location ? 13 : 1,
+        style: {
+          version: 8,
+          sources: {},
+          layers: [{ id: "no-data", type: "background", paint: { "background-color": NO_DATA } }],
+        } as StyleSpecification,
+        center: [0, 0],
+        zoom: 1,
         attributionControl: false,
       });
       map.on("error", (event) => setMapError(String(event.error?.message ?? event)));
@@ -379,13 +445,13 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationChecked]);
+  }, []);
 
   useEffect(() => () => {
     waypointPinsRef.current.forEach((marker) => marker.remove());
     ownshipMarkerRef.current?.remove();
     targetMarkerRef.current?.remove();
+    commitMarkerRef.current?.remove();
     coverageLabelRef.current?.remove();
     mapRef.current?.remove();
   }, []);
@@ -458,23 +524,24 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
     }
   }, [ownship, legs, styleReady, visible.trail]);
 
-  // What the map frames: the basemap's bounds, or the reviewed run's whole
-  // track on a station with no basemap (the twin flies on past its last
-  // waypoint, so a track can run far off the raster). Keyed on the track, so
-  // the operator's own pan and zoom survive every seek in between.
+  // What the map frames: the viewed map's basemap, else its working area,
+  // else the reviewed run's whole track (the twin flies on past its last
+  // waypoint, so a track can run far off the raster). Keyed on the map and
+  // the track, so the operator's own pan and zoom survive every seek in between.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     const points = legs?.flat() ?? [];
     const box: [number, number, number, number] | null =
       (location?.bounds as [number, number, number, number] | undefined)
+      ?? (area as [number, number, number, number] | null)
       ?? (points.length
         ? [Math.min(...points.map(([lon]) => lon)), Math.min(...points.map(([, lat]) => lat)),
            Math.max(...points.map(([lon]) => lon)), Math.max(...points.map(([, lat]) => lat))]
         : null);
     if (!box) return;
     map.fitBounds([[box[0], box[1]], [box[2], box[3]]], { padding: 48, animate: false });
-  }, [legs, mapReady, location]);
+  }, [legs, mapReady, location, area]);
 
   return (
     <div className="map-pane">
@@ -497,7 +564,11 @@ export function MapPane({ missionLabel, ownship, legs, flights, target, leg, pas
           ? `MAP ENGINE UNAVAILABLE · ${mapError}`
           : location
             ? location.label.toUpperCase()
-            : "NO LOCAL IMAGERY STAGED"}
+            : !mapName
+              ? "NO MAP"
+              : area
+                ? `${mapName.toUpperCase()} · NO IMAGERY STAGED`
+                : `${mapName.toUpperCase()} · NOT PLACED: NO BAKE OR NO GEOREFERENCE`}
         {missionLabel ? ` · ${missionLabel}` : ""}
       </div>
     </div>
@@ -510,40 +581,4 @@ function tileUrl(template: string): string {
   return /^[a-z][a-z0-9+.-]*:/i.test(template)
     ? template
     : new URL(".", document.baseURI).href + template.replace(/^\//, "");
-}
-
-function rasterStyle(location: DisplayLocation | null): StyleSpecification {
-  const sources = location
-    ? {
-        basemap: {
-          type: "raster" as const,
-          tiles: [tileUrl(location.tiles)],
-          tileSize: 256,
-          attribution: location.attribution,
-          minzoom: location.minzoom,
-          maxzoom: location.maxzoom,
-          bounds: location.bounds,
-        },
-      }
-    : {};
-  return {
-    version: 8,
-    sources,
-    layers: [
-      { id: "no-data", type: "background",
-        paint: { "background-color": NO_DATA } },
-      ...(location
-        ? [{
-            id: "basemap",
-            type: "raster" as const,
-            source: "basemap",
-            paint: {
-              "raster-saturation": 0,
-              "raster-contrast": 0,
-              "raster-brightness-max": 1,
-            },
-          }]
-        : []),
-    ],
-  } as StyleSpecification;
 }

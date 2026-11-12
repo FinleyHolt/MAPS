@@ -5,6 +5,12 @@
  * the first message of a mission or a re-task mid-flight: starting IS
  * sending the first message.
  *
+ * The station serves one bench (`GET station`): its splits fill the split
+ * menu, and the map every pane draws is the map of the mission being looked
+ * at (`viewedMap`), since a bench has one map per block. On the twin, words
+ * with no row picked fly as the operator's own mission; a bench episode is
+ * always a row of its split.
+ *
  * A row of the list expands in place to that mission's finished runs, and
  * clicking one opens the REVIEW: the transcript, map, observations and
  * ownship then read that run instead of the seat. Review is a fact about
@@ -18,7 +24,7 @@ import { flownPasses } from "@/app/coverage";
 import { MapPane } from "@/app/MapPane";
 import { Transcript } from "@/app/Transcript";
 import { Viewer } from "@/app/Viewer";
-import type { MissionState, Ownship, ReplayState } from "@/app/mission";
+import type { MissionState, Ownship, ReplayState, StationAbout } from "@/app/mission";
 import {
   STATUS_LABEL,
   armOutage,
@@ -29,6 +35,7 @@ import {
   postJson,
   runLabel,
   trackLegs,
+  viewedMap,
 } from "@/app/mission";
 
 interface CatalogEntry {
@@ -61,6 +68,18 @@ const clamp = (v: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, v));
 
 export function MissionConsole() {
+  // The bench this station serves and what its seat can do; null until it answers.
+  const [about, setAbout] = useState<StationAbout | null>(null);
+  // The split the catalog shows; "" is the bench's default.
+  const [split, setSplit] = useState("");
+  useEffect(() => {
+    fetch("station")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => setAbout(body as StationAbout | null))
+      .catch(() => {
+        // A station that does not say what it is still lists and reviews.
+      });
+  }, []);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState("");
@@ -171,7 +190,9 @@ export function MissionConsole() {
   // The catalog, filtered server-side: the search is the picker.
   useEffect(() => {
     const timer = setTimeout(() => {
-      const url = query ? `missions?limit=1000&q=${encodeURIComponent(query)}` : "missions?limit=1000";
+      const url = "missions?limit=1000"
+        + (query ? `&q=${encodeURIComponent(query)}` : "")
+        + (split ? `&split=${encodeURIComponent(split)}` : "");
       fetch(url)
         .then((r) => r.json())
         .then((body) => {
@@ -181,7 +202,7 @@ export function MissionConsole() {
         .catch((err) => setFault(`catalog unavailable: ${err.message}`));
     }, 200);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, split]);
 
   // The mission as it happens. The stream carries the whole state document
   // per message (null for an empty seat), so a console that joins late shows
@@ -293,7 +314,11 @@ export function MissionConsole() {
   // to the live mission (a re-task in flight, an answer to a parked
   // report); with neither, the words fly as the operator's own mission.
   const startsPicked = picked !== null && !(live && picked.episode_id === mission?.episode_id);
-  const canSend = draft.trim() !== "";
+  // On a bench a mission is a row of the split: words alone start nothing.
+  const ownWords = about?.own_words ?? true;
+  const speaks = live && !startsPicked;
+  const canSend = draft.trim() !== "" && (speaks || startsPicked || ownWords) && (speaks || (about?.flies ?? true));
+  const benchSeat = mission?.kind === "bench";
 
   // The next mission starts from nothing: the seat emptied on the station
   // (a mission flying is stopped), and this browser's own half let go with it.
@@ -329,6 +354,7 @@ export function MissionConsole() {
           ...(startsPicked && picked ? { episode_id: picked.episode_id } : {}),
           instruction: text,
           ...(effort ? { reasoning_effort: effort } : {}),
+          ...(split ? { split } : {}),
         }));
         setReplay(null);
       }
@@ -338,7 +364,7 @@ export function MissionConsole() {
     } finally {
       setBusy(false);
     }
-  }, [effort, draft, live, startsPicked, picked]);
+  }, [effort, draft, live, startsPicked, picked, split]);
 
   // The box grows with its content; a max-height in CSS keeps a long
   // tasking from swallowing the conversation above it.
@@ -350,15 +376,20 @@ export function MissionConsole() {
   }, [draft]);
 
   const outage = armOutage(mission);
-  const emptySeatHint =
-    "Click a mission: its words go in the box, its target on the map, and send flies it. Or type your own tasking: send flies it from the map centre, unscored.";
+  const emptySeatHint = about && !about.flies
+    ? `${about.why ?? "This station reviews runs only."} A row with finished runs expands to them, and a run opens as a review.`
+    : ownWords
+      ? "Click a mission: its words go in the box, its target on the map, and send flies it. Or type your own tasking: send flies it from the map centre, unscored."
+      : "Click a mission: its words go in the box, its target on the map, and send flies it as the bench flies it. Edit the words to fly the same row under your own.";
 
   const hint = fault
     ? fault
     : live
       ? flying
         ? "The agent is flying. Your message lands on its next turn."
-        : "The agent reported and is holding for your tasking."
+        : benchSeat
+          ? "The agent reported and is holding for your tasking. + ends the mission: the bench scores it and its run lists under its row."
+          : "The agent reported and is holding for your tasking."
       : mission?.status === "ended" || mission?.status === "failed"
         ? `Mission ${mission.status}${mission.ended_by ? ` (${mission.ended_by})` : ""}. A row, clicked and sent, flies again.`
         : emptySeatHint;
@@ -385,7 +416,7 @@ export function MissionConsole() {
         </div>
       ) : null}
       <header className="station-bar">
-        <span className="station-name">MAPS · station</span>
+        <span className="station-name">MAPS · station{about ? ` · ${about.bench}` : ""}</span>
         <span className="station-mission">
           {mission
             ? [runLabel(mission), mission.episode_id].filter(Boolean).join(" · ")
@@ -423,6 +454,23 @@ export function MissionConsole() {
           <div className="missions">
             <div className="missions-head">
               <span className="missions-title">Missions</span>
+              {about && about.splits.length > 1 ? (
+                <select
+                  className="missions-split"
+                  aria-label="Split"
+                  title={`the ${about.bench} split the list shows and a picked row flies from`}
+                  value={split || about.split}
+                  onChange={(event) => {
+                    setSplit(event.target.value);
+                    setPicked(null);
+                    setExpandedMission(null);
+                  }}
+                >
+                  {about.splits.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              ) : null}
               <span className="missions-count">
                 {catalog.length} of {total}
               </span>
@@ -509,7 +557,7 @@ export function MissionConsole() {
                               <span className="past-row-meta">
                                 {run.ended_by ?? STATUS_LABEL[run.status] ?? run.status}
                                 {" · "}
-                                {run.turns_used}t / {run.flights_flown}f
+                                {run.turns_used}t{run.flights_flown == null ? "" : ` / ${run.flights_flown}f`}
                                 {formatCommit(run.git_commit, run.git_dirty) ? (
                                   <span className="past-row-commit">
                                     {" · "}
@@ -565,12 +613,13 @@ export function MissionConsole() {
           <div className="run-view">
             <div className="run-scroll">
               {activeMission?.error ? <p className="fault">{activeMission.error}</p> : null}
-              {replay && formatScore(replay.score) ? (
+              {/* The score, plainly: a reviewed run's, or the seat's once the bench has scored it. */}
+              {activeMission && formatScore(activeMission.score) ? (
                 <p className="past-detail-score">
-                  {formatScore(replay.score)}
-                  {formatCommit(replay.git_commit, replay.git_dirty) ? (
+                  {formatScore(activeMission.score)}
+                  {formatCommit(activeMission.git_commit, activeMission.git_dirty) ? (
                     <span className="past-detail-commit">
-                      {formatCommit(replay.git_commit, replay.git_dirty)}
+                      {formatCommit(activeMission.git_commit, activeMission.git_dirty)}
                     </span>
                   ) : null}
                 </p>
@@ -588,7 +637,7 @@ export function MissionConsole() {
               ref={inputRef}
               className="chatbox-input"
               aria-label="Message the agent"
-              placeholder={startsPicked ? "The mission's words: edit them if you like, then send to fly it" : flying ? "Message the agent" : live ? "Answer the report, or click a mission" : "Click a mission, or type your own tasking"}
+              placeholder={startsPicked ? "The mission's words: edit them if you like, then send to fly it" : flying ? "Message the agent" : live ? "Answer the report, or click a mission" : ownWords ? "Click a mission, or type your own tasking" : "Click a mission"}
               disabled={busy}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -673,6 +722,7 @@ export function MissionConsole() {
 
         <div className="instrument">
           <MapPane
+            map={viewedMap({ replay, starting: startsPicked ? picked : null, mission, picked, about })}
             missionLabel={activeMission?.episode_id ?? null}
             ownship={ownship}
             legs={legs}
@@ -680,6 +730,8 @@ export function MissionConsole() {
             target={replay
               ? replay.target_lonlat
               : startsPicked ? picked?.target_lonlat : (mission?.target_lonlat ?? picked?.target_lonlat ?? null)}
+            targetPoint={replay ? replay.target_point : startsPicked ? null : mission?.target_point}
+            commit={activeMission?.commit_lonlat}
             leg={waitingLeg}
             passes={passes}
           />

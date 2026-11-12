@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from "react";
 
-import { missionClock, missionFile } from "@/app/mission";
+import { emptyBook, missionClock, missionFile } from "@/app/mission";
 import type { MissionState } from "@/app/mission";
 import { framePrior, priorFor, type PriorFeature } from "@/app/observation_frame";
 
@@ -84,7 +84,7 @@ export function Viewer({ mission }: {
           ) : null}
         </div>
         {!shot ? (
-          <p className="camera-annunciator">NO OBSERVATIONS YET · EACH WAYPOINT FLOWN OVER LANDS HERE AS ONE IMAGE</p>
+          <p className="camera-annunciator">{emptyBook(mission)}</p>
         ) : null}
       </div>
       <p className="viewer-caption">{caption}</p>
