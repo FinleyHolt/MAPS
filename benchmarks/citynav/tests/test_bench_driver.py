@@ -422,7 +422,7 @@ _INTERRUPTED = (
     "    print('flying', flush=True)\n"
     "    time.sleep(60)\n"
     "d.worker_loop = fly\n"
-    "d.run()\n"
+    "sys.exit(d.run())\n"
 )
 
 
@@ -434,7 +434,7 @@ def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
         [sys.executable, "-c", _INTERRUPTED, str(tmp_path)],
         cwd=REPO,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         text=True,
         preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
     )
@@ -443,7 +443,9 @@ def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
         assert next(flying) and next(flying)
         time.sleep(0.5)  # the main thread is joining its first worker
         proc.send_signal(signal.SIGINT)
-        assert proc.wait(timeout=10) != 0
+        assert proc.wait(timeout=10) == 130
+        assert "Traceback" not in proc.stderr.read()
+        assert "interrupted" in (tmp_path / "driver.log").read_text()
     finally:
         proc.kill()
         proc.wait()

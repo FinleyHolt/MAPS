@@ -639,6 +639,10 @@ class Driver:
             return 2
         try:
             return self._run()
+        except KeyboardInterrupt:
+            # The ledger keeps every landed row, so a relaunch into this root resumes.
+            self.log("interrupted (SIGINT): stopping; relaunch into this root to resume")
+            return 130
         finally:
             lock.close()
 
