@@ -467,3 +467,21 @@ def test_a_keyword_spelled_as_a_method_names_the_call():
 def test_filter_nearest_names_the_order_it_is():
     err = _served_error('find("car").filter(nearest="prior_7")\n')
     assert "nearest= ORDERS and drops nothing: rows.order(nearest=<place>)" in err, err
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        'find("car").filter(south_of="prior_7")\n',
+        'find("car", south_of="prior_7")\n',
+        'r = find("car").filter(south_of="prior_7")\nr\n',
+    ],
+)
+def test_a_side_cut_that_empties_says_nothing_is_on_that_side(block):
+    # car_1 lies north of the depot (prior_7), so nothing is south of it.
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    (env,) = out["result"]["results"].values()
+    assert env["len"] == 0, env
+    assert "the prior map holds nothing on that side" in env["cut_stats"]["nothing_on_that_side"]

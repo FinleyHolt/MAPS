@@ -61,6 +61,13 @@ def _attach_color_column(items, canon):
     return out
 
 
+def _emptying_stats(items):
+    """The stats of the cut that emptied ``items``, carried by an op over the
+    empty set so the answer that shows it (an ordering, a bare-name window)
+    still says why nothing is there; None over rows."""
+    return None if items else getattr(items, "cut_stats", None)
+
+
 def run_score_by(cx, a):
     """The sort: a signed, key-normalized composite over exactly the
     columns the emphasis names."""
@@ -116,6 +123,7 @@ def run_score_by(cx, a):
         ordered=True,
         op_cols=keys,
         notes=notes,
+        cut_stats=_emptying_stats(items),
     )
 
 
@@ -199,7 +207,7 @@ def run_filter_items(cx, a):
                 "segment it"
             )
     else:  # truthy
-        on, stats = [it for it in items if it.get(key)], None
+        on, stats = [it for it in items if it.get(key)], _emptying_stats(items)
     # A cut that keeps every way of a name's tied set is still that set.
     return Result(
         on,
