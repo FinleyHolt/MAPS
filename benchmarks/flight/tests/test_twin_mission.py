@@ -55,17 +55,30 @@ def calcity(tmp_path, monkeypatch):
     return SimpleNamespace(root=root, tiles=tiles, rgbd=rgbd, bench=calcity_bench(os.environ))
 
 
+class _Tokenizer:
+    """Four characters a token over the rendered transcript: a tokenizer with nothing to download."""
+
+    def apply_chat_template(self, messages, tools=None, **_kw):
+        return json.dumps([messages, tools], default=str)
+
+    def encode(self, text, add_special_tokens=False):
+        return range(len(text) // 4)
+
+
 @pytest.fixture
 def serves(monkeypatch):
     """The reasoner scripted (fly to the church, then reply), the segmenter
     seeing nothing; every request body the reasoner was sent."""
     from huggingface_hub import constants as hub
 
-    from maps.llm import endpoint_spec, http
+    from maps.llm import endpoint_spec, flight_summary, http
+    from maps.mission import compactor
     from maps.llm.endpoint_spec import EndpointSpec
 
-    # The compactor's tokenizer comes off the local cache: the hub read its flag at import.
+    # No test loads a tokenizer off the hub: prompt sizing and reasoning-token counts read this one.
     monkeypatch.setattr(hub, "HF_HUB_OFFLINE", True)
+    monkeypatch.setattr(compactor, "load_tokenizer", lambda model, tokenizer_name="": _Tokenizer())
+    monkeypatch.setattr(flight_summary, "load_tokenizer", lambda model, tokenizer_name="": _Tokenizer())
     spec = EndpointSpec(base_url="http://unused", model_id="inkling-small", max_model_len=262144, tokenizer_name="qwen",
                         max_output_tokens=40000)
     monkeypatch.setattr(endpoint_spec, "_SPEC", None)
