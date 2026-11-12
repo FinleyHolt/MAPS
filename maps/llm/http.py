@@ -44,16 +44,11 @@ import httpx
 from maps.settings import Endpoint
 
 from . import endpoint_spec, openai_wire
+from .endpoint_spec import RATE_LIMIT_STATUS
 from .model_cards import speaks_responses
 
 log = logging.getLogger(__name__)
 
-
-# 4xx codes that mean "not now": the rate limit (429) and the quota check (402).
-_RATE_LIMIT_STATUS = frozenset({402, 429})
-# Every 4xx a serve may clear on its own: the rate limit and quota checks,
-# and 408 request timeout. Any other 4xx is a request the caller built wrong.
-TRANSIENT_CLIENT_STATUS = _RATE_LIMIT_STATUS | {408}
 
 # Timeouts this layer does not re-send (the server may still hold the request);
 # the mission loop's backoff owns that retry. A connect timeout is retried here:
@@ -685,7 +680,7 @@ def chat_completions_raw(
                 if isinstance(e, httpx.HTTPStatusError)
                 else None
             )
-            if status in _RATE_LIMIT_STATUS:
+            if status in RATE_LIMIT_STATUS:
                 delay = _retry_after_delay(
                     e.response.headers, _BACKOFF_S * (2**min(rate_limit_attempt, 6)))
                 if rate_limit_waited + delay > _RATE_LIMIT_BUDGET_S:

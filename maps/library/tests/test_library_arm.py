@@ -920,7 +920,7 @@ def test_the_legend_documents_every_call_the_surface_serves():
     import inspect
 
     from maps.mission.served_text import CODE_DOC
-    from maps.library.interpreter import MissionPython
+    from maps.library.calls import Library
     from maps.library.rows import Rows
     from maps.library.block_scan import _LIBRARY_CALLS
 
@@ -929,7 +929,7 @@ def test_the_legend_documents_every_call_the_surface_serves():
     assert not [n for n in names if f"{n}(" not in CODE_DOC], names
     # ...and every keyword the executing functions take, bar order(reverse=),
     # which is accepted and not advertised.
-    fns = [getattr(MissionPython, f"_call_{n}") for n in names] + [Rows.order, Rows.filter]
+    fns = [getattr(Library, n) for n in names] + [Rows.order, Rows.filter]
     kws = {n for f in fns for n, p in inspect.signature(f).parameters.items()
            if p.kind is p.KEYWORD_ONLY} - {"reverse"}
     assert len(kws) >= 7, kws
@@ -956,8 +956,8 @@ def test_the_legend_documents_every_call_the_surface_serves():
     assert "known only from a look, never from rank" in CODE_SYSTEM_PROMPT
     assert "never that its head is the thing" in CODE_SYSTEM_PROMPT
     # the facing word, the cut's compass value and the axis convention
-    from maps.mission.served_text import served_tools
-    desc = served_tools()[0]["function"]["description"]
+    from maps.mission.served_text import SERVED_TOOLS
+    desc = SERVED_TOOLS[0]["function"]["description"]
     assert '"facing <place>"' in desc, desc
     assert 'filter(facing=<place>, direction="south")' in desc, desc
     assert "+x runs EAST" in desc and "+y runs NORTH" in desc

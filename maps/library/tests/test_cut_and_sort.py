@@ -271,10 +271,10 @@ def test_a_predicate_filter_is_not_a_one_way_door():
     seen = []
 
     class _MP:
-        def _rows_order(self, items, **kw):
+        def rows_order(self, items, **kw):
             seen.append(("order", list(items), kw)); return "ordered"
 
-        def _rows_filter(self, items, **kw):
+        def rows_filter(self, items, **kw):
             seen.append(("filter", list(items), kw)); return "cut"
 
     mp = _MP()
@@ -351,7 +351,7 @@ def test_a_set_handed_to_go_to_is_told_to_index_not_told_it_is_a_coordinate():
     from maps.library import interpreter as ps
     mp = ps.MissionPython(quiet_env())
     with pytest.raises(CodeError) as e:
-        mp._call_go_to(rows)
+        mp.library.go_to(rows)
     msg = str(e.value)
     assert "set of 2" in msg and "[0]" in msg, msg
     assert "not a coordinate" not in msg, msg

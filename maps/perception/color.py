@@ -5,6 +5,7 @@ an erode plus a luminance drop, so the colour comes from the object's interior
 rather than its edges or its shadow.
 """
 from __future__ import annotations
+import functools
 import logging
 import math
 import os
@@ -41,17 +42,14 @@ _ACHR_T = 16.0
 _MAX_COMP = 3
 _MIN_COMP_FRAC = 0.12
 
-_TABLE = None
 
-
+@functools.cache
 def _table() -> np.ndarray:
-    global _TABLE
-    if _TABLE is None:
-        rows = np.loadtxt(_W2C_PATH, dtype=np.float64)
-        probs = rows[:, 3:14] if rows.shape[1] == 14 else rows
-        s = probs.sum(axis=1, keepdims=True)
-        _TABLE = np.divide(probs, s, out=np.zeros_like(probs), where=s > 0).astype(np.float32)
-    return _TABLE
+    """The colour-name table, read once per process: immutable data."""
+    rows = np.loadtxt(_W2C_PATH, dtype=np.float64)
+    probs = rows[:, 3:14] if rows.shape[1] == 14 else rows
+    s = probs.sum(axis=1, keepdims=True)
+    return np.divide(probs, s, out=np.zeros_like(probs), where=s > 0).astype(np.float32)
 
 
 def _posterior(px: np.ndarray) -> np.ndarray:

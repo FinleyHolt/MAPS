@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import re
 
-from maps.perception.geometry.sensor_spec import resolve_sensor, served_description
+from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.perception.ortho.sensor_frame import served_description
 from maps.mission.served_text import served_system_prompt
 
 

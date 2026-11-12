@@ -200,7 +200,7 @@ def test_an_unknown_filter_kwarg_is_refused_never_dropped():
     from maps.mission.tests.fakes import quiet_env
 
     mp = MissionPython(quiet_env())
-    rows = RowList([Row({"fid": "detected_1", "xy": [0.0, 0.0]}, mp=mp)])
+    rows = RowList([Row({"fid": "detected_1", "xy": [0.0, 0.0]}, mp=mp.library)])
 
     # the diagonal: refused, and the refusal names the two cuts that work
     with pytest.raises(CodeError) as e:

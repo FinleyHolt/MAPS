@@ -22,6 +22,9 @@ import threading
 from pathlib import Path
 
 import numpy as np
+from numpy.lib.format import open_memmap
+
+from maps.perception.ortho.ortho_fill import fill_ortho_holes
 
 log = logging.getLogger(__name__)
 
@@ -146,7 +149,6 @@ def _bake_geotiff_mmap(rgbd_dir, map_name: str, d: Path, stamp: dict) -> None:
     raises: there is no in-heap alternative at this size.
     """
     import rasterio  # noqa: PLC0415
-    from numpy.lib.format import open_memmap  # noqa: PLC0415
     from rasterio.windows import Window  # noqa: PLC0415
 
     rgbd_dir = Path(rgbd_dir)
@@ -218,7 +220,6 @@ def bake_ortho_from_rasters(rgbd_dir, map_name: str) -> dict:
         )
     # Upstream nodata is literal 0 RGB; coverage = any nonzero channel.
     alpha = (rgb.max(axis=2) > 0).astype(np.uint8) * 255
-    from maps.perception.ortho.ortho_fill import fill_ortho_holes  # noqa: PLC0415
 
     rgb, height, alpha = fill_ortho_holes(rgb, height, alpha)
     height = height.copy()

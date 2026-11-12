@@ -1,12 +1,15 @@
 """The mission conversation: one persistent reasoner, one served tool.
 
 Each ``run`` call carries one block of Python; the interpreter
-(``maps.library.interpreter``) runs it in the mission's one namespace on this
-mission's verbs (ground, analyze, the acts, finish). ``go_to`` / ``explore``
-fly the moment they land and the query surface re-derives from the world the
-flight folded. The model's plain reply ends the mission and the last flight's
-target is the answer (the engine owns the commit); ``MissionSpec`` holds the
-liveness bounds the model never hears."""
+(``maps.library.interpreter``) runs it in the mission's one namespace, and
+each library call runs on one verb of this mission: a program
+(``program_verbs``), a flight (``fly_verbs``), a picture (``picture_verbs``),
+the watchlist (``watch_verbs``) or a stance (``surface_state``), all over one
+:class:`Surface`. ``go_to`` / ``explore`` fly the moment they land and the
+query surface re-derives from the world the flight folded. The model's plain
+reply ends the mission and the last flight's target is the answer (the engine
+owns the commit); ``MissionSpec`` holds the liveness bounds the model never
+hears."""
 
 from __future__ import annotations
 
@@ -18,27 +21,28 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from dataclasses import dataclass
+
 from maps.library.call_arguments import MissionEnv
 from maps.library.interpreter import MissionPython
 from maps.library.op_compiler import HANDLE_WORD_RE
-from maps.library.result_handles import Carry
 from maps.library.rows import UNNAMED
 from maps.llm.http import CallCanceled
-from maps.mission.acks import _Acks, _summarise_exc
+from maps.mission.acks import Rejections, summarise_exc
 from maps.mission.compactor import CompactionInfeasible, CompactionInvariantError
-from maps.mission.fly_verbs import _FlyVerbs
-from maps.mission.picture_verbs import _PictureVerbs
-from maps.mission.program_verbs import _ProgramVerbs
+from maps.mission.fly_verbs import Flights
+from maps.mission.picture_verbs import Pictures
+from maps.mission.program_verbs import Programs
 from maps.mission.reasoner import Reasoner
 from maps.mission.reply_repair import (
     MALFORMED_ENVELOPE_NUDGE, NO_FLIGHT_ABSTAIN_STREAK, NO_FLIGHT_REPLY_NUDGE,
     TRUNCATED_TURN_NUDGE, TRUNCATED_TURN_STREAK, _envelope_residue,
     _not_a_reply)
 from maps.mission.serve_refusals import _REFUSAL_ENDINGS, _RETRIABLE_LLM_ERRORS
-from maps.mission.served_text import served_tools
+from maps.mission.served_text import SERVED_TOOLS
 from maps.mission.spec import MissionReply, MissionSpec
-from maps.mission.surface_state import _SurfaceState, _surface_from_ctx
-from maps.mission.watch_verbs import _WatchVerbs
+from maps.mission.surface_state import Progress, Stance, Surface, surface_from_ctx
+from maps.mission.watch_verbs import Watchlist
 from maps.settings import Settings
 from maps.world_state.context import QueryContext
 
@@ -82,7 +86,7 @@ def run_mission(
         reasoning_effort=reasoning_effort,
     )
     mission = _Mission(reasoner=reasoner, workdir=workdir, rid_tag=rid_tag, preflight=True,
-                       compute_namespace=_surface_from_ctx(turn["ctx"]), **turn)
+                       compute_namespace=surface_from_ctx(turn["ctx"]), **turn)
     return mission.converse(instruction.strip()), mission
 
 
@@ -92,15 +96,30 @@ def continue_mission(mission: "_Mission", instruction: str, *,
     field path: the reply is a report), reads the surface the mission's
     ``ctx`` holds now, and keeps every name, handle, flown stop, staged view
     and watched class of the turns before it."""
-    mission.rid_tag = rid_tag
-    mission._world_moved()
+    mission.progress.rid_tag = rid_tag
+    mission.surface.world_moved()
     return mission.converse(instruction.strip())
 
 
-class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
-               _SurfaceState, _Acks):
-    """One mission's conversation state, across every operator turn, and the
-    verbs the run surface calls on it."""
+@dataclass
+class _Streaks:
+    """An operator turn's consecutive turns that were not progress; a tool
+    call ends the first three, any answered request the last."""
+
+    #: Dropped messages: an empty turn or a block of code sent as text.
+    no_call: int = 0
+    #: Clean replies with no flight behind them (NO_FLIGHT_ABSTAIN_STREAK).
+    no_flight: int = 0
+    #: Empty turns the output cap cut off (TRUNCATED_TURN_STREAK).
+    truncated: int = 0
+    #: Transient request failures (_MAX_TRANSIENT).
+    transient: int = 0
+
+
+class _Mission:
+    """One mission's conversation, across every operator turn: the reasoner,
+    the interpreter its blocks run in, and the verbs the library's calls run
+    on, each a component over the one surface."""
 
     def __init__(
         self,
@@ -121,117 +140,58 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
         workdir: Path | None = None,
     ):
         self.reasoner = reasoner
-        #: The mission's directory, where the frames it is shown are kept; None keeps none.
-        self.workdir = workdir
-        self.ctx = ctx
-        self.rid_tag = rid_tag
         self.transcript = transcript
-        self.ns = compute_namespace
         self.diag = diag
-        self.look_renderer = look_renderer
-        self.obs_span_m = obs_span_m
-        self.obs_minor_m = obs_minor_m
-        self.boost_queue = boost_queue
-        self.preflight = preflight
         self.mission_spec = mission_spec
         self.retask = retask
-
-        # Each fid's latest result-enriched row, for the rejection census.
-        self.row_latest: dict[str, dict] = {}
-        # Successful self-contained programs by ``program_dedup_key`` ->
-        # ``(surface_version, turn, ops)``: a repeat under the same version gets
-        # the dedup note. A flight, a boost or a stance bumps the version.
-        self._programs_seen: dict[str, tuple] = {}
-
-        # Surface rows by fid, rebuilt in place after every flight and boost.
-        self._ns_rows: dict[str, dict] = {}
-
-        self._rebuild_ns_rows()
-        self.stop_tools = list(served_tools())
-        self.pending_vision: list[tuple[str, list[bytes]]] = []
-        self._block_frames: list[str] = []
-
-        # The staged viewpoints by vN handle; the latest is STANDING (its side
-        # columns ride every find row, its facing orients what renders).
-        self.staged_viewpoints: dict[str, dict] = {}
-        self.standing_handle: str | None = None
-        # The mission's flown stops, {stop_id: [x, y]}: each a sayable place.
-        self._plan_stops: dict[str, list] = {}
-
-        # The flatten is built once per surface version.
-        self._map_feats_version = None
-        self._map_feats: list[dict] = []
-
-        self.carry = Carry(compute_namespace, name=lambda ref: (
-            self._mission_py.ref_name(ref) or UNNAMED))
-        # The mission's flights so far, over every operator turn.
-        self.flights = 0
-        # The watched classes, in declaration order.
-        self.mission_sam: list[str] = []
-        self._new_turn()
-
-        # The set in scope (the last non-empty result, or what the last flight
-        # added), the paging ledger, and the mission-global rN counter.
-        self._those: str | None = None
-        self._widened: dict = {}
-        self.plan_rn: list = [0]
+        self.tools = list(SERVED_TOOLS)
         # The lines of every block run, a running total on each result.
         self._script_lines = 0
-        # Every rN in play (bound handles and those the running block spells):
-        # the flight mint skips them.
-        self._code_names: set = set()
-        # The handles flights minted during the running block, for the code
-        # scope to bind.
-        self._code_minted: list = []
-        # The fids explore passes have covered this mission.
-        self._covered_fids: set = set()
 
-        # A pass's stop spacing: half the footprint's long side, under the
-        # short side for any sensor below 2:1, so stops overlap on both axes.
-        self._cover_spacing = (obs_span_m / 2.0
-                               if obs_span_m and obs_span_m > 0 else None)
+        self.progress = Progress(rid_tag=rid_tag)
+        # The interpreter is built last (it runs on the verbs), so the two
+        # verbs that say the model's own name for a set ask it through these.
+        self.surface = Surface(
+            ctx, compute_namespace, preflight=preflight,
+            name_of_ref=lambda ref: self.python.names.ref_name(ref) or UNNAMED)
+        self.rejections = Rejections(self.surface)
+        self.programs = Programs(self.surface, self.rejections, self.progress)
+        self.stance = Stance(self.surface, self.rejections)
+        self.pictures = Pictures(
+            self.surface, self.rejections, self.progress,
+            look_renderer=look_renderer, workdir=workdir,
+            obs_span_m=obs_span_m, obs_minor_m=obs_minor_m,
+            name_of_ref=lambda ref: self.python.names.ref_name(ref),
+            look_argument=lambda: self.python.names.call_arg("look"))
+        self.flights = Flights(mission_spec, self.surface, self.rejections,
+                               self.pictures, self.progress, obs_span_m=obs_span_m)
+        self.watchlist = Watchlist(mission_spec, self.surface, self.rejections,
+                                   self.progress, boost_queue=boost_queue)
 
-        # The call in flight: what _ground_names noted and _analyze answered,
-        # read by _finish.
-        self._call: dict = {}
-
-        self._mission_py = MissionPython(MissionEnv(
-            rows_of_ref=lambda ref: list(self.carry.read(ref) or []),
+        # Each library call's verb: what the interpreter's calls run on.
+        carry = self.surface.carry
+        self.python = MissionPython(MissionEnv(
+            rows_of_ref=lambda ref: list(carry.read(ref) or []),
             tied_of_ref=lambda ref: bool(
-                getattr(self.carry.read(ref), "name_set", False)),
-            version=lambda: self.carry.version,
-            plan_rn=self.plan_rn, widened=self._widened, minted=self._code_minted,
-            say_err=self._plan_err, row_of_fid=self._ns_rows.get,
-            ground=self._ground_names, analyze=self._analyze, stand=self._stand,
-            move=self._move_to, cover=self._cover, crops=self._crops, map=self._map,
-            watch=self._watch, boost=self._boost, finish=self._finish))
+                getattr(carry.read(ref), "name_set", False)),
+            version=lambda: carry.version,
+            plan_rn=carry.next_rn, widened=carry.paged, minted=carry.minted,
+            row_of_fid=self.surface.rows.get,
+            say_err=self.rejections.error,
+            ground=self.programs.ground, analyze=self.programs.analyze,
+            finish=self.programs.finish,
+            stand=self.stance.stand,
+            move=self.flights.go_to, cover=self.flights.explore,
+            crops=self.pictures.look, map=self.pictures.show_map,
+            watch=self.watchlist.watch, boost=self.watchlist.boost))
 
     def _new_turn(self) -> None:
         """An operator turn's own state: its flight budget (the backstop's
-        count; ``flights`` counts the mission's), its escalating loop
-        breaker (see _loop_broken_error) and its dedup streak."""
-        self.turn_flights = 0
-        self._err_class_counts: dict[str, int] = {}
-        self._err_sig, self._err_n = None, 0
-        self._dedup_key, self._dedup_n = None, 0
-
-    def _dispatch_run(self, args) -> dict:
-        """One code block, run in the mission's persistent namespace; an
-        error costs the line it is on."""
-        if "__args_parse_error" in args:
-            return {"error": "the call's arguments did not parse as JSON: "
-                             f"{args['__args_parse_error']}; nothing ran"}
-        code = args.get("code")
-        if not isinstance(code, str) or not code.strip():
-            return {"error": "run takes one block of code in code"}
-        self._code_names.clear()
-        self._code_names.update(HANDLE_WORD_RE.findall(code))
-        self._code_names.update(self._mission_py.held_refs())
-        self._code_minted.clear()
-        self._script_lines += len(code.strip().splitlines())
-        out = self._mission_py.run_block(code)
-        out["script_lines"] = self._script_lines
-        return out
+        count; ``progress.flights`` counts the mission's), its escalating
+        loop breaker and its dedup streak."""
+        self.progress.turn_flights = 0
+        self.rejections.new_turn()
+        self.programs.new_turn()
 
     def _log(self, kind: str, **row) -> None:
         """One transcript row, when the mission keeps a transcript."""
@@ -247,159 +207,217 @@ class _Mission(_ProgramVerbs, _FlyVerbs, _PictureVerbs, _WatchVerbs,
         ``run`` until the model's plain reply or a harness ending; an empty
         turn, a block of code and a reply with no flight behind it are
         repaired before a repeat is accepted as the ending."""
+        rid_tag = self.progress.rid_tag
         self._new_turn()
         if self.reasoner.compaction_infeasible:
             return self._mission_end("compaction_infeasible")
         self.reasoner.append_user(user_message)
-        # Channel misses, consecutive zero-flight replies
-        # (NO_FLIGHT_ABSTAIN_STREAK), transient serve errors.
-        no_call_streak = no_flight_streak = transient_failures = truncated_streak = 0
+        streaks = _Streaks()
         for turn_idx in itertools.count():
-            self.turn_idx = turn_idx
+            self.progress.turn_idx = turn_idx
             if self.diag is not None:
                 self.diag["turns_used"] = turn_idx + 1
             if turn_idx >= self.mission_spec.turn_cap:
-                log.info("%s mission turn cap (%d) reached", self.rid_tag,
+                log.info("%s mission turn cap (%d) reached", rid_tag,
                          self.mission_spec.turn_cap)
                 return self._mission_end("turn_cap", turns=turn_idx)
-            # The operator's re-tasks land at the top of a turn, never between
-            # a turn's tool calls and their results.
-            if self.retask is not None:
-                while (operator_turn := self.retask()) is not None:
-                    log.info("%s operator re-task at turn %d (%d chars)",
-                             self.rid_tag, turn_idx, len(operator_turn))
-                    self.reasoner.append_user(operator_turn)
+            self._take_retasks(turn_idx)
             try:
-                r = self.reasoner.step_tool_call(self.stop_tools)
+                r = self.reasoner.step_tool_call(self.tools)
             except (CompactionInfeasible, CompactionInvariantError) as exc:
-                # Terminal: flag the thread and drop this turn's unread message.
-                self.reasoner.compaction_infeasible = True
-                msgs = self.reasoner.messages
-                if (turn_idx == 0 and msgs
-                        and msgs[-1].get("role") == "user"
-                        and msgs[-1].get("content") == user_message):
-                    msgs.pop()
-                log.warning(
-                    "%s compaction infeasible -> mission ends "
-                    "(thread flagged): %s",
-                    self.rid_tag, _summarise_exc(exc))
-                return self._mission_end("compaction_infeasible", turns=turn_idx + 1)
+                return self._compaction_infeasible(exc, turn_idx, user_message)
             except _RETRIABLE_LLM_ERRORS as exc:
-                for refused, ended_by, why in _REFUSAL_ENDINGS:
-                    if refused(exc):
-                        log.warning("%s %s: %s", self.rid_tag, why,
-                                    _summarise_exc(exc))
-                        self._log(ended_by, error=_summarise_exc(exc))
-                        return self._mission_end(ended_by, turns=turn_idx + 1)
-                transient_failures += 1
-                cancel = self.reasoner.cancel_event
-                log.warning(
-                    "%s transient LLM error %d%s: %s",
-                    self.rid_tag,
-                    transient_failures,
-                    "" if cancel is not None else f"/{_MAX_TRANSIENT}",
-                    _summarise_exc(exc),
-                )
-                self._log("transient_error", attempt=transient_failures,
-                          error=_summarise_exc(exc))
-                if cancel is None:
-                    if transient_failures >= _MAX_TRANSIENT:
-                        return self._mission_end("transient_failures",
-                                                 turns=turn_idx + 1)
-                    time.sleep(min(15.0, 0.5 + 2.0 * transient_failures))
-                elif cancel.wait(min(30.0, 0.5 + 2.0 * transient_failures)):
-                    raise CallCanceled("stopped while waiting for the reasoner")
+                ending = self._request_failed(exc, streaks, turn_idx)
+                if ending is not None:
+                    return ending
                 continue
-            transient_failures = 0
+            streaks.transient = 0
 
             if r["kind"] == "text":
-                content = str(r.get("content") or "")
-                if _envelope_residue(content) or _envelope_residue(
-                        str(r.get("reasoning") or "")):
-                    log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
-                             self.rid_tag, turn_idx)
-                    self._log("malformed_envelope", turn_idx=turn_idx)
-                    self.reasoner.append_repair(MALFORMED_ENVELOPE_NUDGE)
+                nudge = self._repair_for(r, streaks, turn_idx)
+                if nudge is not None:
+                    self.reasoner.append_repair(nudge)
                     continue
-                miss = _not_a_reply(content)
-                cut = (miss is not None and miss[0] == "empty_turn"
-                       and r.get("finish_reason") == "length")
-                if not cut:
-                    truncated_streak = 0
-                elif truncated_streak < TRUNCATED_TURN_STREAK:
-                    truncated_streak += 1
-                    self._log("truncated_turn", turn_idx=turn_idx, streak=truncated_streak)
-                    log.info("%s TRUNCATED turn %d -> nudge", self.rid_tag, turn_idx)
-                    self.reasoner.append_repair(TRUNCATED_TURN_NUDGE)
-                    continue
-                if miss is None:
-                    no_call_streak = 0
-                else:
-                    # Repaired once; a repeat (the streak is shared) is the
-                    # ending.
-                    kind, what, nudge = miss
-                    no_call_streak += 1
-                    self._log(kind, turn_idx=turn_idx, streak=no_call_streak)
-                    if no_call_streak < 2:
-                        log.info("%s %s %d -> repair", self.rid_tag, what, turn_idx)
-                        self.reasoner.append_repair(nudge)
-                        continue
-                    log.info("%s %s %d repeated; mission ends", self.rid_tag, what,
-                             turn_idx)
-                # A clean prose reply before any flight answers nothing: hand
-                # the turn back, up to NO_FLIGHT_ABSTAIN_STREAK.
-                if no_call_streak == 0 and self.flights == 0:
-                    no_flight_streak += 1
-                    self._log("no_flight_reply", turn_idx=turn_idx,
-                              streak=no_flight_streak)
-                    if no_flight_streak < NO_FLIGHT_ABSTAIN_STREAK:
-                        log.info("%s reply with ZERO flights at turn %d "
-                                 "(streak %d) -> repair", self.rid_tag, turn_idx,
-                                 no_flight_streak)
-                        self.reasoner.append_repair(NO_FLIGHT_REPLY_NUDGE)
-                        continue
-                    log.info("%s reply with ZERO flights at turn %d, streak "
-                             "%d -- abstain", self.rid_tag, turn_idx,
-                             no_flight_streak)
                 log.info("%s mission ended by reply at turn %d (%d flights)",
-                         self.rid_tag, turn_idx, self.turn_flights)
+                         rid_tag, turn_idx, self.progress.turn_flights)
                 return self._mission_end("reply", turns=turn_idx + 1)
-            no_call_streak = truncated_streak = 0
-            no_flight_streak = 0
+            streaks.no_call = streaks.truncated = streaks.no_flight = 0
+            self._answer_tool_calls(r, turn_idx)
 
-            # Dispatch each call in order, answering every call id.
-            for tc in r["tool_calls"]:
-                name = (tc.get("function") or {}).get("name") or ""
-                cid = tc.get("id") or ""
-                args = json.loads(tc["function"]["arguments"])
-                if name == "run":
-                    flights_before = self.flights
-                    out = self._dispatch_run(args)
-                    out.setdefault("watching", (
-                        self._watching_trailer()
-                        or "nothing -- no class is segmented on any flight "
-                           'until one is looked for; call look_for("<class>").'))
-                    self.reasoner.append_tool_result(cid, "run", out)
-                    self._log(
-                        "run",
-                        turn_idx=turn_idx,
-                        reasoning=str(r.get("reasoning") or "")[:4000],
-                        # the whole block: a flight past any cut would
-                        # vanish from the transcript
-                        said=str(args.get("code") or ""),
-                        # already capped (interpreter.PRINT_CHAR_CAP)
-                        printed=str(out.get("printed") or ""),
-                        errored="error" in out,
-                        # stops this block flew, an errored block's included
-                        flights=self.flights - flights_before,
-                        # every image this block showed, by sha
-                        frames=list(self._block_frames))
-                    self._block_frames.clear()
-                else:
-                    # An unknown tool's id is answered, never executed.
-                    self.reasoner.append_tool_result(cid, name or "unknown", {
-                        "error": f"unknown tool {name!r}; available: run"})
-            # Pictures ride a user turn after the turn's tool results.
-            for vtext, vjpegs in self.pending_vision:
-                self.reasoner.append_vision_user(vtext, vjpegs)
-            self.pending_vision.clear()
+    def _take_retasks(self, turn_idx: int) -> None:
+        """The operator's re-tasks land at the top of a turn, never between
+        a turn's tool calls and their results."""
+        if self.retask is None:
+            return
+        while (operator_turn := self.retask()) is not None:
+            log.info("%s operator re-task at turn %d (%d chars)",
+                     self.progress.rid_tag, turn_idx, len(operator_turn))
+            self.reasoner.append_user(operator_turn)
+
+    def _compaction_infeasible(self, exc: Exception, turn_idx: int,
+                               user_message: str) -> MissionReply:
+        """The transcript cannot be folded into the window. Terminal: flag
+        the thread and drop this turn's unread message."""
+        self.reasoner.compaction_infeasible = True
+        msgs = self.reasoner.messages
+        if (turn_idx == 0 and msgs
+                and msgs[-1].get("role") == "user"
+                and msgs[-1].get("content") == user_message):
+            msgs.pop()
+        log.warning(
+            "%s compaction infeasible -> mission ends "
+            "(thread flagged): %s",
+            self.progress.rid_tag, summarise_exc(exc))
+        return self._mission_end("compaction_infeasible", turns=turn_idx + 1)
+
+    def _request_failed(self, exc: Exception, streaks: _Streaks,
+                        turn_idx: int) -> MissionReply | None:
+        """A failed reasoner request: the ending of a rejection a retry
+        would only repeat or of a spent transient budget; None after the
+        wait before a retry."""
+        rid_tag = self.progress.rid_tag
+        for refused, ended_by, why in _REFUSAL_ENDINGS:
+            if refused(exc):
+                log.warning("%s %s: %s", rid_tag, why, summarise_exc(exc))
+                self._log(ended_by, error=summarise_exc(exc))
+                return self._mission_end(ended_by, turns=turn_idx + 1)
+        streaks.transient += 1
+        cancel = self.reasoner.cancel_event
+        log.warning(
+            "%s transient LLM error %d%s: %s",
+            rid_tag,
+            streaks.transient,
+            "" if cancel is not None else f"/{_MAX_TRANSIENT}",
+            summarise_exc(exc),
+        )
+        self._log("transient_error", attempt=streaks.transient,
+                  error=summarise_exc(exc))
+        if cancel is None:
+            if streaks.transient >= _MAX_TRANSIENT:
+                return self._mission_end("transient_failures",
+                                         turns=turn_idx + 1)
+            time.sleep(min(15.0, 0.5 + 2.0 * streaks.transient))
+        elif cancel.wait(min(30.0, 0.5 + 2.0 * streaks.transient)):
+            raise CallCanceled("stopped while waiting for the reasoner")
+        return None
+
+    def _repair_for(self, r: dict, streaks: _Streaks, turn_idx: int) -> str | None:
+        """The nudge a text turn draws, or None when it stands as the reply
+        that ends the mission."""
+        content = str(r.get("content") or "")
+        if _envelope_residue(content) or _envelope_residue(
+                str(r.get("reasoning") or "")):
+            log.info("%s MALFORMED_ENVELOPE at turn %d -> repair",
+                     self.progress.rid_tag, turn_idx)
+            self._log("malformed_envelope", turn_idx=turn_idx)
+            return MALFORMED_ENVELOPE_NUDGE
+        dropped = _not_a_reply(content)
+        cut_off = (dropped is not None and dropped[0] == "empty_turn"
+                   and r.get("finish_reason") == "length")
+        if not cut_off:
+            streaks.truncated = 0
+        elif streaks.truncated < TRUNCATED_TURN_STREAK:
+            return self._truncated_turn(streaks, turn_idx)
+        if dropped is not None:
+            return self._dropped_message(dropped, streaks, turn_idx)
+        streaks.no_call = 0
+        if self.progress.flights == 0:
+            return self._reply_before_any_flight(streaks, turn_idx)
+        return None
+
+    def _truncated_turn(self, streaks: _Streaks, turn_idx: int) -> str:
+        """A turn the output cap cut off empty: the serve's truncation, so
+        it spends no repair."""
+        streaks.truncated += 1
+        self._log("truncated_turn", turn_idx=turn_idx, streak=streaks.truncated)
+        log.info("%s TRUNCATED turn %d -> nudge", self.progress.rid_tag, turn_idx)
+        return TRUNCATED_TURN_NUDGE
+
+    def _dropped_message(self, dropped: tuple[str, str, str], streaks: _Streaks,
+                         turn_idx: int) -> str | None:
+        """An empty turn or a block of code sent as text: repaired once; a
+        repeat (the streak is shared) is the ending."""
+        kind, what, nudge = dropped
+        streaks.no_call += 1
+        self._log(kind, turn_idx=turn_idx, streak=streaks.no_call)
+        if streaks.no_call < 2:
+            log.info("%s %s %d -> repair", self.progress.rid_tag, what, turn_idx)
+            return nudge
+        log.info("%s %s %d repeated; mission ends", self.progress.rid_tag, what,
+                 turn_idx)
+        return None
+
+    def _reply_before_any_flight(self, streaks: _Streaks, turn_idx: int) -> str | None:
+        """A clean prose reply before any flight answers nothing: hand the
+        turn back, up to NO_FLIGHT_ABSTAIN_STREAK."""
+        streaks.no_flight += 1
+        self._log("no_flight_reply", turn_idx=turn_idx,
+                  streak=streaks.no_flight)
+        if streaks.no_flight < NO_FLIGHT_ABSTAIN_STREAK:
+            log.info("%s reply with ZERO flights at turn %d "
+                     "(streak %d) -> repair", self.progress.rid_tag, turn_idx,
+                     streaks.no_flight)
+            return NO_FLIGHT_REPLY_NUDGE
+        log.info("%s reply with ZERO flights at turn %d, streak "
+                 "%d -- abstain", self.progress.rid_tag, turn_idx,
+                 streaks.no_flight)
+        return None
+
+    def _answer_tool_calls(self, r: dict, turn_idx: int) -> None:
+        """Dispatch each call of a turn in order, answering every call id;
+        the pictures its blocks showed ride a user turn after the results."""
+        for tc in r["tool_calls"]:
+            name = (tc.get("function") or {}).get("name") or ""
+            cid = tc.get("id") or ""
+            args = json.loads(tc["function"]["arguments"])
+            if name != "run":
+                # An unknown tool's id is answered, never executed.
+                self.reasoner.append_tool_result(cid, name or "unknown", {
+                    "error": f"unknown tool {name!r}; available: run"})
+                continue
+            flights_before = self.progress.flights
+            out = self._run_block(args)
+            out.setdefault("watching", (
+                self.watchlist.trailer()
+                or "nothing -- no class is segmented on any flight "
+                   'until one is looked for; call look_for("<class>").'))
+            self.reasoner.append_tool_result(cid, "run", out)
+            self._log(
+                "run",
+                turn_idx=turn_idx,
+                reasoning=str(r.get("reasoning") or "")[:4000],
+                # the whole block: a flight past any cut would
+                # vanish from the transcript
+                said=str(args.get("code") or ""),
+                # already capped (interpreter.PRINT_CHAR_CAP)
+                printed=str(out.get("printed") or ""),
+                errored="error" in out,
+                # stops this block flew, an errored block's included
+                flights=self.progress.flights - flights_before,
+                # every image this block showed, by sha
+                frames=list(self.pictures.block_frames))
+            self.pictures.block_frames.clear()
+        for caption, jpegs in self.pictures.pending:
+            self.reasoner.append_vision_user(caption, jpegs)
+        self.pictures.pending.clear()
+
+    def _run_block(self, args: dict) -> dict:
+        """One code block, run in the mission's persistent namespace; an
+        error costs the line it is on."""
+        if "__args_parse_error" in args:
+            return {"error": "the call's arguments did not parse as JSON: "
+                             f"{args['__args_parse_error']}; nothing ran"}
+        code = args.get("code")
+        if not isinstance(code, str) or not code.strip():
+            return {"error": "run takes one block of code in code"}
+        # Every rN in play (bound handles and those this block spells): a
+        # flight's mint skips them.
+        carry = self.surface.carry
+        carry.in_play.clear()
+        carry.in_play.update(HANDLE_WORD_RE.findall(code))
+        carry.in_play.update(self.python.names.held_refs())
+        carry.minted.clear()
+        self._script_lines += len(code.strip().splitlines())
+        out = self.python.run_block(code)
+        out["script_lines"] = self._script_lines
+        return out

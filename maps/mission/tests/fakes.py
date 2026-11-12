@@ -496,9 +496,9 @@ def record_block(code: str, bound: dict | None = None, rn: int = 0,
                                 "watch", "boost")}))
     for name, held in (bound or {}).items():
         if isinstance(held, str) and re.fullmatch(r"r\d+", held):
-            mp.ns[name] = Rows(held, mp)
+            mp.ns[name] = Rows(held, mp.library)
         elif isinstance(held, str):
-            mp.ns[name] = Row({"fid": held}, mp=mp)
+            mp.ns[name] = Row({"fid": held}, mp=mp.library)
         else:
             mp.ns[name] = held
     return calls, mp.run_block(code)

@@ -1,18 +1,22 @@
 """The library the model writes against: ``find``, ``look_for``, ``go_to``,
 ``explore``, ``look``, ``show_map``, ``stand``, ``more_of``,
-``intersection``, ``ends_of`` and ``distance``, and the served ``filter`` and
-``order`` of a result."""
+``intersection``, ``ends_of`` and ``distance``, the served ``filter`` and
+``order`` of a result, and how one call runs: its arguments as the compiler
+reads them, the grounding that opens it and the ack that closes it."""
 
 from __future__ import annotations
 
 from maps.library.block_scan import _MOVE_SAYS
 from maps.library.call_arguments import (
-    _CallArguments, _Name, _no_such_fid, _plain, _tok)
+    MissionEnv, Names, _Name, _no_such_fid, _plain, _SITE_SLOT, _Stop, _tok, fold,
+    place_token)
 from maps.library.op_compiler import (
-    VIEWPOINT_RE, CodeError, Ref, act_needs_a_thing, compile_filter, compile_find,
-    compile_order, fid_like, refuse_metres_in_within)
+    CARDINAL_ORDER, HANDLE_RE, VIEWPOINT_RE, Bind, CodeError, Program, Ref,
+    act_needs_a_thing, compile_filter, compile_find, compile_order, fid_like,
+    refuse_metres_in_within, rn_spelled)
 from maps.library.rows import Row, Rows, _index_it, _one_row, _places, _set_as_list
 from maps.query.result_tables import BROAD_HEAD_ROWS
+from maps.query.row_geometry import SurfaceGeometry
 from maps.query.spatial_math import COMPASS_UNIT
 from maps.xy_token import is_xy
 
@@ -22,12 +26,169 @@ from maps.xy_token import is_xy
 MEASURE_CALL_CEILING = 20_000
 
 
-class _LibraryCalls(_CallArguments):
+class Library:
     """The library: each mission call the model writes, compiled onto ops
     (``op_compiler``) or run on one of the loop's verbs
-    (:class:`MissionEnv`)."""
+    (:class:`MissionEnv`). The sets and rows a call hands back reach their
+    served ``filter``, ``order`` and ``distance`` through it."""
 
-    def _call_find(self, query="", *more, nearest=None, near=None,
+    def __init__(self, env: MissionEnv, names: Names):
+        self.env = env
+        self.names = names
+        self.ns = names.ns
+        # Footprint geometry BY FID off the live surface, cached until a
+        # call ends: a flight folds detections in under it.
+        self._geom = SurfaceGeometry(env.row_of_fid)
+        self._call_minted: list = []    # handles the last call's flights minted
+        self.begin_block({})
+
+    def begin_block(self, out: dict) -> None:
+        """A block starts: ``out`` is the receipt its calls fold into."""
+        self.out = out
+        #: The refs whose envelope the receipt keeps whole.
+        self.shown_whole: set = set()
+        #: The refs a dedup left unrendered this block -> surface version.
+        self.unrendered: dict = {}
+        self._get_noted: set = set()    # .get near-miss keys noted this block
+        self._measure_calls = 0
+        self._geom.clear()
+
+    def note(self, text: str) -> None:
+        """One note on the block's receipt."""
+        fold(self.out, {"note": text})
+
+    # -- how one call runs ------------------------------------------------
+
+    def _held(self, name: str):
+        """What a bound name holds, as an argument: a whole result, a row,
+        or a staged viewpoint; None for anything else."""
+        v = dict.get(self.ns, name)
+        if isinstance(v, Rows) and not v._spec:
+            return Ref(v._ref, name)
+        if isinstance(v, Row):
+            return Bind(v._bind, name)
+        if isinstance(v, str) and v == name and VIEWPOINT_RE.fullmatch(v):
+            return Bind(v, name)
+        return None
+
+    def _slot(self, v):
+        """A Python value -> the argument the compiler reads: a result is a
+        :class:`Ref` and a row a :class:`Bind`, labelled with the model's
+        own name (as is a string naming one); anything else rides verbatim,
+        a bare name to ground."""
+        if isinstance(v, Rows):
+            # A nameless set is numbered, once per mission, so two of them
+            # in one call stay two places (two columns, two cuts).
+            name = self.names.spelling(v)
+            if v._spec:
+                v = self._materialize(v)
+            return Ref(v._ref, name or self.names.unnamed_label(v._ref))
+        if isinstance(v, Row):
+            return Bind(v._bind, self.names.name_of(v) or (v.fid or "row"))
+        if isinstance(v, str):
+            return self._held(v) or v
+        if isinstance(v, dict):
+            raise CodeError("a place is a row, a set, a fid or an [x, y]; "
+                            f"got a dict ({v!r:.60}).")
+        if isinstance(v, (set, frozenset)):
+            v = _set_as_list(v)
+        if isinstance(v, (list, tuple)) and not is_xy(v):
+            # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
+            # element-wise.
+            out = [self._slot(x) for x in v]
+            return out if any(isinstance(x, (Row, Rows)) for x in v) \
+                else type(v)(out)
+        return v
+
+    def _cards(self, **anchors) -> list:
+        """The cardinal cuts given, slotted in the order named, read in
+        the compiler's order."""
+        got = {d: self._slot(a) for d, a in anchors.items() if a is not None}
+        return [(d, got[d]) for d in CARDINAL_ORDER if d in got]
+
+    def _program(self, *args) -> Program:
+        """A program for one call: it mints past the rN names the call spells
+        and the mission's handles hold."""
+        taken = rn_spelled(args) | {
+            k for k, v in self.ns.items() if HANDLE_RE.fullmatch(k)
+            and (isinstance(v, Row) or isinstance(v, Rows) and not v._spec)}
+        live = {v._ref for v in self.ns.values()
+                if isinstance(v, Rows) and not v._spec}
+        return Program(self.env.plan_rn[0], taken, live)
+
+    def _ground(self, sites) -> dict:
+        """Open a call: ground the NAMES among its ``(site, why)`` pairs ->
+        ``{name: top-tie fids}``."""
+        why: dict = {}
+        for n, w in sites:
+            if isinstance(n, _Name):
+                if not n.strip():
+                    raise CodeError(
+                        f"{_SITE_SLOT[w]} got an empty name, which is no place.")
+                why.setdefault(n, w)
+        got = self.env.ground(why)
+        if "error" in got:
+            self._end(got)
+        return got["ties"]
+
+    def _analyze(self, p: Program, ref: str, *, shown=None, page=None) -> str:
+        """Ground the program's named anchors and run it, ``ref``'s envelope
+        the answer (served under ``shown`` when given)."""
+        if shown is not None:
+            self._show_as(ref, shown)
+        ties = self._ground((_Name(n), "anchor") for n in p.anchor_names())
+        p.ground(ties)
+        ack = self.env.analyze(p.ops, p.rn, ref, page)
+        if "results" not in ack.get("result", {"results": None}):
+            # deduped: its note says so, while the surface stands
+            self.unrendered[ref] = self.env.version()
+        self._end(ack)
+        return ref
+
+    def _act(self, verb, sites: list, *args, **kw) -> None:
+        """Ground the NAMES among ``sites`` (``(site, why)`` pairs), then run
+        the act ``verb`` on their tokens."""
+        ties = self._ground(sites)
+        self._end(verb(*[_tok(s, ties) for s, _w in sites], *args, **kw))
+
+    def _end(self, ack: dict) -> None:
+        """Close one call: finish an ack nothing refused, fold it into the
+        receipt, bind what its flights minted; a refusal ends the block. A
+        call may have changed the surface, so measured geometry is dropped."""
+        if "error" not in ack:
+            ack = self.env.finish(ack)
+        self._geom.clear()
+        fold(self.out, ack)
+        self._call_minted = list(self.env.minted)
+        for h in self._call_minted:
+            self.ns[h] = Rows(h, self)
+        del self.env.minted[:]
+        if "error" in ack:
+            raise _Stop()
+
+    def _show_as(self, ref: str, label: str | None) -> None:
+        """Serve ``ref``'s envelope under ``label``, kept whole (unnamed when
+        ``label`` is None)."""
+        if label is not None:
+            self.names.shown[ref] = label
+        self.shown_whole.add(ref)
+
+    def _window(self, ref: str, spec: str, label: str, *args) -> str:
+        """The identity window over ``ref`` (sliced by ``spec``), served
+        under ``label``."""
+        p = self._program(*args)
+        return self._analyze(p, p.window(ref, spec), shown=label)
+
+    def _materialize(self, sliced: "Rows") -> "Rows":
+        """A sliced set becomes a real ref via the identity window, so a
+        slice rides every slot a set can (find(near=r1[0:5]) is the union
+        of the head, which is what the spelling plainly means)."""
+        return Rows(self._window(sliced._ref, sliced._spec,
+                                self.names.spelling(sliced), sliced._ref), self)
+
+    # -- the calls --------------------------------------------------------
+
+    def find(self, query="", *more, nearest=None, near=None,
                    within=None, dwithin=None, color=None,
                    name=None, north_of=None, south_of=None, east_of=None,
                    west_of=None):
@@ -57,7 +218,7 @@ class _LibraryCalls(_CallArguments):
         self._analyze(p, ref)
         self._near_miss_note(ref, query)
         if q:
-            self._labels[ref] = f"find({query!r})"
+            self.names.labels[ref] = f"find({query!r})"
         return Rows(ref, self, label=f"find({query!r})" if q else "")
 
     _NEAR_MISS_M = 500.0
@@ -78,13 +239,13 @@ class _LibraryCalls(_CallArguments):
         if not vals or min(vals) <= self._NEAR_MISS_M:
             return
         anchor = dkey[len("distance to "):]
-        self._fold({"note": (
+        self.note((
             f"nothing found for {str(query)!r} lies near {anchor} -- the "
             f"nearest match is {min(vals):,.0f} m away."
             f" Rows of a watched class appear near {anchor} only when a "
-            "flight covers it.")})
+            "flight covers it."))
 
-    def _rows_order(self, items, *, nearest=None, color=None):
+    def rows_order(self, items, *, nearest=None, color=None):
         """A distance or a colour, never both: combining the two can rank a
         row that is second on both below worse rows, so the second is refused
         and named as a cut."""
@@ -109,7 +270,7 @@ class _LibraryCalls(_CallArguments):
         return Rows(self._analyze(p, compile_order(
             p, items, nearest=nearest, color=color)), self)
 
-    def _rows_filter(self, items, *, within=None, near=None,
+    def rows_filter(self, items, *, within=None, near=None,
                      dwithin=None, facing=None, direction=None, **cards):
         # Which-arg validation lives in the compiler; every caller has
         # already refused a kwarg outside the set.
@@ -127,23 +288,23 @@ class _LibraryCalls(_CallArguments):
             p, items, within=within, near=near, dwithin=dwithin,
             facing=facing, direction=direction, cards=cards)), self)
 
-    def _call_intersection(self, a, b):
+    def intersection(self, a, b):
         a, b = self._slot(a), self._slot(b)
         p = self._program(a, b)
         return Rows(self._analyze(p, p.add("crossings", {
             "refs": [p.ref_of(a), p.ref_of(b)]})), self)
 
-    def _call_ends_of(self, x):
+    def ends_of(self, x):
         x = self._slot(x)
         p = self._program(x)
         return Rows(self._analyze(p, p.add("ends", {
             "refs": [p.ref_of(x)]})), self)
 
-    def _call_more_of(self, x):
+    def more_of(self, x):
         if not isinstance(x, Rows) or x._spec:
             raise CodeError("more_of pages a RESULT a find or an ordering "
                             "left")
-        name = self.said_name(x, "more_of")
+        name = self.names.said_name(x, "more_of")
         if x._tied():
             x._refuse_tied(name, "has no next block")
         lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x._ref) or 0)
@@ -155,7 +316,7 @@ class _LibraryCalls(_CallArguments):
             p, p.window(x._ref, f"[{lo}:{lo + BROAD_HEAD_ROWS}]"),
             shown=f"more_of({name})", page=(x._ref, lo, name)), self)
 
-    def _call_distance(self, a, b) -> float:
+    def distance(self, a, b) -> float:
         """Metres between two footprints, mask to mask; 0.0 on touch or
         containment. Either side may be a set, meaning its nearest member."""
         self._measure_calls += 1
@@ -176,7 +337,7 @@ class _LibraryCalls(_CallArguments):
                     "[x, y] points.")
         return self._geom.distance(a, b)
 
-    def _call_look(self, x, *, marks=None):
+    def look(self, x, *, marks=None):
         if isinstance(x, (list, tuple, set, frozenset)) and not x:
             raise CodeError(
                 "look() got an empty list; there is nothing to look at.")
@@ -194,7 +355,7 @@ class _LibraryCalls(_CallArguments):
         if isinstance(x, Rows) and x._spec:
             # A SLICE is looked at through its window: two verbs, one
             # receipt, and the window is no answer of its own.
-            name = self.spelling(x)
+            name = self.names.spelling(x)
             p = self._program(x._ref, mk)
             ref = p.window(x._ref, x._spec)
             self._show_as(ref, name)
@@ -206,7 +367,7 @@ class _LibraryCalls(_CallArguments):
                 x if isinstance(x, (list, tuple, set, frozenset)) else ())
                 if isinstance(a, Rows)]
             if sets:
-                held = self.spelling(sets[0])
+                held = self.names.spelling(sets[0])
                 if not held:
                     raise CodeError(
                         "look() got an unnamed set inside a list; bind it "
@@ -223,12 +384,12 @@ class _LibraryCalls(_CallArguments):
                     f"name its rows: look([{held}[0], ...])")
             if many:
                 # look([a, b, c]) crops EACH element.
-                fids = [self._site(a, "crops") for a in x]
+                fids = [place_token(a, "crops") for a in x]
                 lead = [(f, "crops") for f in fids]
             elif not isinstance(x, Ref):
-                site = self._site(x, "crops")
+                site = place_token(x, "crops")
                 lead = [(site, "crops")]
-        marks = [(self._site(m, "marks"), "marks") for m in mk or []]
+        marks = [(place_token(m, "marks"), "marks") for m in mk or []]
         ties = self._ground(lead + marks)
         toks = [_tok(s, ties) for s, _w in marks] if mk else None
         if isinstance(x, Rows):
@@ -245,23 +406,23 @@ class _LibraryCalls(_CallArguments):
         self._end(ack)
         return None
 
-    def _call_show_map(self, around=None):
+    def show_map(self, around=None):
         if around is None:
             raise CodeError(
                 "around= got None, which is no place: show_map(around=<place>) "
                 "centres on a row, a fid or an [x, y] point.")
         if isinstance(around, Rows):
             raise CodeError(
-                self._not_one_place("around", around) + (" -- or use a "
+                self.names.not_one_place("around", around) + (" -- or use a "
                 "name. (A set IS one "
                 "place in near=, within= and nearest=, where it means "
                 "the gap to its NEAREST member, but there is no one "
                 "point to centre on.)" if len(around) else "."))
         around = self._slot(around)
-        self._act(self.env.map, [(self._site(around, "map"), "map")])
+        self._act(self.env.map, [(place_token(around, "map"), "map")])
         return None
 
-    def _call_look_for(self, *classes, at=None):
+    def look_for(self, *classes, at=None):
         # at=, not near=: this names WHERE to segment extra.
         if not classes:
             raise CodeError('look_for takes the classes to watch: '
@@ -275,31 +436,31 @@ class _LibraryCalls(_CallArguments):
         words = [w.strip().lower().replace("_", " ")
                  for w in classes if w.strip()]
         if isinstance(at, Rows):
-            raise CodeError(self._not_one_place("at", at) + ".")
+            raise CodeError(self.names.not_one_place("at", at) + ".")
         at = self._slot(at)
         if at is None:
             self._act(self.env.watch, [], words)
         else:
             # The placed form is the TARGETED BOOST, and the loop arms the
             # standing watchlist from it too -- one verb, one semantics.
-            self._act(self.env.boost, [(self._site(at, "boost"), "boost")],
+            self._act(self.env.boost, [(place_token(at, "boost"), "boost")],
                       words)
         return None
 
-    def _call_stand(self, *, at, facing="north"):
+    def stand(self, *, at, facing="north"):
         for kw, v in (("at", at), ("facing", facing)):
             if isinstance(v, Rows):
-                raise CodeError(self._not_one_place(kw, v) + ".")
+                raise CodeError(self.names.not_one_place(kw, v) + ".")
         at = self._slot(at)
         # A heading: a compass word rides as itself, anything else is a
         # place to look TOWARD.
         word = facing.strip().lower() if isinstance(facing, str) else None
         if word not in COMPASS_UNIT:
             facing = self._slot(facing)
-        at_site = self._site(at, "stage")
-        f_site = word if word in COMPASS_UNIT else self._site(facing, "facing")
+        at_site = place_token(at, "stage")
+        f_site = word if word in COMPASS_UNIT else place_token(facing, "facing")
         self._act(self.env.stand, [(at_site, "stage"), (f_site, "facing")])
-        st = self._out["stance"]
+        st = self.out["stance"]
         h = (st[-1] if isinstance(st, list) else st)["staged"][-1]["handle"]
         self.ns[h] = h
         return h
@@ -312,7 +473,7 @@ class _LibraryCalls(_CallArguments):
             # A SET is one place for explore; go_to lands on one thing (an
             # empty set takes the empty refusal below).
             if call == "go_to" and len(x):
-                name = self.spelling(x)
+                name = self.names.spelling(x)
                 s = name or "s"
                 raise CodeError(
                     f"go_to() takes ONE thing and {name or 'that'} is a set "
@@ -349,7 +510,7 @@ class _LibraryCalls(_CallArguments):
         for e in (x if isinstance(x, (list, tuple)) else [x]):
             if isinstance(e, Rows) and not len(e):
                 raise CodeError(
-                    f"{self.spelling(e) or 'that set'} holds 0 row(s) here; "
+                    f"{self.names.spelling(e) or 'that set'} holds 0 row(s) here; "
                     f"there is nothing to {_MOVE_SAYS[call]}.")
         if isinstance(x, str) and VIEWPOINT_RE.fullmatch(x):
             # A staged viewpoint is a pose, not a thing on the map: the
@@ -361,13 +522,13 @@ class _LibraryCalls(_CallArguments):
                 f"{call}() a row: r1[0], or a fid off one.")
         x = self._slot(x)
         if call == "go_to":
-            self._act(self.env.move, [(self._site(x, "move"), "move")])
+            self._act(self.env.move, [(place_token(x, "move"), "move")])
         else:
             # A `cover` move flies a pass over the thing and ends on its
             # last stop. A SET is one place to cover; a NAME covers its
             # whole top tie group.
             many = isinstance(x, (list, tuple)) and not is_xy(x)
-            sites = [self._site(a, "cover") for a in (x if many else [x])]
+            sites = [place_token(a, "cover") for a in (x if many else [x])]
             said = _plain(x)
             ties = self._ground((s, "cover") for s in sites)
             self._end(self.env.cover(
@@ -380,8 +541,8 @@ class _LibraryCalls(_CallArguments):
         return self.ns.get(self._call_minted[-1]) if self._call_minted \
             else None
 
-    def _call_go_to(self, x):
+    def go_to(self, x):
         return self._move("go_to", x)
 
-    def _call_explore(self, x):
+    def explore(self, x):
         return self._move("explore", x)

@@ -30,7 +30,7 @@ def _served(row: dict) -> dict:
 
 def test_distance_is_footprint_not_centroid():
     mp = _mp({"prior_1": ROAD, "detected_1": CAR})
-    assert mp._call_distance("detected_1", "prior_1") == pytest.approx(7.0)
+    assert mp.library.distance("detected_1", "prior_1") == pytest.approx(7.0)
     # ...and the number a centroid read would have produced is nowhere near
     # it, so a regression to point math fails loud rather than passing on a
     # coincidence.
@@ -45,15 +45,15 @@ def test_a_set_is_its_nearest_member():
     surface = {"prior_1": ROAD, "detected_1": near, "detected_2": far}
     # the FAR one first, so a first-member read is wrong too
     mp = _mp(surface, refs={"r0": [_served(far), _served(near)]})
-    pools = Rows("r0", mp)
+    pools = Rows("r0", mp.library)
     assert len(pools) == 2
-    assert mp._call_distance(pools, "prior_1") == pytest.approx(7.0)
+    assert mp.library.distance(pools, "prior_1") == pytest.approx(7.0)
     # the alternatives it must not be
-    assert mp._call_distance(far["fid"], "prior_1") == pytest.approx(400.0)
+    assert mp.library.distance(far["fid"], "prior_1") == pytest.approx(400.0)
     mean_x = (7.0 + 400.0) / 2
-    assert abs(mp._call_distance(pools, "prior_1") - mean_x) > 190.0
+    assert abs(mp.library.distance(pools, "prior_1") - mean_x) > 190.0
     # a plain list of Rows/Row unions the same way
-    assert mp._call_distance([pools, Row(far, mp=mp)], ROAD["fid"]) \
+    assert mp.library.distance([pools, Row(far, mp=mp.library)], ROAD["fid"]) \
         == pytest.approx(7.0)
 
 
@@ -64,8 +64,8 @@ def test_a_point_inside_overlapping_members_is_inside_the_set():
     surface = {"prior_1": {"fid": "prior_1", "mask": [sq(0.0)]},
                "prior_2": {"fid": "prior_2", "mask": [sq(5.0)]}}
     mp = _mp(surface)
-    assert mp._call_distance([7.0, 5.0], ["prior_1", "prior_2"]) == 0.0
-    assert mp._call_distance([7.0, 5.0], "prior_2") == 0.0
+    assert mp.library.distance([7.0, 5.0], ["prior_1", "prior_2"]) == 0.0
+    assert mp.library.distance([7.0, 5.0], "prior_2") == 0.0
 
 
 def test_distance_matches_the_executor_column():
@@ -76,7 +76,7 @@ def test_distance_matches_the_executor_column():
     row = out["results"]["r0"][0]
     column = row[f"distance to {ROAD['fid']}"]
     mp = _mp({"prior_1": ROAD, "detected_1": CAR})
-    served = mp._call_distance("detected_1", "prior_1")
+    served = mp.library.distance("detected_1", "prior_1")
     assert abs(served - column) <= 0.1, (served, column)
     # VACUITY FLOOR: the executor's OWN centroid column is a different
     # number, so the parity above is not two ways of reading one default.
@@ -104,7 +104,7 @@ def test_each_place_geometry_is_built_once(monkeypatch):
     monkeypatch.setattr(G, "mask_geom", counted)
 
     road = list(ways)
-    gaps = [mp._call_distance(f"detected_{i % 64}", road) for i in range(100)]
+    gaps = [mp.library.distance(f"detected_{i % 64}", road) for i in range(100)]
     assert len(gaps) == 100 and all(math.isfinite(g) for g in gaps)
     assert calls["n"] <= 128, calls["n"]
     # VACUITY FLOOR: it really did build the ways and the houses, so a
@@ -122,7 +122,7 @@ def test_a_bare_name_is_refused_rather_than_grounded():
     assert _places("prior_1", "gap") == (("prior_1", None),)
     assert _places([10.0, 20.0], "gap") == ((None, (10.0, 20.0)),)
     with pytest.raises(CodeError) as e:
-        mp._call_distance(3, "prior_1")
+        mp.library.distance(3, "prior_1")
     assert "int" in str(e.value)
 
 
@@ -131,10 +131,10 @@ def test_the_measuring_ceiling_names_the_pairwise_scan(monkeypatch):
         "maps.library.calls.MEASURE_CALL_CEILING", 3)
     mp = _mp({"prior_1": ROAD, "detected_1": CAR})
     for _ in range(3):
-        mp._call_distance("detected_1", "prior_1")
+        mp.library.distance("detected_1", "prior_1")
     with pytest.raises(CodeError) as e:
-        mp._call_distance("detected_1", "prior_1")
+        mp.library.distance("detected_1", "prior_1")
     assert "per PAIR" in str(e.value)
     # a fresh block gets a fresh budget
     mp.run_block("")
-    assert mp._call_distance("detected_1", "prior_1") == pytest.approx(7.0)
+    assert mp.library.distance("detected_1", "prior_1") == pytest.approx(7.0)

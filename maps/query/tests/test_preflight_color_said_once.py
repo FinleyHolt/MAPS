@@ -2,7 +2,7 @@
 note, not a second preflight note restating it."""
 from __future__ import annotations
 
-from maps.library.result_handles import _preflight_color_note, run_ops
+from maps.library.result_handles import PREFLIGHT_COLOR_NOTE, run_ops
 
 
 def test_a_dropped_colour_term_is_explained_once():
@@ -20,4 +20,4 @@ def test_a_dropped_colour_term_is_explained_once():
                   preflight=True, answer_ref="r3")
     hint = out["results"]["r3"]["hint"]
     assert "'color_red' ranked nothing here" in hint, hint
-    assert _preflight_color_note() not in hint, hint
+    assert PREFLIGHT_COLOR_NOTE not in hint, hint

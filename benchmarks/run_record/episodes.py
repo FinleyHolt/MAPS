@@ -17,6 +17,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 EPISODES_JSONL = "episodes.jsonl"
 EPISODE_JSON = "episode.json"
 
@@ -155,8 +157,6 @@ def upsert_row(root: Path, row: dict) -> None:
 
 def json_default(obj: Any) -> Any:
     """numpy arrays and scalars as their values; anything else as its str."""
-    import numpy as np  # noqa: PLC0415 — the fleet driver imports this module without numpy
-
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     if isinstance(obj, (np.integer, np.floating)):

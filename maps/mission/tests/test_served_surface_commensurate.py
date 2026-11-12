@@ -60,7 +60,7 @@ def _schema_descriptions(node) -> list[str]:
 
 def _static_corpus() -> list[str]:
     corpus: list[str] = [served_text.served_system_prompt()]
-    for t in served_text.served_tools():
+    for t in served_text.SERVED_TOOLS:
         corpus.append(t["function"]["description"])
         corpus.extend(_schema_descriptions(t["function"]["parameters"]))
     # The shared transport-repair nudges are served too.

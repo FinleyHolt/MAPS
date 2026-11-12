@@ -15,10 +15,16 @@ import socket
 import time
 from pathlib import Path
 
-from benchmarks import repo_provenance
+import yaml
+
+from benchmarks.run_record.config import repo_provenance
 from benchmarks.bench import Bench
 from benchmarks.run_record.config import resolve_config
-from benchmarks.run_record.episodes import EPISODES_JSONL, MANIFEST_NAME, atomic_write_json
+from benchmarks.run_record.episodes import (
+    EPISODES_JSONL,
+    MANIFEST_NAME,
+    atomic_write_json,
+)
 from maps.llm import endpoint_spec
 from maps.llm.model_cards import effort
 from maps.settings import Settings
@@ -165,8 +171,6 @@ def build_manifest(
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
     in ``search_env_flags`` (:func:`arm_env_stamp`), since the mission's requests
     carried it."""
-    import yaml  # noqa: PLC0415  (only config runs need it)
-
     resolved = resolve_config(config_path)[0]
     arm = arm_env_stamp(bench)
     if mission is not None and mission.get("reasoning_effort") is not None:

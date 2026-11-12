@@ -28,15 +28,22 @@ import http.client
 import json
 import logging
 import threading
-import urllib.error
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
-from maps.settings import Endpoint, Settings
+from maps.llm.model_cards import card_for, check_effort, effort, speaks_openai
+from maps.settings import Endpoint, Settings, sam_endpoints
 
 log = logging.getLogger(__name__)
 
+
+# 4xx codes that mean "not now": the rate limit (429) and the quota check (402).
+RATE_LIMIT_STATUS = frozenset({402, 429})
+# Every 4xx a serve may clear on its own: the rate limit and quota checks,
+# and 408 request timeout. Any other 4xx is a request the caller built wrong.
+TRANSIENT_CLIENT_STATUS = RATE_LIMIT_STATUS | {408}
 
 #: The reasoner's base URL when ``SEARCH_REASONER_URL`` is unset.
 DEFAULT_REASONER_URL = "http://127.0.0.1:8001/v1"
@@ -139,7 +146,6 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
     dropped one, a body cut short, a timeout, a 5xx or a 4xx the serve clears
     on its own) and EndpointDiscoveryError, unasked again, on any other 4xx, a malformed URL
     or a non-JSON body."""
-    from maps.llm.http import TRANSIENT_CLIENT_STATUS  # noqa: PLC0415 -- http imports this module
     req = urllib.request.Request(url)
     if bearer:
         req.add_header("Authorization", f"Bearer {bearer}")
@@ -197,8 +203,6 @@ def _facts_from_endpoint(
     models = probe_models(base_url, endpoint)
     ids = [str(m.get("id") or "") for m in models]
     if override is not None:
-        from maps.llm.model_cards import speaks_openai  # noqa: PLC0415
-
         if speaks_openai(override.model_id):
             # A hosted endpoint lists its provider's models, not the
             # deployment the alias names: the listing answering the key is
@@ -354,7 +358,6 @@ def discover(
         if sam_urls:
             _probe_sam_health(sam_urls)
 
-    from maps.llm.model_cards import card_for, check_effort, effort  # noqa: PLC0415
 
     try:
         card_for(model_id)  # the sampling envelope: refused at startup, not mid-mission
@@ -390,8 +393,6 @@ def discover_from_settings(settings: Settings, *, probe_sam: bool = True) -> End
     reasoner URL (``SEARCH_REASONER_URL``), the SAM replicas (none when
     ``probe_sam`` is False) and the ``SEARCH_ENDPOINT_OFFLINE`` /
     ``SEARCH_ENDPOINT_SPEC_OVERRIDE`` pins."""
-
-    from maps.perception.sam.detect_client import sam_endpoints  # noqa: PLC0415
 
     endpoint = settings.endpoint
     try:

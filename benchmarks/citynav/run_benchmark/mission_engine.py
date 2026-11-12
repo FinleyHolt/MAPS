@@ -18,7 +18,7 @@ from benchmarks.run_record.episode_workdir import CONVERSATION_JSONL, Conversati
 from benchmarks.run_record.episodes import DEADLINE_ENV, TOUR_CURSOR, atomic_write_json
 from benchmarks.citynav.run_benchmark.osm_prior import prior_percepts
 from maps.llm.endpoint_spec import spec as endpoint_spec
-from maps.perception.geometry.sensor_spec import served_description
+from maps.perception.ortho.sensor_frame import served_description
 from maps.perception.observation import ground_sides_m
 from maps.perception.ortho.detection_stamping import project_and_stamp_ortho_detections
 from maps.mission.spec import MissionSpec

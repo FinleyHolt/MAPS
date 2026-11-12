@@ -16,9 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from benchmarks import REPO_ROOT
-from maps.perception.geometry.sensor_spec import resolve_sensor
+import yaml
 
+from benchmarks import REPO_ROOT, git_provenance
+from maps.perception.geometry.sensor_spec import resolve_sensor
 
 _NUM = (int, float)
 _NONE = type(None)
@@ -89,8 +90,6 @@ def _merge(base: dict, over: dict) -> dict:
 
 
 def _read_chain(p: Path, seen: tuple[Path, ...] = ()) -> dict:
-    import yaml  # lazy -- only required for config runs
-
     p = p.resolve()
     if p in seen:
         raise ValueError(f"{p}: base chain loops ({' -> '.join(map(str, (*seen, p)))})")
@@ -143,6 +142,31 @@ def config_sha256(path: str | Path) -> str:
     run flew, whichever base chain spelled it."""
     data, _ = resolve_config(path)
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def repo_provenance(
+    *,
+    config_path: str | Path | None = None,
+    split: str | None = None,
+    search_flags: dict | None = None,
+    served_model: str | None = None,
+    served_build: str | None = None,
+) -> dict:
+    """The provenance record: git, and each run fact given."""
+    prov: dict = git_provenance()
+    if config_path is not None:
+        prov["config"] = str(config_path)
+        prov["config_sha256"] = config_sha256(config_path)
+    # One served alias can name two quantizations; the tokenizer (served_build) tells them apart.
+    for key, value in (
+        ("split", split),
+        ("search_env_flags", None if search_flags is None else dict(search_flags)),
+        ("served_model", served_model),
+        ("served_build", served_build),
+    ):
+        if value is not None:
+            prov[key] = value
+    return prov
 
 
 def load_config(path: str | Path | None) -> RunConfig:

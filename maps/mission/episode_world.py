@@ -12,13 +12,20 @@ from typing import Any
 
 import numpy as np
 
-from maps.query.spatial_math import cell_centre_xy
 from maps.mission.explore_stops import spread
-from maps.perception.watchlist import (
-    SegmenterTasking, canon_concept)
-from maps.world_state.graph import GridDomain, MapObject
 from maps.perception.mask_codec import encode_mask_record
-
+from maps.perception.watchlist import SegmenterTasking, canon_concept
+from maps.perception.world_tracker import WorldTracker
+from maps.query.spatial_math import cell_centre_xy
+from maps.query.surface import build_surface_from_graph
+from maps.render import look_render
+from maps.world_state.context import QueryContext
+from maps.world_state.graph import GridDomain, MapObject
+from maps.world_state.upsert import (
+    upsert_detected_centroid_only,
+    upsert_tracked_detected,
+)
+from maps.world_state.upsert import upsert_prior_percept as _upsert_prior_percept
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +70,6 @@ class EpisodeWorld:
         #: What a live run has captured (``benchmarks/flight/run_imagery``),
         #: cropped by ``look`` instead of the raster; None on the bench.
         self.look_imagery = None
-        from maps.perception.world_tracker import WorldTracker
 
         self._world_tracker = WorldTracker()
         self._state: _State | None = None
@@ -84,7 +90,6 @@ class EpisodeWorld:
         built once (priors do not move). Under the lock."""
         if self._prior_xy_cache is not None:
             return self._prior_xy_cache
-        from maps.query.surface import build_surface_from_graph  # noqa: PLC0415
 
         priors = [(f, n) for f, n in self.state.runtime_graph.nodes.items()
                   if n.provenance != "detected"]
@@ -184,8 +189,6 @@ class EpisodeWorld:
 
     def render_candidate_crops(self, requests: list[dict]) -> list[dict]:
         """The ``look`` renderer, bound to this episode's map and imagery."""
-        from maps.render import look_render  # noqa: PLC0415
-
         return look_render.render_candidate_crops(
             requests,
             map_name=self._map_name,
@@ -243,11 +246,6 @@ class EpisodeWorld:
         with a projected footprint through the tracked upsert, the rest
         centroid-only. Returns the per-step detection records the recorder
         writes."""
-        from maps.world_state.upsert import (  # noqa: PLC0415
-            upsert_detected_centroid_only,
-            upsert_tracked_detected,
-        )
-
         with self._lock:
             s = self.state
             bounds_min, cell = self._tile_origin_xy, self._cell_size_m
@@ -315,10 +313,6 @@ class EpisodeWorld:
         (e.g. ``{"color": "gray", "color_rgb": "128,130,131"}``) onto its
         node. Never raises: the per-frame enrichment calls it inline."""
         try:
-            from maps.world_state.upsert import (
-                upsert_prior_percept as _upsert_prior_percept,
-            )
-
             with self._lock:
                 return _upsert_prior_percept(
                     self.state.runtime_graph, str(fid), dict(attrs or {}), px=px
@@ -329,8 +323,6 @@ class EpisodeWorld:
 
     def query_context(self):
         """The :class:`QueryContext` over the live graph and the tile frame."""
-        from maps.world_state.context import QueryContext
-
         with self._lock:
             return QueryContext(
                 grid_shape=(int(self._grid.height), int(self._grid.width)),

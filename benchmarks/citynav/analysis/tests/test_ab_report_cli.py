@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.citynav.analysis.ab_report import main, wilson_ci
+from benchmarks.citynav.analysis.ab_report import main
 from benchmarks.run_record.tests.ledger import write_ledger
 
 
@@ -70,14 +70,3 @@ def test_cli_refuses_ring_runs_of_two_radii_even_with_the_waiver(tmp_path, monke
                                       "--allow-provenance-mismatch"])
     with pytest.raises(SystemExit, match="A is scored on the 20 m disc and B on the 40 m disc"):
         main()
-
-
-def test_wilson_ci_bounds_and_midpoint():
-    lo, hi = wilson_ci(0, 20)
-    assert lo == 0.0 and 0.0 < hi < 0.25  # k=0 pins the floor, hi stays real
-    lo, hi = wilson_ci(20, 20)
-    assert hi == 1.0 and 0.75 < lo < 1.0
-    lo, hi = wilson_ci(50, 100)
-    assert (lo, hi) == (pytest.approx(0.4038, abs=1e-3),
-                        pytest.approx(0.5962, abs=1e-3))
-    assert wilson_ci(0, 0) == (pytest.approx(float("nan"), nan_ok=True),) * 2

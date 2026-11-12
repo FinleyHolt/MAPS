@@ -18,11 +18,22 @@ FORBIDDEN = {
 FLOOR = {"station": 20}
 
 
-# Within the upper layers, what a package's own modules (its tests apart) never
-# import: the bench value and the run record sit under every bench, and the
+# What a package's own modules (its tests apart) never import. Within the upper
+# layers: the bench value and the run record sit under every bench, and the
 # flight harness and the station reach a bench's engine through the bench
 # value they are handed, never by import.
+_ENGINE = ("maps.perception", "maps.llm", "maps.world_state", "maps.query", "maps.render", "maps.library",
+           "maps.mission")
 APART = {
+    # Within the engine: perception, the transport and the world state stand
+    # alone; the query reads none of them; the pictures read perception and
+    # the query; the library reads the query; the mission composes them all.
+    "maps/perception": tuple(p for p in _ENGINE if p != "maps.perception"),
+    "maps/llm": tuple(p for p in _ENGINE if p != "maps.llm"),
+    "maps/world_state": tuple(p for p in _ENGINE if p != "maps.world_state"),
+    "maps/query": tuple(p for p in _ENGINE if p != "maps.query"),
+    "maps/render": ("maps.llm", "maps.world_state", "maps.library", "maps.mission"),
+    "maps/library": ("maps.perception", "maps.llm", "maps.world_state", "maps.render", "maps.mission"),
     "benchmarks/bench.py": ("benchmarks.citynav", "benchmarks.calcity", "benchmarks.flight", "benchmarks.run_record"),
     "benchmarks/run_record": ("benchmarks.citynav", "benchmarks.calcity", "benchmarks.flight"),
     "benchmarks/citynav": ("benchmarks.flight",),
@@ -32,7 +43,9 @@ APART = {
 }
 # The vacuity floor of each: the fewest imports a scan that read the package finds.
 APART_FLOOR = {"benchmarks/bench.py": 5, "benchmarks/run_record": 30, "benchmarks/citynav": 100,
-               "benchmarks/calcity": 30, "benchmarks/flight": 100, "station": 20}
+               "benchmarks/calcity": 30, "benchmarks/flight": 100, "station": 20,
+               "maps/perception": 60, "maps/llm": 30, "maps/world_state": 10, "maps/query": 40,
+               "maps/render": 20, "maps/library": 40}
 
 
 def _imports(layer: str, tests: bool = True) -> list[tuple[str, str]]:

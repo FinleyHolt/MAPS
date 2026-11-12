@@ -18,8 +18,15 @@ from pathlib import Path
 
 import yaml
 
-from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor, served_description
+from maps.library.block_scan import _LIBRARY_CALLS
+from maps.library.calls import Library
+from maps.library.rows import Rows
 from maps.mission import served_text
+from maps.perception.geometry.sensor_spec import (
+    list_sensors,
+    resolve_sensor,
+)
+from maps.perception.ortho.sensor_frame import served_description
 from maps.settings import from_process
 
 _SAMPLE_INSTRUCTION = "<operator cue>"
@@ -43,17 +50,13 @@ def assemble(sensor: str | None = None, agl_m: float | None = None) -> dict:
         except ValueError as exc:
             raise SystemExit(f"contract: {exc} (pass --agl-m)") from exc
     system = served_text.served_system_prompt(description)
-    return {"system": system, "tools": served_text.served_tools()}
+    return {"system": system, "tools": served_text.SERVED_TOOLS}
 
 
 def surface_lines() -> list[str]:
     """Every call the namespace serves, with its real signature, read off
-    the executing functions themselves (``MissionPython._call_*`` for each
+    the executing functions themselves (the ``Library`` method of each
     served call, then the ``Rows`` methods)."""
-    from maps.library.interpreter import MissionPython
-    from maps.library.rows import Rows
-    from maps.library.block_scan import _LIBRARY_CALLS
-
     def _params(fn) -> str:
         # A parameter that exists only to refuse (find's extra queries, a
         # cut's unknown keywords, show_map's missing centre) is not served.
@@ -64,7 +67,7 @@ def surface_lines() -> list[str]:
               and not (p.kind is p.VAR_POSITIONAL and p.name == "more")]
         return str(sig.replace(parameters=ps, return_annotation=sig.empty))[1:-1]
 
-    out = [f"  {call}({_params(getattr(MissionPython, f'_call_{call}'))})"
+    out = [f"  {call}({_params(getattr(Library, call))})"
            for call in _LIBRARY_CALLS]
     # A cut, a sort and a distance are methods on a result.
     return out + [f"  <rows>.{name}({_params(getattr(Rows, name))})"

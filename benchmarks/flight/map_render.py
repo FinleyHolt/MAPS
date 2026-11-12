@@ -17,6 +17,8 @@ from pathlib import Path
 import numpy as np
 
 from benchmarks.flight.tile_georef import Bounds, map_bounds
+from maps.perception.ortho import camera_model
+from maps.perception.ortho.sensor_frame import render_frame
 
 #: The block's bare-earth surface beside the bake, ``<map>_dem.tif`` on the
 #: bake's grid in the map's MSL; absent, the map is flat at ``FLOOR_MSL_M``.
@@ -38,11 +40,9 @@ def holds_raster(rgbd_dir: str | Path, map_name: str) -> bool:
 def load_raster(rgbd_dir: str | Path, map_name: str):
     """``(rgb, bounds, px_per_m)`` for a raster directory, the rgb memory-mapped;
     None when it does not hold the pair (:func:`raster_pair`)."""
-    from maps.perception.ortho.camera_model import load_ortho_or_rasters  # noqa: PLC0415
-
     if not holds_raster(rgbd_dir, map_name):
         return None
-    bake = load_ortho_or_rasters(map_name, rgbd_dir=str(rgbd_dir))
+    bake = camera_model.load_ortho_or_rasters(map_name, rgbd_dir=str(rgbd_dir))
     if bake is None:
         return None
     rgb, ppm = bake["rgb"], float(bake["px_per_m"])
@@ -115,8 +115,6 @@ def renderer(ortho):
     roll_deg, pitch_deg) -> (H, W, 3)`` uint8 over flat ground, ``pitch_deg``
     the projector's (nose down). Raises ``ValueError`` when the footprint
     leaves the raster or a corner reaches the horizon."""
-    from maps.perception.ortho.sensor_frame import render_frame  # noqa: PLC0415
-
     rgb, bounds, ppm = ortho
 
     def render(sensor, pose_xy, agl_m: float, yaw_deg: float, roll_deg: float = 0.0,

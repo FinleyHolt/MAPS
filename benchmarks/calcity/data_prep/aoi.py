@@ -37,9 +37,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Mapping
 
-# The briefed area of operations the C-12 flew, WGS84 (w, s, e, n).
-AO_BBOX_WGS84: tuple[float, float, float, float] = (-118.003686, 35.1017, -117.922950, 35.140292)
-
 # The one map, ``calcity``, as a WGS84 bbox (w, s, e, n): the briefed area of
 # operations plus 3 km on every side, so a C-12 hold about a target at the
 # AO's edge, or a turn back into it, stays on imagery. Rows carry

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import httpx
 
-from maps.llm.http import TRANSIENT_CLIENT_STATUS
+from maps.llm.endpoint_spec import TRANSIENT_CLIENT_STATUS
 
 
 # Transient LLM-side errors: a retry, never the end of the reasoner (a

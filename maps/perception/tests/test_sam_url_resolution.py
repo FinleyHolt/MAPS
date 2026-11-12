@@ -1,7 +1,7 @@
 """A blank SAM_SERVER_URL is refused; only an unset one means the default replica.
 
 The client and endpoint discovery read the segmenter's URL through one
-resolver (``detect_client.sam_endpoints``), so discovery probes exactly the
+resolver (``settings.sam_endpoints``), so discovery probes exactly the
 replicas the run posts to, and a set-but-blank value is refused by both
 instead of the client quietly posting to the default.
 """
@@ -11,8 +11,7 @@ from __future__ import annotations
 import pytest
 
 from maps.llm import endpoint_spec
-from maps.perception.sam import detect_client as dc
-from maps.settings import from_environ
+from maps.settings import DEFAULT_SAM_SERVER_URL, from_environ, sam_endpoints
 
 
 @pytest.mark.parametrize("blank", ["", " ", " , "])
@@ -20,18 +19,18 @@ def test_a_blank_sam_url_is_refused_by_the_client_and_by_discovery(blank):
     # A reasoner nothing answers: discovery must refuse before probing it.
     settings = from_environ({"SAM_SERVER_URL": blank, "SEARCH_REASONER_URL": "http://127.0.0.1:9/v1"})
     with pytest.raises(ValueError, match="SAM_SERVER_URL is empty"):
-        dc.sam_endpoints(settings.endpoint)
+        sam_endpoints(settings.endpoint)
     with pytest.raises(endpoint_spec.EndpointDiscoveryError, match="SAM_SERVER_URL is empty"):
         endpoint_spec.discover_from_settings(settings)
 
 
 def test_an_unset_sam_url_is_the_default_replica():
-    assert dc.sam_endpoints(from_environ({}).endpoint) == [dc.DEFAULT_SAM_SERVER_URL]
-    assert dc.sam_endpoints(from_environ({"SAM_SERVER_URL": "http://a:1/, http://b:2"}).endpoint) == [
+    assert sam_endpoints(from_environ({}).endpoint) == [DEFAULT_SAM_SERVER_URL]
+    assert sam_endpoints(from_environ({"SAM_SERVER_URL": "http://a:1/, http://b:2"}).endpoint) == [
         "http://a:1", "http://b:2"]
 
 
 def test_the_flown_station_s_sam_variable_alone_is_refused_not_defaulted():
     alone = from_environ({"SAM_VIDEO_SERVER_URL": "http://sam.example:8772"}).endpoint
     with pytest.raises(ValueError, match="SAM_VIDEO_SERVER_URL is not read; set SAM_SERVER_URL"):
-        dc.sam_endpoints(alone)
+        sam_endpoints(alone)

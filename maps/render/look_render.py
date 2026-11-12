@@ -6,6 +6,20 @@ from __future__ import annotations
 import logging
 import math
 
+import cv2
+import numpy as np
+
+from maps.perception import observation
+from maps.perception.ortho.camera_model import (
+    ortho_gsd_m,
+    ortho_world_bounds,
+    raster_source_gsd_m,
+)
+from maps.perception.ortho.ground_level import GROUND_LEVEL
+from maps.query.polyline import clip_ring_to_box, simplify_ring
+from maps.query.result_tables import BROAD_HEAD_ROWS
+from maps.render import mark_overlay
+
 log = logging.getLogger(__name__)
 
 # A crop is a digital crop of the captured nadir ortho. Its window fits the
@@ -24,11 +38,11 @@ LOOK_CTX_BUDGET_PX: int = 1000
 LOOK_CAR_MARGIN_M: float = 6.0
 # The Lanczos upscale (pixels, not detail) aims the side here, factor 1..3.
 LOOK_TARGET_PX: int = 450
-# Badges per crop; the centre and a target are never dropped.
-LOOK_MAX_BADGES: int = 25
-# The rows of a set one crop badges (the centre costs one). Every served row
-# budget derives from it, so the rows the model reads are the rows it is shown.
-LOOK_SET_ROWS: int = LOOK_MAX_BADGES - 1
+# The rows of a set one crop badges: the rows a served table shows.
+LOOK_SET_ROWS: int = BROAD_HEAD_ROWS
+# Badges per crop (the centre costs one); the centre and a target are never
+# dropped.
+LOOK_MAX_BADGES: int = LOOK_SET_ROWS + 1
 
 
 def look_window_bounds_m(gsd_m: float) -> tuple[float, float]:
@@ -136,7 +150,6 @@ def view_rotation(frame_up, w: int, h: int):
     """``(matrix, band_text)`` for a declared view-up on a w x h image: the
     cv2 matrix that turns ``frame_up`` to image-up (None when it is absent
     or north) and the orientation stamp the margin band prints."""
-    import cv2  # noqa: PLC0415
     if (isinstance(frame_up, (list, tuple)) and len(frame_up) == 2
             and (float(frame_up[0]) or float(frame_up[1]))):
         a = frame_up_angle_deg(float(frame_up[0]), float(frame_up[1]))
@@ -165,7 +178,6 @@ def frame_arcs(boundary, w2p, w: int, h: int):
     A footprint bigger than its window is clipped, never dropped, and no
     edge runs along the frame edge (that would say the shape ends there).
     Half a stroke of buffer keeps a footprint hugging the frame."""
-    from maps.query.polyline import clip_ring_to_box  # noqa: PLC0415
     if not (isinstance(boundary, list) and len(boundary) >= 3):
         return None
     pts = [w2p(*p) for p in xy_list(boundary)]
@@ -243,8 +255,6 @@ def look_xy(row: object) -> list[float] | None:
 def look_outline(row: object) -> list | None:
     """The display outline of a row: the largest loop of its ``mask``,
     Douglas-Peucker at half a 2 m cell (budget 256 vertices), at 2 dp."""
-    from maps.query.polyline import simplify_ring  # noqa: PLC0415
-
     m = row.get("mask") if isinstance(row, dict) else None
     if not (isinstance(m, list) and m):
         return None
@@ -276,12 +286,6 @@ def render_candidate_crops(
     ``imagery`` (``gsd_m`` and ``ortho(window)``) is the run's own captures
     in a flight mission; unset, the raster is the camera. A failed crop is
     logged and skipped."""
-    from maps.perception.ortho.camera_model import (  # noqa: PLC0415
-        ortho_gsd_m,
-        ortho_world_bounds,
-    )
-    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-
     if map_name not in GROUND_LEVEL:
         log.warning("look: map %r not in GROUND_LEVEL; no crop", map_name)
         return []
@@ -358,13 +362,6 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     """Render one crop of the ``ctx`` m square at ``pose_xy`` around the
     subject at ``true_xy``: ``{"jpeg": bytes, ...}`` with the caption's
     facts, or None (logged) on a failed render."""
-    import cv2  # noqa: PLC0415
-    import numpy as np  # noqa: PLC0415
-    from maps.perception.ortho.camera_model import raster_source_gsd_m  # noqa: PLC0415
-    from maps.perception.ortho.ground_level import GROUND_LEVEL  # noqa: PLC0415
-    from maps.render.mark_overlay import render_look_overlay  # noqa: PLC0415
-    from maps.perception.observation import crop_ortho_observation  # noqa: PLC0415
-
     ground = float(GROUND_LEVEL[map_name])
     true_x, true_y = true_xy
     pose_x, pose_y = pose_xy
@@ -373,7 +370,7 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
     center_label = str(req.get("center_label") or center_fid or "candidate")
     try:
         _window = (pose_x - half_ctx, pose_y - half_ctx, pose_x + half_ctx, pose_y + half_ctx)
-        oc = crop_ortho_observation(
+        oc = observation.crop_ortho_observation(
             map_name=map_name,
             pose_xy=(pose_x, pose_y),
             altitude_m=ground + half_ctx,
@@ -447,7 +444,7 @@ def _crop_record(req: dict, *, map_name: str, true_xy, pose_xy, ctx: float,
                            "role": "context"})
 
     try:
-        jp = render_look_overlay(
+        jp = mark_overlay.render_look_overlay(
             rgb,
             center_px=center_px,
             center_poly_px=frame_arcs(req.get("center_boundary"), _w2p, W, H),

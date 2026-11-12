@@ -279,14 +279,12 @@ before it ran and stands. Names persist for the whole mission.
 """
 
 
-
-def served_tools() -> list:
-    """The one tool a run serves, ``run``: a block of Python in ``code``."""
-    return [{"type": "function", "function": {
-        "name": "run", "description": CODE_DOC,
-        "parameters": {"type": "object", "additionalProperties": False,
-                       "required": ["code"],
-                       "properties": {"code": {"type": "string"}}}}}]
+#: The one tool a run serves, ``run``: a block of Python in ``code``.
+SERVED_TOOLS = [{"type": "function", "function": {
+    "name": "run", "description": CODE_DOC,
+    "parameters": {"type": "object", "additionalProperties": False,
+                   "required": ["code"],
+                   "properties": {"code": {"type": "string"}}}}}]
 
 
 def served_system_prompt(sensor_description: str = "") -> str:

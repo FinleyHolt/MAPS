@@ -5,19 +5,17 @@ from __future__ import annotations
 
 import re
 
-from maps.query.result_tables import MODEL_UNSERVED_COLUMNS
 
-
-def _summarise_exc(exc: BaseException) -> str:
+def summarise_exc(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
-def _live_counts(c_n: int, a_n: int, sep: str = ",") -> str:
+def live_counts(c_n: int, a_n: int, sep: str = ",") -> str:
     """The census's fid counts."""
     return f"{c_n} detection fid(s){sep} {a_n} prior map row fid(s)"
 
 
-def _add_note(d: dict, text: str, sep: str = " ", *,
+def add_note(d: dict, text: str, sep: str = " ", *,
               before: bool = False) -> None:
     """Join ``text`` onto ``d["note"]``, after it (or before it)."""
     old = d.get("note")
@@ -25,40 +23,44 @@ def _add_note(d: dict, text: str, sep: str = " ", *,
                  if old else text)
 
 
-class _Acks:
-    """A verb's ack: ``{key: ack}``, and an error through the escalating
-    breaker that tells a repeated same-class error from a first one."""
+def error_class_signature(err: str) -> str:
+    """An error's same-class signature: line prefix, quoted tokens (a run of
+    them counts as one) and numbers stripped."""
+    s = re.sub(r"^line \d+: ", "", str(err))
+    s = re.sub(r"'[^']*'(, '[^']*')*", "'_'", s)
+    s = re.sub(r"\d+", "_", s)
+    return s[:100]
+
+
+class Rejections:
+    """A verb's refusals, through the escalating breaker that tells a
+    repeated same-class error from a first one. ``surface`` is read for the
+    live census a repeat serves."""
+
+    def __init__(self, surface):
+        self.surface = surface
+        self.new_turn()
+
+    def new_turn(self) -> None:
+        """An operator turn counts its error classes afresh."""
+        self._class_counts: dict[str, int] = {}
+        self._streak_sig, self._streak_n = None, 0
+
+    def end_streak(self) -> None:
+        """A successful call ends the consecutive streak, never the class
+        count: the next same-class error serves its full text again."""
+        self._streak_sig, self._streak_n = None, 0
 
     def _loop_breaker_facts(self, n: int) -> str:
-        c_n, a_n, cols, more = self._census(8)
+        c_n, a_n, cols, more = self.surface.census(8)
         parts = [
             f" This error class has now occurred {n}x.",
-            f" Live surface: {_live_counts(c_n, a_n, ';')}.",
+            f" Live surface: {live_counts(c_n, a_n, ';')}.",
         ]
         if cols:
             parts.append(
                 f" Columns computed on rows so far: {cols}{more}.")
         return "".join(parts)
-
-    def _err_class_sig(self, err: str) -> str:
-        # Same-class signature: line prefix, quoted tokens (a run of them
-        # counts as one) and numbers stripped.
-        s = re.sub(r"^line \d+: ", "", str(err))
-        s = re.sub(r"'[^']*'(, '[^']*')*", "'_'", s)
-        s = re.sub(r"\d+", "_", s)
-        return s[:100]
-
-    def _census(self, cap: int) -> tuple[int, int, list[str], str]:
-        """Live counts: detections, priors, the first ``cap`` computed
-        columns and the " (+N more)" past them."""
-        c_n = len(self.ns.get("cands") or [])
-        a_n = len(self.ns.get("anchors") or [])
-        cols = sorted({k for row in self.row_latest.values()
-                       for k, v in row.items()
-                       if k not in MODEL_UNSERVED_COLUMNS
-                       and v not in (None, "")})
-        more = f" (+{len(cols) - cap} more)" if len(cols) > cap else ""
-        return c_n, a_n, cols[:cap], more
 
     def _repeated_rejection_state(self, err: str, n: int, consec: int) -> str:
         """The 3rd-consecutive-rejection fact, served instead of the remedy
@@ -67,7 +69,7 @@ class _Acks:
         first = str(err).split(". ", 1)[0].strip().rstrip(".")
         if not first.endswith(("?", "!")):
             first += "."
-        c_n, a_n, cols, more = self._census(12)
+        c_n, a_n, cols, more = self.surface.census(12)
         return (
             f"rejected again -- the same error class, {consec}x "
             f"consecutively ({n}x): {first} The full "
@@ -76,21 +78,20 @@ class _Acks:
             f"conversation, unchanged). The executor is deterministic on "
             f"the same surface: re-issuing the same call unchanged "
             f"returns exactly this rejection. Live now: "
-            f"{_live_counts(c_n, a_n)}"
+            f"{live_counts(c_n, a_n)}"
             + (f"; columns computed on rows: {cols}{more}." if cols else "."))
 
-    def _loop_broken_error(self, err: str, sig_of: str | None = None) -> str:
+    def escalated(self, err: str, sig_of: str | None = None) -> str:
         """A repeated same-class error, escalating: verbatim first, then with
         the live census, then (3rd consecutive on) the repetition fact
-        alone. A shape error gets only its count. A successful call resets
-        the consecutive streak, never the class count."""
-        sig = self._err_class_sig(err if sig_of is None else sig_of)
-        n = self._err_class_counts[sig] = self._err_class_counts.get(sig, 0) + 1
-        if self._err_sig == sig:
-            self._err_n += 1
+        alone. A shape error gets only its count."""
+        sig = error_class_signature(err if sig_of is None else sig_of)
+        n = self._class_counts[sig] = self._class_counts.get(sig, 0) + 1
+        if self._streak_sig == sig:
+            self._streak_n += 1
         else:
-            self._err_sig, self._err_n = sig, 1
-        consec = self._err_n
+            self._streak_sig, self._streak_n = sig, 1
+        consec = self._streak_n
         if n < 2:
             return err
         # The escalation is a new sentence; a caret line is no sentence.
@@ -103,13 +104,13 @@ class _Acks:
             return self._repeated_rejection_state(err, n, consec)
         return err + self._loop_breaker_facts(n)
 
-    def _plan_err(self, ack: dict, msg: str) -> dict:
-        """A plan error, through the escalating loop breaker."""
-        return {**ack, "error": self._loop_broken_error(str(msg))}
+    def error(self, ack: dict, msg: str) -> dict:
+        """``ack`` with a plan error, through the escalating loop breaker."""
+        return {**ack, "error": self.escalated(str(msg))}
 
-    def _acked(self, key: str, ack: dict) -> dict:
+    def acked(self, key: str, ack: dict) -> dict:
         """A verb's ``{key: ack}``; an ack carrying an error is a plan error.
         (A look or a map that errors delivered nothing.)"""
         if ack.get("error"):
-            return self._plan_err({key: ack}, str(ack["error"]))
+            return self.error({key: ack}, str(ack["error"]))
         return {key: ack}

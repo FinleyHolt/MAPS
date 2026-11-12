@@ -9,7 +9,7 @@ from maps.mission import served_text
 def test_the_dump_is_the_code_arm_the_flight_path_serves():
     c = contract.assemble()
     assert c["system"] == served_text.CODE_SYSTEM_PROMPT
-    assert c["tools"] == served_text.served_tools()
+    assert c["tools"] == served_text.SERVED_TOOLS
     assert [t["function"]["name"] for t in c["tools"]] == ["run"]
     for t in c["tools"]:
         assert len(t["function"]["description"]) > 300
@@ -50,7 +50,7 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
     import inspect
 
     from maps.library.block_scan import _LIBRARY_CALLS
-    from maps.library.interpreter import MissionPython
+    from maps.library.calls import Library
     text = contract.dump_text()
     assert "=== SURFACE" in text
     section = text.split("=== SURFACE", 1)[1].split("=== USER TURN", 1)[0]
@@ -61,7 +61,7 @@ def test_the_dump_surface_section_names_every_call_the_namespace_serves():
         line = next((ln for ln in section.splitlines()
                      if ln.strip().startswith(f"{call}(")), None)
         assert line, call
-        sig = inspect.signature(getattr(MissionPython, f"_call_{call}"))
+        sig = inspect.signature(getattr(Library, call))
         for n, p in sig.parameters.items():
             # A parameter that only refuses is not served (find's *more).
             if n == "self" or p.kind is p.VAR_POSITIONAL:

@@ -15,12 +15,12 @@ from maps.library.op_compiler import (
     HANDLE_RE, HANDLE_WORD_RE, CodeError)
 
 
-def _preflight_color_note() -> str:
-    """Served on a refused preflight program that names a color column:
-    before landing no row carries perceived color."""
-    return ("priors carry no perceived color before landing"
-            ", so no color column attaches yet; color enriches per-stop "
-            "after arrival.")
+# Served on a refused preflight program that names a color column: before
+# landing no row carries perceived color.
+PREFLIGHT_COLOR_NOTE = (
+    "priors carry no perceived color before landing"
+    ", so no color column attaches yet; color enriches per-stop "
+    "after arrival.")
 
 
 def _requests_color(op: dict) -> bool:
@@ -56,7 +56,7 @@ def run_ops(ops: list, *, namespace: dict,
             # The color request errored before any envelope existed (e.g.
             # the emphasis absent-color guard) -- the phase fact rides the
             # error so "no color" reads as WHEN, not broken.
-            _err = join_hints(_err, _preflight_color_note())
+            _err = join_hints(_err, PREFLIGHT_COLOR_NOTE)
         return {"error": _err}
     except Exception as exc:  # noqa: BLE001 -- served to the model; never crash the turn
         return {"error": f"program failed: {exc}"}
@@ -115,6 +115,19 @@ class Carry:
         # A flight-minted handle records an event (the rows one flight added)
         # and never re-derives.
         self._events: set = set()
+        # The handles' names. ``next_rn`` is the mission-global rN counter,
+        # shared with the library's compiler; ``in_play`` holds every rN
+        # bound or spelled by the running block, which a flight's mint
+        # skips; ``minted`` the handles flights minted during the running
+        # block, for the block to bind.
+        self.next_rn: list = [0]
+        self.in_play: set = set()
+        self.minted: list = []
+        # The set in scope: the last non-empty result, or what the last
+        # flight added.
+        self.in_scope: str | None = None
+        # How far past its head each handle has been paged.
+        self.paged: dict = {}
 
     def _closure(self, ref) -> set:
         """``ref`` and every handle its ops read that is not fresh under the
@@ -178,11 +191,20 @@ class Carry:
             self._history.append(op)
             self._reads.append(_refs_read(op))
 
-    def mint(self, handle: str, rows: list) -> None:
-        """An event handle: rows a flight added, never re-derived."""
+    def mint(self, rows: list) -> str:
+        """An event handle over ``rows`` (the rows a flight added), never
+        re-derived: the next free rN, now the set in scope."""
+        while f"r{self.next_rn[0]}" in self.in_play:
+            self.next_rn[0] += 1
+        handle = f"r{self.next_rn[0]}"
+        self.next_rn[0] += 1
+        self.in_play.add(handle)
+        self.minted.append(handle)
         self.rows[handle] = rows
         self._events.add(handle)
         self._fresh.add(handle)
+        self.in_scope = handle
+        return handle
 
     def alias(self, prev_ops, cur_ops) -> None:
         """A deduped emission: its refs take the rows the first run's refs

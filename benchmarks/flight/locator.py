@@ -15,6 +15,8 @@ from dataclasses import replace
 
 import numpy as np
 
+from maps.perception.geometry.sensor_spec import CameraIntrinsics
+
 #: The template and search window, in work pixels: the matcher searches
 #: ``SEARCH_HALF - TEMPLATE_HALF`` of displacement about the prediction, and a
 #: prediction nearer the border than ``SEARCH_HALF`` is out.
@@ -44,8 +46,6 @@ pool = ThreadPoolExecutor(max_workers=LOCATE_THREADS, thread_name_prefix="locate
 
 def sized(sensor, width: int, height: int):
     """``sensor`` at ``width`` x ``height`` pixels, the same fields of view."""
-    from maps.perception.geometry.sensor_spec import CameraIntrinsics  # noqa: PLC0415
-
     intr = sensor.intrinsics
     if (intr.image_width, intr.image_height) == (width, height):
         return sensor

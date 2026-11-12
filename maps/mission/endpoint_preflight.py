@@ -38,8 +38,8 @@ import threading
 from pathlib import Path
 
 from maps.llm import endpoint_spec
-from maps.llm.flight_summary import summarize
 from maps.llm.model_cards import check_effort, effort, speaks_openai
+from maps.mission.served_text import SERVED_TOOLS
 from maps.settings import Settings, from_process
 
 
@@ -63,7 +63,8 @@ def _shape(out: dict) -> dict:
 
 def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir: Path,
                   settings: Settings = Settings()) -> dict:
-    from maps.mission.served_text import served_tools  # noqa: PLC0415
+    # The mission stack loads transformers: not at --help.
+    from maps.llm.flight_summary import summarize  # noqa: PLC0415
     from maps.mission.reasoner import Reasoner  # noqa: PLC0415
 
     # one prompt-cache key per conversation, as one per episode
@@ -72,14 +73,14 @@ def _conversation(spec: endpoint_spec.EndpointSpec, effort: str | None, workdir:
     reasoner.append_vision_user(
         "Endpoint check. Name the colour of the square in this picture, then call run with the code "
         "print('ok').", [_picture()])
-    first = reasoner.step_tool_call(served_tools())
+    first = reasoner.step_tool_call(SERVED_TOOLS)
     after_first = summarize(workdir / "flight", settings.endpoint.tokenizer_name)
     for call in first.get("tool_calls") or []:
         reasoner.append_tool_result(call["id"], call["function"]["name"], "ok")
     if not first.get("tool_calls"):
         reasoner.append_user("Call run with the code print('ok').")
     reasoner.cancel_event = threading.Event()  # never set: the call streams, as a flight's does
-    second = reasoner.step_tool_call(served_tools())
+    second = reasoner.step_tool_call(SERVED_TOOLS)
     meter = summarize(workdir / "flight", settings.endpoint.tokenizer_name)
     out = {"first": _shape(first), "second": _shape(second),
            "tokens": {k: meter[k] for k in ("prompt_tokens", "completion_tokens", "reasoning_tokens",
