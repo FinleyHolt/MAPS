@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import contextlib
 import io
 import logging
 import os
@@ -108,10 +109,6 @@ class SegmentRequest(BaseModel):
     max_per_image: int = 1024
 
 
-app = FastAPI(title="sam3.1-image", version="0.1")
-
-
-@app.on_event("shutdown")
 def _release() -> None:
     """Hand the resident model's device memory back before the process ends."""
     from serving.sam_engine import release
@@ -120,7 +117,6 @@ def _release() -> None:
         release()
 
 
-@app.on_event("startup")
 def _prewarm() -> None:
     """One forward on a black frame so the first ``/segment`` does not pay
     the checkpoint load and kernel warmup. ``SAM_PREWARM=0`` skips it; a
@@ -138,6 +134,18 @@ def _prewarm() -> None:
         log.info("prewarm: SAM 3.1 warm")
     except Exception as exc:
         log.warning("prewarm failed (%s); continuing without warmup", exc)
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _prewarm()
+    try:
+        yield
+    finally:
+        _release()
+
+
+app = FastAPI(title="sam3.1-image", version="0.1", lifespan=_lifespan)
 
 
 @app.get("/health")
