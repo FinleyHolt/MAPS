@@ -1,7 +1,8 @@
 cff-version: 1.2.0
 message: >-
   If you use this software, please cite it as below, and cite the CityNav
-  benchmark it evaluates on.
+  benchmark it evaluates on and the SensatUrban and CityRefer datasets
+  CityNav is built on.
 title: "MAPS"
 abstract: "MAPS: Multimodal Agentic Planning and Search"
 type: software
@@ -32,3 +33,61 @@ references:
     collection-title: "Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)"
     year: 2025
     url: "https://arxiv.org/abs/2406.14240"
+  - type: conference-paper
+    title: "Towards Semantic Segmentation of Urban-Scale 3D Point Clouds: A Dataset, Benchmarks and Challenges"
+    authors:
+      - family-names: Hu
+        given-names: Qingyong
+      - family-names: Yang
+        given-names: Bo
+      - family-names: Khalid
+        given-names: Sheikh
+      - family-names: Xiao
+        given-names: Wen
+      - family-names: Trigoni
+        given-names: Niki
+      - family-names: Markham
+        given-names: Andrew
+    collection-title: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    year: 2021
+    url: "https://arxiv.org/abs/2009.03137"
+  - type: article
+    title: "SensatUrban: Learning Semantics from Urban-Scale Photogrammetric Point Clouds"
+    authors:
+      - family-names: Hu
+        given-names: Qingyong
+      - family-names: Yang
+        given-names: Bo
+      - family-names: Khalid
+        given-names: Sheikh
+      - family-names: Xiao
+        given-names: Wen
+      - family-names: Trigoni
+        given-names: Niki
+      - family-names: Markham
+        given-names: Andrew
+    journal: "International Journal of Computer Vision"
+    volume: 130
+    issue: 2
+    start: 316
+    end: 343
+    year: 2022
+    doi: "10.1007/s11263-021-01554-9"
+  - type: conference-paper
+    title: "CityRefer: Geography-aware 3D Visual Grounding Dataset on City-scale Point Cloud Data"
+    authors:
+      - family-names: Miyanishi
+        given-names: Taiki
+      - family-names: Kitamori
+        given-names: Fumiya
+      - family-names: Kurita
+        given-names: Shuhei
+      - family-names: Lee
+        given-names: Jungdae
+      - family-names: Kawanabe
+        given-names: Motoaki
+      - family-names: Inoue
+        given-names: Nakamasa
+    collection-title: "Advances in Neural Information Processing Systems 36 (NeurIPS 2023), Datasets and Benchmarks Track"
+    year: 2023
+    url: "https://arxiv.org/abs/2310.18773"
