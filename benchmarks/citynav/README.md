@@ -11,11 +11,11 @@ readers in [`analysis/`](analysis/README.md).
 ## Prepare the data
 
 The episodes, the CityRefer catalog, and the SensatUrban point clouds come
-from upstream; this repository redistributes none of them.
+from upstream. For their terms, see
+[`docs/data.md`](../../docs/data.md#citynav).
 
 1. Request SensatUrban's `data_release.zip` from its authors'
-   [form](https://github.com/QingyongHu/SensatUrban). The terms are
-   CC BY-NC-SA, non-commercial research use, and no redistribution.
+   [form](https://github.com/QingyongHu/SensatUrban).
 
 2. Run the setup script:
 
