@@ -6,9 +6,8 @@ Discovers the endpoint as a run does (``SEARCH_REASONER_URL``,
 ``SEARCH_REASONER_API_KEY``, ``SEARCH_ENDPOINT_SPEC_OVERRIDE``,
 ``SEARCH_REASONER_MODELS_URL``; ``SEARCH_ENDPOINT_OFFLINE=1`` skips the
 model listing and takes the override as the endpoint's facts), without the
-SAM probe, then flies a short
-conversation through the reasoner's own request path: the served system turn
-and ``run`` tool, a picture, the effort, the model's tool call, and its
+SAM probe, then flies a short conversation through the reasoner's own
+request path: the served system turn and ``run`` tool, a picture, the effort, the model's tool call, and its
 result. The first turn is a blocking request, as the bench sends; the second
 streams, as the flight mission sends, and carries the assistant tool-call and
 tool-result messages a long mission is made of. A refusal prints the
@@ -55,7 +54,8 @@ def _picture() -> bytes:
     return buf.getvalue()
 
 
-def _shape(out: dict) -> dict:
+def _reply_shape(out: dict) -> dict:
+    """What the report prints of one reply."""
     return {
         "kind": out["kind"],
         "finish_reason": out["finish_reason"],
@@ -66,10 +66,12 @@ def _shape(out: dict) -> dict:
 
 def _conversation(
     spec: endpoint_spec.EndpointSpec,
-    effort: str | None,
+    reasoning_effort: str | None,
     workdir: Path,
-    settings: Settings = Settings(),
+    settings: Settings,
 ) -> dict:
+    """Two turns at ``reasoning_effort``, recorded under ``workdir``: each
+    reply's shape and the conversation's token meter."""
     # The mission stack loads transformers: not at --help.
     from maps.llm.flight_summary import summarize
     from maps.mission.reasoner import Reasoner
@@ -81,7 +83,7 @@ def _conversation(
         workdir=workdir,
         routing_key=f"preflight-{workdir.name}",
         seed=1234,
-        reasoning_effort=effort,
+        reasoning_effort=reasoning_effort,
     )
     reasoner.append_vision_user(
         "Endpoint check. Name the colour of the square in this picture, then call run with the code "
@@ -98,8 +100,8 @@ def _conversation(
     second = reasoner.step_tool_call(SERVED_TOOLS)
     meter = summarize(workdir / "flight", settings.endpoint.tokenizer_name)
     out = {
-        "first": _shape(first),
-        "second": _shape(second),
+        "first": _reply_shape(first),
+        "second": _reply_shape(second),
         "tokens": {
             k: meter[k]
             for k in (

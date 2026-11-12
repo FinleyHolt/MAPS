@@ -22,10 +22,7 @@ from maps.library.block_scan import LIBRARY_CALLS
 from maps.library.calls import Library
 from maps.library.rows import Rows
 from maps.mission import served_text
-from maps.perception.geometry.sensor_spec import (
-    list_sensors,
-    resolve_sensor,
-)
+from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor
 from maps.perception.ortho.sensor_frame import served_description
 from maps.settings import from_process
 
@@ -58,7 +55,7 @@ def surface_lines() -> list[str]:
     the executing functions themselves (the ``Library`` method of each
     served call, then the ``Rows`` methods)."""
 
-    def _params(fn) -> str:
+    def served_signature(fn) -> str:
         # A parameter that exists only to refuse (find's extra queries, a
         # cut's unknown keywords, show_map's missing centre) is not served.
         sig = inspect.signature(fn)
@@ -71,15 +68,16 @@ def surface_lines() -> list[str]:
         ]
         return str(sig.replace(parameters=ps, return_annotation=sig.empty))[1:-1]
 
-    out = [f"  {call}({_params(getattr(Library, call))})" for call in LIBRARY_CALLS]
+    out = [f"  {call}({served_signature(getattr(Library, call))})" for call in LIBRARY_CALLS]
     # A cut, a sort and a distance are methods on a result.
     return out + [
-        f"  <rows>.{name}({_params(getattr(Rows, name))})"
+        f"  <rows>.{name}({served_signature(getattr(Rows, name))})"
         for name in ("filter", "order", "distance")
     ]
 
 
 def dump_text(sensor: str | None = None, agl_m: float | None = None) -> str:
+    """The sectioned dump: system text, tools, the served surface, the user turn."""
     c = assemble(sensor=sensor, agl_m=agl_m)
     tools_json = json.dumps(c["tools"], indent=2, ensure_ascii=False)
     names = ", ".join(t["function"]["name"] for t in c["tools"])

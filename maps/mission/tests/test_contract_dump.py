@@ -6,7 +6,7 @@ from maps.perception.geometry.sensor_spec import list_sensors
 
 def test_the_dump_is_the_code_arm_the_flight_path_serves():
     c = contract.assemble()
-    assert c["system"] == served_text.CODE_SYSTEM_PROMPT
+    assert c["system"] == served_text.SYSTEM_PROMPT
     assert c["tools"] == served_text.SERVED_TOOLS
     assert [t["function"]["name"] for t in c["tools"]] == ["run"]
     for t in c["tools"]:
