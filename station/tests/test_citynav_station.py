@@ -133,6 +133,8 @@ def test_a_bench_root_reviews_with_its_path_target_commit_score_pictures_and_rep
     client = TestClient(serve.build_app(station, web=None))
 
     about = client.get("/station").json()
+    # The list and the selector open on one split.
+    assert client.get("/missions").json()["split"] == about["split"]
     assert about["bench"] == "citynav" and about["split"] == "val_seen" and about["splits"] == ["val_seen"]
     assert about["map"] == BLOCK and about["flies"] and not about["own_words"]
 

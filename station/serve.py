@@ -238,14 +238,17 @@ class Station:
             return f"this station reviews runs only: {str(exc).splitlines()[0]}"
         return None
 
+    def shown_split(self) -> str:
+        """The split the mission list opens on: the newest run's under the output root, so its
+        runs are in view, else the bench's default."""
+        return next((r["split"] for r in self.runs() if r.get("split")), self.split)
+
     def about(self) -> dict[str, Any]:
         """What the console asks once: the bench, its splits, and what the seat can do."""
         held = [s for s in self.bench.split_files if self.bench.split_path(s).is_file()]
         flown = sorted({r["split"] for r in self.runs() if r.get("split")} - set(held))
         why = self.why_not_flying()
-        # The list opens on the split of the newest run under the output root, so its runs are in view.
-        shown = next((r["split"] for r in self.runs() if r.get("split") in held + flown), self.split)
-        return {"bench": self.bench.name, "split": shown, "splits": held + flown, "map": self.map_name,
+        return {"bench": self.bench.name, "split": self.shown_split(), "splits": held + flown, "map": self.map_name,
                 "flies": why is None, "why": why,
                 # The twin flies the operator's own words from the map's centre; a bench episode is a row of its split.
                 "own_words": self.bench.name == "calcity"}
@@ -636,7 +639,7 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
 
     @app.get("/missions")
     def missions(q: str | None = None, limit: int = 200, split: str | None = None) -> dict[str, Any]:
-        split = split or station.split
+        split = split or station.shown_split()
         catalog, by_id = station.catalog(split)
         words = (q or "").lower().split()
         hits = [e for e in catalog if all(w in e.description.lower() or w in e.episode_id.lower() for w in words)]
