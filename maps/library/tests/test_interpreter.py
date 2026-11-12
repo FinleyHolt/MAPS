@@ -1248,3 +1248,48 @@ def test_a_move_to_an_empty_set_says_there_is_nothing_there(code, said):
     err, flights = _refusal(code)
     assert err.endswith(said), err
     assert not flights
+
+
+# --------------------------------------------------------------------------
+# A harness fault leaves the block: the bench's infra rule reads it
+# --------------------------------------------------------------------------
+
+
+def _harness_faults():
+    import httpx
+
+    from maps.perception.sam.detect_client import SamServerOutage
+
+    return [
+        SamServerOutage("no tile of the frame got a /segment answer"),
+        httpx.ConnectError("segmenter refused"),
+        httpx.ReadTimeout("segmenter timed out"),
+    ]
+
+
+@pytest.mark.parametrize("fault", _harness_faults(), ids=type)
+@pytest.mark.parametrize(
+    "code",
+    [
+        'look_for("depot")\ngo_to("prior_7")\n',
+        'try:\n    go_to("prior_7")\nexcept Exception as e:\n    print(e)\n',
+    ],
+    ids=["bare", "caught"],
+)
+def test_a_harness_fault_inside_a_flight_leaves_the_block(fault, code):
+    """A segmenter outage or transport fault ends the mission (the model's
+    own ``except`` included); it never reaches the model as a line error."""
+
+    def fly(item):
+        raise fault
+
+    with pytest.raises(type(fault)):
+        drive([[run(code)], "done"], fly=fly)
+
+
+def test_a_models_own_error_inside_a_flight_is_served():
+    def fly(item):
+        raise KeyError("boom")
+
+    _reply, fr, _f, _d = drive([[run('go_to("prior_7")')], "done"], fly=fly)
+    assert "line 1: KeyError" in (tool_results(fr)[0].get("error") or "")

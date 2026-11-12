@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import httpx
 import numpy as np
 
+from maps.harness_faults import HarnessFault
 from maps.perception.detection import DetectedObject
 from maps.perception.geometry.geolocate import (
     project_mask_to_world_ortho,
@@ -52,11 +53,10 @@ SEGMENT_BACKOFF_S = (3.0, 6.0, 12.0)
 SEGMENT_DEADLINE_S = 900.0
 
 
-class SamServerOutage(RuntimeError):
+class SamServerOutage(HarnessFault):
     """No tile of a frame got a usable ``/segment`` response
     (:func:`_post_segment` gave up on each); a ``200`` with zero detections is
-    an empty frame. Outside the model's code it ends the episode as infra;
-    inside a run block it is served as that line's error."""
+    an empty frame. It ends the episode as infra."""
 
 
 class SamRequestRefused(RuntimeError):
