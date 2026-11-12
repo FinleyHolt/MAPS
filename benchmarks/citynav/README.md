@@ -64,6 +64,7 @@ its root.
 | `--sample-seed <n>` | Seed of the shuffle applied before `--limit`. Default 1234. |
 | `--episode-allowlist <file>` | Keeps only the listed IDs, before the shuffle. A list that names an ID outside the split is refused. |
 | `--max-infra-attempts <n>` | Attempts an episode gets under infrastructure faults. Default 3. |
+| `--episode-timeout-s <s>` | Per-episode wall cap, seconds. Default 14400 (4 h). |
 | `--dry-run` | Prints the selection and launches nothing. |
 
 For the remaining flags, run
@@ -79,6 +80,7 @@ The driver refuses or records faults as follows:
 | Second run into a root | Refused. A run holds its root for its lifetime (`.bench.lock`). |
 | Exception raised by the method | A scored miss: status `ok` with its `error` and `traceback` and no metrics. |
 | Infrastructure fault (a serve or segmenter outage, an image-store refusal, a runner that died) | Status `infra`. The episode flies again, up to `--max-infra-attempts` attempts, and past that is reported as persistent infra with its errors. |
+| Episode past its wall cap (`--episode-timeout-s`) | The mission stops flying at 90% of the cap so the model can still reply, and the driver ends the attempt at the cap. Status `timed_out`: scored as recorded, a miss without metrics, and counted apart in the readers. |
 
 ### Run root
 
@@ -89,7 +91,7 @@ The driver refuses or records faults as follows:
 | `summary.txt` | `analysis.run_report` over the root under the driver's infra lines, refreshed after every attempt. |
 | `driver.log` | Driver's own lines: each attempt's start and end, crashes, timeouts, aborts. |
 | `w<id>/server.log` | Stderr of worker `<id>`'s attempt children, appended. |
-| `w<id>/maps_<stamp>_<benchmark>_<slug>/` | One directory per attempt: `episode.json`, `run.log`, `conversation.jsonl`, and `flight/`. |
+| `w<id>/maps_<stamp>_<benchmark>_<slug>/` | One directory per attempt: `episode.json`, `run.log`, `conversation.jsonl`, `detections.jsonl`, `frames/` (every picture the model was sent), and `flight/`. |
 
 Read a root with [`analysis/`](analysis/README.md). Don't parse
 `episodes.jsonl` by hand.

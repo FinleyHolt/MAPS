@@ -40,7 +40,7 @@ The script skips each step whose output is on disk. Its three scripts, in
 |---|---|---|---|
 | Annotations | `fetch_data.sh` | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. |
 | Point clouds | `setup.sh --sensaturban` | `$CITYNAV_ROOT/raw_ply/{train,test}/<block>.ply` | Links the 34 block PLYs out of the SensatUrban release. |
-| Rasters | `rasterize_citynav_native.sh [--blocks <block>...]` | `$CITYNAV_ROOT/data/rgbd_upstream/<block>.{png,tif}` | Runs upstream's `rasterize.py` PDAL pipeline (vendored as `benchmarks/citynav/data_prep/_vendor_citynav_rasterize.py`) in an environment with `pdal`, `rasterio`, and `pillow`. `RASTERIZE_PYTHON` names its interpreter; without one, a conda-family tool on `PATH` builds the `rasterize` environment. |
+| Rasters | `rasterize_citynav_native.sh [--blocks <block>...]` | `$CITYNAV_ROOT/data/rgbd_upstream/<block>.{png,tif}` | Runs upstream's `rasterize.py` PDAL pipeline (vendored as `benchmarks/citynav/data_prep/_vendor_citynav_rasterize.py`) in an environment with `pdal`, `rasterio`, and `pillow`. `RASTERIZE_PYTHON` names its interpreter; without one, the script runs a `rasterize` environment under micromamba. `setup.sh` builds that environment with micromamba, mamba, or conda when it finds none. |
 | Bake | `bake_tiles.sh` | `tiles/citynav_2m_osmv3/` | Bakes every block with a raster under `SEARCH_CITYNAV_RGBD_DIR` from the city's shipped OSM cache, `tiles/osm_cache/<city>_osm_local.geojson` (already in CityNav local XY), on 2 m cells over the raster's extent. |
 
 Every run manifest records the bake's `bake_sha256`. For these steps it is
@@ -56,10 +56,30 @@ The corpus (`benchmarks/calcity/data/calcity.json`) and the positions of its
 reviewed targets (`benchmarks/calcity/data_prep/authoring/ground_truth.json`)
 ship with the repository. You supply two inputs:
 
-- The C-12 v6 map raster of the block, `<map>_rgb.tif`.
+- The map raster of the block, `<map>_rgb.tif`. The runs used the C-12's
+  map; a public orthophoto on the same frame stands in.
 - A world bundle of OpenStreetMap layers over the block
   (`osm/<layer>.geojson` in WGS84 for each of the eight `bundle.OSM_LAYERS`),
   named by `CALCITY_BUNDLE`.
+
+The raster must lie on the block's frame (`benchmarks/calcity/data_prep/aoi.py`):
+
+| Property | Value |
+|---|---|
+| CRS | WGS 84 / UTM zone 11N (EPSG:32611), north up |
+| Extent | Eastings 405,494.66 to 418,950.47 m, northings 3,881,866.66 to 3,892,077.04 m: the UTM envelope of `aoi.AOI_BBOX` |
+| Cell | Square, in metres, any size |
+| Size | `round(13455.81 / cell)` columns by `round(10210.38 / cell)` rows |
+| Bands | RGB in bands 1 to 3, 8-bit |
+
+`build_rgbd_ortho` reads the raster's cell and size, refuses a raster of any
+other size, and takes its extent as the block's. For example, to lay a public
+orthophoto, such as USDA NAIP, on the frame at 0.5 m:
+
+```sh
+gdalwarp -t_srs EPSG:32611 -te 405494.66 3881866.66 418950.47 3892077.04 -tr 0.5 0.5 -r bilinear \
+  <orthophoto>.tif calcity_rgb.tif
+```
 
 To build the catalog, the raster pair, and the tile bake, and for the
 variables that relocate each part, see
@@ -67,8 +87,7 @@ variables that relocate each part, see
 
 ### Flight harness DEM
 
-The flight harness also reads the block's bare-earth surface, as the flown
-bake carried it.
+The flight harness also reads the block's bare-earth surface.
 
 | Property | Value |
 |---|---|

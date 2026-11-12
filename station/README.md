@@ -118,8 +118,11 @@ differs from a bench run in the following ways:
 To review only:
 
 ```sh
-python -m station.serve --bench calcity --out <runs> --basemap <picture>
+SEARCH_CALCITY_TILES=<bake> python -m station.serve --bench calcity --out <runs> --basemap <picture>
 ```
+
+`<bake>` is the tile bake the runs were flown on; the example runs carry
+theirs as `bake/`.
 
 To fly missions on the twin and review them:
 
@@ -162,11 +165,11 @@ confined to `--out`. A map name is a file stem and nothing else.
 
 | Part | Contents |
 |---|---|
-| Mission list | The split's rows, searchable, with a menu of the bench's splits. The list opens on the split of the newest run under `--out`. Rows that have runs list first. A run with no row in the split shown lists ahead of them, by its own words. A row's words go into the chat box; send flies it. A row with finished runs expands to them, each with its score; a run opens as a review. |
-| Header | The mission's turns and flights. A review shows the run's own. |
-| Transcript | The conversation as it happens: each `run` block's reasoning, code, and printed receipt, the pictures the model was sent, and the report. On the twin, each leg posted and what the pass held. |
+| Mission list | Split's rows, searchable, with a menu of the bench's splits. The list opens on the split of the newest run under `--out`. Rows that have runs list first. A run with no row in the split shown lists ahead of them, by its own words. A row's words go into the chat box; send flies it. A row with finished runs expands to them, each with its score; a run opens as a review. |
+| Header | Mission's turns and flights. A review shows the run's own. |
+| Transcript | Conversation as it happens: each `run` block's reasoning, code, and printed receipt, the pictures the model was sent, and the report. On the twin, each leg posted and what the pass held. |
 | Chat box | Speaks to the mission in the seat: a tasking lands on the model's next turn, and an answer wakes a mission holding at its report. `+` ends the mission and empties the seat. Disabled on a reviewing station. |
-| Map | The viewed map's basemap, the aircraft and its trail, the target's footprint or centre, each stop, and the commit of a scored run. A review frames the run on the basemap. On the twin, each leg's area as a mask of the points the recording holds. |
+| Map | Viewed map's basemap, the aircraft and its trail, the target's footprint or centre, each stop, and the commit of a scored run. A review frames the run on the basemap. On the twin, each leg's area as a mask of the points the recording holds. |
 | Picture book | Cal City: each waypoint's observation as the segmenter received it, with the map's features drawn over it on request. A bench run: the pictures the model was sent, in order. |
 | Scrubber | In a review of a run with a recorded track: the aircraft along it. |
 
@@ -194,18 +197,18 @@ page.
 
 | Request | Response |
 |---|---|
-| `GET station` | The bench: `bench`, `split` (the split the mission list opens on), `splits`, `map` (the default map), `flies`, `why` (when it doesn't), `own_words`. |
+| `GET station` | Bench: `bench`, `split` (the split the mission list opens on), `splits`, `map` (the default map), `flies`, `why` (when it doesn't), `own_words`. |
 | `GET missions?q=&limit=&split=` | Catalog of a split (default: the split the list opens on): `episode_id`, `instruction`, `map`, `target_lonlat`. 404 for a split the bench doesn't have. |
-| `GET missions/runs` | Every finished run under `--out`, from the ledgers alone: path, status, score, and counts, with no transcript. |
-| `GET replay?path=` | One run: its state document with the transcript, `flights`, `target_lonlat`, `target_point`, `commit_lonlat`, and `score`, plus `track` and `duration_s` (null on a run with no recorded track, whose `track` is its `visited_xy`). |
-| `GET mission/events` | Server-sent events: the seat's whole state document each time it changes, `null` with the seat empty. |
+| `GET missions/runs` | Finished runs under `--out`, from the ledgers alone: path, status, score, and counts, with no transcript. |
+| `GET replay?path=` | Run's state document with the transcript, `flights`, `target_lonlat`, `target_point`, `commit_lonlat`, and `score`, plus `track` and `duration_s` (null on a run with no recorded track, whose `track` is its `visited_xy`). |
+| `GET mission/events` | Server-sent events: seat's whole state document each time it changes, `null` with the seat empty. |
 | `POST mission/next` `{episode_id?, instruction, reasoning_effort?, split?}` | Flies a catalog row; on the twin, your own words too. 409 while a mission is live or on a station that flies nothing. |
 | `POST mission/tasking` `{text}` | Speaks to the live mission. |
 | `POST mission/clear` | Ends the mission and empties the seat. A bench episode is scored before the response. |
 | `GET reasoner` | Served model and the reasoning efforts its card takes. |
-| `GET mission/ownship[?path=&t=]` | The seat's aircraft, or a reviewed run's at mission second `t` (null on a run with no recorded track). |
-| `GET location?map=`, `GET tiles/{map}/{z}/{x}/{y}.png`, `GET area?map=` | A map's basemap manifest, its web-mercator tiles, and the bake's extent. 404 for a map that isn't placed. |
-| `GET mission/prior.json?map=` | A map's bake features in local metres, grouped for drawing. |
+| `GET mission/ownship[?path=&t=]` | Seat's aircraft, or a reviewed run's at mission second `t` (null on a run with no recorded track). |
+| `GET location?map=`, `GET tiles/{map}/{z}/{x}/{y}.png`, `GET area?map=` | Map's basemap manifest, its web-mercator tiles, and the bake's extent. 404 for a map that isn't placed. |
+| `GET mission/prior.json?map=` | Map's bake features in local metres, grouped for drawing. |
 | `GET run/file?path=` | One file of a run, by `<root>/<workdir>/<name>`. |
 
 A run's `path` is `<root>/<workdir>`: the root's folder name under `--out`

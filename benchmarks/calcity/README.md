@@ -16,7 +16,7 @@ ship in this repository.
 |---|---|---|
 | Corpus, 4,573 episodes | `data/calcity.json` | Ships. |
 | Positions of the reviewed targets | `data_prep/authoring/ground_truth.json` | Ships. |
-| C-12 v6 map raster of the block | `<map>_rgb.tif` | You supply it. |
+| Map raster of the block | `<map>_rgb.tif` | You supply it: the C-12's map, or a public orthophoto on the block's frame. For the frame, see [`docs/data.md`](../../docs/data.md#cal-city). |
 | World bundle of OpenStreetMap layers | `osm/<layer>.geojson` in WGS84 for each of the eight `bundle.OSM_LAYERS` | You supply it, covering `aoi.BUNDLE_BBOX_WGS84`. |
 | Bare-earth surface of the block, read by the flight harness | `calcity_dem.tif` under `SEARCH_CALCITY_TILES` | You supply it from public USGS 3DEP data. See [`docs/data.md`](../../docs/data.md#flight-harness-dem). |
 
