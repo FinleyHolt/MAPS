@@ -5,15 +5,15 @@ MAPS on a C-12 over California City from 11 to 18 September 2026. It hydrates
 a mission as the bench does, flies each flight as a leg on an aircraft, and
 fuses each observation from the frames the aircraft recorded. It reaches the
 aircraft through one protocol, `Vehicle`. The package also holds a kinematic
-twin of the aircraft, the as-flown replay, and the closed-loop measures.
+twin of the aircraft and the closed-loop measures.
 
-This README is the reference. For a short guide to the twin, the replay, and
-an aircraft of your own, see [`docs/flight.md`](../../docs/flight.md).
+This README is the reference. For a short guide to the twin and an aircraft
+of your own, see [`docs/flight.md`](../../docs/flight.md).
 
-A mission receives its bench as a value (`benchmarks.bench.Bench`). The twin,
-the replay, and the measures build the Cal City bench from the environment at
-startup (`benchmarks.calcity.paths.calcity_bench`), and the mission reaches
-the episode engine through it.
+A mission receives its bench as a value (`benchmarks.bench.Bench`). The twin
+and the measures build the Cal City bench from the environment at startup
+(`benchmarks.calcity.paths.calcity_bench`), and the mission reaches the
+episode engine through it.
 
 ## Flown chain
 
@@ -88,8 +88,7 @@ class Vehicle(Protocol):
 | `frame` | Returns one frame's JPEG and its pose tag. |
 | `now`, `sleep` | Clock the harness waits on. The vehicle owns it. |
 
-Two implementations exist: the twin (`twin.py`) and a camera recording read
-back (`recorded_ring.py`).
+One implementation is in the tree: the twin (`twin.py`).
 
 A `Leg` carries `point` and `ahead`, which the twin flies, and `target`,
 `step`, `area`, `revision`, and `note`: the hand-off that a vehicle for your
@@ -120,32 +119,6 @@ and `elapsed_s`, the track's `t_unix`) on the vehicle's clock. The twin's
 clock moves only while the harness waits on it, so a time to identification
 is flying time.
 
-## Replay a flown run
-
-```sh
-python -m benchmarks.flight.replay <sortie>/<run dir> [--bank week]
-python -m benchmarks.flight.replay <sortie>/<run dir> --forced
-python -m benchmarks.flight.replay <sortie>/<run dir> --frames <sensors.mcap> --boresight <chain.json> --raster <raster dir>
-```
-
-| Tier | Answer to a flight | Proof |
-|---|---|---|
-| Observation bank (default) | The recorded observations holding the leg's area (`--bank run`: the run's own; `--bank week`: every run under the sorties root). Your reasoner and segmenter answer; the recorded taskings are spoken after each report. | How the method decides over the ground the aircraft actually saw. |
-| Forced (`--forced`) | The recorded reasoner responses, observations, and detections. Every request's text is diffed against the recording into `replay_diff.json`; differing pictures are counted (`pictures_differ`); any divergence (request text, params, flights, request count, stopped_there) exits non-zero. No endpoint is contacted. | That this harness sends the flown request text turn for turn. |
-| Frames (`--frames`) | The camera recording as the aircraft's ring, re-fused through the live chain at every waypoint. Needs the `recording` extra. | The observation chain on the real frames. |
-
-- The bank and frame tiers fly your arm's reasoning effort
-  (`SEARCH_SAMPLING_REASONING_EFFORT`, or `--reasoning-effort`, which the
-  served model's card checks like the environment's). The forced tier sends
-  the recorded one.
-- The station registered frames against NAIP 2024 imagery (the `calcity.png`
-  of the v5 Cal City data release beside the flown bake). Pass its directory
-  as `--raster`.
-- A replay's ledger row names the run it replays (`replay_of`). `measures`
-  scores it on SR and NE (it records no start time and no track). The bench
-  readers don't read it.
-- The recordings aren't distributed.
-
 ## Run records
 
 A mission writes these files. Run-level files are in its run folder;
@@ -161,8 +134,7 @@ sortie-level files are in the sortie folder.
 | Sortie's `flight_track.jsonl` | Ownship track. |
 
 The measures read `conversation.jsonl`'s `mission_end`, `leg`, and `waypoint`
-rows. The replay tiers' `leg` rows read `mosaic`'s `asked` and
-`fetch_failed`. No measure or decision reads the following fields:
+rows. No measure or decision reads the following fields:
 
 | Fields | Purpose |
 |---|---|

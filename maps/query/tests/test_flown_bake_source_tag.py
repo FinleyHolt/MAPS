@@ -1,5 +1,5 @@
 """A bake written before the release stamped ``source`` on every prior row;
-the as-flown replays read such bakes, so the surface never serves that key."""
+the flown runs' bakes are such bakes, so the surface never serves that key."""
 
 from types import SimpleNamespace
 

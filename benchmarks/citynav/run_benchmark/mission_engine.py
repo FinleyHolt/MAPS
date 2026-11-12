@@ -30,8 +30,8 @@ log = logging.getLogger("run_benchmark")
 
 def _write_tour_cursor(flights: list[dict], workdir: Path | None) -> None:
     """Persist the flown stops (id and xy, in flight order) to
-    ``<workdir>/flight/tour_cursor.json``, the record ``replay.tour_stops``
-    takes a run's flights from. No-op without a ``workdir``."""
+    ``<workdir>/flight/tour_cursor.json``, the record the station
+    takes a run's stops from. No-op without a ``workdir``."""
     if not workdir:
         return
     try:

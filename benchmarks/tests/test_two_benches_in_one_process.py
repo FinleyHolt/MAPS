@@ -13,6 +13,7 @@ from benchmarks.calcity.paths import calcity_bench
 from benchmarks.citynav.bake.city import bake_block
 from benchmarks.citynav.eval import WorldBounds
 from benchmarks.citynav.paths import citynav_bench
+from benchmarks.citynav.run_benchmark import episode_runner
 from benchmarks.run_record.config import load_config
 from maps.settings import from_environ
 from benchmarks.run_record.episode_workdir import mint_workdir
@@ -40,22 +41,23 @@ def benches(tmp_path):
     return citynav, calcity
 
 
-def _hydrate(bench, map_name: str, config: str):
+def _hydrate(bench, map_name: str, config: str, monkeypatch):
     engine = bench.engine
     # An authored start carries no height: a CityNav row states its own.
     episode = dataclasses.replace(engine.authored_episode(f"{map_name}::t", (5.0, 5.0)), start_z=120.0)
     seen = SimpleNamespace(set_concepts=lambda concepts: None)
+    monkeypatch.setattr(episode_runner, "make_perception", lambda settings: seen)
     cfg = load_config(config)
     return engine.build_episode(cfg, episode, engine.load_assets(bench, map_name), bench,
-                                settings=from_environ(bench.environ), perception_factory=lambda: seen)
+                                settings=from_environ(bench.environ))
 
 
-def test_an_episode_of_each_bench_is_hydrated_from_its_own_bake_in_one_process(benches):
+def test_an_episode_of_each_bench_is_hydrated_from_its_own_bake_in_one_process(benches, monkeypatch):
     citynav, calcity = benches
     # CityNav first, then Cal City, then CityNav again: no order selects a bench for the process.
-    first = _hydrate(citynav, BLOCK, "configs/citynav.yaml")
-    second = _hydrate(calcity, "calcity", "configs/calcity.yaml")
-    third = _hydrate(citynav, BLOCK, "configs/citynav.yaml")
+    first = _hydrate(citynav, BLOCK, "configs/citynav.yaml", monkeypatch)
+    second = _hydrate(calcity, "calcity", "configs/calcity.yaml", monkeypatch)
+    third = _hydrate(citynav, BLOCK, "configs/citynav.yaml", monkeypatch)
     for h, bench, name, shape in ((first, citynav, "Elm Church", (20, 20)), (second, calcity, "North Barn", (30, 30)),
                                   (third, citynav, "Elm Church", (20, 20))):
         assert h.bench is bench and h.assets.grid_shape == shape

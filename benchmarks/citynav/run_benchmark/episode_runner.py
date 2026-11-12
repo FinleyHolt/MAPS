@@ -164,20 +164,17 @@ class Hydrated:
 
 
 def build_episode(cfg: RunConfig, episode: CityNavEpisode, assets: BlockAssets, bench: Bench, *,
-                  settings: Settings, workdir: Path | None = None, routing_key: str | None = None,
-                  perception_factory: Callable[[], Any] | None = None) -> Hydrated:
+                  settings: Settings, workdir: Path | None = None, routing_key: str | None = None) -> Hydrated:
     """The engine for one episode on ``bench`` under ``settings``: its graph,
     the start pose, the segmenter wired to the director's watchlist (the
     declared classes plus the boosts riding a flight), and the started
     EpisodeWorld. ``workdir`` and ``routing_key`` are the mission's own
-    (:class:`Hydrated`). ``perception_factory`` builds the segmenter in place
-    of :func:`make_perception` (the flight's forced replay brings the
-    recorded one)."""
+    (:class:`Hydrated`)."""
     graph = _episode_graph(assets)
     start_alt_m, ground = start_altitude_m(cfg, episode.map_name, episode.start_z)
     state = EpisodeState(pose_xy=episode.start_xy, altitude_m=start_alt_m)
     # ``make_perception`` is a module global looked up at call time: a test swaps it.
-    perception = perception_factory() if perception_factory is not None else make_perception(settings)
+    perception = make_perception(settings)
     grid_h, grid_w = assets.grid_shape
     world = EpisodeWorld(
         GridDomain(height=grid_h, width=grid_w, cell_size_m=float(assets.cell_size_m)),

@@ -22,7 +22,6 @@ import queue
 import threading
 import time
 from io import BytesIO
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -123,20 +122,18 @@ def resolve_episode(bench: Bench, episode_id: str, split: str, start_xy: tuple[f
 
 
 def hydrate(*, bench: Bench, episode_id: str, split: str, config: str, agl_m: float,
-            start_xy: tuple[float, float] | None = None, workdir: Path | None = None,
-            perception_factory: Callable[[], Any] | None = None) -> Hydrated:
+            start_xy: tuple[float, float] | None = None, workdir: Path | None = None) -> Hydrated:
     """The engine for one mission, built by the bench's engine
     (``EpisodeEngine.build_episode``), at the operator's start and at
     ``agl_m``, the crew's commanded height above ground: the one height the
     served sensor block and every leg read. The mission records under
-    ``workdir`` and its requests ride its episode id as their routing key.
-    ``perception_factory`` builds the segmenter in place of the engine's own."""
+    ``workdir`` and its requests ride its episode id as their routing key."""
     engine = bench.engine
     cfg = load_config(config)
     episode = resolve_episode(bench, episode_id, split, start_xy)
     h = engine.build_episode(cfg, episode, engine.load_assets(bench, episode.map_name), bench,
                              settings=from_environ(bench.environ), workdir=workdir,
-                             routing_key=episode_id, perception_factory=perception_factory)
+                             routing_key=episode_id)
     h.state.altitude_m = h.ground_z_m + float(agl_m)
     return h
 
@@ -183,12 +180,9 @@ class Mission:
     def __init__(self, *, bench: Bench, episode_id: str, split: str, config: str, workdir: Path, live: LiveSource,
                  recorder: Any, close_log, agl_m: float, instruction: str | None = None,
                  run_id: str | None = None, run_no: int | None = None,
-                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None,
-                 perception_factory: Callable[[], Any] | None = None) -> None:
+                 start_xy: tuple[float, float] | None = None, reasoning_effort: str | None = None) -> None:
         #: The bench the mission flies: its split, its bake, its engine.
         self.bench = bench
-        #: Builds the segmenter in place of the engine's own (a forced replay's recorded one).
-        self._perception_factory = perception_factory
         self.episode_id = episode_id
         self.split = split
         self.config = config
@@ -231,7 +225,7 @@ class Mission:
         #: The vehicle's clock at the start: every time the mission records
         #: (``t_s``, ``elapsed_s``, the track) is vehicle seconds from here.
         self._t0: float | None = None
-        #: The same instant on the receiver's clock (UTC, unix seconds), what a replay anchors on.
+        #: The same instant on the receiver's clock (UTC, unix seconds).
         self.started_at_utc: float | None = None
         #: How many track fixes have been written.
         self._tracked = 0
@@ -626,8 +620,7 @@ class Mission:
             self._write_manifests()
 
             h = hydrate(bench=self.bench, episode_id=self.episode_id, split=self.split, config=self.config,
-                        start_xy=self._start_xy, agl_m=self.agl_m, workdir=self.workdir,
-                        perception_factory=self._perception_factory)
+                        start_xy=self._start_xy, agl_m=self.agl_m, workdir=self.workdir)
             self.hydrated = h
             instruction = self.instruction or h.episode.description
             # The override IS the operator's instruction, so the episode

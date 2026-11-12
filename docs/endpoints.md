@@ -37,9 +37,8 @@ the repository root, in the activated environment
 
 | Extra | Contents |
 |---|---|
-| `recording` | Reader of a camera recording for the as-flown frame replay (`mcap`). |
 | `station` | Station's server (`fastapi`, `uvicorn`). |
-| `dev` | Test suite and linter, plus both extras above. |
+| `dev` | Test suite and linter, plus the extra above. |
 
 Every run records the commit it ran from. A tree without git, such as a
 `git archive` export, reads that commit from a `.commit` file at its root:

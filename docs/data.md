@@ -101,6 +101,5 @@ the steps, see the
 ## Flight recordings
 
 The camera recordings, sortie folders, and analysts' adjudications of the
-closed-loop flight aren't distributed. The replay tiers
-([`flight.md`](flight.md)) and the closed-loop measures run on recordings of
-your own.
+closed-loop flight aren't distributed. The closed-loop measures
+([`flight.md`](flight.md)) run on sorties of your own.
