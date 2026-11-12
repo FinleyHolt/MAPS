@@ -44,7 +44,8 @@ the live source and the frame registration stand each frame on the bake's
 
 ## Watch a mission
 
-[`station/`](../station/README.md) is a web console over the twin: pick a
+[`station/`](../station/README.md) is a web console over a bench's runs and,
+with `--bench calcity --ortho <raster dir>`, over the twin: pick a
 Cal City tasking or type your own, watch the model reason turn by turn, see
 the aircraft, each leg's area and the observation it brought back on the
 map, and re-task the model while it flies. Every finished run under its

@@ -47,7 +47,7 @@ the pictures the model saw and its score. Open the station on the folder it
 unpacks to (the archive's own README gives the exact command):
 
 ```sh
-SEARCH_CALCITY_TILES=<folder>/bake python -m station.serve --out <folder>/runs --basemap <folder>/basemap.jpg
+SEARCH_CALCITY_TILES=<folder>/bake python -m station.serve --bench calcity --out <folder>/runs --basemap <folder>/basemap.jpg
 ```
 
 Then open `http://127.0.0.1:8788`, pick a run and scrub through it.
@@ -95,10 +95,15 @@ python -m benchmarks.citynav.analysis.run_report output/citynav
 ```
 
 `run_report` prints SR, NE, SPL and OSR for the root. Rerunning the
-`bench_fullset` command resumes it. Each attempt's directory under the root
-holds its conversation (`conversation.jsonl`); see
-[`benchmarks/citynav`](benchmarks/citynav/README.md) for the root's layout
-and the driver's flags.
+`bench_fullset` command resumes it. Review the run in the station, episode
+by episode:
+
+```sh
+python -m station.serve --bench citynav --out output/citynav
+```
+
+[`benchmarks/citynav`](benchmarks/citynav/README.md) describes the root's
+layout and the driver's flags.
 
 ## How it works
 
