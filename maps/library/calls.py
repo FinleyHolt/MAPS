@@ -38,6 +38,7 @@ from maps.library.op_compiler import (
     rn_spelled,
 )
 from maps.library.rows import Row, Rows, index_it_remedy, one_row_spelling, places_of, set_as_list
+from maps.query.color_words import COLOR_ENUM, normalize_color
 from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.row_geometry import SurfaceGeometry
 from maps.query.spatial_math import COMPASS_UNIT
@@ -46,6 +47,29 @@ from maps.xy_token import is_xy
 # One block's measuring budget: a nested loop of distance() calls is one per
 # PAIR, millions of mask-to-mask scans at real set sizes.
 MEASURE_CALL_CEILING = 20_000
+
+
+def _refuse_unplain_class(cls: str) -> None:
+    """Refuse a look_for class the served text rules out: one carrying a
+    colour word, or a proper noun (a capitalised word past the first; a
+    capitalised first word is how a sentence starts)."""
+    words = cls.replace("_", " ").split()
+    # ponytail: any palette word refuses, so "orange tree" does too; a
+    # head-noun parse if a real class ever needs a colour word.
+    colour = next(
+        (w for w in words if w.lower() == "grey" or normalize_color(w) in COLOR_ENUM), None
+    )
+    if colour:
+        raise CodeError(
+            f'look_for takes plain visual classes, each naming a THING, never a colour: "{cls}" '
+            f'carries the colour "{colour}". A colour ORDERS the rows once they exist: '
+            f'find("<class>", color="{colour.lower()}").'
+        )
+    if any(w[:1].isupper() and not w.isupper() for w in words[1:]):
+        raise CodeError(
+            f'look_for takes plain visual classes, no proper nouns: "{cls}" is a proper noun. '
+            f'A named place is already a world-state row: find("{cls}").'
+        )
 
 
 class Library:
@@ -522,6 +546,8 @@ class Library:
             raise CodeError('look_for takes the classes to watch: look_for("house", "pool")')
         if not all(isinstance(c, str) for c in classes):
             raise CodeError('look_for takes class names as strings: look_for("house", "pool")')
+        for c in classes:
+            _refuse_unplain_class(c)
         # THE SEGMENTER CHANNEL: it arms perception and moves nothing. The
         # segmenter reads WORDS, so look_for("parking_lot") and
         # look_for("parking lot") arm the same class.
