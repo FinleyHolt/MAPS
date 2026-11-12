@@ -78,7 +78,7 @@ _PRIOR_NS = {"cands": [],
              "anchors": [dict(a) for a in _ANCHORS], "cell_m": 1.0}
 
 
-def testPREFLIGHT_COLOR_NOTE_on_emphasis_only_attach():
+def test_preflight_color_note_on_emphasis_only_attach():
     # The NEW lazy path -- no find{color} anywhere: a pre-takeoff emphasis
     # naming color_red must state the phase fact, not just "no color".
     out = run_ops(
