@@ -1,31 +1,33 @@
 # benchmarks/citynav/analysis
 
-The readers every reported number is derived with. Each reads run roots, the
-directories a bench run writes (`run_manifest.json` beside `episodes.jsonl`),
-and none defines a metric of its own: `rows.load_attempts` decides which
+These readers derive every reported number. Each reads run roots, the
+directories a bench run writes (`run_manifest.json` beside `episodes.jsonl`).
+No reader defines a metric of its own: `rows.load_attempts` decides which
 attempt is an episode's result (the first fully complete attempt by start
-time) and `arm_table.arm_row` averages.
+time), and `arm_table.arm_row` averages.
 
-`run_report`, `arm_table` and `ab_report` refuse a root that
-scores fewer episodes than its manifest selected (`selection.episodes_n`) and
-names the shortfall: episodes only ever an infrastructure casualty, and
-episodes that never landed a row. Resuming the run into the same root finishes
-it; `--allow-partial` reads it as it stands and prints the shortfall to
-stderr.
+## Readers
 
-| Reader | Reads | Prints |
+| Reader | Input | Output |
 |---|---|---|
-| `benchmarks/run_record/rows.py` | One root's ledger | Nothing: the library every reader picks attempts with. |
+| `benchmarks/run_record/rows.py` | One root's ledger | Nothing. It's the library every reader picks attempts with. |
 | `run_report.py <root>...` | Each root in turn | SR, NE, SPL, OSR and the OSR x SR joint, SR by target shape, SR by referent bucket and by intel quality (Cal City; a recorded row's own class; a pick without one is bucketed by its recorded description and graded from the run's split), commit provenance, the bake check. |
-| `arm_table.py <root>...` | Many roots, one per arm | One row per arm: effort, n, SR, OSR, shape and radius SR, NE; refuses roots that mix success criteria, discs of two radii included. `--json` for the rows. |
+| `arm_table.py <root>...` | Many roots, one per arm | One row per arm: effort, n, SR, OSR, shape and radius SR, NE. Refuses roots that mix success criteria, discs of two radii included. `--json` prints the rows. |
 | `ab_report.py <a> <b>` | Two roots | Paired SR with a bootstrap interval on the difference, McNemar, and the flip counts. |
-| `spend.py <root>` | Every attempt's transcript, flying or re-queued included | A hosted endpoint's tokens and USD (cache reads, cache writes and the rest priced apart, off each transcript's `cached_tokens` and `cache_write_tokens` (`maps.llm.flight_summary`), null where the serve reports none), USD per scored episode, the projection for the selection's remainder, and every `served_model` that answered. |
+| `spend.py <root>` | Every attempt's transcript, flying or re-queued included | A hosted endpoint's tokens and USD, USD per scored episode, the projection for the selection's remainder, and every `served_model` that answered. Cache reads, cache writes, and the rest are priced apart, from each transcript's `cached_tokens` and `cache_write_tokens` (`maps.llm.flight_summary`), null where the serve reports none. |
 
-## Every claim and its reader
+`run_report`, `arm_table`, and `ab_report` refuse a root that scores fewer
+episodes than its manifest selected (`selection.episodes_n`) and name the
+shortfall: episodes that were only ever an infrastructure casualty, and
+episodes that never landed a row. To finish the root, resume the run into it.
+To read it as it stands, pass `--allow-partial`, which prints the shortfall
+to stderr.
+
+## Claims and their readers
 
 The run roots are named as in the
 [reproduction commands](../../../docs/experiments.md#reproduce-the-bench-experiments).
-Every command runs from the repository root.
+Run every command from the repository root.
 
 | Claim | Quantity | Reader | Command |
 |---|---|---|---|

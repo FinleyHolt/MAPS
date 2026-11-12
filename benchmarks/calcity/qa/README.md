@@ -1,25 +1,27 @@
 # Cal City mask QA
 
-An audit of the prompt and mask pairs in the 1,100 reviewed Cal City episodes,
-the set `data_prep/reviewed.py` derives and every Cal City experiment flies.
+This folder audits the prompt and mask pairs of the reviewed Cal City
+episodes, the set that `data_prep/reviewed.py` derives and every Cal City
+experiment flies.
 
-| File | Role |
+| File | Contents |
 |---|---|
-| `mask_qa.csv` | One line per reviewed episode: corpus row, episode id, where its shape comes from, the prompt, and blank `verdict` and `note` columns |
-| `../data/calcity.json` | The corpus. Row `row` of this array is the pair: `descriptions[0]` is the prompt, and the shape is `target_mask` or a linked object |
+| `mask_qa.csv` | One line per reviewed episode: corpus row, episode ID, where its shape comes from, the prompt, and blank `verdict` and `note` columns |
+| `../data/calcity.json` | Corpus. Row `row` of this array is the pair: `descriptions[0]` is the prompt, and the shape is `target_mask` or a linked object |
 | `objects.json` | Linked object contours, under `$SEARCH_CALCITY_DATA/data/cityrefer/` (built by `data_prep/build_objects_json.py`; not in git) |
 
-## What to check
+## Check a line
 
-For each line, does the mask outline exactly the thing the prompt names, on
-the benchmark's own imagery? Fill `verdict` with one of:
+For each line, decide whether the mask outlines exactly the thing the prompt
+names, on the benchmark's own imagery. Fill `verdict` with one of the
+following:
 
 | Verdict | Meaning |
 |---|---|
 | `ok` | The mask covers the named thing and nothing else |
 | `mask` | The mask is wrong (off target, cut short, spills over); fixed in `calcity.json` |
 | `prompt` | The prompt is wrong or ambiguous for the imagery; fixed in `calcity.json` |
-| `drop` | Not fixable; the row should leave the reviewed set |
+| `drop` | Not fixable; the row leaves the reviewed set |
 
 The `shape` column says where each target's shape comes from:
 
@@ -28,31 +30,30 @@ The `shape` column says where each target's shape comes from:
 | `target_mask` | 1,074 | A polygon drawn in the row |
 | `object <ids>` | 26 | The contour of the linked object in `objects.json` (the "house on the corner of" prompts) |
 
-A linked object's contour wins over a drawn `target_mask` in scoring
+In scoring, a linked object's contour wins over a drawn `target_mask`
 (`benchmarks/citynav/eval.py`).
 
-## How to fix
+## Fix a row
 
-Edit the row in `benchmarks/calcity/data/calcity.json` in place; never
-reorder or delete rows (the episode id carries the row index).
+1. Edit the row in `benchmarks/calcity/data/calcity.json` in place. Don't
+   reorder or delete rows: the episode ID carries the row index.
 
-- `target_mask` is a list of `[x, y]` vertices in metres, in the task frame:
-  x east, y north.
-- For an `object` row, fix the shape by pointing `object_ids` at the right
-  object, or by emptying `object_ids` and drawing a `target_mask`.
-- A row is in the reviewed set only while its `target_positions[0]` sits
-  within 0.2 m of a key in `data_prep/authoring/ground_truth.json`. If a fix
-  moves the target point, update that key to match, or the row silently
-  leaves the set.
-- For `drop`, remove the row's key from `ground_truth.json`, and lower
-  `REVIEWED_N` in `tests/test_reviewed_episodes.py` to match. Some targets
-  carry several prompts (1,100 prompts over 982 targets), and removing a key
-  drops every row on that target.
+   | Verdict | Fix |
+   |---|---|
+   | `mask`, drawn shape | Edit `target_mask`: a list of `[x, y]` vertices in metres, in the task frame (x east, y north). |
+   | `mask`, `object` row | Point `object_ids` at the right object, or empty `object_ids` and draw a `target_mask`. |
+   | `prompt` | Edit `descriptions[0]`. |
+   | `drop` | Remove the row's key from `data_prep/authoring/ground_truth.json`, and lower `REVIEWED_N` in `tests/test_reviewed_episodes.py` to match. Some targets carry several prompts (1,100 prompts over 982 targets), and removing a key drops every row on that target. |
 
-Before committing:
+2. If the fix moves the target point, update its key in `ground_truth.json`
+   to match. A row is in the reviewed set only while its
+   `target_positions[0]` sits within 0.2 m of a key in that file; otherwise
+   the row silently leaves the set.
 
-```bash
-python -m pytest benchmarks/calcity/tests
-```
+3. Run the tests:
 
-Commit the filled `mask_qa.csv` with the fixes.
+   ```bash
+   python -m pytest benchmarks/calcity/tests
+   ```
+
+4. Commit the filled `mask_qa.csv` with the fixes.
