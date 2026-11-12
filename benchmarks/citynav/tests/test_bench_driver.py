@@ -797,3 +797,14 @@ def test_calcity_without_its_catalog_exits_2_with_its_recipe_before_any_out_root
     err = capsys.readouterr().err
     assert err.startswith("FATAL: Cal City data is incomplete under ")
     assert "build_objects_json" in err and "objects.json" in err
+
+
+def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from benchmarks.citynav.run_benchmark import cli
+
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
+    assert cli.main(citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err

@@ -73,3 +73,9 @@ def test_unnamed_features_are_unaffected(monkeypatch):
         monkeypatch,
     )
     assert len(objects) == 2
+
+
+def test_a_missing_bundle_exits_1_naming_the_file_without_a_traceback(tmp_path, capsys):
+    assert boj.main(["--root", str(tmp_path), "--bundle", str(tmp_path / "absent")]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("FATAL: the world bundle has no ") and "Traceback" not in err

@@ -184,7 +184,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=bench.root)
     parser.add_argument("--bundle", type=Path, default=None)
     args = parser.parse_args(argv)
-    build(args.root, args.bundle or bundle_root(bench.root, os.environ))
+    try:
+        build(args.root, args.bundle or bundle_root(bench.root, os.environ))
+    except FileNotFoundError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

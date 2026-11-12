@@ -12,6 +12,7 @@ import ctypes
 import logging
 import os
 import signal
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -133,7 +134,11 @@ def main(bench: Bench | None = None) -> int:
         bench = bench.with_environ({"SEARCH_SEED_BASE": str(args.seed_base)})
         log.info("Deterministic seed base: SEARCH_SEED_BASE=%d", args.seed_base)
 
-    bench.assert_available()
+    try:
+        bench.assert_available()
+    except (OSError, RuntimeError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
     cfg = load_config(args.config)
     # The engine's settings, built once from the run's environment.
     settings = from_environ(bench.environ)
