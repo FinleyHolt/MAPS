@@ -17,9 +17,8 @@ def test_an_empty_environment_states_the_defaults():
         e.reasoner_url,
         e.reasoner_api_key,
         e.sam_server_url,
-        e.sam_video_server_url,
         e.cache_key,
-    ) == (None,) * 5
+    ) == (None,) * 4
     assert (
         e.reasoner_timeout_s,
         e.reasoner_models_url,
@@ -42,7 +41,6 @@ def test_each_variable_reaches_its_field_as_the_engine_reads_it():
             "SEARCH_COMPACT_TOKENIZER_NAME": " org/tok ",
             "MAPS_IMAGE_STORE_URL": " http://store/ ",
             "SAM_SERVER_URL": "http://a:1, http://b:2",
-            "SAM_VIDEO_SERVER_URL": "http://v:3",
             "SEARCH_LLM_CACHE_KEY": "run/w3",
             "SEARCH_SAMPLING_REASONING_EFFORT": " 0.9 ",
         }
@@ -57,7 +55,6 @@ def test_each_variable_reaches_its_field_as_the_engine_reads_it():
         tokenizer_name="org/tok",
         image_store_url="http://store",
         sam_server_url="http://a:1, http://b:2",
-        sam_video_server_url="http://v:3",
         cache_key="run/w3",
     )
     # The effort is kept as set (the request strips it).

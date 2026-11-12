@@ -32,9 +32,3 @@ def test_an_unset_sam_url_is_the_default_replica():
         "http://a:1",
         "http://b:2",
     ]
-
-
-def test_the_flown_station_s_sam_variable_alone_is_refused_not_defaulted():
-    alone = from_environ({"SAM_VIDEO_SERVER_URL": "http://sam.example:8772"}).endpoint
-    with pytest.raises(ValueError, match="SAM_VIDEO_SERVER_URL is not read; set SAM_SERVER_URL"):
-        sam_endpoints(alone)
