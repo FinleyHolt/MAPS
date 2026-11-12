@@ -210,13 +210,6 @@ _REGISTRY: dict[str, SensorSpec] = {
         description=_ORYX_ORX32_25MM_NADIR_DESCRIPTION,
     ),
 }
-def register_sensor(spec: SensorSpec) -> None:
-    """Add a rig the caller flies to the registry, by its name. Registering a
-    name already held by a different spec is refused."""
-    held = _REGISTRY.get(spec.name)
-    if held is not None and held != spec:
-        raise ValueError(f"sensor {spec.name!r} is already registered as a different rig")
-    _REGISTRY[spec.name] = spec
 
 
 def list_sensors() -> list[str]:

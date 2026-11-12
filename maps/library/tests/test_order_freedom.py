@@ -4,7 +4,7 @@ from __future__ import annotations
 from maps.query.result_tables import compact_results
 from maps.query.program import run_program
 from maps.library.result_handles import (
-    _preflight_color_note,
+    PREFLIGHT_COLOR_NOTE,
     run_ops,
 )
 
@@ -78,7 +78,7 @@ _PRIOR_NS = {"cands": [],
              "anchors": [dict(a) for a in _ANCHORS], "cell_m": 1.0}
 
 
-def test_preflight_color_note_on_emphasis_only_attach():
+def testPREFLIGHT_COLOR_NOTE_on_emphasis_only_attach():
     # The NEW lazy path -- no find{color} anywhere: a pre-takeoff emphasis
     # naming color_red must state the phase fact, not just "no color".
     out = run_ops(
@@ -88,7 +88,7 @@ def test_preflight_color_note_on_emphasis_only_attach():
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
         ], namespace=_PRIOR_NS, preflight=True)
-    assert _preflight_color_note() in str(out.get("error")), out
+    assert PREFLIGHT_COLOR_NOTE in str(out.get("error")), out
 
 
 def test_per_stop_round_serves_no_phase_note():
@@ -102,4 +102,4 @@ def test_per_stop_round_serves_no_phase_note():
              "args": {"items": "r0",
                       "emphasis": [{"key": "color_red", "w": 1}]}},
         ], namespace=ns)
-    assert _preflight_color_note() not in str(out), out
+    assert PREFLIGHT_COLOR_NOTE not in str(out), out

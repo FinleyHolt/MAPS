@@ -15,12 +15,12 @@ from maps.library.op_compiler import (
     HANDLE_RE, HANDLE_WORD_RE, CodeError)
 
 
-def _preflight_color_note() -> str:
-    """Served on a refused preflight program that names a color column:
-    before landing no row carries perceived color."""
-    return ("priors carry no perceived color before landing"
-            ", so no color column attaches yet; color enriches per-stop "
-            "after arrival.")
+# Served on a refused preflight program that names a color column: before
+# landing no row carries perceived color.
+PREFLIGHT_COLOR_NOTE = (
+    "priors carry no perceived color before landing"
+    ", so no color column attaches yet; color enriches per-stop "
+    "after arrival.")
 
 
 def _requests_color(op: dict) -> bool:
@@ -56,7 +56,7 @@ def run_ops(ops: list, *, namespace: dict,
             # The color request errored before any envelope existed (e.g.
             # the emphasis absent-color guard) -- the phase fact rides the
             # error so "no color" reads as WHEN, not broken.
-            _err = join_hints(_err, _preflight_color_note())
+            _err = join_hints(_err, PREFLIGHT_COLOR_NOTE)
         return {"error": _err}
     except Exception as exc:  # noqa: BLE001 -- served to the model; never crash the turn
         return {"error": f"program failed: {exc}"}
