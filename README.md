@@ -5,7 +5,7 @@ language model flies the aircraft by writing Python against a small library
 over a structured world state: an OpenStreetMap prior joined with the
 detections of an open-vocabulary segmenter (SAM 3.1).
 
-![A MAPS search flown on a C-12 over California City: the description, the flown track, and each call the model made, at the place it made it.](docs/figures/overview.jpg)
+![A MAPS search flown on a C-12 over California City: the description, the flown track, and each call the model made, at the place it made it.](docs/figures/overview.webp)
 
 *A search flown in closed loop on a C-12. Bottom: the track over California
 City, with each call the model wrote at the place it wrote it.*
@@ -114,7 +114,10 @@ world-state graph, and its printed output returns to the model, which then
 writes the next block. The search ends when the model replies without a tool
 call; the answer is the target of its last flight.
 
-![The model writes a block of Python, the block reads or extends the world-state graph, and the result returns to the model for its next step.](docs/figures/how-it-works.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/how-it-works-dark.svg">
+  <img alt="The model writes a block of Python, the block reads or extends the world-state graph, and the result returns to the model for its next step." src="docs/figures/how-it-works-light.svg">
+</picture>
 
 *One search of 13 steps. The model finds a street in the map, flies a pass
 over it, looks at the cars the pass detected, and flies to the one it picks.*
