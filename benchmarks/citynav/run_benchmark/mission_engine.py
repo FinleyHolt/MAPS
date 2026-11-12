@@ -235,7 +235,6 @@ class MissionSession:
 
         step_idx = len(self.flights)
         stop_id = f"stop_{step_idx:03d}"
-        state.step_idx = step_idx
         if self.observe is not None:
             obs = self.observe()
             if obs is None:
