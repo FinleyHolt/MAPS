@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from benchmarks import REPO_ROOT
-from benchmarks.bench import Bench
+from benchmarks.bench import Bench, env_path
 from benchmarks.calcity.paths import calcity_bench
 
 # The tile bake (data_prep/bake_tiles.sh): one tags-only OSM ``prior`` list per
@@ -52,14 +52,6 @@ SPLIT_FILES: dict[str, str] = {
 }
 
 
-def _env_path(environ: Mapping[str, str], *names: str, default: Path) -> Path:
-    """The first of ``names`` set to a non-empty value, else ``default``, resolved."""
-    for name in names:
-        if value := environ.get(name):
-            return Path(value).expanduser().resolve()
-    return Path(default).expanduser().resolve()
-
-
 def _assert_available(bench: Bench) -> None:
     """Raise with the fetch recipe when the splits or ``objects.json`` are missing."""
     missing = [p for p in (bench.splits_dir, bench.objects_json) if not p.exists()]
@@ -77,7 +69,7 @@ def _assert_available(bench: Bench) -> None:
 
 def citynav_bench(environ: Mapping[str, str]) -> Bench:
     """The CityNav bench ``environ`` describes."""
-    root = _env_path(
+    root = env_path(
         environ,
         "SEARCH_CITYNAV_DATA",
         "CITYNAV_ROOT",
@@ -87,10 +79,10 @@ def citynav_bench(environ: Mapping[str, str]) -> Bench:
     return Bench(
         name="citynav",
         root=root,
-        splits_dir=_env_path(environ, "SEARCH_CITYNAV_SPLITS", default=data / "citynav"),
+        splits_dir=env_path(environ, "SEARCH_CITYNAV_SPLITS", default=data / "citynav"),
         objects_json=data / "cityrefer" / "objects.json",
-        rgbd_dir=_env_path(environ, "SEARCH_CITYNAV_RGBD_DIR", default=data / "rgbd_upstream"),
-        tiles_dir=_env_path(environ, "SEARCH_CITYNAV_TILES", default=REPO_ROOT / DEFAULT_TILE_BAKE),
+        rgbd_dir=env_path(environ, "SEARCH_CITYNAV_RGBD_DIR", default=data / "rgbd_upstream"),
+        tiles_dir=env_path(environ, "SEARCH_CITYNAV_TILES", default=REPO_ROOT / DEFAULT_TILE_BAKE),
         split_files=SPLIT_FILES,
         success_criterion="ring",
         default_split="val_seen",

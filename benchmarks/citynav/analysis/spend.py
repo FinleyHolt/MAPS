@@ -3,7 +3,8 @@ selection will cost at that rate, read live off every attempt's transcript.
 
     python -m benchmarks.citynav.analysis.spend <out-root> [--price-in 5 ...]
 
-Every attempt directory (``w*/maps_*``) is metered with
+Every attempt directory (each ledger row's ``workdir``, and any ``maps_*``
+directory under the root, for an attempt still flying) is metered with
 ``maps.llm.flight_summary.summarize``, the one transcript reader, so an
 attempt still flying and one the run re-queued as infra are both counted:
 the endpoint billed them. Prompt tokens are priced in three parts: the
@@ -68,7 +69,11 @@ def spend(out_root: Path, prices: dict = PRICES, tokenizer_name: str = "") -> di
     usd = {"scored": 0.0, "infra": 0.0, "flying": 0.0}
     served: Counter = Counter()
     scored_ids: set[str] = set()
-    for attempt in sorted(out_root.glob("w*/maps_*")):
+    # The ledger names each landed attempt wherever its root nests it; an
+    # attempt still flying has no row yet and is found by its directory name.
+    attempts = {out_root / str(w) for w in ledger if w and (out_root / str(w)).is_dir()}
+    attempts |= {p for p in out_root.rglob("maps_*") if p.is_dir()}
+    for attempt in sorted(attempts):
         llm = summarize(attempt / "flight", tokenizer_name)
         for k in totals:
             if llm[k] is not None:

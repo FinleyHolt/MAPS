@@ -3,7 +3,7 @@
 ``spawn: uniform`` replaces a dataset start with a deterministic draw per
 (spawn_seed, episode_id). Reproducibility is the contract: the same seed
 must reproduce a run's spawns exactly, and a different seed must give an
-independent set — silently correlated spawns would make a "new" spawn set
+independent set: silently correlated spawns would make a "new" spawn set
 re-measure the old one.
 """
 

@@ -56,6 +56,15 @@ def bake_sha256(tiles_dir: Path) -> str | None:
     return h.hexdigest()
 
 
+def env_path(environ: Mapping[str, str], *names: str, default: Path) -> Path:
+    """The first of ``names`` set to a non-empty value in ``environ``, else
+    ``default``, resolved."""
+    for name in names:
+        if value := environ.get(name):
+            return Path(value).expanduser().resolve()
+    return Path(default).expanduser().resolve()
+
+
 def missing_bake(stem: str) -> str | None:
     """What the bake at ``stem`` lacks for an episode to load, or None."""
     recipe = (

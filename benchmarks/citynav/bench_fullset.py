@@ -639,6 +639,10 @@ class Driver:
             return 2
         try:
             return self._run()
+        except KeyboardInterrupt:
+            # The ledger keeps every landed row, so a relaunch into this root resumes.
+            self.log("interrupted (SIGINT): stopping; relaunch into this root to resume")
+            return 130
         finally:
             lock.close()
 
@@ -795,6 +799,11 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     try:
         resolve_config(config)
     except (OSError, ValueError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
+    try:
+        bench.assert_available()
+    except (OSError, RuntimeError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     driver = Driver(args, bench, config)

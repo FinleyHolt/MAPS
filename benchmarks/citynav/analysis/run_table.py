@@ -64,18 +64,14 @@ def _mean(vals: list) -> float | None:
     return round(float(np.mean(vals)), 4) if vals else None
 
 
-def run_row(
-    root: Path, *, allow_partial: bool = False, attempts: tuple[dict, _rows.ReadStats] | None = None
-) -> dict:
+def run_row(root: Path, *, allow_partial: bool = False) -> dict:
     """One run's summary; a run with no scored episode still gets its row.
-    ``attempts`` is the root's ``rows.load_attempts`` result when the caller
-    already read it.
 
     Each mean is a macro mean over the rows carrying the key (OSR is absent
     from a shape-scored row); a shape-scored SR, which pools footprint
     containment and the disc fallback, is also split by ``precise_target``;
     rates are also given as percentages, as CityNav reports them."""
-    picked, stats = attempts or _rows.load_attempts(root, allow_partial=allow_partial)
+    picked, stats = _rows.load_attempts(root, allow_partial=allow_partial)
     scored = list(_rows.scored_metrics(picked).values())
     recorded = [a.metrics for a in picked.values() if a.metrics]
     manifest = _rows.read_manifest(root)

@@ -43,12 +43,11 @@ log = logging.getLogger("run_benchmark")
 
 @dataclass
 class EpisodeState:
-    """The aircraft's pose during the mission and the stop it is flying; the
-    graph lives on the ``EpisodeWorld``."""
+    """The aircraft's pose during the mission; the graph lives on the
+    ``EpisodeWorld``."""
 
     pose_xy: tuple[float, float]
     altitude_m: float
-    step_idx: int = 0
 
 
 def make_perception(settings: Settings) -> SamDetectClient:
@@ -131,7 +130,6 @@ class Hydrated:
     """The search stack for one episode, built once by :func:`build_episode`
     for the bench and the flight mission alike."""
 
-    cfg: RunConfig
     state: EpisodeState
     assets: BlockAssets
     episode: CityNavEpisode
@@ -195,7 +193,6 @@ def build_episode(
     # separates them from the prebaked nodes.
     world.start(graph)
     return Hydrated(
-        cfg=cfg,
         state=state,
         assets=assets,
         episode=episode,

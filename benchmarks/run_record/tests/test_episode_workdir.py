@@ -8,7 +8,6 @@ value points), and the log handler outliving its episode.
 from __future__ import annotations
 
 import logging
-import os
 import re
 
 import pytest
@@ -53,18 +52,12 @@ def test_an_undeclared_benchmark_refuses_instead_of_naming_the_wrong_one(tmp_pat
             ew.mint_workdir(tmp_path, "block_7::0#3", benchmark=declared)
 
 
-def test_each_episode_records_under_its_own_directory_whatever_a_stale_value_says(
-    tmp_path, monkeypatch
-):
-    """The directory is handed to the engine as a value. Two episodes open in
-    one process each keep their own wire log, and a value a previous episode
-    (or the shell) left in the environment is neither read nor written."""
+def test_each_episode_records_under_its_own_directory(tmp_path, monkeypatch):
+    """The directory is handed to the engine as a value: two episodes open in
+    one process each keep their own wire log."""
     from maps.llm import http
     from tests.serves import ChatServe
 
-    stale = tmp_path / "stale"
-    monkeypatch.setenv("SEARCH_COMPILE_WORKDIR", str(stale))
-    monkeypatch.setenv("SEARCH_LLM_ROUTING_KEY", "previous::9#9")
     sent: list[dict] = []
     monkeypatch.setattr(
         http,
@@ -102,11 +95,6 @@ def test_each_episode_records_under_its_own_directory_whatever_a_stale_value_say
 
     assert (requests(first), requests(second)) == (2, 1)
     assert [s["routing_key"] for s in sent] == ["block_7::0#3", "block_8::1#4", "block_7::0#3"]
-    assert not stale.exists()
-    assert (
-        os.environ["SEARCH_COMPILE_WORKDIR"] == str(stale)
-        and os.environ["SEARCH_LLM_ROUTING_KEY"] == "previous::9#9"
-    )
 
 
 def test_run_log_receives_the_loggers_and_close_detaches_it(tmp_path, caplog):

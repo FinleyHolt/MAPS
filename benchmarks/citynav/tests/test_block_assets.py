@@ -41,7 +41,7 @@ def test_per_block_graph_has_no_cross_block_leakage():
     )
     ids = list(graph.nodes.keys())
     # The tags-only bake emits generic prior ids (road_0, building_3) with
-    # CityRefer provenance in tags — never city/block-namespaced ids.
+    # CityRefer provenance in tags, never city/block-namespaced ids.
     namespaced = [i for i in ids if "birmingham_block_" in i]
     assert namespaced == [], f"per-block bake leaked namespaced ids: {namespaced[:5]}"
     # Reasonable node count for one block (the smoke bake carries a

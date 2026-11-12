@@ -23,7 +23,7 @@ def _poly(x0, y0, x1, y1):
 
 
 _RECORDS = [
-    # a tag combination NO class table ever spoke for — kept regardless
+    # a tag combination NO class table ever spoke for, kept regardless
     ({"power": "generator", "osm_id": "w1"}, _poly(2, 2, 10, 10)),
     ({"amenity": "parking", "osm_id": "w2"}, _poly(12, 2, 20, 10)),
     (
@@ -31,7 +31,7 @@ _RECORDS = [
         {"type": "LineString", "coordinates": [[0, 20], [40, 20]]},
     ),
     ({"tourism": "artwork", "osm_id": "n1"}, {"type": "Point", "coordinates": [30, 30]}),
-    # outside the window: rasterizes to no cell — the ONE exclusion
+    # outside the window: rasterizes to no cell, the ONE exclusion
     ({"building": "yes", "osm_id": "w4"}, _poly(200, 200, 210, 210)),
 ]
 
@@ -46,7 +46,7 @@ def _bake(tmp_path):
 
 def test_every_in_window_geometry_is_kept_with_its_tags_and_nothing_minted(tmp_path):
     rows, _meta, graph = _bake(tmp_path)
-    # 4 in-window records kept — including the classifier-orphan tags —
+    # 4 in-window records kept (the classifier-orphan tags among them),
     # exactly 1 excluded, and ONLY for no-geometry-in-window.
     by_id = {e["osm_id"]: e for e in rows}
     assert set(by_id) == {"w1", "w2", "w3", "n1"}, by_id

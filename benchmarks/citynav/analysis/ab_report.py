@@ -132,7 +132,7 @@ def comparability_issues(prov_a: dict, prov_b: dict) -> tuple[list[str], list[st
     code, config, served model and reasoning effort (unset reads as
     blank), which an A/B is meant to vary; compared only where both sides
     recorded them, and waived by ``--allow-provenance-mismatch``. A side whose
-    resumes ran other code is an ``varied`` mismatch on its own."""
+    resumes ran other code is a ``varied`` mismatch on its own."""
     fatal: list[str] = []
     ga, gb = _ground_truth_keys(prov_a), _ground_truth_keys(prov_b)
     for key, label in (

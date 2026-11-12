@@ -76,7 +76,7 @@ def test_provenance_records_no_constant():
 
 
 def test_absent_varied_provenance_does_not_invent_a_mismatch():
-    """An old run without a recorded model or sha still baselines a code A/B."""
+    """A run that records no model, commit or config sha still baselines a code A/B."""
     a = _prov()
     del a["git_commit"], a["served_model"], a["config_sha256"]
     fatal, varied = comparability_issues(a, _prov())

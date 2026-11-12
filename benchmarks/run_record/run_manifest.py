@@ -41,8 +41,8 @@ RUN_ENV_FLAGS = (
     # Unset flies at the serve's default, which is its own run.
     "SEARCH_SAMPLING_REASONING_EFFORT",
 )
-# Set keys under these prefixes join the stamp the same way (compaction
-# budgets change reasoning behavior).
+# Set keys under these prefixes join the stamp the same way
+# (SEARCH_COMPACT_TOKENIZER_NAME, the tokenizer a run counts its tokens with).
 RUN_ENV_PREFIXES = ("SEARCH_COMPACT_",)
 
 # The ambient env the manifest records when set: the run flags, the vars that

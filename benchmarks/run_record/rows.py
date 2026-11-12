@@ -1,4 +1,4 @@
-"""Which attempt is an episode's result — one definition, every reader.
+"""Which attempt is an episode's result: one definition, every reader.
 
 A run's ledger ``<run>/episodes.jsonl`` holds one flat row per ATTEMPT,
 appended when it lands; ``workdir`` is the attempt's directory relative to

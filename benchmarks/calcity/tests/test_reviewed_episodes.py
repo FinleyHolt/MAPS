@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 import os
 
+import pytest
+
 from benchmarks.calcity.data_prep import reviewed
 from benchmarks.calcity.data_prep.reviewed import reviewed_episode_ids
 from benchmarks.calcity.paths import calcity_bench
@@ -110,3 +112,11 @@ def test_every_reviewed_row_names_its_intel_quality_or_none():
         None: 411,
     }
     assert {r.get("intel_quality") for r in rows} == {"G", "M", "P", None}
+
+
+def test_help_prints_the_usage_and_no_ids(capsys):
+    with pytest.raises(SystemExit) as exit_:
+        reviewed.main(["--help"])
+    out = capsys.readouterr().out
+    assert exit_.value.code == 0
+    assert out.startswith("usage: ") and "calcity::" not in out

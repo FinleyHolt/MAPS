@@ -44,6 +44,18 @@ OUTCOMES = {
 }
 
 
+@pytest.fixture
+def bench_data(tmp_path, monkeypatch) -> Path:
+    """A CityNav data root holding what ``assert_available`` checks: the splits
+    directory and the object catalog."""
+    root = tmp_path / "citynav"
+    (root / "data" / "citynav").mkdir(parents=True)
+    (root / "data" / "cityrefer").mkdir(parents=True)
+    (root / "data" / "cityrefer" / "objects.json").write_text("{}")
+    monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(root))
+    return root
+
+
 def _infra(i: int, cause: str = "no_prediction_unclassified", **extra) -> dict:
     return {"episode_id": f"ep{i}", "worker_id": 0, "status": "infra", "error": cause, **extra}
 
@@ -297,7 +309,7 @@ def test_a_second_run_into_a_held_root_is_refused(driver, tmp_path, monkeypatch)
 
 @pytest.mark.parametrize("dry", [[], ["--dry-run"]])
 def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(
-    dry, tmp_path, monkeypatch, capsys
+    dry, tmp_path, monkeypatch, capsys, bench_data
 ) -> None:
     from benchmarks.bench import BAKE_OUTPUT_SUFFIXES
     from maps.llm import endpoint_spec
@@ -410,7 +422,7 @@ _INTERRUPTED = (
     "    print('flying', flush=True)\n"
     "    time.sleep(60)\n"
     "d.worker_loop = fly\n"
-    "d.run()\n"
+    "sys.exit(d.run())\n"
 )
 
 
@@ -422,7 +434,7 @@ def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
         [sys.executable, "-c", _INTERRUPTED, str(tmp_path)],
         cwd=REPO,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         text=True,
         preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
     )
@@ -431,7 +443,9 @@ def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
         assert next(flying) and next(flying)
         time.sleep(0.5)  # the main thread is joining its first worker
         proc.send_signal(signal.SIGINT)
-        assert proc.wait(timeout=10) != 0
+        assert proc.wait(timeout=10) == 130
+        assert "Traceback" not in proc.stderr.read()
+        assert "interrupted" in (tmp_path / "driver.log").read_text()
     finally:
         proc.kill()
         proc.wait()
@@ -616,7 +630,7 @@ def test_an_allowlist_that_cannot_be_read_is_refused_fatal(driver, tmp_path, mon
 
 @pytest.mark.parametrize("refusal", ["split", "allowlist", "partial", "empty"])
 def test_a_refused_selection_exits_2_before_discovery_and_any_out_root(
-    refusal, tmp_path, monkeypatch, capsys
+    refusal, tmp_path, monkeypatch, capsys, bench_data
 ) -> None:
     """A bad selection is refused as the dry run refuses it: no serve asked, no root made, no lock taken."""
     from maps.llm import endpoint_spec
@@ -681,7 +695,9 @@ def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(
 
 
 @pytest.mark.parametrize("refusal", ["split", "allowlist", "partial", "empty"])
-def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypatch, capsys) -> None:
+def test_a_refused_dry_run_exits_2_with_no_out_root(
+    refusal, tmp_path, monkeypatch, capsys, bench_data
+) -> None:
     monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("a dry run flew"))
     if refusal != "split":
         monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
@@ -699,7 +715,7 @@ def test_a_refused_dry_run_exits_2_with_no_out_root(refusal, tmp_path, monkeypat
 
 
 def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch, capsys, bench_data
 ) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
     monkeypatch.setattr(bf, "_missing_block_assets", lambda bench, eps: [])
@@ -754,3 +770,41 @@ def test_each_worker_s_children_share_one_prompt_cache_key(driver, monkeypatch) 
         d._run_attempt(wid, "e::1#1")
     keys = [e["SEARCH_LLM_CACHE_KEY"] for e in envs]
     assert keys == [f"{d.out_root.name}/w0", f"{d.out_root.name}/w3", f"{d.out_root.name}/w3"]
+
+
+def test_a_bench_without_its_data_exits_2_with_its_recipe_before_any_out_root(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(tmp_path / "absent"))
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("flew without data"))
+    assert bf.main(["--out-root", str(tmp_path / "r")]) == 2
+    assert not (tmp_path / "r").exists()
+    err = capsys.readouterr().err
+    assert err.startswith("FATAL: CityNav data not found under ") and "setup.sh" in err
+    assert "Traceback" not in err
+
+
+def test_calcity_without_its_catalog_exits_2_with_its_recipe_before_any_out_root(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from benchmarks.calcity import bench_fullset as calcity_driver
+
+    monkeypatch.setenv("SEARCH_CALCITY_DATA", str(tmp_path / "absent"))
+    monkeypatch.setattr(sys, "argv", ["bench_fullset", "--out-root", str(tmp_path / "r")])
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("flew without data"))
+    assert calcity_driver.main() == 2
+    assert not (tmp_path / "r").exists()
+    err = capsys.readouterr().err
+    assert err.startswith("FATAL: Cal City data is incomplete under ")
+    assert "build_objects_json" in err and "objects.json" in err
+
+
+def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from benchmarks.citynav.run_benchmark import cli
+
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
+    assert cli.main(citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err

@@ -6,7 +6,7 @@ holds the town's developed core.
 Runtime frame
 -------------
 WGS84 -> UTM (zone 11N / EPSG:32611), then map into the CityNav task
-frame: local ``x`` increases east and local ``y`` increases north — the
+frame: local ``x`` increases east and local ``y`` increases north, the
 engine's one world frame. The south-west corner is ``(0, 0)`` and the
 north-east corner is ``(width_m, height_m)``, so geographic compass words
 in Cal City instructions align with the runtime's cardinals with no

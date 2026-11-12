@@ -1,7 +1,7 @@
 """Vacuity floor for the run manifest (derived tests fail open, so this one
 pins by name): the writer emits every required field NON-EMPTY on a stub run,
 the measured-identity fields exist under their exact names, secrets never
-appear, and re-entry semantics hold — an identical re-entry appends a resume,
+appear, and re-entry semantics hold: an identical re-entry appends a resume,
 an identity drift refuses.
 """
 
