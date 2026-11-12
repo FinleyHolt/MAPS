@@ -78,11 +78,17 @@ def dist(a, b) -> float:
     return math.hypot(bx - ax, by - ay)
 
 
-def bearing(a, b) -> float:
-    """Compass bearing of ``a -> b`` in degrees, 0 = north, clockwise."""
+def bearing_deg(a, b) -> float:
+    """Compass bearing of ``a -> b`` in degrees, 0 = north, clockwise, signed in [-180, 180]:
+    the one statement of the convention, so every flight model points at a target the same way."""
     ax, ay = _xy(a)
     bx, by = _xy(b)
-    return math.degrees(math.atan2(bx - ax, by - ay)) % 360.0
+    return math.degrees(math.atan2(bx - ax, by - ay))
+
+
+def bearing(a, b) -> float:
+    """Compass bearing of ``a -> b`` in degrees, 0 = north, clockwise."""
+    return bearing_deg(a, b) % 360.0
 
 
 def cardinal(a, b) -> str:

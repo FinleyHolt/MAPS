@@ -58,7 +58,7 @@ from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.perception.ortho.ground_level import GROUND_LEVEL
 from maps.perception.ortho.sensor_frame import footprint_m
-from maps.query.spatial_math import point_in_polygon
+from maps.query.spatial_math import bearing_deg, point_in_polygon
 from maps.settings import from_environ
 
 FT_PER_M = 1.0 / 0.3048
@@ -335,11 +335,6 @@ def _agl(
         if e.get("kind") == "waypoint" and e.get("altitudeAglMeters")
     ]
     return (statistics.median(asked), "waypoint altitude") if asked else (None, None)
-
-
-def bearing_deg(from_xy, to_xy) -> float:
-    """Compass bearing from ``from_xy`` to ``to_xy`` (0 = north, clockwise), signed."""
-    return math.degrees(math.atan2(to_xy[0] - from_xy[0], to_xy[1] - from_xy[1]))
 
 
 def first_leg_m(p, h: float, q, r: float) -> float | None:
