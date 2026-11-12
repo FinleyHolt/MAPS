@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 
 import pytest
 
@@ -16,7 +17,6 @@ from benchmarks import REPO_ROOT
 from benchmarks.citynav.paths import citynav_bench
 from benchmarks.run_record import run_manifest
 from benchmarks.run_record.episodes import MANIFEST_NAME
-from maps.llm import endpoint_spec as endpoint_spec_module
 from maps.llm.endpoint_spec import EndpointSpec
 
 STUB_SPEC = EndpointSpec(
@@ -39,13 +39,13 @@ def bake(monkeypatch, tmp_path):
 
 
 def _bench():
-    """CityNav as this test's environment describes it, read as an entry point reads it."""
-    return citynav_bench(os.environ)
+    """CityNav as this test's environment describes it, read as an entry point reads it,
+    flying the stub serve."""
+    return replace(citynav_bench(os.environ), endpoint_spec=STUB_SPEC)
 
 
 @pytest.fixture()
 def stub_run(monkeypatch, tmp_path, bake):
-    monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_REASONER_API_KEY", "sk-SECRET-NEVER-RECORDED")
     return run_manifest.build_manifest(
         bench=_bench(),
@@ -157,7 +157,6 @@ def test_a_missions_own_effort_replaces_the_arms_in_its_manifest(monkeypatch, tm
     ``search_env_flags`` records, since that is what its requests carried;
     a mission naming none leaves the arm's stamp, and no mission at all
     leaves no ``mission`` key."""
-    monkeypatch.setattr(endpoint_spec_module, "_SPEC", STUB_SPEC)
     monkeypatch.setenv("SEARCH_SAMPLING_REASONING_EFFORT", "0.99")
     common = dict(
         bench=_bench(),
@@ -270,3 +269,19 @@ def test_a_set_reasoner_timeout_is_recorded(monkeypatch):
 
     monkeypatch.setenv("SEARCH_REASONER_TIMEOUT_S", "240")
     assert RM._audited_env(_bench())["SEARCH_REASONER_TIMEOUT_S"] == "240"
+
+
+def test_install_endpoint_puts_the_discovered_spec_on_the_bench(monkeypatch, caplog):
+    """The bench an entry point flies carries the spec discovery found, logged once per discovery."""
+    from maps.llm import endpoint_spec
+    from maps.settings import Settings
+
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings: STUB_SPEC)
+    bench = citynav_bench({})
+    with caplog.at_level("INFO", logger="maps.llm.endpoint_spec"):
+        flying = run_manifest.install_endpoint(bench, Settings())
+    assert bench.endpoint_spec is None and flying.endpoint_spec is STUB_SPEC
+    assert [r.getMessage() for r in caplog.records] == [
+        "endpoint spec installed: model_id=stub-model max_model_len=32768 "
+        "input_budget=27648 max_output_tokens=4096 base_url=http://127.0.0.1:9/v1"
+    ]

@@ -81,7 +81,6 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
     discovery accepted."""
     from dataclasses import replace
 
-    from maps.llm import endpoint_spec as E
     from maps.mission.tests.fakes import TEST_SPEC
 
     asked: list[str] = []
@@ -99,8 +98,16 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
         asked.append(req.full_url)
         return _Answer()
 
+    served = {}
+
     def installed(base_url):
-        monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, base_url=base_url))
+        served["spec"] = replace(TEST_SPEC, base_url=base_url)
+
+    def flying() -> bf.Driver:
+        """A driver whose bench flies the spec last installed."""
+        d = driver()
+        d.bench = replace(d.bench, endpoint_spec=served["spec"])
+        return d
 
     monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
     monkeypatch.setenv(
@@ -108,19 +115,19 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
     )  # the gate asks the spec's URL
     installed("https://reasoner.example/serve/v1")
     monkeypatch.setenv("SEARCH_REASONER_MODELS_URL", "https://reasoner.example/catalog/models")
-    assert driver()._reasoner_answers()
+    assert flying()._reasoner_answers()
     monkeypatch.delenv("SEARCH_REASONER_MODELS_URL")
     installed("https://example.openai.azure.com/openai/v1")
-    assert driver()._reasoner_answers()
+    assert flying()._reasoner_answers()
     installed("http://127.0.0.1:8001/v1")
-    assert driver()._reasoner_answers()
+    assert flying()._reasoner_answers()
     assert asked == [
         "https://reasoner.example/catalog/models",
         "https://example.openai.azure.com/openai/v1/models",
         "http://127.0.0.1:8001/v1/models",
     ]
     installed("")  # an offline spec names no URL: a reasoner that does not answer
-    assert not driver()._reasoner_answers()
+    assert not flying()._reasoner_answers()
     bearers: list = []
     monkeypatch.setattr(
         bf.urllib.request,
@@ -129,7 +136,7 @@ def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypa
     )
     monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
     installed("http://127.0.0.1:8001/v1")
-    assert driver()._reasoner_answers() and bearers == [
+    assert flying()._reasoner_answers() and bearers == [
         "Bearer k"
     ]  # hosted endpoints auth the listing
 
@@ -550,12 +557,11 @@ def test_an_offline_run_launches_with_nothing_served(driver, monkeypatch) -> Non
     assert flown == ["ep0"]
 
 
-def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
+def test_the_sam_gate_asks_the_replicas_discovery_checked(driver, monkeypatch) -> None:
     """Any replica answering ``/health`` passes (the client steps off a dead one); none checked
     at discovery passes as discovery did; every replica down fails."""
     from dataclasses import replace
 
-    from maps.llm import endpoint_spec as E
     from maps.mission.tests.fakes import TEST_SPEC
 
     asked: list[str] = []
@@ -578,10 +584,13 @@ def test_the_sam_gate_asks_the_replicas_discovery_checked(monkeypatch) -> None:
         return _Answer()
 
     monkeypatch.setattr(bf.urllib.request, "urlopen", _open)
-    monkeypatch.setattr(E, "_SPEC", replace(TEST_SPEC, sam_urls=("http://a:8100", "http://b:8100")))
-    assert not bf.Driver._sam_answers()
+    d = driver()
+    d.bench = replace(
+        d.bench, endpoint_spec=replace(TEST_SPEC, sam_urls=("http://a:8100", "http://b:8100"))
+    )
+    assert not d._sam_answers()
     up.add("http://b:8100/health")
-    assert bf.Driver._sam_answers()
+    assert d._sam_answers()
     assert asked == [
         "http://a:8100/health",
         "http://b:8100/health",

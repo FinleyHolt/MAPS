@@ -8,6 +8,7 @@ import time
 from fastapi.testclient import TestClient
 
 from benchmarks.flight.tests.test_twin_mission import calcity, serves  # noqa: F401  (fixtures)
+from maps.llm import endpoint_spec
 from station import serve
 
 
@@ -20,7 +21,7 @@ def _until(what, timeout_s: float = 120.0):
     raise AssertionError("the station never got there")
 
 
-def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # noqa: F811
+def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monkeypatch):  # noqa: F811
     station = serve.Station(
         bench=calcity.bench,
         config="configs/calcity.yaml",
@@ -50,6 +51,13 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
         lambda: s if (s := station.seat_state())["status"] == "awaiting_tasking" else None
     )
     assert parked["reply_text"] == "The church is under the last flight."
+
+    def refused(settings):
+        raise RuntimeError("asked a serve")
+
+    # A seat answers from the serve it flies, asking no discovery.
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", refused)
+    assert client.get("/reasoner").json()["model"] == "inkling-small"
     waypoint = next(r for r in parked["transcript"] if r["kind"] == "waypoint")
     assert waypoint["n"] == 1 and math.isfinite(waypoint["lon"]) and waypoint["coverageFloor"] > 0
     leg = next(r for r in parked["transcript"] if r["kind"] == "leg" and r.get("area"))

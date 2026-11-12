@@ -1,6 +1,6 @@
 """The run's record: ``run_manifest.json`` at the run root, written before the first episode flies.
 
-Identity fields are measured (served model and window off the installed
+Identity fields are measured (served model and window off the bench's
 endpoint spec, the bake off its bytes) and the config is inlined. The flight
 mission writes one at the sortie root and one per mission workdir
 (``mission=``). Write-once: a resume into the same root is refused on
@@ -13,6 +13,7 @@ import hashlib
 import json
 import socket
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -114,16 +115,20 @@ class EndpointRefused(RuntimeError):
 
 def install_endpoint(bench: Bench, settings: Settings) -> Bench:
     """Discover the serve ``settings`` names (the engine's, built from
-    ``bench.environ``), install its spec and settle the effort, once per
-    process before any inference or perception call. Returns ``bench`` with
-    the effort settled (:func:`settle_effort`). Raises
-    :class:`EndpointRefused`."""
+    ``bench.environ``) before any inference or perception call: ``bench``
+    flying it (:func:`with_endpoint`). Raises :class:`EndpointRefused`."""
     try:
         spec = endpoint_spec.discover_from_settings(settings)
     except endpoint_spec.EndpointDiscoveryError as exc:
         raise EndpointRefused(f"endpoint discovery failed: {exc}") from exc
-    endpoint_spec.install_spec(spec)
-    return settle_effort(bench)
+    return with_endpoint(bench, spec)
+
+
+def with_endpoint(bench: Bench, spec: endpoint_spec.EndpointSpec) -> Bench:
+    """``bench`` flying the discovered ``spec``, logged, with the effort
+    settled (:func:`settle_effort`)."""
+    endpoint_spec.log_spec(spec)
+    return settle_effort(replace(bench, endpoint_spec=spec))
 
 
 def _audited_env(bench: Bench) -> dict:
@@ -132,9 +137,8 @@ def _audited_env(bench: Bench) -> dict:
     return {k: env[k] for k in sorted(keys - set(SECRET_ENV)) if k in env}
 
 
-def _endpoint_section() -> dict:
-    """The installed endpoint spec's served facts; raises if none is installed."""
-    s = endpoint_spec.spec()
+def _endpoint_section(s: endpoint_spec.EndpointSpec) -> dict:
+    """The served facts of the spec a run flies."""
     return {
         "base_url": s.base_url,
         "model_id": s.model_id,
@@ -174,7 +178,7 @@ def build_manifest(
     arm = arm_env_stamp(bench)
     if mission is not None and mission.get("reasoning_effort") is not None:
         arm[_EFFORT] = str(mission["reasoning_effort"])
-    endpoints = _endpoint_section()
+    endpoints = _endpoint_section(bench.endpoint_spec)
     prov = repo_provenance(
         config_path=str(config_path),
         split=split,

@@ -194,6 +194,8 @@ class BenchMission:
             bench = install_endpoint(self.bench, settings)
             if "SEARCH_BENCHMARK_NAME" not in bench.environ:
                 bench = bench.with_environ({"SEARCH_BENCHMARK_NAME": bench.name})
+            # The seat holds the serve it flies: the station's /reasoner answers from it.
+            self.bench = bench
             emit_or_verify(
                 self.sortie,
                 build_manifest(

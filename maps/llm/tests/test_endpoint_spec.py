@@ -22,7 +22,6 @@ from maps.llm import endpoint_spec as E
 from maps.llm.endpoint_spec import (
     EndpointDiscoveryError,
     EndpointOverride,
-    EndpointSpec,
     discover,
     parse_override,
 )
@@ -55,9 +54,8 @@ def _fake_http(monkeypatch, table: dict):
 
 @pytest.fixture(autouse=True)
 def _isolated(monkeypatch):
-    """Fresh install slot + a stub tokenizer check per test (the
-    tokenizer-failure test overrides the stub with the real path)."""
-    monkeypatch.setattr(E, "_SPEC", None)
+    """A stub tokenizer check per test (the tokenizer-failure test overrides
+    the stub with the real path)."""
     monkeypatch.setattr(E, "_require_tokenizer", lambda m, override="": f"tok:{m}")
     yield
 
@@ -306,44 +304,6 @@ def test_parse_override():
         parse_override("no-window")
     with pytest.raises(EndpointDiscoveryError, match="malformed"):
         parse_override(":123")
-
-
-# --------------------------------------------------------------------------- #
-# install_spec / spec: one authority, install-once-or-abort                   #
-# --------------------------------------------------------------------------- #
-
-
-def _spec(**kw) -> EndpointSpec:
-    base = dict(
-        base_url=_URL_A,
-        model_id="gemma4-e4b",
-        max_model_len=262144,
-        tokenizer_name="Qwen/Qwen3.6-35B-A3B",
-        max_output_tokens=40000,
-    )
-    base.update(kw)
-    return EndpointSpec(**base)
-
-
-def test_spec_before_install_raises():
-    with pytest.raises(EndpointDiscoveryError, match="no EndpointSpec installed"):
-        E.spec()
-    assert E.spec_installed() is False
-
-
-def test_install_then_read_back():
-    s = _spec()
-    E.install_spec(s)
-    assert E.spec() is s
-    assert E.spec_installed() is True
-    E.install_spec(_spec())  # equal fields: idempotent
-    assert E.spec() is s
-
-
-def test_divergent_second_install_raises():
-    E.install_spec(_spec())
-    with pytest.raises(EndpointDiscoveryError, match="divergent"):
-        E.install_spec(_spec(max_model_len=131072))
 
 
 def test_a_transport_failure_is_asked_again_before_it_is_a_verdict(monkeypatch):

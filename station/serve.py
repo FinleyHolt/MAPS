@@ -936,12 +936,13 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
 
     @app.get("/reasoner")
     def reasoner() -> dict[str, Any]:
-        """The served model and the reasoning efforts its card takes; ``model`` is None while no reasoner answers."""
+        """The served model and the reasoning efforts its card takes: the seat's serve, else
+        the one discovery finds; ``model`` is None while no reasoner answers."""
+        seat = station.mission
         try:
             model = (
-                endpoint_spec.spec()
-                if endpoint_spec.spec_installed()
-                else endpoint_spec.discover_from_settings(from_environ(station.bench.environ))
+                (seat.bench.endpoint_spec if seat is not None else None)
+                or endpoint_spec.discover_from_settings(from_environ(station.bench.environ))
             ).model_id
         except Exception as exc:
             return {"model": None, "efforts": [], "error": str(exc)}

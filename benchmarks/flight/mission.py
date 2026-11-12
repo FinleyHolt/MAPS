@@ -51,7 +51,7 @@ from benchmarks.run_record.run_manifest import (
     arm_env_stamp,
     build_manifest,
     emit_or_verify,
-    settle_effort,
+    with_endpoint,
 )
 from maps.llm import endpoint_spec
 from maps.llm.http import CallCanceled
@@ -345,12 +345,11 @@ class Mission:
         engine = self.bench.engine
         try:
             self._set(STATE_FLYING)
-            endpoint_spec.install_spec(
-                endpoint_spec.discover_from_settings(from_environ(self.bench.environ))
+            self.bench = with_endpoint(
+                self.bench, endpoint_spec.discover_from_settings(from_environ(self.bench.environ))
             )
-            self.bench = settle_effort(self.bench)
             if self.reasoning_effort:
-                check_effort(endpoint_spec.spec().model_id, self.reasoning_effort)
+                check_effort(self.bench.endpoint_spec.model_id, self.reasoning_effort)
             self._write_manifests()
 
             h = hydrate(
@@ -564,7 +563,7 @@ class Mission:
                 "git_commit": self.git_commit,
                 "git_dirty": self.git_dirty,
                 "served_model": (
-                    endpoint_spec.spec().model_id if endpoint_spec.spec_installed() else None
+                    self.bench.endpoint_spec.model_id if self.bench.endpoint_spec else None
                 ),
                 "bake_sha256": self.bench.bake_sha256(),
             },

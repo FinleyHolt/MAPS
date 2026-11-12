@@ -35,7 +35,7 @@ from benchmarks.run_record import episodes
 from benchmarks.run_record import rows as _rows
 from benchmarks.run_record import run_manifest as _rm
 from benchmarks.run_record.config import resolve_config
-from maps.llm.endpoint_spec import models_url, spec
+from maps.llm.endpoint_spec import models_url
 from maps.settings import from_environ
 
 REPO = Path(__file__).resolve().parents[2]
@@ -321,15 +321,15 @@ class Driver:
         )
 
     def _reasoner_answers(self) -> bool:
-        """True when the installed spec's reasoner answers its model list, at
+        """True when the bench's spec's reasoner answers its model list, at
         the URL discovery read it from (``endpoint_spec.models_url``), asked
         with the chat path's bearer (hosted endpoints auth ``/v1/models``)."""
-        return _answers(models_url(spec().base_url, self.endpoint), self.endpoint.reasoner_api_key)
+        spec = self.bench.endpoint_spec
+        return _answers(models_url(spec.base_url, self.endpoint), self.endpoint.reasoner_api_key)
 
-    @staticmethod
-    def _sam_answers() -> bool:
+    def _sam_answers(self) -> bool:
         """True when a SAM replica discovery health-checked answers ``/health``."""
-        return any(_answers(f"{url}/health") for url in spec().sam_urls)
+        return any(_answers(f"{url}/health") for url in self.bench.endpoint_spec.sam_urls)
 
     def _wait_for_reasoner(self) -> bool:
         return self._wait_for("reasoner", self._reasoner_answers)
@@ -780,7 +780,7 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     """The driver's CLI, for ``bench``; unset, for the bench the environment selects."""
-    # Discovery logs at INFO (the installed spec); without a config it reaches no console.
+    # Discovery logs at INFO (the spec the run flies); without a config it reaches no console.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
