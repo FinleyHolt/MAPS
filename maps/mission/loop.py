@@ -54,7 +54,7 @@ log = logging.getLogger(__name__)
 
 
 # The bench's transient-error budget; a live mission (a reasoner with a
-# cancel_event) waits for the arm until it answers or the operator stops.
+# cancel_event) waits for the endpoint until it answers or the operator stops.
 _MAX_TRANSIENT = 6
 
 

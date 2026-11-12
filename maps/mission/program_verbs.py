@@ -10,12 +10,7 @@ from maps.library.result_handles import program_dedup_key, program_reads, run_op
 from maps.mission.acks import Rejections, add_note, live_counts
 from maps.mission.surface_state import Progress, Surface
 from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS
-from maps.query.text_match import (
-    FUZZY_THRESHOLD as _FUZZY_FLOOR,
-)
-from maps.query.text_match import (
-    unmatched_query_tokens as _unmatched_query_tokens,
-)
+from maps.query.text_match import FUZZY_THRESHOLD, unmatched_query_tokens
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
 # re-render of an identical result is loop fuel). Every path that can mint a
@@ -185,7 +180,7 @@ class Programs:
             rows = [
                 r
                 for r in rows
-                if r.get("name_match") is None or float(r["name_match"]) >= _FUZZY_FLOOR
+                if r.get("name_match") is None or float(r["name_match"]) >= FUZZY_THRESHOLD
             ]
             what = q.lower()
             if not rows:
@@ -215,7 +210,7 @@ class Programs:
                     ),
                 )
             # A token no matched row carries gets a note, never a refusal.
-            dead = _unmatched_query_tokens(q.lower(), rows)
+            dead = unmatched_query_tokens(q.lower(), rows)
             if dead:
                 notes.append(
                     f'no row matching "{what}" carries '

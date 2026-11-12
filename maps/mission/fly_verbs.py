@@ -135,7 +135,7 @@ class Flights:
         # The flight's new rows (the surface diff) mint a handle; a pass
         # mints once, around the whole of itself.
         if cover is None:
-            _handle, note = self._mint_rows(fids_before, "flight")
+            _, note = self._mint_rows(fids_before, "flight")
             if note is not None:
                 report["new_rows"] = note
         self.surface.preflight = False

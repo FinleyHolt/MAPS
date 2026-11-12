@@ -34,30 +34,40 @@ def _legend_line(entries: list[dict]) -> str:
 def _window_caption(c: dict) -> str:
     """One rendered image's window: span, orientation and world extent."""
     # A rotated image states its true up; only an unrotated one says north-up.
-    _fu = c.get("frame_up")
-    if isinstance(_fu, (list, tuple)) and len(_fu) == 2:
-        _fn = str(c.get("frame_note") or "").strip()
-        _deg = round(up_bearing_deg(_fu)) % 360
-        _up = (
-            f"up {_deg} deg"
-            + (f" -- {_fn}" if _fn else "")
+    frame_up = c.get("frame_up")
+    if isinstance(frame_up, (list, tuple)) and len(frame_up) == 2:
+        frame_note = str(c.get("frame_note") or "").strip()
+        bearing = round(up_bearing_deg(frame_up)) % 360
+        orientation = (
+            f"up {bearing} deg"
+            + (f" -- {frame_note}" if frame_note else "")
             # a turn off the square leaves the frame's corners empty
-            + ("; its corners lie outside the turned window and render dark" if _deg % 90 else "")
+            + (
+                "; its corners lie outside the turned window and render dark"
+                if bearing % 90
+                else ""
+            )
         )
     else:
-        _up = "north-up"
-    _cm = c.get("context_m")
-    _span = f" ({_cm:g} m window; {_up})" if isinstance(_cm, (int, float)) else f" ({_up})"
+        orientation = "north-up"
+    context_m = c.get("context_m")
+    caption = (
+        f" ({context_m:g} m window; {orientation})"
+        if isinstance(context_m, (int, float))
+        else f" ({orientation})"
+    )
     # The numeric extent makes a pixel position back-projectable.
-    _ww = c.get("world_window")
-    if isinstance(_ww, (list, tuple)) and len(_ww) == 4:
-        _span += f" [x {_ww[0]:g}..{_ww[2]:g}, y {_ww[1]:g}..{_ww[3]:g}]"
-    return _span
+    window = c.get("world_window")
+    if isinstance(window, (list, tuple)) and len(window) == 4:
+        caption += f" [x {window[0]:g}..{window[2]:g}, y {window[1]:g}..{window[3]:g}]"
+    return caption
 
 
 def look_vision_text(crops: list[dict]) -> str:
-    # The digit -> fid binding lives in this text legend; color is left to
-    # the pixels, and each crop line states its delivered span.
+    """The look message's text: the crops' detail and order, and each crop's
+    window, badge legend (the digit -> fid binding; colour is left to the
+    pixels) and what of its subject and marks the image does not show."""
+
     def _subject(c):
         return str(
             c.get("center_fid")
@@ -73,24 +83,26 @@ def look_vision_text(crops: list[dict]) -> str:
 
     order = ", ".join(_subject(c) for c in crops)
     # GSD from the crop records themselves, never a literal.
-    _gsds = {round(float(c["gsd_m_per_px"]), 2) for c in crops if c.get("gsd_m_per_px")}
-    _gsd = (
-        f"{min(_gsds):.2f} m/px"
-        if len(_gsds) == 1
-        else f"{min(_gsds):.2f}-{max(_gsds):.2f} m/px"
-        if _gsds
+    gsds = {round(float(c["gsd_m_per_px"]), 2) for c in crops if c.get("gsd_m_per_px")}
+    gsd = (
+        f"{min(gsds):.2f} m/px"
+        if len(gsds) == 1
+        else f"{min(gsds):.2f}-{max(gsds):.2f} m/px"
+        if gsds
         else "m/px unknown"
     )
     # Resampling adds pixels, never detail: the source imagery's GSD bounds
     # what the caption may claim.
-    _src = max((float(c["source_gsd_m"]) for c in crops if c.get("source_gsd_m")), default=0.0)
-    _detail = (
-        f"{_gsd}; detail limited by {_src:.2f} m source imagery"
-        if _src and _src > min(_gsds or {_src})
-        else _gsd
+    source_gsd = max(
+        (float(c["source_gsd_m"]) for c in crops if c.get("source_gsd_m")), default=0.0
     )
-    base = (
-        f"Overhead crops ({_detail}, nadir), one per fid "
+    detail = (
+        f"{gsd}; detail limited by {source_gsd:.2f} m source imagery"
+        if source_gsd and source_gsd > min(gsds or {source_gsd})
+        else gsd
+    )
+    text = (
+        f"Overhead crops ({detail}, nadir), one per fid "
         f"in order: [{order}]. White outline marks, numbered badges; "
         f"per-crop badge legend. Altitude does NOT change crop detail: "
         f"a crop is a digital crop of imagery already captured, so "
@@ -102,47 +114,47 @@ def look_vision_text(crops: list[dict]) -> str:
         if not entries:
             continue
         line = _legend_line(entries)
-        _span = _window_caption(c)
+        window = _window_caption(c)
         # The pixel grid, per image: with the window it converts what the
         # model sees into a world point.
-        _px = c.get("side_px")
-        if _px:
-            _span += f" ({int(_px)}x{int(_px)} px)"
-        base += f"\n  crop {k + 1}{_span}: {line}"
-        _sxy = c.get("world_xy") or ["?", "?"]
+        side_px = c.get("side_px")
+        if side_px:
+            window += f" ({int(side_px)}x{int(side_px)} px)"
+        text += f"\n  crop {k + 1}{window}: {line}"
+        subject_xy = c.get("world_xy") or ["?", "?"]
         if c.get("subject_in_window") is False:
-            _sw = c.get("world_window") or ["?"] * 4
-            base += (
+            bounds = c.get("world_window") or ["?"] * 4
+            text += (
                 " ; WARNING: neither this fid's position "
-                f"[{_sxy[0]}, {_sxy[1]}] nor any part of its "
+                f"[{subject_xy[0]}, {subject_xy[1]}] nor any part of its "
                 f"footprint is inside this crop's window "
-                f"[x {_sw[0]}..{_sw[2]}, y {_sw[1]}..{_sw[3]}] "
+                f"[x {bounds[0]}..{bounds[2]}, y {bounds[1]}..{bounds[3]}] "
                 "(edge-clamped or off-tile) -- the subject is not "
                 "in this image; do not read color or arrangement "
                 "from it (the position and window bounds here say "
                 "where it sits relative to this crop)."
             )
         elif c.get("subject_centroid_in_window") is False:
-            base += (
+            text += (
                 " ; note: this fid's recorded position "
-                f"[{_sxy[0]}, {_sxy[1]}] is outside this crop's "
+                f"[{subject_xy[0]}, {subject_xy[1]}] is outside this crop's "
                 "window (edge-clamped at the tile boundary), but "
                 "part of its footprint IS in frame -- the outline/"
                 "circle marks the in-frame part."
             )
         elif c.get("subject_on_data") is False and c.get("source") == "run":
-            base += (
+            text += (
                 " ; WARNING: this fid's position "
-                f"[{_sxy[0]}, {_sxy[1]}] is inside this crop's "
+                f"[{subject_xy[0]}, {subject_xy[1]}] is inside this crop's "
                 "window but this run has not imaged that ground yet "
                 "-- the black region is unobserved, not a dark "
                 "object; its color/shape cannot be read until a leg "
                 "flies over it (go_to it, then look)."
             )
         elif c.get("subject_on_data") is False:
-            base += (
+            text += (
                 " ; WARNING: this fid's position "
-                f"[{_sxy[0]}, {_sxy[1]}] is inside this crop's "
+                f"[{subject_xy[0]}, {subject_xy[1]}] is inside this crop's "
                 "window but past the map raster's DATA edge -- "
                 "the black region is off-raster no-data, not a "
                 "dark object; the raster holds no pixels for "
@@ -150,18 +162,22 @@ def look_vision_text(crops: list[dict]) -> str:
                 "read from this image."
             )
         # A subject bigger than the frame: state its size, the ink is cut.
-        _ext = c.get("subject_extent_m")
-        if c.get("subject_outline_cut") and isinstance(_ext, (list, tuple)):
-            base += (
-                f" ; note: this fid's footprint is {_ext[0]:g} x "
-                f"{_ext[1]:g} m and runs past this window, so the "
+        extent = c.get("subject_extent_m")
+        if c.get("subject_outline_cut") and isinstance(extent, (list, tuple)):
+            text += (
+                f" ; note: this fid's footprint is {extent[0]:g} x "
+                f"{extent[1]:g} m and runs past this window, so the "
                 "outline marks only where its edge crosses the frame "
                 "-- not a shape you can read whole here. Its size is "
                 "the fact; the ink is a fragment."
             )
-        _vf = c.get("window_valid_frac")
-        if isinstance(_vf, (int, float)) and _vf < 0.99 and c.get("subject_on_data") is not False:
-            base += f" ; note: {round((1 - _vf) * 100)}% of this " + (
+        valid_frac = c.get("window_valid_frac")
+        if (
+            isinstance(valid_frac, (int, float))
+            and valid_frac < 0.99
+            and c.get("subject_on_data") is not False
+        ):
+            text += f" ; note: {round((1 - valid_frac) * 100)}% of this " + (
                 "window is ground this run has not imaged yet "
                 "(black there = unobserved, not shadow)."
                 if c.get("source") == "run"
@@ -169,27 +185,27 @@ def look_vision_text(crops: list[dict]) -> str:
                 "(black there = no data, not shadow)."
             )
         if int(c.get("marks_dropped") or 0):
-            base += (
+            text += (
                 f" ; +{int(c['marks_dropped'])} requested mark(s) "
                 f"not drawn (badge cap {LOOK_MAX_BADGES}/crop -- "
                 f"request them in another look())"
             )
-        _mof = c.get("marks_out_of_view") or []
-        if _mof:
-            base += (
-                f" ; requested mark(s) {', '.join(_mof)} lie "
+        out_of_view = c.get("marks_out_of_view") or []
+        if out_of_view:
+            text += (
+                f" ; requested mark(s) {', '.join(out_of_view)} lie "
                 f"outside this crop's frame and are NOT drawn "
                 f"(absent from the image, not unlabeled)"
             )
-        _muf = c.get("marks_unbadged_in_frame") or []
-        if _muf:
-            base += (
-                f" ; requested mark(s) {', '.join(_muf)}: part of "
+        unbadged = c.get("marks_unbadged_in_frame") or []
+        if unbadged:
+            text += (
+                f" ; requested mark(s) {', '.join(unbadged)}: part of "
                 f"the footprint IS in frame but the centroid badge "
                 f"position falls outside it, so no badge is drawn "
                 f"(in the image, unlabeled)"
             )
-    return base
+    return text
 
 
 def rounded_xy(p) -> list[float] | None:
@@ -236,56 +252,56 @@ def crop_requests(
     # refused.
     uncovered: list[str] = []
 
-    def _covered(_xy) -> bool:
+    def covered(point) -> bool:
         if not (isinstance(obs_minor_m, (int, float)) and obs_minor_m > 0):
             return True
-        _r = float(obs_minor_m) / 2.0
-        return any(math.dist(_xy, _p) <= _r for _p in stops.values())
+        reach = float(obs_minor_m) / 2.0
+        return any(math.dist(point, stop) <= reach for stop in stops.values())
 
     # A handle is a legal mark (a street is its ways), each row placed by
-    # its own token (a terminus by its xy, its end_N being per call).
-    own: dict = {}
-    for t in marks or []:
-        if HANDLE_RE.fullmatch(t):
-            for _r in carry.read(t) or []:
-                if _r.get("fid"):
-                    own.setdefault(str(_r["fid"]), row_token(_r))
+    # its token_of token (a terminus by its xy, its end_N being per call).
+    token_of: dict = {}
+    for mark in marks or []:
+        if HANDLE_RE.fullmatch(mark):
+            for handle_row in carry.read(mark) or []:
+                if handle_row.get("fid"):
+                    token_of.setdefault(str(handle_row["fid"]), row_token(handle_row))
         else:
-            own.setdefault(t, t)
-    for _i, f in enumerate(fids):
+            token_of.setdefault(mark, mark)
+    for i, fid in enumerate(fids):
         if len(requests) >= LOOK_MAX_CROPS:
             ref_notes.append(
                 f"only the first {LOOK_MAX_CROPS} crops of this call "
-                f"rendered ({len(fids) - _i} item(s) dropped); the "
+                f"rendered ({len(fids) - i} item(s) dropped); the "
                 f"server takes {LOOK_MAX_CROPS} images per request. "
                 "Ask for the rest in another look()."
             )
             break
-        f = f.strip()
-        if not f:
+        fid = fid.strip()
+        if not fid:
             continue
         mark_list: list[dict] = []
-        for mf in dict.fromkeys([*own, f]):
-            xy = resolve(own.get(mf, mf))
+        for mark_fid in dict.fromkeys([*token_of, fid]):
+            xy = resolve(token_of.get(mark_fid, mark_fid))
             if xy is None:
-                skipped.append(mf)
+                skipped.append(mark_fid)
                 continue
-            mark_list.append(_mark(mf, rows.get(mf), xy, mf == f))
-        row = rows.get(f)
-        xy = resolve(f)
+            mark_list.append(_mark(mark_fid, rows.get(mark_fid), xy, mark_fid == fid))
+        row = rows.get(fid)
+        xy = resolve(fid)
         if xy is None:
-            skipped.append(f)
+            skipped.append(fid)
             continue
-        if not _covered(xy):
-            uncovered.append(f)
+        if not covered(xy):
+            uncovered.append(fid)
             continue
         requests.append(
             {
-                "center_fid": f,
+                "center_fid": fid,
                 "center_xy": xy,
                 "frame_up": frame[0],
                 "frame_note": frame[1],
-                "center_label": look_label(f, row, is_target=True),
+                "center_label": look_label(fid, row, is_target=True),
                 "center_boundary": look_outline(row),
                 "marks": mark_list,
                 # The observation extent: the renderer's window ceiling.
@@ -293,10 +309,10 @@ def crop_requests(
             }
         )
     if uncovered:
-        _u = ", ".join(uncovered[:6])
-        _um = f", +{len(uncovered) - 6} more" if len(uncovered) > 6 else ""
+        named = ", ".join(uncovered[:6])
+        more = f", +{len(uncovered) - 6} more" if len(uncovered) > 6 else ""
         ref_notes.append(
-            f"{len(uncovered)} crop(s) not rendered ({_u}{_um}): that ground "
+            f"{len(uncovered)} crop(s) not rendered ({named}{more}): that ground "
             f"lies more than {float(obs_minor_m) / 2.0:.0f} m from every "
             "flown stop, outside the middle of every frame so far. A look "
             "shows ground within that reach of a stop"
@@ -309,7 +325,7 @@ def map_spec(
     around: str, mark_rows: list, *, rows: dict, resolve, frame: tuple
 ) -> tuple[dict | None, list[str]]:
     """One show_map's render spec centred on ``around``, its marks the rows
-    ``mark_rows``, each placed by its own token: ``(spec or None,
+    ``mark_rows``, each placed by its token_of token: ``(spec or None,
     skipped_fids)``."""
     cxy = resolve(around)
     if cxy is None:
@@ -324,58 +340,59 @@ def map_spec(
         else f"[{cxy[0]}, {cxy[1]}]"
     )
     marks: list[dict] = []
-    own = {}
+    token_of = {}
     for r in mark_rows:
-        own.setdefault(str(r["fid"]), row_token(r))
-    for mf, tok in own.items():
-        row = rows.get(mf)
+        token_of.setdefault(str(r["fid"]), row_token(r))
+    for fid, tok in token_of.items():
+        row = rows.get(fid)
         # a computed row (a crossing, a terminus) is no surface row: its
         # point is what its token names
         xy = look_xy(row) if row is not None else resolve(tok)
         if xy is None:
-            skipped.append(mf)
+            skipped.append(fid)
             continue
-        marks.append(_mark(mf, row, xy, False))
+        marks.append(_mark(fid, row, xy, False))
     # The frame follows the request: the marks' and centre's extent derives
     # the zoom, and a bare point gets the floor. A window that would miss
     # the centre frames the centre alone, so the map is centred there.
-    _cb = look_outline(rows.get(center_fid)) if center_fid else None
+    center_boundary = look_outline(rows.get(center_fid)) if center_fid else None
 
-    def _pts(srcs) -> list:
+    def points_of(srcs) -> list:
         return [
-            [float(_b[0]), float(_b[1])]
-            for _src in srcs
-            for _b in (_src or [])
-            if isinstance(_b, (list, tuple)) and len(_b) >= 2
+            [float(point[0]), float(point[1])]
+            for source in srcs
+            for point in (source or [])
+            if isinstance(point, (list, tuple)) and len(point) >= 2
         ]
 
-    def _frame(pts) -> tuple:
+    def frame_of(pts) -> tuple:
         if not pts:
             return cxy, _MAP_FRAME_MIN_M
-        _fx = [p[0] for p in pts]
-        _fy = [p[1] for p in pts]
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
         return (
-            [round((min(_fx) + max(_fx)) / 2.0, 2), round((min(_fy) + max(_fy)) / 2.0, 2)],
+            [round((min(xs) + max(xs)) / 2.0, 2), round((min(ys) + max(ys)) / 2.0, 2)],
             max(
-                (max(_fx) - min(_fx)) * _MAP_FRAME_MARGIN,
-                (max(_fy) - min(_fy)) * _MAP_FRAME_MARGIN,
+                (max(xs) - min(xs)) * _MAP_FRAME_MARGIN,
+                (max(ys) - min(ys)) * _MAP_FRAME_MARGIN,
                 _MAP_FRAME_MIN_M,
             ),
         )
 
-    _own = _pts([_cb])
-    fxy, span = _frame(
-        _pts([[m["xy"] for m in marks if m.get("xy")]] + [m.get("boundary") for m in marks]) + _own
+    center_points = points_of([center_boundary])
+    fxy, span = frame_of(
+        points_of([[m["xy"] for m in marks if m.get("xy")]] + [m.get("boundary") for m in marks])
+        + center_points
     )
     if max(abs(cxy[0] - fxy[0]), abs(cxy[1] - fxy[1])) > span / 2.0:
-        fxy, span = _frame(_own)
+        fxy, span = frame_of(center_points)
     cxy = fxy
     spec: dict = {
         "center_xy": cxy,
         "context_m": round(float(span), 2),
         "center_fid": center_fid,
         "center_label": center_label,
-        "center_boundary": _cb,
+        "center_boundary": center_boundary,
         "marks": marks,
     }
     frame_up, frame_note = frame
@@ -413,9 +430,9 @@ def map_features(ctx) -> list[dict]:
             "provenance": ("detected" if prov == "detected" else "prebaked"),
         }
         # The name rides beside the class label the palette keys off.
-        _nm = tags.get("name")
-        if _nm:
-            feat["name"] = str(_nm)
+        name = tags.get("name")
+        if name:
+            feat["name"] = str(name)
         if kind == "road":
             cl = node.centerline
             if cl is not None and len(cl) >= 2:
@@ -434,16 +451,16 @@ def map_vision_text(maps: list[dict]) -> str:
     """The map message's text: what the picture is (world state, not
     imagery), and each map's window, badge legend and class colors."""
     order = ", ".join(str(m.get("center_fid") or "map") for m in maps)
-    _dn = (
+    detections = (
         "Detections are the bright class-colored shapes, each carrying a "
         "small dN chip -- dN is detection fid detected_N, so any "
         "one of them can be named. "
     )
-    base = (
+    text = (
         f"World-state maps -- the survey plus everything detected "
         f"so far, not a photograph: light-gray lines are roads, "
         f"tan shapes are surveyed buildings, muted regions are "
-        f"landuse by class, dark is nothing recorded. {_dn}"
+        f"landuse by class, dark is nothing recorded. {detections}"
         f"Surveyed buildings big enough "
         f"at this zoom carry their own NNNN chip of bare digits "
         f"(a map around a fid or with marks chips only its centre "
@@ -459,7 +476,7 @@ def map_vision_text(maps: list[dict]) -> str:
         f"shows those; what has been DETECTED is drawn where it "
         f"was found. To see what is actually there, "
     )
-    base += (
+    text += (
         "fly and look: "
         "the camera is the live check on this. One per item in "
         f"order: [{order}]. A white outline or ring marks the "
@@ -467,29 +484,29 @@ def map_vision_text(maps: list[dict]) -> str:
     )
     for k, m in enumerate(maps):
         line = " ; ".join(f"{e['label']} ({e['role']})" for e in m.get("legend") or [])
-        _span = _window_caption(m)
-        base += f"\n  map {k + 1}{_span}: {line}" if line else f"\n  map {k + 1}{_span}:"
-        _cls = m.get("classes") or []
-        if _cls:
-            base += " ; classes: " + ", ".join(f"{c['label']}={c['color']}" for c in _cls)
+        window = _window_caption(m)
+        text += f"\n  map {k + 1}{window}: {line}" if line else f"\n  map {k + 1}{window}:"
+        classes = m.get("classes") or []
+        if classes:
+            text += " ; classes: " + ", ".join(f"{c['label']}={c['color']}" for c in classes)
         elif m.get("features_painted") == 0:
-            base += (
+            text += (
                 " ; NOTE: 0 recorded features in this window -- "
                 "the dark image is an empty window, not a broken "
                 "render; re-center the map where rows are."
             )
-        _pu = int(m.get("priors_unchipped") or 0)
-        if _pu:
-            base += (
+        unchipped = int(m.get("priors_unchipped") or 0)
+        if unchipped:
+            text += (
                 f" ; {int(m.get('priors_chipped') or 0)} "
-                f"buildings carry fid chips, {_pu} more in frame "
+                f"buildings carry fid chips, {unchipped} more in frame "
                 f"are unchipped at this zoom -- narrow the window "
                 f"to id them"
             )
-        _mof = m.get("marks_out_of_view") or []
-        if _mof:
-            base += (
-                f" ; requested mark(s) {', '.join(_mof)} lie "
+        out_of_view = m.get("marks_out_of_view") or []
+        if out_of_view:
+            text += (
+                f" ; requested mark(s) {', '.join(out_of_view)} lie "
                 f"outside this map's window and are NOT drawn"
             )
-    return base
+    return text

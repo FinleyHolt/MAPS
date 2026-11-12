@@ -68,8 +68,8 @@ def cover_items(accepted: list, said, *, spec, spacing, rows: dict, covered: set
         items = [dict(item)]
     # A named feature is often many segments: the note names those no
     # pass has covered.
-    covered.add(str(tok))
-    name = (rows.get(str(tok)) or {}).get("name")
+    covered.add(tok)
+    name = (rows.get(tok) or {}).get("name")
     if name:
         note += _uncovered_segments(name, rows, covered)
     return items, note, tok, 1
@@ -117,8 +117,7 @@ def _cover_set_items(accepted: list, said, *, spec, spacing, rows: dict, covered
                 }
             )
     # greedy nearest-endpoint chain, seeded from where the drone is
-    cur = pose_xy
-    cur = [float(cur[0]), float(cur[1])] if cur else None
+    cur = [float(pose_xy[0]), float(pose_xy[1])] if pose_xy else None
     chained: list[dict] = []
     rest = list(members)
     while rest:
@@ -180,14 +179,14 @@ def _cover_set_items(accepted: list, said, *, spec, spacing, rows: dict, covered
     else:
         note = f"covered {reached:.0%} of {subject}'s {total:.0f} m."
 
-    def pct(m):
+    def share_reached(m):
         if not m["walk"] or spacing is None:
             return 1.0
         return min(1.0, m["kept"] * spacing / m["walk"])
 
-    mm = ", ".join(f"{m['tok']} {pct(m):.0%}" for m in chained[:8])
-    mm_more = f", +{len(chained) - 8} more" if len(chained) > 8 else ""
-    note = f"{note} ({mm}{mm_more})"
+    per_member = ", ".join(f"{m['tok']} {share_reached(m):.0%}" for m in chained[:8])
+    more = f", +{len(chained) - 8} more" if len(chained) > 8 else ""
+    note = f"{note} ({per_member}{more})"
     for m in chained:
         covered.add(m["tok"])
     names = {(rows.get(m["tok"]) or {}).get("name") for m in chained}
