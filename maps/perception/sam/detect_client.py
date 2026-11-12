@@ -13,8 +13,8 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
+import httpx
 import numpy as np
-import requests
 
 from maps.perception.detection import DetectedObject
 from maps.perception.geometry.geolocate import (
@@ -90,7 +90,7 @@ def _post_segment(json_body: dict, endpoint: Endpoint = Endpoint()) -> dict | No
     has not seen fail (any replica once all have) after ``SEGMENT_BACKOFF_S``,
     and a read timeout drops the replica that still holds the request. Each
     attempt opens a fresh connection: a pooled socket the tunnel reaped during
-    a long compile reads as half-open (urllib3#944, #2751).
+    a long compile reads as half-open.
     """
     deadline = time.monotonic() + SEGMENT_DEADLINE_S
     eps = sam_endpoints(endpoint)
@@ -102,25 +102,22 @@ def _post_segment(json_body: dict, endpoint: Endpoint = Endpoint()) -> dict | No
             break
         url = _pick_url([u for u in eps if u not in failed] or eps)
         try:
-            with requests.Session() as s:
-                resp = s.post(
-                    url + "/segment",
-                    json=json_body,
-                    headers={"Connection": "close"},
-                    timeout=(
-                        min(SEGMENT_CONNECT_TIMEOUT_S, left),
-                        min(SEGMENT_READ_TIMEOUT_S, left),
-                    ),
-                )
-                payload = resp.json() if resp.ok else None
-        except requests.exceptions.ReadTimeout as e:
+            resp = httpx.post(
+                url + "/segment",
+                json=json_body,
+                timeout=httpx.Timeout(
+                    min(SEGMENT_READ_TIMEOUT_S, left), connect=min(SEGMENT_CONNECT_TIMEOUT_S, left)
+                ),
+            )
+            payload = resp.json() if resp.is_success else None
+        except httpx.ReadTimeout as e:
             last = e
             eps = [u for u in eps if u != url]
             continue
-        except requests.exceptions.RequestException as e:
+        except (httpx.HTTPError, ValueError) as e:
             last = e
         else:
-            if resp.ok:
+            if resp.is_success:
                 return payload
             if resp.status_code < 500 and resp.status_code not in _SAM_TRANSIENT_CLIENT_STATUSES:
                 raise SamRequestRefused(

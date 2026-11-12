@@ -258,7 +258,7 @@ def test_offline_without_pin_raises():
 
 
 def test_offline_with_pin_skips_probes(monkeypatch):
-    _fake_http(monkeypatch, {})  # every URL unreachable — must not matter
+    _fake_http(monkeypatch, {})  # every URL unreachable, which must not matter
     s = discover(
         _URL_A,
         ("http://sam:8772",),

@@ -2,7 +2,7 @@
 
 ``summarize`` is the ONLY producer of ``metrics.llm``, which readers use
 instead of walking transcripts. These pin turn and token counts, the
-declared and called tools, and the thing a naive scan gets wrong — a
+declared and called tools, and the thing a naive scan gets wrong: a
 request that never got a response.
 """
 
@@ -15,7 +15,7 @@ from maps.llm import flight_summary
 
 # The tool schema a run sends: two tools, and ``analyze`` discriminating its
 # program ops on a const ``op``. ``find`` declares a ``color`` arg the model
-# may or may not ever supply — the question the arg table exists to answer.
+# may or may not ever supply, the question the arg table exists to answer.
 PARAMS = {
     "model": "qwen",
     "tools": [

@@ -23,7 +23,7 @@ CARDS: dict[str, dict[str, Any]] = {
     # model card): a permissive envelope, not a card-derived one. The
     # template's `reasoning_effort` ({none:0.0, minimal:0.1, low:0.2,
     # medium:0.7, high:0.9, max:0.99}, or a raw float in [0.0, 0.99])
-    # DEFAULTS TO 0.9 when the request omits it — the expensive end.
+    # DEFAULTS TO 0.9 when the request omits it, the expensive end.
     "inkling-small": {
         "tokenizer": "thinkingmachines/Inkling-Small-NVFP4",
         "top_p": 0.95,
@@ -35,7 +35,7 @@ CARDS: dict[str, dict[str, Any]] = {
     # GatedDeltaNet + Qwen Sparse Attention, n-gram PLE, one MTP layer). Its
     # generation_config.json states temperature 1.0, top_p 0.95, top_k 20 and
     # nothing else; temperature is the caller's argument. The template's
-    # `reasoning_effort` DEFAULTS TO xhigh — the expensive end. The serve's
+    # `reasoning_effort` DEFAULTS TO xhigh, the expensive end. The serve's
     # --tool-call-parser qwen3_coder owns enforcement.
     "qwen38-flash-next-nvfp4": {
         "tokenizer": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
@@ -46,9 +46,10 @@ CARDS: dict[str, dict[str, Any]] = {
     # Gemma 4, the family envelope (top_p 0.95, top_k 64) on every size,
     # `-it` throughout: the base checkpoints carry no chat template and no
     # tool-call surface. The GGUF alias is the same weights served by
-    # llama.cpp (flown aboard); a serve is not a model, and a run has to be
-    # able to name which one it got. The bench NVFP4 serve adds presence
-    # penalty 1.0, which breaks the 26B's thinking loops. Its template
+    # llama.cpp (the flights' serve, off board over the datalink); a serve is
+    # not a model, and a run has to be able to name which one it got. The
+    # bench NVFP4 serve adds presence penalty 1.0, which breaks the 26B's
+    # thinking loops. Its template
     # (chat_template.jinja of the NVFP4 build) reads `enable_thinking` and
     # never `reasoning_effort`: false leaves `<|think|>` out of the system turn
     # and prefills an empty thought channel, so `none` is that switch. The
@@ -156,7 +157,7 @@ def check_effort(model_id: str | None, raw: str) -> None:
 def speaks_openai(model_id: str | None) -> bool:
     """Whether the served model takes OpenAI's chat-completions contract
     rather than a self-hosted chat template's. A name with no card reads
-    False, so a reader of an old record never raises on it."""
+    False, so any record's model name reads without raising."""
     return CARDS.get((model_id or "").strip().lower(), {}).get("wire") == "openai"
 
 

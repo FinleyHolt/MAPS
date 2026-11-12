@@ -45,8 +45,6 @@ class Endpoint:
     image_store_url: str = ""
     #: ``SAM_SERVER_URL``; None is unset (``DEFAULT_SAM_SERVER_URL``).
     sam_server_url: str | None = None
-    #: ``SAM_VIDEO_SERVER_URL``, the flown station's name for the segmenter, refused when it stands alone.
-    sam_video_server_url: str | None = None
     #: ``SEARCH_LLM_CACHE_KEY``, a bench worker's prompt-cache key; None when unset or blank.
     cache_key: str | None = None
 
@@ -58,10 +56,7 @@ def sam_endpoints(endpoint: Endpoint = Endpoint()) -> list[str]:
     """The segmenter's replica base URLs from the run's ``SAM_SERVER_URL``
     (``endpoint.sam_server_url``; a comma list spreads calls across
     replicas), the one resolver the client and endpoint discovery read. Unset
-    is the default replica; set but blank, or unset beside the flown
-    station's ``SAM_VIDEO_SERVER_URL``, raises ``ValueError``."""
-    if endpoint.sam_server_url is None and endpoint.sam_video_server_url:
-        raise ValueError("SAM_VIDEO_SERVER_URL is not read; set SAM_SERVER_URL")
+    is the default replica; set but blank raises ``ValueError``."""
     raw = DEFAULT_SAM_SERVER_URL if endpoint.sam_server_url is None else endpoint.sam_server_url
     eps = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
     if not eps:
@@ -105,7 +100,6 @@ def from_environ(environ: Mapping[str, str]) -> Settings:
             tokenizer_name=get("SEARCH_COMPACT_TOKENIZER_NAME", "").strip(),
             image_store_url=get(IMAGE_STORE_ENV, "").strip().rstrip("/"),
             sam_server_url=get("SAM_SERVER_URL"),
-            sam_video_server_url=get("SAM_VIDEO_SERVER_URL"),
             cache_key=get("SEARCH_LLM_CACHE_KEY") or None,
         ),
         sampling=Sampling(reasoning_effort=get("SEARCH_SAMPLING_REASONING_EFFORT", "")),

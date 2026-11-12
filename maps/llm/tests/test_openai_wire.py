@@ -230,7 +230,7 @@ def test_descriptions_that_fit_pass_untouched() -> None:
 
 
 def test_a_self_hosted_card_keeps_its_shape(monkeypatch) -> None:
-    """The narrowing is the OpenAI card's alone: Inkling's body is what it always was."""
+    """The narrowing is the OpenAI card's alone: Inkling's body keeps its self-hosted shape."""
     sent = _serve(monkeypatch)
     r = Reasoner(endpoint_spec=TEST_SPEC, seed=7)
     r.append_user("find the truck")

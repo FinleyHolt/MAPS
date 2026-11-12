@@ -107,7 +107,7 @@ def test_a_caller_cannot_write_into_another_callers_copy(monkeypatch):
 
 def test_the_already_encoded_branch_is_never_cached(monkeypatch):
     """``VETextEncoder.forward`` also accepts a 3-tuple of tensors meaning
-    'already encoded' — which is the shape this cache PRODUCES. Caching that
+    'already encoded', which is the shape this cache PRODUCES. Caching that
     branch would let the two feed each other."""
     _, enc = _wrapped(monkeypatch)
     pre = (torch.zeros(1), torch.zeros(1, 2), torch.zeros(1, 3))

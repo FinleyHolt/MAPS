@@ -4,6 +4,8 @@ Responses endpoint, and fails an effort whose second turn reads no prompt-cache 
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -163,3 +165,10 @@ def test_an_offline_preflight_asks_no_model_listing_and_still_flies_both_turns(
     monkeypatch.delenv("SEARCH_ENDPOINT_OFFLINE")
     assert endpoint_preflight.main(["--effort", "xhigh"]) == 0
     assert server.gets == ["/openai/v1/models"]
+
+
+def test_importing_endpoint_preflight_leaves_transformers_unloaded():
+    """Importing the preflight leaves transformers unloaded: its CLI starts without the import cost."""
+    probe = "import sys, maps.mission.endpoint_preflight; print('transformers' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False"
