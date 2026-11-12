@@ -1,20 +1,22 @@
 # Differences from the engine as flown
 
-MAPS flew 87 closed-loop runs on a C-12 over California City, CA, from 11 to
-18 September 2026, at about 3,000 to 6,500 ft above ground. The reasoner ran
-off board over the datalink; SAM 3.1 ran on board. The method half of the
-station that flew them is [`benchmarks/flight`](../benchmarks/flight/README.md).
+This page lists every place where this repository's engine differs from the
+engine as flown. MAPS flew 87 closed-loop runs on a C-12 over California
+City, CA, from 11 to 18 September 2026, at about 3,000 to 6,500 ft above
+ground. The reasoner ran off board over the datalink; SAM 3.1 ran on board.
+The method half of the station that flew them is
+[`benchmarks/flight`](../benchmarks/flight/README.md).
 
 The flown engine is this repository's engine. The station served the same
-text (system turn, tool schema and every string the model reads) on every
-run from 14 September on. The engine here differs from the flown one in the
-places this table lists, the served-text changes among them. Each row states
-what this repository does and what the flown engine did in its place.
+text (system turn, tool schema, and every string the model reads) on every
+run from 14 September on. Each row of the table states what this repository
+does and what the flown engine did in its place, the served-text changes
+among them.
 
-Module names in the table are paths in this repository
-([`maps/README.md`](../maps/README.md) maps the engine). The closed-loop
-measures the table refers to are in [`experiments.md`](experiments.md); the
-flight harness, the twin and the replay tiers are in [`flight.md`](flight.md).
+Module names in the table are paths in this repository. For the engine's
+modules, see [`maps/README.md`](../maps/README.md). For the closed-loop
+measures, see [`experiments.md`](experiments.md). For the flight harness, the
+twin, and the replay tiers, see [`flight.md`](flight.md).
 
 | Difference | Effect on a flight |
 |---|---|

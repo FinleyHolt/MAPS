@@ -1,115 +1,106 @@
 # Data
 
-The two benches read their data from directories you prepare. This
+This page covers the data each bench reads and how to prepare it. This
 repository ships the OpenStreetMap caches the CityNav bake reads and the Cal
-City corpus; it ships no imagery.
+City corpus. It ships no imagery.
 
-| Bench | Ships here | You supply |
+| Bench | Shipped | You supply |
 |---|---|---|
-| CityNav | The OSM cache per city (`tiles/osm_cache/`), the vendored rasterizer. | The SensatUrban point clouds, from their authors' form. The annotations are fetched by script. |
-| Cal City | The corpus (`benchmarks/calcity/data/calcity.json`) and the reviewed targets' positions. | The block's map raster and an OSM bundle over it. For the flight harness, a DEM from public USGS data. |
+| CityNav | OSM cache per city (`tiles/osm_cache/`), the vendored rasterizer. | SensatUrban point clouds, from their authors' form. A script fetches the annotations. |
+| Cal City | Corpus (`benchmarks/calcity/data/calcity.json`) and the reviewed targets' positions. | The block's map raster and an OSM bundle over it. For the flight harness, a DEM from public USGS data. |
 
 ## CityNav
 
-CityNav's episodes, the CityRefer catalog and the SensatUrban point clouds
-come from their upstream sources; this repository redistributes none of them.
-One step is yours: SensatUrban's authors release the point clouds through a
-[form](https://github.com/QingyongHu/SensatUrban) (name, email, institution;
-no account), whose confirmation page links `data_release.zip`. Its terms are
-CC BY-NC-SA, non-commercial research use, and no redistribution, which is
-why this repository ships no point cloud, raster or picture made from one.
-Then one command fetches the annotations, rasterizes the blocks and bakes
-the prior:
+CityNav's episodes, the CityRefer catalog, and the SensatUrban point clouds
+come from their upstream sources. This repository redistributes none of them.
 
-```sh
-export CITYNAV_ROOT=~/datasets/citynav-arxiv
-benchmarks/citynav/data_prep/setup.sh --sensaturban <data_release.zip>
-```
+1. Request the point clouds through the SensatUrban authors'
+   [form](https://github.com/QingyongHu/SensatUrban) (name, email,
+   institution; no account). Its confirmation page links `data_release.zip`.
+   The terms are CC BY-NC-SA, non-commercial research use, and no
+   redistribution, so this repository ships no point cloud, raster, or
+   picture made from one.
 
-`--sensaturban` takes the zip or its unpacked folder. Run with no argument,
-the script fetches the annotations and says what it is waiting for. It ends
-by naming the splits that are ready to fly and printing the bake's
-`bake_sha256`. Each step is skipped where its output is on disk, and the
-three scripts it runs stand alone (`fetch_data.sh`,
-`rasterize_citynav_native.sh`, `bake_tiles.sh`).
+2. Fetch the annotations, rasterize the blocks, and bake the prior:
 
-| Step | Writes | Notes |
-|---|---|---|
-| Annotations | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. |
-| Point clouds | `$CITYNAV_ROOT/raw_ply/{train,test}/<block>.ply` | Links the 34 block PLYs out of the SensatUrban release. |
-| Rasters | `$CITYNAV_ROOT/data/rgbd_upstream/<block>.{png,tif}` | Runs upstream's PDAL pipeline (vendored as `benchmarks/citynav/data_prep/_vendor_citynav_rasterize.py`) in an environment with `pdal`, `rasterio` and `pillow`. `RASTERIZE_PYTHON` names its interpreter; without one, a conda-family tool on `PATH` builds the `rasterize` environment. |
-| Bake | `tiles/citynav_2m_osmv3/` | Bakes every block with a raster from the city's shipped OSM cache, `tiles/osm_cache/<city>_osm_local.geojson`, on 2 m cells over the raster's extent. |
+   ```sh
+   export CITYNAV_ROOT=~/datasets/citynav-arxiv
+   benchmarks/citynav/data_prep/setup.sh --sensaturban <data_release.zip>
+   ```
 
-Every run manifest records the bake's `bake_sha256`; for these steps it is
+   `--sensaturban` takes the zip or its unpacked folder. With no argument,
+   the script fetches the annotations and says what it is waiting for. It
+   ends by naming the splits that are ready to fly and printing the bake's
+   `bake_sha256`.
+
+The script skips each step whose output is on disk. Its three scripts, in
+`benchmarks/citynav/data_prep/`, also run alone.
+
+| Step | Script | Output | Notes |
+|---|---|---|---|
+| Annotations | `fetch_data.sh` | `$CITYNAV_ROOT/data/citynav/*.json`, `$CITYNAV_ROOT/data/cityrefer/objects.json` | Clones `water-cookie/citynav-arxiv` and runs its downloader. |
+| Point clouds | `setup.sh --sensaturban` | `$CITYNAV_ROOT/raw_ply/{train,test}/<block>.ply` | Links the 34 block PLYs out of the SensatUrban release. |
+| Rasters | `rasterize_citynav_native.sh [--blocks <block>...]` | `$CITYNAV_ROOT/data/rgbd_upstream/<block>.{png,tif}` | Runs upstream's `rasterize.py` PDAL pipeline (vendored as `benchmarks/citynav/data_prep/_vendor_citynav_rasterize.py`) in an environment with `pdal`, `rasterio`, and `pillow`. `RASTERIZE_PYTHON` names its interpreter; without one, a conda-family tool on `PATH` builds the `rasterize` environment. |
+| Bake | `bake_tiles.sh` | `tiles/citynav_2m_osmv3/` | Bakes every block with a raster under `SEARCH_CITYNAV_RGBD_DIR` from the city's shipped OSM cache, `tiles/osm_cache/<city>_osm_local.geojson` (already in CityNav local XY), on 2 m cells over the raster's extent. |
+
+Every run manifest records the bake's `bake_sha256`. For these steps it is
 `e110df262470ff65275973628260928d73b2f13243087d63976a2308be74990a`, and
 `run_report` checks a root's stamp against the bake on disk.
 
-| Variable | Default | Names |
-|---|---|---|
-| `SEARCH_CITYNAV_DATA`, then `CITYNAV_ROOT` | `~/datasets/citynav-arxiv` | The upstream checkout. |
-| `SEARCH_CITYNAV_SPLITS` | `$CITYNAV_ROOT/data/citynav` | The episode split files. |
-| `SEARCH_CITYNAV_RGBD_DIR` | `$CITYNAV_ROOT/data/rgbd_upstream` | The nadir rasters the observation crops. |
-| `SEARCH_CITYNAV_TILES` | `tiles/citynav_2m_osmv3` | The OSM prior bake. |
-
-See [`benchmarks/citynav`](../benchmarks/citynav/README.md) for the bench
-itself.
+For the variables that relocate each part and for the bench itself, see
+[`benchmarks/citynav`](../benchmarks/citynav/README.md#prepare-the-data).
 
 ## Cal City
 
-The Cal City corpus (`benchmarks/calcity/data/calcity.json`, 4,573 episodes)
-and the positions of its reviewed targets
-(`benchmarks/calcity/data_prep/authoring/ground_truth.json`) ship with the
-repository. The bench needs two inputs this repository does not ship; you
-supply them:
+The corpus (`benchmarks/calcity/data/calcity.json`) and the positions of its
+reviewed targets (`benchmarks/calcity/data_prep/authoring/ground_truth.json`)
+ship with the repository. You supply two inputs:
 
-* The C-12 v6 map raster of the block, `<map>_rgb.tif`.
-* A world bundle of OpenStreetMap layers over the block (`osm/<layer>.geojson`
-  in WGS84 for each of the eight `bundle.OSM_LAYERS`), named by `CALCITY_BUNDLE`.
+- The C-12 v6 map raster of the block, `<map>_rgb.tif`.
+- A world bundle of OpenStreetMap layers over the block
+  (`osm/<layer>.geojson` in WGS84 for each of the eight `bundle.OSM_LAYERS`),
+  named by `CALCITY_BUNDLE`.
 
-Then build the catalog, the raster pair and the tile bake:
+To build the catalog, the raster pair, and the tile bake, and for the
+variables that relocate each part, see
+[`benchmarks/calcity`](../benchmarks/calcity/README.md#build-the-bench).
 
-```sh
-export CALCITY_BUNDLE=<bundle dir>
-python -m benchmarks.calcity.data_prep.build_objects_json
-python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <map>_rgb.tif
-python -m benchmarks.calcity.data_prep.bake_tiles
-```
-
-The raster pair lands in `<root>/data/rgbd_upstream`, `<root>` being
-`SEARCH_CALCITY_DATA` (default `~/datasets/calcity`), where the bench reads it.
-[`benchmarks/calcity`](../benchmarks/calcity/README.md) lists what each step
-writes and the variables that relocate each part.
-
-### The DEM the flight harness reads
+### Flight harness DEM
 
 The flight harness also reads the block's bare-earth surface, as the flown
-bake carried it: `calcity_dem.tif` beside `calcity_meta.json` under
-`SEARCH_CALCITY_TILES`, heights in metres NAVD88 on 10 m cells in EPSG:32611
-over the bake's bounds. It is public USGS 3DEP data (the 1/3 arc-second DEM,
-from The National Map), resampled onto the bake's frame, for example:
+bake carried it.
+
+| Property | Value |
+|---|---|
+| File | `calcity_dem.tif` beside `calcity_meta.json` under `SEARCH_CALCITY_TILES` |
+| Heights | Metres NAVD88 on 10 m cells in EPSG:32611 over the bake's bounds |
+| Source | Public USGS 3DEP data (the 1/3 arc-second DEM, from The National Map), resampled onto the bake's frame |
+
+For example:
 
 ```sh
 gdalwarp -t_srs EPSG:32611 -tr 10 10 -r bilinear -te <origin_e> <origin_n> <origin_e + x_max> <origin_n + y_max> \
   USGS_13_*.tif "$SEARCH_CALCITY_TILES/calcity_dem.tif"
 ```
 
-`origin_e` and `origin_n` are the bake's `georef` in `calcity_meta.json`,
-`x_max` and `y_max` its `bounds`. Without the file the flight places every
-frame over flat ground at the block's floor (`tile_georef.FLOOR_MSL_M`).
-The twin, the live source and the frame registration stand each frame on the
-DEM where it is present.
+`origin_e` and `origin_n` are the bake's `georef` in `calcity_meta.json`;
+`x_max` and `y_max` are its `bounds`. The twin, the live source, and the
+frame registration stand each frame on the DEM where it is present. Without
+the file, the flight places every frame over flat ground at the block's floor
+(`tile_georef.FLOOR_MSL_M`).
 
-## The example runs
+## Example runs
 
 `MAPS-example-runs.zip`, attached to the Releases page of this repository,
 holds recorded Cal City missions (each with its conversation, the pictures
-the model saw and its score), the bake they were flown on and a basemap
-picture. It needs none of the data above: the station opens it as it is. The
-top-level README's [Quickstart](../README.md#quickstart-review-recorded-searches) section gives the steps.
+the model saw, and its score), the bake they were flown on, and a basemap
+picture. It needs none of the data above: the station opens it as it is. For
+the steps, see the
+[Quickstart](../README.md#quickstart-review-recorded-searches).
 
-## The flight recordings
+## Flight recordings
 
-The camera recordings, sortie folders and analysts' adjudications of the
-closed-loop flight are not distributed. The replay tiers
+The camera recordings, sortie folders, and analysts' adjudications of the
+closed-loop flight aren't distributed. The replay tiers
 ([`flight.md`](flight.md)) and the closed-loop measures run on recordings of
 your own.
