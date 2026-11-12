@@ -1,16 +1,17 @@
 """Server-discovered endpoint facts, probed once at process start.
 
 :func:`discover` reads the served model and its window off
-``GET models_url(url)`` and checks the SAM replicas' ``/health``; any
+``GET models_url(url, endpoint)`` and checks the SAM replicas' ``/health``; any
 divergence raises :class:`EndpointDiscoveryError` naming the URL and what was
-seen. An entry point runs ``install_spec(discover_from_settings(settings))``; the reasoner
+seen. An entry point installs it once (``install_spec(discover_from_settings(settings))``,
+which ``run_manifest.install_endpoint`` wraps for the benches); the reasoner
 gets the spec injected, and other readers call :func:`spec`, which raises when
 nothing was installed.
 
 Explicit pins, read from the run's settings (``maps.settings``):
 
   ``SEARCH_ENDPOINT_OFFLINE=1``
-      Offline / replay: probe nothing; requires the override below.
+      Offline: probe nothing; requires the override below.
   ``SEARCH_ENDPOINT_SPEC_OVERRIDE=<model_id>:<max_model_len>``
       An endpoint serving several models or stating no window. A reachable
       self-hosted endpoint must still serve the pinned id. A hosted
@@ -141,8 +142,8 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
     """GET ``url`` (``bearer`` as an Authorization header) and parse the JSON
     body; raise EndpointUnreachable when nothing answers (no connection, a
     dropped one, a body cut short, a timeout, a 5xx or a 4xx the serve clears
-    on its own) and EndpointDiscoveryError, unasked again, on any other 4xx, a malformed URL
-    or a non-JSON body."""
+    on its own) and EndpointDiscoveryError, which no caller retries, on any other 4xx, a
+    malformed URL or a non-JSON body."""
     req = urllib.request.Request(url)
     if bearer:
         req.add_header("Authorization", f"Bearer {bearer}")
@@ -174,7 +175,7 @@ def _get_json(url: str, *, bearer: str | None = None) -> object:
         ) from exc
 
 
-def models_url(base_url: str, endpoint: Endpoint = Endpoint()) -> str:
+def models_url(base_url: str, endpoint: Endpoint) -> str:
     """Where the reasoner at ``base_url`` lists its served models, for
     discovery and every later probe alike: the run's
     ``SEARCH_REASONER_MODELS_URL`` (``endpoint.reasoner_models_url``), else
@@ -186,7 +187,7 @@ def models_url(base_url: str, endpoint: Endpoint = Endpoint()) -> str:
     return f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
 
 
-def probe_models(base_url: str, endpoint: Endpoint = Endpoint()) -> list[dict]:
+def probe_models(base_url: str, endpoint: Endpoint) -> list[dict]:
     """``GET models_url(base_url, endpoint)`` -> the ``data`` model list (non-empty)."""
     payload = _get_json(models_url(base_url, endpoint), bearer=endpoint.reasoner_api_key)
     data = payload.get("data") if isinstance(payload, dict) else None
@@ -199,7 +200,7 @@ def probe_models(base_url: str, endpoint: Endpoint = Endpoint()) -> list[dict]:
 
 
 def _facts_from_endpoint(
-    base_url: str, override: EndpointOverride | None, endpoint: Endpoint = Endpoint()
+    base_url: str, override: EndpointOverride | None, endpoint: Endpoint
 ) -> tuple[str, int]:
     """One endpoint's ``(model_id, max_model_len)``."""
     models = probe_models(base_url, endpoint)
@@ -360,7 +361,7 @@ def discover(
     ``base_url`` is one URL (a comma-list is refused: the engine balances its
     own replicas); ``sam_urls`` the replicas to health-check (none skips);
     ``offline=True`` probes nothing and requires ``override``. ``settings``
-    supplies the bearer and the models URL the probe uses, the arm's effort
+    supplies the bearer and the models URL the probe uses, the run's effort
     the served card is asked to take, and the tokenizer override.
     """
     url = str(base_url or "").strip().rstrip("/")
@@ -478,5 +479,6 @@ def spec() -> EndpointSpec:
 
 
 def spec_installed() -> bool:
-    """Whether a spec was installed (an LLM-free run records no model)."""
+    """Whether a spec was installed: a mission that failed before discovery
+    records no served model."""
     return _SPEC is not None

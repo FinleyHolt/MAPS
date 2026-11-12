@@ -22,10 +22,10 @@ from maps.library.block_ceilings import (
 )
 from maps.library.block_scan import (
     _LIBRARY_CALLS,
-    _MOVED_TO_METHOD,
     _SAFE_BUILTINS,
     _SAFE_MODULES,
     BLOCK_FILENAME,
+    METHOD_FOR_FREE_SPELLING,
     _instrument,
     _safe_import,
     _shadows,
@@ -95,12 +95,12 @@ class MissionNamespace(dict):
                     raise CodeError(f"there is no {k} on this surface -- did you mean {fix}?")
         # A free spelling of a method: the name stays undefined and the
         # refusal names the method.
-        _moved = difflib.get_close_matches(k, tuple(_MOVED_TO_METHOD), n=1, cutoff=0.8)
-        if k in _MOVED_TO_METHOD or _moved:
-            k = k if k in _MOVED_TO_METHOD else _moved[0]
+        near = difflib.get_close_matches(k, tuple(METHOD_FOR_FREE_SPELLING), n=1, cutoff=0.8)
+        if k in METHOD_FOR_FREE_SPELLING or near:
+            k = k if k in METHOD_FOR_FREE_SPELLING else near[0]
             raise CodeError(
                 f"there is no {k}() here -- did you mean "
-                f"{_MOVED_TO_METHOD[k]}? A cut and a sort are methods on the "
+                f"{METHOD_FOR_FREE_SPELLING[k]}? A cut and a sort are methods on the "
                 "rows they act on."
             )
         # The suggestion pool: the mission calls and the model's own bound
@@ -311,8 +311,12 @@ class MissionPython:
             # envelope folds to its hint under the model's name for it.
             keys = list(results)
             answer = keys[-1] if keys else None
-            _a = results.get(answer)
-            said = set(str(_a.get("hint") or "").splitlines() if isinstance(_a, dict) else ())
+            answer_env = results.get(answer)
+            said = set(
+                str(answer_env.get("hint") or "").splitlines()
+                if isinstance(answer_env, dict)
+                else ()
+            )
             folded = []
             for k in keys[:-1]:
                 if k in self.library.shown_whole:

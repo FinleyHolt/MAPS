@@ -184,7 +184,7 @@ def features_window_paint(features, *, tile_origin_xy, cell_size_m, grid_shape, 
     raster painted from feature cells (grid row 0 = south), largest prior
     first so the smallest claim wins a cell, detections last; and label ->
     ``{"cells", "kind"}``. Road cells are counted, not painted: roads are
-    stroked by :func:`render_map_from_spec`."""
+    stroked by :func:`_draw_priors`."""
     x0, y0, x1, y1 = (float(v) for v in window)
     cs = float(cell_size_m)
     gh, gw = int(grid_shape[0]), int(grid_shape[1])
@@ -259,14 +259,14 @@ class _View:
         )
 
 
-def _draw_priors(rgb, features, view: _View, span: float, _tan):
+def _draw_priors(rgb, features, view: _View, span: float, tan):
     """Feature ink under the overlay: road strokes and building contour
     fills. Returns the mask of surveyed building footprints and the chip
     candidates: each prior with fid digits and a point in the window, as
     (pixel centre x, y, digits, pixel bbox w, h, fid)."""
     x0, y0, x1, y1 = view.window
     W, H = view.size
-    _w2p, _in_window, _px_ring, _cell_quad = view.to_px, view.holds, view.px_ring, view.cell_quad
+    to_px, in_window, px_ring, cell_quad = view.to_px, view.holds, view.px_ring, view.cell_quad
     tile_origin_xy, cell_size_m = view.tile_origin_xy, view.cell_size_m
     px_per_m = float(W) / max(span, 1e-6)
     road_w = int(min(9, max(2, round(2.5 * px_per_m))))
@@ -296,20 +296,20 @@ def _draw_priors(rgb, features, view: _View, span: float, _tan):
                 ).any()
             ):
                 cv2.polylines(
-                    rgb, [_px_ring(P)], False, paint_color("", kind="road"), road_w, cv2.LINE_AA
+                    rgb, [px_ring(P)], False, paint_color("", kind="road"), road_w, cv2.LINE_AA
                 )
         elif kind == "building":
             pts = xy_list(f.get("contour"))
             if len(pts) >= 3:
-                cv2.fillPoly(bmask, [_px_ring(pts)], 1)
-                if any(_in_window(p, win_pad) for p in pts):
-                    cv2.fillPoly(rgb, [_px_ring(pts)], _tan, cv2.LINE_AA)
+                cv2.fillPoly(bmask, [px_ring(pts)], 1)
+                if any(in_window(p, win_pad) for p in pts):
+                    cv2.fillPoly(rgb, [px_ring(pts)], tan, cv2.LINE_AA)
             else:
                 for r, c in cells_of(f):
-                    cv2.fillPoly(bmask, [_cell_quad(r, c)], 1)
+                    cv2.fillPoly(bmask, [cell_quad(r, c)], 1)
             if not pts:  # cells-only building: chip geometry off its cells
                 pts = [cell_centre_xy(r, c, tile_origin_xy, cell_size_m) for r, c in cells_of(f)]
-            ppx = [_w2p(*p) for p in pts if _in_window(p)]
+            ppx = [to_px(*p) for p in pts if in_window(p)]
             m = re.search(r"(\d+)$", str(f.get("fid") or ""))
             if ppx and m:
                 xs, ys = [p[0] for p in ppx], [p[1] for p in ppx]
@@ -365,12 +365,12 @@ def _detections_in_view(features, view: _View) -> list[dict]:
     return det_entries
 
 
-def _draw_detections(rgb, det_entries, bmask, view: _View, _tan, glyphs) -> None:
+def _draw_detections(rgb, det_entries, bmask, view: _View, tan, glyphs) -> None:
     """Detections over the building fills: cell fill, tan hatch on a surveyed
     footprint (so the survey stays visible), and onto ``glyphs`` the dN chip
     and any stacked prior chip."""
     W, H = view.size
-    _w2p = view.to_px
+    to_px = view.to_px
     stripe = (np.add.outer(np.arange(H), np.arange(W)) // 4) % 3 == 0
     for de in det_entries:
         det_color = paint_color(de["label"], detected=True)
@@ -379,8 +379,8 @@ def _draw_detections(rgb, det_entries, bmask, view: _View, _tan, glyphs) -> None
         cv2.fillPoly(dmask, de["quads"], 1)
         overlap = (dmask > 0) & (bmask > 0)
         if overlap.any():
-            rgb[overlap & stripe] = _tan
-        cpx, cpy = _w2p(de["cx"], de["cy"])
+            rgb[overlap & stripe] = tan
+        cpx, cpy = to_px(de["cx"], de["cy"])
         pw, ph, th = _pill(de["chip"])
         by0 = _fit(cpy - ph / 2.0, ph, H)
         glyphs.append((_fit(cpx - pw / 2.0, pw, W), by0, pw, ph, de["chip"], th, det_color, None))
@@ -395,7 +395,7 @@ def _draw_detections(rgb, det_entries, bmask, view: _View, _tan, glyphs) -> None
                     ph2,
                     digits,
                     th2,
-                    _tan,
+                    tan,
                     sfid,
                 )
             )
@@ -404,48 +404,48 @@ def _draw_detections(rgb, det_entries, bmask, view: _View, _tan, glyphs) -> None
 def _road_names_in_view(features, view: _View) -> list:
     """Each named road in the window as ``(pixel x, pixel y, name)``, at the
     mean of its in-window points."""
-    _w2p, _in_window = view.to_px, view.holds
-    _name_cands: list = []
-    for _f in features:
-        if _f.get("kind") != "road" or not _f.get("name"):
+    to_px, in_window = view.to_px, view.holds
+    names: list = []
+    for feature in features:
+        if feature.get("kind") != "road" or not feature.get("name"):
             continue
-        _inw = [
-            (float(p_[0]), float(p_[1]))
-            for p_ in _f.get("centerline") or []
-            if _in_window((float(p_[0]), float(p_[1])))
+        inside = [
+            (float(p[0]), float(p[1]))
+            for p in feature.get("centerline") or []
+            if in_window((float(p[0]), float(p[1])))
         ]
-        if _inw:
-            _name_cands.append(
+        if inside:
+            names.append(
                 (
-                    *_w2p(
-                        sum(p_[0] for p_ in _inw) / len(_inw), sum(p_[1] for p_ in _inw) / len(_inw)
+                    *to_px(
+                        sum(p[0] for p in inside) / len(inside),
+                        sum(p[1] for p in inside) / len(inside),
                     ),
-                    str(_f["name"]),
+                    str(feature["name"]),
                 )
             )
-    return _name_cands
+    return names
 
 
-def _draw_names(rgb, _name_cands, placed, view: _View) -> None:
+def _draw_names(rgb, names, placed, view: _View) -> None:
     """One label per name, where it overlaps no box in ``placed``: an
     overlapping label is dropped rather than stacked."""
     W, H = view.size
-    _seen_names: set = set()
-    for _px, _py, _lab in _name_cands:
-        if _lab in _seen_names:
+    drawn: set = set()
+    for x, y, name in names:
+        if name in drawn:
             continue
-        _seen_names.add(_lab)
-        _txt = _lab[:22]
-        _pw, _ph, _th = _pill(_txt, 1)
-        _x0, _y0 = _fit(_px - _pw / 2.0, _pw, W), _fit(_py + 10, _ph, H)
-        _box = (_x0, _y0, _x0 + _pw, _y0 + _ph)
+        drawn.add(name)
+        text = name[:22]
+        pw, ph, th = _pill(text, 1)
+        x0, y0 = _fit(x - pw / 2.0, pw, W), _fit(y + 10, ph, H)
+        box = (x0, y0, x0 + pw, y0 + ph)
         if any(
-            not (_box[2] < q[0] or q[2] < _box[0] or _box[3] < q[1] or q[3] < _box[1])
-            for q in placed
+            not (box[2] < q[0] or q[2] < box[0] or box[3] < q[1] or q[3] < box[1]) for q in placed
         ):
             continue  # overlapping label: drop rather than stack
-        placed.append(_box)
-        _label(rgb, _txt, _x0, _y0, _pw, _ph, _th, (250, 250, 250), 1)
+        placed.append(box)
+        _label(rgb, text, x0, y0, pw, ph, th, (250, 250, 250), 1)
 
 
 def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m, grid_shape) -> dict | None:
@@ -473,59 +473,59 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m, grid_sh
     rgb = cv2.resize(cell_rgb, (MAP_MAX_PX, MAP_MAX_PX), interpolation=cv2.INTER_NEAREST)
     H, W = rgb.shape[:2]
 
-    _rotM, band_text = view_rotation(spec.get("frame_up"), W, H)
-    if _rotM is not None:
-        rgb = cv2.warpAffine(rgb, _rotM, (W, H), borderValue=_BG_BGR[::-1])
-    _w2p = pixel_mapper(x0, y1, span, span, W, H, _rotM)
-    _tan = paint_color("", kind="building")
-    view = _View((x0, y0, x1, y1), (W, H), _w2p, tile_origin_xy, cell_size_m)
+    rotation, band_text = view_rotation(spec.get("frame_up"), W, H)
+    if rotation is not None:
+        rgb = cv2.warpAffine(rgb, rotation, (W, H), borderValue=_BG_BGR[::-1])
+    to_px = pixel_mapper(x0, y1, span, span, W, H, rotation)
+    tan = paint_color("", kind="building")
+    view = _View((x0, y0, x1, y1), (W, H), to_px, tile_origin_xy, cell_size_m)
 
-    bmask, prior_chip_cands = _draw_priors(rgb, features, view, span, _tan)
+    bmask, prior_chip_cands = _draw_priors(rgb, features, view, span, tan)
 
     # Detections first: a prior chip under detection ink stacks below its dN.
     det_entries = _detections_in_view(features, view)
 
     # Chips queue as (x, y, pw, ph, text, th, fill, prior fid or None) and
     # draw after all ink.
-    _marked_fids = {str(mk.get("fid")) for mk in (spec.get("marks") or []) if mk.get("fid")}
+    marked_fids = {str(mark.get("fid")) for mark in (spec.get("marks") or []) if mark.get("fid")}
     if spec.get("center_fid"):
-        _marked_fids.add(str(spec.get("center_fid")))
+        marked_fids.add(str(spec.get("center_fid")))
     glyphs, n_prior_chips, n_prior_unchipped = _prior_chips(
-        rgb, prior_chip_cands, det_entries, _marked_fids, _tan
+        rgb, prior_chip_cands, det_entries, marked_fids, tan
     )
 
     # Detections last, over the building fills.
-    _draw_detections(rgb, det_entries, bmask, view, _tan, glyphs)
+    _draw_detections(rgb, det_entries, bmask, view, tan, glyphs)
 
     center_fid = str(spec.get("center_fid") or "")
     center_label = str(spec.get("center_label") or center_fid or "map center")
     legend = [{"label": center_label, "role": "center"}]
     neighbor_px: list = []
     neighbor_polys: list = []
-    _name_cands: list = []
-    shown, marks_out_of_view, _ = frame_marks(spec.get("marks"), center_fid, _w2p, W, H)
-    for mk, mfid, px, py in shown:
-        _mlab = str(mk.get("label") or "").strip()
-        if _mlab and _mlab != mfid:
-            _name_cands.append((px, py, _mlab))
+    names: list = []
+    shown, marks_out_of_view, _ = frame_marks(spec.get("marks"), center_fid, to_px, W, H)
+    for mark, mark_fid, px, py in shown:
+        mark_label = str(mark.get("label") or "").strip()
+        if mark_label and mark_label != mark_fid:
+            names.append((px, py, mark_label))
         # every mark is context: a map request names no target
         neighbor_px.append((px, py))
-        neighbor_polys.append(frame_arcs(mk.get("boundary"), _w2p, W, H))
-        legend.append({"label": str(mk.get("label") or mfid), "role": "context"})
+        neighbor_polys.append(frame_arcs(mark.get("boundary"), to_px, W, H))
+        legend.append({"label": str(mark.get("label") or mark_fid), "role": "context"})
 
     # Names: each mark's label and each named road in the window, drawn
     # after the chips so a name never takes an id's pixels.
-    _name_cands += _road_names_in_view(features, view)
+    names += _road_names_in_view(features, view)
 
     placed, undrawn = _place_glyphs(rgb, glyphs)
 
-    _draw_names(rgb, _name_cands, placed, view)
+    _draw_names(rgb, names, placed, view)
 
     try:
-        jp = mark_overlay.render_look_overlay(
+        jpeg = mark_overlay.render_look_overlay(
             rgb,
-            center_px=_w2p(cx, cy),
-            center_poly_px=frame_arcs(spec.get("center_boundary"), _w2p, W, H),
+            center_px=to_px(cx, cy),
+            center_poly_px=frame_arcs(spec.get("center_boundary"), to_px, W, H),
             neighbor_px=neighbor_px,
             neighbor_polys_px=neighbor_polys,
             band_text=band_text,
@@ -542,7 +542,7 @@ def render_map_from_spec(spec, features, *, tile_origin_xy, cell_size_m, grid_sh
         for k, e in sorted(counts.items(), key=lambda kv: -kv[1]["cells"])
     ]
     rec = {
-        "jpeg": bytes(jp),
+        "jpeg": bytes(jpeg),
         "features_painted": int(sum(e["cells"] for e in counts.values())),
         # a prior chip the placement could not fit is counted out
         "priors_chipped": n_prior_chips - len(undrawn),

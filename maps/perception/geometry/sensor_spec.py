@@ -109,7 +109,7 @@ class SensorSpec:
     """Per-sensor geometry. Immutable.
 
     ``mount_pitch_deg`` is positive-down in the body frame (+90 = nadir).
-    The ``max_range_m`` default is a short-range stereo envelope; both
+    The ``max_range_m`` default bounds a sensor built directly; both
     registered sensors set it infinite.
     """
 
@@ -202,8 +202,8 @@ _REGISTRY: dict[str, SensorSpec] = {
         name="oryx_orx32_25mm_nadir",
         intrinsics=_ORYX_ORX32_25MM_INTRINSICS,
         mount_pitch_deg=90.0,
-        # Depth is DSM-raycast (no stereo); 8 km march cap lives in the
-        # renderer, so the sensor envelope is effectively infinite.
+        # Depth is synthesised, not measured, so the sensor has no range
+        # envelope.
         max_range_m=float("inf"),
         # Installed facing AFT: the frame's top is the tail. The ground moves
         # up the frame on both headings, where a forward mount sees it move

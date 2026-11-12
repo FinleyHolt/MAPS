@@ -139,8 +139,7 @@ class WorldTracker:
         gated = maha > _CHI2_2DOF_P99
         # Class gate: forbid cross-label association so a detection only ever
         # re-identifies a track of the SAME class (a "gray car" never folds
-        # onto a "car" track). Unconditional — the two-layer perception
-        # contract depends on it.
+        # onto a "car" track).
         tl = np.array([t.label for t in self._tracks], dtype=object)
         dl = np.array([lab for _, _, lab in dets], dtype=object)
         gated = gated | (tl[:, None] != dl[None, :])

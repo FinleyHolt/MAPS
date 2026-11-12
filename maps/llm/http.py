@@ -236,7 +236,7 @@ class ImageStoreError(ValueError):
     """The image store refused or dropped a PUT. Never an LLM status: a PUT
     that could not connect takes the call's transport retries, and no other
     store fault meets its retries or status handling. A ``ValueError``, so
-    the mission loop retries the turn (``maps.mission.serve_refusals._RETRIABLE_LLM_ERRORS``)."""
+    the mission loop retries the turn (``maps.mission.serve_refusals.RETRIABLE_LLM_ERRORS``)."""
 
 
 def _put_image(url: str, raw: bytes, media_type: str, cancel_event: threading.Event | None) -> None:
@@ -260,9 +260,7 @@ def _put_image(url: str, raw: bytes, media_type: str, cancel_event: threading.Ev
             watch.close()
 
 
-def _wire_body(
-    body: dict, cancel_event: threading.Event | None = None, image_store_url: str = ""
-) -> dict:
+def _wire_body(body: dict, cancel_event: threading.Event | None, image_store_url: str) -> dict:
     """``body`` as it crosses the wire: with an image store set
     (``image_store_url``, the run's ``MAPS_IMAGE_STORE_URL``), every
     data-URL image part rides as ``sha256:<sha>``, its bytes PUT once; a
@@ -401,6 +399,22 @@ _EMPTY_STREAM_CHUNKS = 1200
 _EMPTY_STREAM_ERROR = "LLM stream emitted only empty deltas"
 
 
+def _merge_tool_call_delta(calls: dict[int, dict], delta: dict) -> None:
+    """Fold one streamed tool-call fragment into ``calls`` by its index: the
+    id and name arrive once, the arguments in pieces."""
+    slot = calls.setdefault(
+        delta.get("index", 0),
+        {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+    )
+    if delta.get("id"):
+        slot["id"] = delta["id"]
+    fn = delta.get("function") or {}
+    if fn.get("name"):
+        slot["function"]["name"] = fn["name"]
+    if fn.get("arguments"):
+        slot["function"]["arguments"] += fn["arguments"]
+
+
 def stream_chat_completions(
     url: str,
     headers: dict[str, str],
@@ -474,22 +488,7 @@ def stream_chat_completions(
                 if reasoning_delta:
                     aggregated_reasoning.append(reasoning_delta)
                 for tc in delta.get("tool_calls") or []:
-                    idx = tc.get("index", 0)
-                    slot = aggregated_tool_calls.setdefault(
-                        idx,
-                        {
-                            "id": "",
-                            "type": "function",
-                            "function": {"name": "", "arguments": ""},
-                        },
-                    )
-                    if tc.get("id"):
-                        slot["id"] = tc["id"]
-                    fn = tc.get("function") or {}
-                    if fn.get("name"):
-                        slot["function"]["name"] = fn["name"]
-                    if fn.get("arguments"):
-                        slot["function"]["arguments"] += fn["arguments"]
+                    _merge_tool_call_delta(aggregated_tool_calls, tc)
                 fin = choice.get("finish_reason")
                 if fin is not None:
                     finish_reason = fin
@@ -595,7 +594,7 @@ def stream_responses(
 
 
 def _raise_on_served_model_mismatch(
-    base_url: str, requested: str | None, refusal: str, endpoint: Endpoint = Endpoint()
+    base_url: str, requested: str | None, refusal: str, endpoint: Endpoint
 ) -> None:
     """On a 404, re-probe the served ids and raise when the request's model is
     no longer among them (the server behind the URL changed since discovery).
@@ -628,6 +627,45 @@ _SAMPLING_KEYS = (
 )
 
 
+def _post(
+    url: str,
+    headers: dict[str, str],
+    wire: dict,
+    *,
+    responses: bool,
+    timeout: float,
+    cancel_event: threading.Event | None,
+) -> dict:
+    """One POST of ``wire`` and its answer in the chat shape: streamed when
+    the call can be cancelled, whole otherwise."""
+    if cancel_event is not None:
+        return (stream_responses if responses else stream_chat_completions)(
+            url, headers, wire, timeout=timeout, cancel_event=cancel_event
+        )
+    with httpx.Client(timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)) as client:
+        r = client.post(url, headers=headers, json=wire)
+    r.raise_for_status()
+    response_json = r.json()
+    return openai_wire.from_responses(response_json) if responses else response_json
+
+
+def _log_refused_request(status: int, response_text: str, body: dict) -> None:
+    """What a 4xx said and the shape of the request it refused."""
+    msgs = body.get("messages") or []
+    log.error("LLM endpoint %d response body: %s", status, response_text[:4000])
+    log.error(
+        "LLM endpoint %d request summary: body_keys=%s, "
+        "n_tools=%d, sampling=%r, model=%r, n_messages=%d, roles=%s",
+        status,
+        sorted(body),
+        len(body.get("tools") or []),
+        {k: body[k] for k in _SAMPLING_KEYS if k in body},
+        body.get("model"),
+        len(msgs),
+        [m.get("role") for m in msgs],
+    )
+
+
 def chat_completions_raw(
     base_url: str,
     api_key: str | None,
@@ -656,8 +694,7 @@ def chat_completions_raw(
     if flight_dir is not None:
         _flight_request_record(flight_dir, request_id, body)
 
-    use_stream = cancel_event is not None
-    if use_stream:
+    if cancel_event is not None:
         # without it a stream carries no token counts
         body["stream_options"] = {"include_usage": True}
         body["stream"] = True
@@ -673,19 +710,9 @@ def chat_completions_raw(
             wire = _wire_body(body, cancel_event, endpoint.image_store_url)
             if responses:
                 wire = openai_wire.to_responses(wire)
-            if use_stream:
-                response_json = (stream_responses if responses else stream_chat_completions)(
-                    url, headers, wire, timeout=timeout, cancel_event=cancel_event
-                )
-            else:
-                with httpx.Client(
-                    timeout=httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT_S)
-                ) as client:
-                    r = client.post(url, headers=headers, json=wire)
-                r.raise_for_status()
-                response_json = r.json()
-                if responses:
-                    response_json = openai_wire.from_responses(response_json)
+            response_json = _post(
+                url, headers, wire, responses=responses, timeout=timeout, cancel_event=cancel_event
+            )
             if cancel_event is not None and cancel_event.is_set():
                 # The answer landed as the caller gave up on it: never used.
                 raise CallCanceled("canceled as the answer landed")
@@ -752,19 +779,7 @@ def chat_completions_raw(
                     base_url, body.get("model"), e.response.text, endpoint
                 )
             if status is not None and status < 500:
-                msgs = body.get("messages") or []
-                log.error("LLM endpoint %d response body: %s", status, e.response.text[:4000])
-                log.error(
-                    "LLM endpoint %d request summary: body_keys=%s, "
-                    "n_tools=%d, sampling=%r, model=%r, n_messages=%d, roles=%s",
-                    status,
-                    sorted(body),
-                    len(body.get("tools") or []),
-                    {k: body[k] for k in _SAMPLING_KEYS if k in body},
-                    body.get("model"),
-                    len(msgs),
-                    [m.get("role") for m in msgs],
-                )
+                _log_refused_request(status, e.response.text, body)
                 raise
             if attempt >= _MAX_RETRIES:
                 raise

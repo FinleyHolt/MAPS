@@ -14,7 +14,7 @@ from maps.library.block_scan import looks_like_code
 NO_FLIGHT_ABSTAIN_STREAK = 3
 
 
-def _envelope_residue(text: str) -> bool:
+def envelope_residue(text: str) -> bool:
     """True when a prose turn carries tool-call markup: a malformed
     envelope, repaired, never an ending."""
     t = str(text or "")
@@ -68,7 +68,7 @@ def _code_reply(text: str) -> bool:
     return bool(t) and looks_like_code(t)
 
 
-def _not_a_reply(content: str) -> tuple[str, str, str] | None:
+def not_a_reply(content: str) -> tuple[str, str, str] | None:
     """A text turn that is a dropped message rather than a reply -- empty,
     or a block of code -- as ``(transcript kind, log label, nudge)``."""
     if not content.strip():

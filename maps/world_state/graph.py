@@ -35,11 +35,11 @@ class MapObject:
     provenance: str = "prebaked"  # "prebaked" | "detected"
     # The in-view mask pixel count of the frame the perceived color was read
     # from; a later frame replaces the color only with a larger view
-    # (runtime.apply_best_view_color). 0 = no color view yet.
+    # (upsert.apply_best_view_color). 0 = no color view yet.
     best_view_px: int = 0
     # Observed attributes, {key: {value: count}}; keys are open (color, ...).
     # Prebake nodes receive only pixel-derived attributes
-    # (runtime.upsert_prior_percept), never catalog text.
+    # (upsert.upsert_prior_percept), never catalog text.
     semantic_attributes: dict[str, dict[str, int]] = field(default_factory=dict)
     # The world tracker's stable identity; None for prebake nodes and
     # untracked detections.
@@ -54,7 +54,7 @@ class MapObject:
     # The tracker's sub-cell world position; geometry readers prefer it over
     # the cell centroid.
     world_xy: tuple[float, float] | None = None
-    # Mask-derived geometry in the grid (row, col) frame (the builder has no
+    # Mask-derived geometry in the grid (row, col) frame (``prior_graph`` has no
     # tile origin): the mask's principal-axis polyline at grid resolution.
     centerline: list[list[float]] | None = None  # [[row, col], ...] grid frame
     axis_length_m: float = 0.0  # total centerline arc length, meters

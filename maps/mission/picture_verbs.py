@@ -18,11 +18,13 @@ from maps.mission.picture_requests import (
     map_vision_text,
 )
 from maps.mission.surface_state import Progress, Surface
-from maps.render.look_render import LOOK_MAX_BADGES as _MAP_MAX_MARKS
-from maps.render.look_render import look_label, look_outline, look_xy
+from maps.render.look_render import LOOK_MAX_BADGES, look_label, look_outline, look_xy
 from maps.render.map_render import render_map_from_spec
 
 log = logging.getLogger(__name__)
+
+# A map badges as many marks as a crop.
+_MAP_MAX_MARKS = LOOK_MAX_BADGES
 
 
 def _deliver_frames(jpegs: list[bytes], sink: list[str], workdir: Path | None = None) -> None:
@@ -89,19 +91,21 @@ class Pictures:
         """THE FLIGHT SHOWS WHAT IT SAW: the target's own look, centred on
         the row it asked for (a stop flown again centres on the stop's
         point), queued for the next message and named in the report."""
-        tfid = str(item.get("target_fid") or "")
-        trow = self.surface.rows.get(tfid)
-        txy = look_xy(trow)
+        target_fid = str(item.get("target_fid") or "")
+        target_row = self.surface.rows.get(target_fid)
+        target_xy = look_xy(target_row)
         try:
-            fv = self.look_renderer(
+            view = self.look_renderer(
                 [
                     {
-                        "center_fid": tfid if txy else "",
-                        "center_xy": (list(txy) if txy else list(report["pose_xy"])),
+                        "center_fid": target_fid if target_xy else "",
+                        "center_xy": (list(target_xy) if target_xy else list(report["pose_xy"])),
                         "center_label": (
-                            look_label(tfid, trow, is_target=True) if txy else (tfid or "the stop")
+                            look_label(target_fid, target_row, is_target=True)
+                            if target_xy
+                            else (target_fid or "the stop")
                         ),
-                        "center_boundary": look_outline(trow) if txy else None,
+                        "center_boundary": look_outline(target_row) if target_xy else None,
                         "marks": [],
                     }
                 ]
@@ -110,13 +114,13 @@ class Pictures:
             log.warning(
                 "%s flight view render failed: %s", self.progress.rid_tag, summarise_exc(exc)
             )
-            fv = []
-        fj = [c["jpeg"] for c in fv if c.get("jpeg")]
-        if not fj:
+            view = []
+        jpegs = [c["jpeg"] for c in view if c.get("jpeg")]
+        if not jpegs:
             return
-        fv_text = look_vision_text(fv)
-        _deliver_frames(fj, self.block_frames, self.workdir)
-        self.pending.append((fv_text, fj))
+        caption = look_vision_text(view)
+        _deliver_frames(jpegs, self.block_frames, self.workdir)
+        self.pending.append((caption, jpegs))
         add_note(report, "the view follows.")
 
     def _ship(self, ack: dict, kind: str, jpegs: list, vis_text: str) -> bool:
@@ -196,38 +200,40 @@ class Pictures:
 
     def look(self, of, fid, marks) -> dict:
         """look(): the crops of a handle's rows (``of``) or of ``fid``."""
-        mk = [m for m in marks or [] if isinstance(m, str) and m.strip()]
+        named_marks = [m for m in marks or [] if isinstance(m, str) and m.strip()]
         crop = (
-            self._crops_set(str(of), marks=mk or None)
+            self._crops_set(str(of), marks=named_marks or None)
             if of
-            else self.crops_of(fid, marks=mk or None)
+            else self.crops_of(fid, marks=named_marks or None)
         )
         return self.rejections.acked("crop", crop)
 
     def show_map(self, around: str) -> dict:
         """show_map(): one map around a place, badging the set in scope."""
-        h = self.surface.carry.in_scope
+        scope = self.surface.carry.in_scope
         # The set in scope only badges the map: a refused re-derive is
         # noted, never the map's own refusal.
         try:
-            mrows = [r for r in (self.surface.carry.read(h) or []) if r.get("fid")] if h else []
+            scope_rows = (
+                [r for r in (self.surface.carry.read(scope) or []) if r.get("fid")] if scope else []
+            )
         except CodeError as exc:
-            mrows, scope_err = [], f"{exc}; this map badges none of it"
+            scope_rows, scope_err = [], f"{exc}; this map badges none of it"
         else:
             scope_err = None
-        marks = mrows[:_MAP_MAX_MARKS]
-        spec, m_skipped = map_spec(
+        marks = scope_rows[:_MAP_MAX_MARKS]
+        spec, skipped = map_spec(
             around,
             marks,
             rows=self.surface.rows,
             resolve=self.surface.point,
             frame=self.surface.standing_frame(),
         )
-        mp: dict = {"maps": int(spec is not None)}
-        if m_skipped:
-            mp["skipped"] = m_skipped[:20]
+        ack: dict = {"maps": int(spec is not None)}
+        if skipped:
+            ack["skipped"] = skipped[:20]
         if spec is None:
-            mp["error"] = f"{around} is not on the live surface"
+            ack["error"] = f"{around} is not on the live surface"
         else:
             try:
                 rendered = render_map_from_spec(
@@ -242,20 +248,20 @@ class Pictures:
                 log.warning(
                     "%s SAY map render failed: %s", self.progress.rid_tag, summarise_exc(exc)
                 )
-                mp = {"error": f"map render failed: {summarise_exc(exc)}"}
+                ack = {"error": f"map render failed: {summarise_exc(exc)}"}
             else:
                 self._ship(
-                    mp, "map", [m["jpeg"] for m in maps if m.get("jpeg")], map_vision_text(maps)
+                    ack, "map", [m["jpeg"] for m in maps if m.get("jpeg")], map_vision_text(maps)
                 )
         if scope_err:
-            mp.setdefault("ref_notes", []).append(scope_err)
+            ack.setdefault("ref_notes", []).append(scope_err)
         if marks:
             # The set under the model's own name for it.
-            name = self.name_of_ref(h)
-            mp["badged_from"] = name or "the set in scope"
-            if len(mrows) > len(marks):
-                mp.setdefault("ref_notes", []).append(
-                    f"{len(mrows)} rows in {name or 'the set in scope'}; "
+            name = self.name_of_ref(scope)
+            ack["badged_from"] = name or "the set in scope"
+            if len(scope_rows) > len(marks):
+                ack.setdefault("ref_notes", []).append(
+                    f"{len(scope_rows)} rows in {name or 'the set in scope'}; "
                     f"this map badges the first {len(marks)}"
                 )
-        return self.rejections.acked("map", mp)
+        return self.rejections.acked("map", ack)

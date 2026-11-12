@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 def _named_feature_note(classes: list[str], names: set[str]) -> str | None:
     """A note when a watch class IS a world-state name (the watchlist takes
-    visual classes); the arm stands as said."""
+    visual classes); the class is watched as said."""
     named = [c for c in classes if c.strip().lower() in names]
     if not named:
         return None

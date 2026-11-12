@@ -693,9 +693,9 @@ def set_gap(geoms, bbs, item_geom):
         cut = d if d is not None else ub
         if cut is not None and bounds[gi] > cut + BOUND_SLACK_M:
             continue
-        _d, _wr, _wi = seed if gi == seed_i else gap_witness(g, item_geom)
-        if d is None or _d < d:
-            d, wr, wi = _d, _wr, _wi
+        gap, ref_point, item_point = seed if gi == seed_i else gap_witness(g, item_geom)
+        if d is None or gap < d:
+            d, wr, wi = gap, ref_point, item_point
     return d, wr, wi
 
 

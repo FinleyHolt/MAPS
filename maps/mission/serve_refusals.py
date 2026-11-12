@@ -12,7 +12,7 @@ from maps.llm.endpoint_spec import TRANSIENT_CLIENT_STATUS
 # Transient LLM-side errors: a retry, never the end of the reasoner (a
 # non-2xx, a link fault, or a ValueError: an undecodable body or a collapsed
 # completion).
-_RETRIABLE_LLM_ERRORS: tuple[type[BaseException], ...] = (
+RETRIABLE_LLM_ERRORS: tuple[type[BaseException], ...] = (
     httpx.HTTPStatusError,
     httpx.ConnectError,
     httpx.ReadError,
@@ -74,7 +74,7 @@ def _is_refused_request(exc: BaseException) -> bool:
 
 # The rejections a retry would only repeat, in the order they are tested:
 # ``(test, ended_by, the log's why)``.
-_REFUSAL_ENDINGS = (
+REFUSAL_ENDINGS = (
     (
         _is_oversize_rejection,
         "oversize_rejection",

@@ -86,7 +86,7 @@ def upsert_detected_centroid_only(graph: ObjectGraph, node: MapObject) -> str:
 
 def _stamp_cells(node: MapObject, cells: np.ndarray, cell_size_m: float) -> None:
     """Set a detected node's ``cells`` and, if it has none yet, the bake's own
-    centerline family (``builder.mask_centerline``) derived from them.
+    centerline family (``prior_graph.mask_centerline``) derived from them.
 
     ponytail: derive-if-absent, so the centerline stays the first frame's
     while ``cells`` are re-stamped every frame; re-deriving changes the geom

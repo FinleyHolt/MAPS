@@ -8,6 +8,7 @@ from collections import Counter
 
 from maps.query import color_words
 from maps.query import text_match as T
+from maps.xy_token import is_xy
 
 # Row fields the executor resolves by fid and the model never reads.
 _MODEL_HIDDEN_ROW_FIELDS = ("search_text", "centerline", "mask", "mask_centroid", "cells")
@@ -222,11 +223,7 @@ def _is_gridable(v) -> bool:
         return True
     if isinstance(v, dict):
         return all(isinstance(x, (bool, int, float, str)) for x in v.values())
-    return (
-        isinstance(v, (list, tuple))
-        and len(v) == 2
-        and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)
-    )
+    return is_xy(v)
 
 
 def _fmt_float(v: float) -> str:
@@ -255,12 +252,12 @@ def _grid_cell(v) -> str:
     if isinstance(v, int):
         return str(v)
     if isinstance(v, dict):
-        _items = [kv for kv in v.items() if kv[0] not in _TAG_RENDER_DROP]
-        if not _items:
+        shown_tags = [kv for kv in v.items() if kv[0] not in _TAG_RENDER_DROP]
+        if not shown_tags:
             return "-"
-        s = "; ".join(f"{k}={val}" for k, val in _items[:_TAG_RENDER_HEAD])
-        if len(_items) > _TAG_RENDER_HEAD:
-            s += f"; +{len(_items) - _TAG_RENDER_HEAD} more tags (full set on the node)"
+        s = "; ".join(f"{k}={val}" for k, val in shown_tags[:_TAG_RENDER_HEAD])
+        if len(shown_tags) > _TAG_RENDER_HEAD:
+            s += f"; +{len(shown_tags) - _TAG_RENDER_HEAD} more tags (full set on the node)"
         return s.replace("|", "/")
     if isinstance(v, (list, tuple)) and len(v) == 2 and all(isinstance(x, (int, float)) for x in v):
         return f"{_fmt_float(float(v[0]))}, {_fmt_float(float(v[1]))}"
@@ -384,12 +381,12 @@ def _budget_columns(proj, cols, op_cols) -> tuple[list, int]:
         cost[c] = w
     if base + sum(cost.values()) <= _RENDER_CHAR_BUDGET:
         return cols, 0
-    _named = [c for c in cols if c in set(op_cols or ())]
-    _ident = [c for c in cols if c not in _named and c in _GRID_COL_PRIORITY]
-    _extra = [c for c in cols if c not in _named and c not in _GRID_COL_PRIORITY]
+    op_named = [c for c in cols if c in set(op_cols or ())]
+    identity = [c for c in cols if c not in op_named and c in _GRID_COL_PRIORITY]
+    extra = [c for c in cols if c not in op_named and c not in _GRID_COL_PRIORITY]
     kept: set = set()
     total = base
-    for c in _named + _ident + _extra:
+    for c in op_named + identity + extra:
         if kept and total + cost[c] > _RENDER_CHAR_BUDGET:
             continue
         kept.add(c)

@@ -153,7 +153,7 @@ def test_the_sensor_block_states_the_footprint_at_the_height_the_mission_flies(m
     from maps.perception.geometry.sensor_spec import resolve_sensor
 
     served = {}
-    monkeypatch.setattr(me, "endpoint_spec", lambda: SimpleNamespace(base_url="http://unused"))
+    monkeypatch.setattr(me, "installed_spec", lambda: SimpleNamespace(base_url="http://unused"))
     monkeypatch.setattr(me, "run_mission", lambda **kw: served.update(kw))
     session = me.MissionSession.__new__(me.MissionSession)
     session.run_kwargs = {}

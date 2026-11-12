@@ -23,9 +23,9 @@ from maps.world_state.context import QueryContext
 from maps.world_state.graph import GridDomain, MapObject
 from maps.world_state.upsert import (
     upsert_detected_centroid_only,
+    upsert_prior_percept,
     upsert_tracked_detected,
 )
-from maps.world_state.upsert import upsert_prior_percept as _upsert_prior_percept
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class EpisodeWorld:
             float(tile_origin_xy[1]),
         )
         self._map_name = map_name
-        # The segmenter's concept list, written whole by the director.
+        # The segmenter's concept list, written whole by the watchlist (``SegmenterTasking``).
         self._sam_setter = sam_setter
         # The raster ``look`` crops on the bench.
         self._rgbd_dir = rgbd_dir
@@ -95,7 +95,7 @@ class EpisodeWorld:
         priors = [
             (f, n) for f, n in self.state.runtime_graph.nodes.items() if n.provenance != "detected"
         ]
-        _c, anchors = build_surface_from_graph(priors, self._tile_origin_xy, self._cell_size_m)
+        _, anchors = build_surface_from_graph(priors, self._tile_origin_xy, self._cell_size_m)
         self._prior_xy_cache = {
             str(r["fid"]): (float(r["xy"][0]), float(r["xy"][1])) for r in anchors if r.get("xy")
         }
@@ -162,16 +162,16 @@ class EpisodeWorld:
             if (x1 - x0) > float(minor_spacing_m) and (y1 - y0) > float(minor_spacing_m):
                 pitch = max(1.0, float(minor_spacing_m))
                 x_major = (x1 - x0) >= (y1 - y0)
-                _maj = (lambda p: p[0]) if x_major else (lambda p: p[1])
-                _mnr = (lambda p: p[1]) if x_major else (lambda p: p[0])
+                along = (lambda p: p[0]) if x_major else (lambda p: p[1])
+                across = (lambda p: p[1]) if x_major else (lambda p: p[0])
                 lo_min = y0 if x_major else x0
                 rows: dict[int, list] = {}
                 for p in zip(xs, ys):
-                    rows.setdefault(int((_mnr(p) - lo_min) // pitch), []).append(p)
+                    rows.setdefault(int((across(p) - lo_min) // pitch), []).append(p)
                 picks = []
                 for ri, ridx in enumerate(sorted(rows)):
-                    row = sorted(rows[ridx], key=_maj, reverse=bool(ri % 2))
-                    r_reach = abs(_maj(row[-1]) - _maj(row[0]))
+                    row = sorted(rows[ridx], key=along, reverse=bool(ri % 2))
+                    r_reach = abs(along(row[-1]) - along(row[0]))
                     picks.extend(spread(row, min(int(max_stops), int(r_reach // span) + 1)))
                 if len(picks) > int(max_stops):
                     picks = spread(picks, int(max_stops))
@@ -229,11 +229,11 @@ class EpisodeWorld:
             self.state.segmenter_tasking.record_flown(flown)
 
     def declare_mission_concepts(self, classes: list[str]) -> str | None:
-        """Make the declared classes the director's watchlist and push it to
+        """Make the declared classes the watchlist and push it to
         the segmenter. Returns the error the mission serves when the push
         failed, else None."""
         # The classes SAM segments, canonical; a placeholder class is no
-        # class. The director's push dedups.
+        # class. The watchlist's push dedups.
         watch = [c for c in map(canon_concept, classes) if c and c not in _NULL_CONCEPTS]
         with self._lock:
             # never a clean receipt over a segmenter that kept its old classes
@@ -321,7 +321,7 @@ class EpisodeWorld:
         node. Never raises: the per-frame enrichment calls it inline."""
         try:
             with self._lock:
-                return _upsert_prior_percept(
+                return upsert_prior_percept(
                     self.state.runtime_graph, str(fid), dict(attrs or {}), px=px
                 )
         except Exception:

@@ -270,3 +270,24 @@ def test_an_empty_delta_stream_is_logged_as_one_not_as_a_timeout(monkeypatch, ca
         )
     assert "only empty deltas for 3 chunks" in caplog.text
     assert "SEARCH_REASONER_TIMEOUT_S" not in caplog.text
+
+
+def test_a_streamed_tool_call_arrives_in_fragments_and_merges_by_index():
+    from maps.llm.http import _merge_tool_call_delta
+
+    calls: dict = {}
+    for delta in (
+        {"index": 0, "id": "c0", "function": {"name": "run", "arguments": '{"co'}},
+        {"index": 1, "id": "c1", "function": {"name": "run"}},
+        {"index": 0, "function": {"arguments": 'de": 1}'}},
+        {"index": 1, "function": {"arguments": "{}"}},
+    ):
+        _merge_tool_call_delta(calls, delta)
+    assert calls == {
+        0: {
+            "id": "c0",
+            "type": "function",
+            "function": {"name": "run", "arguments": '{"code": 1}'},
+        },
+        1: {"id": "c1", "type": "function", "function": {"name": "run", "arguments": "{}"}},
+    }

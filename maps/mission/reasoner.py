@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 class DegenerateCompletion(ValueError):
     """A completion whose generation collapsed (a repeated-token run): a
-    serve fault, retried as one of ``serve_refusals._RETRIABLE_LLM_ERRORS``."""
+    serve fault, retried as one of ``serve_refusals.RETRIABLE_LLM_ERRORS``."""
 
 
 # One character repeated to the end of a channel: degenerate decode output.
@@ -127,7 +127,7 @@ class Reasoner:
     ``endpoint_spec`` (server-discovered) supplies the base URL, the model
     name, ``max_tokens`` and the compaction budget, so prompt + completion
     fits the served window; ``settings`` (the run's, ``maps.settings``) the
-    bearer, the per-call timeout, the arm's effort and the tokenizer
+    bearer, the per-call timeout, the run's effort and the tokenizer
     override. ``workdir`` is the mission's directory (its wire log and the
     frames it was shown land there; None records nothing) and
     ``routing_key`` its router-affinity key."""

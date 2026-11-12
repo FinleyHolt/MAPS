@@ -193,9 +193,9 @@ def test_a_cut_and_a_sort_chain_into_one_expression():
 
 def test_the_retired_free_calls_name_where_they_went():
     """A model reaching for narrow() gets the method, not a bare NameError."""
-    from maps.library.block_scan import _MOVED_TO_METHOD
+    from maps.library.block_scan import METHOD_FOR_FREE_SPELLING
 
-    assert set(_MOVED_TO_METHOD) == {"narrow", "order_by", "gap"}
+    assert set(METHOD_FOR_FREE_SPELLING) == {"narrow", "order_by", "gap"}
     with pytest.raises(CodeError) as e:
         _ops('r1 = find("car")\nr2 = narrow(r1, near="A", dwithin=25)\n')
     assert "rows.filter(" in str(e.value), str(e.value)
