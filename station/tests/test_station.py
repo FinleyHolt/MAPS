@@ -65,13 +65,19 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
     z = 15
     tx = int((loc["center"]["lon"] + 180) / 360 * 2 ** z)
     ty = int((1 - math.asinh(math.tan(math.radians(loc["center"]["lat"]))) / math.pi) / 2 * 2 ** z)
-    assert client.get(f"/tiles/{z}/{tx}/{ty}.png").content[:4] == b"\x89PNG"
-    assert client.get(f"/tiles/{z}/0/0.png").status_code == 404
-    # A reviewing station draws its map from a picture of the bake's extent, and flies nothing.
+    assert loc["tiles"] == "tiles/calcity/{z}/{x}/{y}.png"
+    assert client.get(f"/tiles/calcity/{z}/{tx}/{ty}.png").content[:4] == b"\x89PNG"
+    assert client.get(f"/tiles/calcity/{z}/0/0.png").status_code == 404
+    about = client.get("/station").json()
+    assert about["bench"] == "calcity" and about["flies"] and about["own_words"] and about["map"] == "calcity"
+    # A reviewing station with no raster draws its map from a picture of the bake's extent, and flies nothing.
     from PIL import Image
 
+    from benchmarks.calcity.paths import calcity_bench
+
     Image.new("RGB", (640, 480), (200, 160, 90)).save(tmp_path / "basemap.jpg")
-    reviewer = serve.Station(bench=calcity.bench, config="configs/calcity.yaml", out=tmp_path / "out", ortho_dir=None, register=None,
+    bare = calcity_bench({**calcity.bench.environ, "SEARCH_CALCITY_RGBD_DIR": str(tmp_path / "no_rasters")})
+    reviewer = serve.Station(bench=bare, config="configs/calcity.yaml", out=tmp_path / "out",
                              basemap=tmp_path / "basemap.jpg")
     review = TestClient(serve.build_app(reviewer, web=None))
     b = review.get("/location").json()["bounds"]
@@ -79,7 +85,8 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path):  # n
     cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
     rx = int((cx + 180) / 360 * 2 ** 12)
     ry = int((1 - math.asinh(math.tan(math.radians(cy))) / math.pi) / 2 * 2 ** 12)
-    assert review.get(f"/tiles/12/{rx}/{ry}.png").content[:4] == b"\x89PNG"
+    assert review.get(f"/tiles/calcity/12/{rx}/{ry}.png").content[:4] == b"\x89PNG"
     assert review.post("/mission/next", json={"instruction": "fly"}).status_code == 409
+    assert not review.get("/station").json()["flies"]
     groups = {g for g, _ in client.get("/mission/prior.json").json()}
     assert "building" in groups and len(client.get("/area").json()["bbox"]) == 4

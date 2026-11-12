@@ -1,22 +1,29 @@
-"""The station: one mission flown on the twin, and every finished run, served to the console.
+"""The station: a bench's finished runs, and one mission flown from the seat, served to the console.
 
-    python -m station.serve --ortho <raster dir>     # fly Cal City missions on the twin, review them after
-    python -m station.serve                          # review the runs under --out: no raster, model or GPU
+    python -m station.serve --out <bench out-root>                    # review CityNav runs
+    python -m station.serve                                            # fly CityNav episodes, review them after
+    python -m station.serve --bench calcity --ortho <raster dir>       # fly Cal City missions on the twin
 
-One process holds the mission in the seat (``benchmarks.flight.mission.Mission``
-over ``benchmarks.flight.twin.Twin``), publishes its state as an event stream
-and serves the built console (``station/web/dist``) from the same port, so the
-page is a browser tab and nothing else. A mission's reasoner and segmenter
-come from the environment as the bench's do (``SEARCH_REASONER_URL``,
-``SEARCH_SAM3_1_URL``; the top-level README's Endpoints section).
+One process holds a bench value (``benchmarks.bench.Bench``, built from the
+environment once), the mission in the seat, and the runs under ``--out``;
+it publishes the seat's state as an event stream and serves the built console
+(``station/web/dist``) from the same port, so the page is a browser tab and
+nothing else. A mission's reasoner and segmenter come from the environment as
+the bench's do (``SEARCH_REASONER_URL``, ``SEARCH_SAM3_1_URL``).
 
-Each mission lands in ``<out>/<UTC stamp>/`` with the run records a flown run
-carries; the console's review reads those folders, so a run flown by
-``python -m benchmarks.flight.twin --out <out>`` or copied in from another
-machine reviews the same way.
+On CityNav the seat flies a row of the split through the bench's own runner
+(``station.bench_seat``); on Cal City it flies the kinematic twin
+(``benchmarks.flight``). Either lands in ``<out>/<UTC stamp>/`` as a run root:
+a ledger ``episodes.jsonl`` and one attempt folder. The review reads run
+roots, so a root written by ``python -m benchmarks.citynav.bench_fullset``,
+by ``python -m benchmarks.flight.twin``, or copied in from another machine
+reviews the same way. ``--out`` names one root or a directory of them.
 
-ponytail: one mission in the seat and one map per process; a second seat is a
-second process on another port.
+A bench has many maps (CityNav: one per block). Every placement, the basemap
+and the prior follow the map a request names (``station.placement``).
+
+ponytail: one mission in the seat per process; a second seat is a second
+process on another port.
 """
 
 from __future__ import annotations
@@ -24,11 +31,13 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import functools
+import importlib
 import json
 import logging
 import math
 import mimetypes
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -39,26 +48,28 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from benchmarks.bench import Bench
-from benchmarks.calcity.paths import calcity_bench
+from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import open_live
 from benchmarks.flight.mission import Mission, flight_config, resolve_episode
-from benchmarks.flight.tile_georef import local_to_lonlat, lonlat_to_local, map_bounds
+from benchmarks.flight.tile_georef import map_bounds
 from benchmarks.flight.twin import Twin
+from benchmarks.run_record import rows
 from benchmarks.run_record.episode_workdir import (CONVERSATION_JSONL, FRAMES_JSONL, TRACK_JSONL,
                                                    open_episode_dir)
-from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA
+from benchmarks.run_record.episodes import EPISODES_JSONL, STATUS_INFRA, TOUR_CURSOR
 from benchmarks.run_record.rows import iter_json_rows
 from maps.llm import endpoint_spec, model_cards
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.settings import from_environ
+from station.bench_seat import END_WAIT_S, BenchMission, with_words
+from station.placement import OSM_CACHE_DIR, Placement, placement
 
 log = logging.getLogger("station")
 
 WEB_DIST = Path(__file__).parent / "web" / "dist"
-#: The zoom range the basemap is served over: the whole block down to about 0.3 m a pixel.
-TILE_ZOOMS = (10, 19)
+#: The zoom range the basemap is served over: the whole block down to about 0.1 m a pixel.
+TILE_ZOOMS = (10, 20)
 TILE_PX = 256
 #: How often the event stream looks for a change, and how often it says it is alive.
 STREAM_PERIOD_S, STREAM_KEEPALIVE_S = 0.5, 15.0
@@ -67,6 +78,16 @@ TRAIL_POINTS = 3600
 LIVE = ("flying", "awaiting_tasking")
 #: What marks the id of a mission flown under the operator's own words, with no row in the split.
 OPERATOR = "::operator-"
+#: What a map's name is made of. A name is a file stem under the bake and the raster directory, so nothing else is one.
+MAP_NAME = re.compile(r"[A-Za-z0-9_-]+")
+#: How many maps' rasters the station holds open at once, and how many cut tiles it keeps.
+BASEMAPS_HELD, TILES_HELD = 3, 2048
+BENCHES = ("citynav", "calcity")
+
+
+def bench_named(name: str, environ) -> Bench:
+    """The bench ``name`` names, as ``environ`` describes it. By name: the station holds a bench as a value."""
+    return getattr(importlib.import_module(f"benchmarks.{name}.paths"), f"{name}_bench")(environ)
 
 _PATHS = frozenset({"footway", "cycleway", "path", "service", "track", "steps", "pedestrian", "bridleway"})
 _PITCHES = frozenset({"pitch", "track", "stadium", "playground", "sports_centre", "golf_course"})
@@ -110,27 +131,28 @@ def tile_lonlat(z: int, x: float, y: float) -> tuple[float, float]:
     return x / n * 360.0 - 180.0, math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
 
 
-def tile_png(ortho, tiles_dir, map_name: str, z: int, x: int, y: int) -> bytes | None:
+def tile_png(ortho, to_local, z: int, x: int, y: int) -> bytes | None:
     """One 256 px web-mercator tile cut from the raster, transparent off its
     edge; None where the tile holds none of it. The tile's four corners are
-    placed in the raster and the quad between them warped: over one tile the
-    mercator grid and the bake's UTM grid differ by less than a pixel."""
+    placed in the raster (``to_local``, the map's placement) and the quad
+    between them warped: over one tile the mercator grid and the map's own
+    grid differ by less than a pixel."""
     import cv2  # noqa: PLC0415
 
     rgb, bounds, ppm = ortho
-    rows, cols = rgb.shape[:2]
+    rows_, cols = rgb.shape[:2]
     quad = []
     for cx, cy in ((x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)):
-        local = lonlat_to_local(tiles_dir, map_name, *tile_lonlat(z, cx, cy))
+        local = to_local(*tile_lonlat(z, cx, cy))
         if local is None:
             return None
-        quad.append([(local[0] - bounds.x_min) * ppm, rows - (local[1] - bounds.y_min) * ppm])
+        quad.append([(local[0] - bounds.x_min) * ppm, rows_ - (local[1] - bounds.y_min) * ppm])
     src = np.float32(quad)
     c0, r0 = (int(v) for v in np.floor(src.min(0)))
     c1, r1 = (int(v) for v in np.ceil(src.max(0)))
     # A tile far wider than 256 px of raster is read every ``step``-th pixel.
     step = max(1, min(c1 - c0, r1 - r0) // (2 * TILE_PX))
-    c0, r0, c1, r1 = max(c0, 0), max(r0, 0), min(c1, cols), min(r1, rows)
+    c0, r0, c1, r1 = max(c0, 0), max(r0, 0), min(c1, cols), min(r1, rows_)
     if c1 <= c0 or r1 <= r0:
         return None
     crop = np.ascontiguousarray(rgb[r0:r1:step, c0:c1:step, :3])
@@ -143,64 +165,158 @@ def tile_png(ortho, tiles_dir, map_name: str, z: int, x: int, y: int) -> bytes |
     return png.tobytes() if ok else None
 
 
-class Station:
-    """The seat, the catalog and the finished runs of one map."""
+def _started(row: dict) -> float | None:
+    """When a run started, unix seconds: the row's own ``ts``, else the stamp on its attempt folder."""
+    if row.get("ts") is not None:
+        return row["ts"]
+    stamp = rows.attempt_stamp(row)
+    return dt.datetime.strptime(stamp, "%Y%m%d_%H%M%S").timestamp() if stamp else None
 
-    def __init__(self, *, bench: Bench, config: str, out: Path, ortho_dir: Path | None, register: Path | None,
-                 basemap: Path | None = None) -> None:
+
+class Station:
+    """One bench's catalog, its maps, the seat, and the finished runs under the output root."""
+
+    def __init__(self, *, bench: Bench, config: str, out: Path, ortho_dir: Path | None = None,
+                 register: Path | None = None, basemap: Path | None = None,
+                 osm_cache_dir: Path = OSM_CACHE_DIR) -> None:
         #: The bench whose catalog the station lists and whose engine its missions fly.
         self.bench = bench
         self.config, self.out, self.register = config, Path(out), register
-        self.split, self.tiles_dir = bench.default_split, Path(bench.tiles_dir)
-        engine = bench.engine
-        self.catalog = [engine.parse_episode(row, row_index=i)
-                        for i, row in enumerate(engine.load_split(bench.split_path(self.split)))]
-        self.by_id = {e.episode_id: e for e in self.catalog}
-        self.map_name = self.catalog[0].map_name
-        #: Whether the bake is on disk: without it the map has no georef and the page draws no basemap.
-        self.baked = (self.tiles_dir / f"{self.map_name}_meta.json").is_file()
-        self.ortho = map_render.load_raster(ortho_dir, self.map_name) if ortho_dir is not None else None
-        if ortho_dir is not None and self.ortho is None:
+        self.split, self.tiles_dir, self.osm_cache_dir = bench.default_split, Path(bench.tiles_dir), Path(osm_cache_dir)
+        #: The twin's raster directory (Cal City); None on a station that flies no twin.
+        self.ortho_dir = ortho_dir
+        #: Where each map's raster pair lies: the twin's directory, else the bench's own.
+        self.raster_dir = Path(ortho_dir) if ortho_dir is not None else Path(bench.rgbd_dir)
+        self._picture_arg = basemap
+        self._catalogs: dict[str, tuple[list, dict]] = {}
+        self._targets: dict[tuple[str, str], list | None] = {}
+        self._ledgers: dict[Path, tuple[tuple, list]] = {}
+        #: The map a request that names none is answered for: the default split's first row's.
+        catalog = self.catalog(self.split)[0]
+        self.map_name: str | None = catalog[0].map_name if catalog else None
+        if ortho_dir is not None and self.map_name and map_render.load_raster(ortho_dir, self.map_name) is None:
             raise SystemExit(f"no {self.map_name} raster under {ortho_dir}: a raster directory holds "
                              f"{map_render.raster_pair(self.map_name)}")
-        #: What the map's tiles are cut from: the raster, else a north-up picture of the bake's whole extent.
-        self.basemap = self.ortho if self.ortho is not None else self._picture(basemap)
+        #: Each map's basemap, loaded when first asked for; the least recently used is let go.
+        self.basemap = functools.lru_cache(maxsize=BASEMAPS_HELD)(self._basemap)
+        self.tile = functools.lru_cache(maxsize=TILES_HELD)(self._tile)
         self._lock = threading.Lock()
         self.mission: Any = None
         self._sortie: Path | None = None
         self._trail: list[list[float]] = []
 
-    def _picture(self, path: Path | None):
-        """``path`` as ``(rgb, bounds, px_per_m)`` over the bake's bounds, or None without a picture or a bake."""
-        from PIL import Image  # noqa: PLC0415
+    # -- the bench's catalog ---------------------------------------------------
 
-        if path is None or not self.baked:
+    def catalog(self, split: str) -> tuple[list, dict]:
+        """``(episodes, by id)`` of a split, read once; empty where the split's file is not on disk."""
+        if split not in self.bench.split_files:
+            raise HTTPException(404, f"{self.bench.name} has no split {split!r}")
+        if split not in self._catalogs:
+            engine, path, episodes = self.bench.engine, self.bench.split_path(split), []
+            for i, row in enumerate(engine.load_split(path) if path.is_file() else []):
+                try:
+                    episodes.append(engine.parse_episode(row, row_index=i))
+                except (KeyError, ValueError, TypeError) as exc:
+                    log.warning("%s row %d does not parse: %s", split, i, exc)
+            self._catalogs[split] = (episodes, {e.episode_id: e for e in episodes})
+        return self._catalogs[split]
+
+    @functools.cached_property
+    def objects(self) -> dict:
+        """The bench's object catalog by map, or nothing where it is not on disk."""
+        path = self.bench.objects_json
+        return self.bench.engine.load_objects(path) if path.is_file() else {}
+
+    def why_not_flying(self) -> str | None:
+        """Why this station flies nothing, or None when it can."""
+        if self.bench.name == "calcity":
+            return None if self.ortho_dir is not None else \
+                "this station reviews runs only: start it with --ortho <raster dir> to fly the twin"
+        try:
+            self.bench.assert_available()
+        except (FileNotFoundError, RuntimeError) as exc:
+            return f"this station reviews runs only: {str(exc).splitlines()[0]}"
+        return None
+
+    def about(self) -> dict[str, Any]:
+        """What the console asks once: the bench, its splits, and what the seat can do."""
+        held = [s for s in self.bench.split_files if self.bench.split_path(s).is_file()]
+        flown = sorted({r["split"] for r in self.runs() if r.get("split")} - set(held))
+        why = self.why_not_flying()
+        return {"bench": self.bench.name, "split": self.split, "splits": held + flown, "map": self.map_name,
+                "flies": why is None, "why": why,
+                # The twin flies the operator's own words from the map's centre; a bench episode is a row of its split.
+                "own_words": self.bench.name == "calcity"}
+
+    # -- placing things on a map ---------------------------------------------
+
+    def place(self, map_name: str | None) -> Placement | None:
+        if not map_name or not MAP_NAME.fullmatch(map_name):
             return None
-        Image.MAX_IMAGE_PIXELS = None  # a basemap of a whole block is large by design
-        rgb = np.asarray(Image.open(path).convert("RGB"))
-        bounds = map_bounds(self.tiles_dir, self.map_name)
-        return rgb, bounds, rgb.shape[1] / (bounds.x_max - bounds.x_min)
+        return placement(str(self.tiles_dir), str(self.osm_cache_dir), map_name)
 
-    # -- placing things on the basemap --------------------------------------
+    def lonlat(self, map_name: str | None, xy) -> list[float] | None:
+        at = self.place(map_name)
+        return list(at.to_lonlat(float(xy[0]), float(xy[1]))) if at is not None and xy is not None else None
 
-    def lonlat(self, xy) -> tuple[float, float] | None:
-        return local_to_lonlat(self.tiles_dir, self.map_name, float(xy[0]), float(xy[1])) if self.baked else None
-
-    def _placed(self, doc: dict[str, Any], xy) -> dict[str, Any]:
-        """``doc`` with ``lon``/``lat`` of local ``xy``, where the bake carries a georef."""
-        ll = self.lonlat(xy) if xy is not None else None
+    def _placed(self, map_name: str | None, doc: dict[str, Any], xy) -> dict[str, Any]:
+        """``doc`` with ``lon``/``lat`` of local ``xy``, where the map is placed."""
+        ll = self.lonlat(map_name, xy)
         if ll is not None:
             doc["lon"], doc["lat"] = ll
         return doc
 
-    def target_lonlat(self, episode_id: str) -> list[list[float]] | None:
-        mask = getattr(self.by_id.get(episode_id), "target_mask", None)
-        ring = [self.lonlat(p) for p in mask or ()]
-        return [list(p) for p in ring] if ring and all(ring) else None
+    def target(self, split: str | None, episode_id: str | None) -> tuple[list | None, list | None]:
+        """``(footprint ring, centre point)`` of an episode's target in WGS84, each None where it draws none.
+        The footprint is the row's own mask, else its linked catalog object's contour."""
+        e = self.catalog(split)[1].get(episode_id) if split in self.bench.split_files else None
+        if e is None:
+            return None, None
+        key = (split, episode_id)
+        if key not in self._targets:
+            ids = set(e.target_object_ids)
+            shape = e.target_mask or next((o.contour for o in self.objects.get(e.map_name) or [] if o.id in ids), None)
+            ring = [self.lonlat(e.map_name, p) for p in shape or ()]
+            self._targets[key] = ring if ring and all(ring) else None
+        return self._targets[key], self.lonlat(e.map_name, e.target_xy)
 
-    def entry(self, e) -> dict[str, Any]:
+    def entry(self, split: str, e) -> dict[str, Any]:
         return {"episode_id": e.episode_id, "instruction": e.description, "map": e.map_name,
-                "target_lonlat": self.target_lonlat(e.episode_id)}
+                "target_lonlat": self.target(split, e.episode_id)[0]}
+
+    def _picture(self, map_name: str):
+        """``--basemap``'s picture of ``map_name`` as ``(rgb, bounds, px_per_m)`` over the bake's bounds, or None."""
+        from PIL import Image  # noqa: PLC0415
+
+        arg = self._picture_arg
+        if arg is None or not (self.tiles_dir / f"{map_name}_meta.json").is_file():
+            return None
+        if Path(arg).is_dir():
+            path = next((p for ext in (".jpg", ".jpeg", ".png") if (p := Path(arg) / f"{map_name}{ext}").is_file()), None)
+        else:
+            path = Path(arg) if map_name == self.map_name else None
+        if path is None:
+            return None
+        Image.MAX_IMAGE_PIXELS = None  # a basemap of a whole block is large by design
+        rgb = np.asarray(Image.open(path).convert("RGB"))
+        bounds = map_bounds(self.tiles_dir, map_name)
+        return rgb, bounds, rgb.shape[1] / (bounds.x_max - bounds.x_min)
+
+    def _basemap(self, map_name: str):
+        """What a map's tiles are cut from, ``(rgb, bounds, px_per_m)``: its raster pair, else
+        ``--basemap``'s north-up picture of the bake's whole extent; None for a map that is not
+        placed or has neither."""
+        if self.place(map_name) is None:
+            return None
+        try:
+            return map_render.load_raster(self.raster_dir, map_name) or self._picture(map_name)
+        except Exception:  # noqa: BLE001 -- a raster that does not read leaves the map bare, and the review standing
+            log.exception("no basemap for %s", map_name)
+            return None
+
+    def _tile(self, map_name: str, z: int, x: int, y: int) -> bytes | None:
+        ortho, at = self.basemap(map_name), self.place(map_name)
+        return tile_png(ortho, at.to_local, z, x, y) if ortho is not None and at is not None else None
 
     # -- a run as the console's state document ------------------------------
 
@@ -235,99 +351,157 @@ class Station:
             transcript[i] = {**transcript[i], "said": text}
         return replies[-1]
 
-    def _flights(self, points, targets: list[str | None]) -> list[dict[str, Any]]:
-        return [self._placed({"step_idx": i, "target": targets[i] if i < len(targets) else None,
-                              "resolved_xy": [float(xy[0]), float(xy[1])]}, xy) for i, xy in enumerate(points)]
+    def _flights(self, map_name: str | None, points, targets: list[str | None]) -> list[dict[str, Any]]:
+        return [self._placed(map_name, {"step_idx": i, "target": targets[i] if i < len(targets) else None,
+                                        "resolved_xy": [float(xy[0]), float(xy[1])]}, xy)
+                for i, xy in enumerate(points)]
 
-    def run_state(self, sortie: Path, row: dict[str, Any]) -> dict[str, Any]:
-        """A ledger row and its run folder as the console's ``MissionState``."""
-        workdir = sortie / row["workdir"]
-        prov = row.get("provenance") or {}
-        transcript = list(iter_json_rows(workdir / CONVERSATION_JSONL))
-        report = self._reported(workdir, transcript)
+    @staticmethod
+    def _summary(root_name: str, row: dict[str, Any]) -> dict[str, Any]:
+        """A ledger row as the run list shows it: the console's ``MissionState`` off the row alone, no file read."""
+        prov, m = row.get("provenance") or {}, rows.metrics(row)
+        eid = row.get("episode_id") or ""
         return {
-            "version": 0, "path": f"{sortie.name}/{row['workdir']}", "episode_id": row.get("episode_id"),
-            "split": row.get("split"), "kind": "replay", "run_no": row.get("run_no"),
+            "version": 0, "path": f"{root_name}/{row['workdir']}", "episode_id": eid,
+            "split": row.get("split") or prov.get("split"), "kind": "replay", "run_no": row.get("run_no"),
             "status": "failed" if row.get("status") == STATUS_INFRA else "ended",
-            "instruction": row.get("description") or "", "ended_by": row.get("ended_by"), "error": row.get("error"),
-            "reply_text": report, "turns_used": row.get("turns_used") or 0,
-            "flights_flown": row.get("flights_flown") or 0, "started_at": row.get("ts"),
+            "instruction": row.get("description") or "", "ended_by": rows.ended_by(row), "error": row.get("error"),
+            "reply_text": None, "turns_used": row.get("turns_used") or (m.get("llm") or {}).get("turns") or 0,
+            # A bench row does not count its flights: the review counts the stops it flew.
+            "flights_flown": row.get("flights_flown"), "started_at": _started(row),
             "git_commit": prov.get("git_commit"), "git_dirty": prov.get("git_dirty"),
-            "map_name": row.get("map_name"), "target_lonlat": self.target_lonlat(row.get("episode_id") or ""),
-            "transcript": transcript, "flights": self._flights((row.get("visited_xy") or [])[1:], []),
-            "observations": self._observations(workdir, []), "leg": None, "score": row.get("metrics"),
-            "duration_s": row.get("elapsed_s"),
+            "map_name": row.get("map_name") or eid.partition("::")[0] or None, "target_lonlat": None,
+            "target_point": None, "commit_lonlat": None, "transcript": [], "flights": [], "observations": [],
+            "leg": None, "score": row.get("metrics"), "duration_s": None,
         }
+
+    def run_state(self, root: Path, row: dict[str, Any]) -> dict[str, Any]:
+        """A ledger row and its attempt folder as the console's ``MissionState``."""
+        doc = self._summary("." if root == self.out else root.name, row)
+        workdir, where = root / row["workdir"], doc["map_name"]
+        transcript = list(iter_json_rows(workdir / CONVERSATION_JSONL))
+        if "flights_flown" in row:
+            # A flight mission's row: its start, then each flight it is scored on.
+            flights = self._flights(where, (row.get("visited_xy") or [])[1:], [])
+        else:
+            # A bench row's visited_xy is the six-action replay; the stops it flew are the tour cursor's.
+            try:
+                stops = json.loads((workdir / TOUR_CURSOR).read_text())["stops_visited"]
+            except (OSError, ValueError, KeyError):
+                stops = []
+            flights = self._flights(where, [s["xy"] for s in stops], [s.get("stop_id") for s in stops])
+        ring, point = self.target(doc["split"], doc["episode_id"])
+        return {**doc, "reply_text": self._reported(workdir, transcript), "transcript": transcript,
+                "flights": flights, "flights_flown": row.get("flights_flown", len(flights)),
+                "observations": self._observations(workdir, []), "target_lonlat": ring,
+                "target_point": point or self.lonlat(where, row.get("target_xy")),
+                "commit_lonlat": self.lonlat(where, row.get("commit_xy"))}
 
     def seat_state(self) -> dict[str, Any] | None:
         """The mission in the seat as the console's ``MissionState``, or None with the seat empty."""
         m = self.mission
         if m is None:
             return None
+        kind = getattr(m, "kind", "twin")
+        row = m.row if kind == "bench" else None  # the scored row of a bench episode that has ended
+        where = m.map_name or self.map_name
         flights = list(m.flights)
         targets = [str(f.get("target") or f.get("target_fid") or "") or None for f in flights]
         transcript = list(m.transcript)
         observations = self._observations(m.workdir, targets)
         report = self._reported(m.workdir, transcript) if m.status in ("awaiting_tasking", "ended") else None
+        ring, point = self.target(m.split, m.episode_id)
         return {
-            "version": hash((m.status, len(transcript), len(flights), len(observations), m.error,
+            "version": hash((m.status, len(transcript), len(flights), len(observations), m.error, row is not None,
                              json.dumps(m.waiting, default=str))),
             "path": f"{m.workdir.parent.name}/{m.workdir.name}", "episode_id": m.episode_id, "split": m.split,
-            "kind": "twin", "run_no": m.run_no, "status": "ready" if m.status == "idle" else m.status,
+            "kind": kind, "run_no": m.run_no, "status": "ready" if m.status == "idle" else m.status,
             "instruction": m.instruction, "ended_by": m.ended_by, "error": m.error, "reply_text": report,
             "turns_used": m.turns(), "flights_flown": len(flights), "started_at": m.started_at,
-            "git_commit": m.git_commit, "git_dirty": m.git_dirty, "map_name": m.map_name or self.map_name,
-            "target_lonlat": self.target_lonlat(m.episode_id), "transcript": transcript,
-            "flights": self._flights([f["resolved_xy"] for f in flights if f.get("resolved_xy")], targets),
-            "observations": observations, "score": None,
+            "git_commit": m.git_commit, "git_dirty": m.git_dirty, "map_name": where,
+            "target_lonlat": ring, "target_point": point,
+            "commit_lonlat": self.lonlat(where, (row or {}).get("commit_xy")), "transcript": transcript,
+            "flights": self._flights(where, [f["resolved_xy"] for f in flights if f.get("resolved_xy")], targets),
+            "observations": observations, "score": getattr(m, "score", None),
             "leg": ({"closest_m": 0.0, "short_passes": 0, "packageVersion": "", **m.waiting}
                     if m.waiting is not None else None),
         }
 
+    def roots(self) -> list[Path]:
+        """The run roots under the output root, newest name first: each folder holding a ledger, the root itself included."""
+        found = sorted((p.parent for p in self.out.glob(f"*/{EPISODES_JSONL}")), reverse=True)
+        return found + ([self.out] if (self.out / EPISODES_JSONL).is_file() else [])
+
     def runs(self) -> list[dict[str, Any]]:
-        """Every finished run under the output root, newest first; the one in the seat is the seat's."""
+        """Every finished run under the output root, newest first; the one in the seat is the seat's.
+        A ledger is read again only when it has changed."""
         seat = self._sortie if self.mission is not None and self.mission.status in LIVE else None
         out = []
-        for ledger in sorted(self.out.glob(f"*/{EPISODES_JSONL}"), reverse=True):
-            if ledger.parent != seat:
-                out += [self.run_state(ledger.parent, r) for r in reversed(list(iter_json_rows(ledger)))
-                        if r.get("workdir")]
+        for root in self.roots():
+            if root == seat:
+                continue
+            ledger = root / EPISODES_JSONL
+            stat = ledger.stat()
+            key = (stat.st_mtime_ns, stat.st_size)
+            if self._ledgers.get(root, (None,))[0] != key:
+                name = "." if root == self.out else root.name
+                self._ledgers[root] = (key, [self._summary(name, r) for r in reversed(list(iter_json_rows(ledger)))
+                                             if r.get("workdir")])
+            out += self._ledgers[root][1]
         return out
 
     def run_at(self, path: str) -> tuple[Path, dict[str, Any]]:
-        """The sortie folder and ledger row a ``<sortie>/<workdir>`` path names."""
-        sortie_name, _, workdir = path.partition("/")
-        sortie = self.out / sortie_name
-        if not sortie_name or ".." in Path(path).parts or not (sortie / EPISODES_JSONL).is_file():
+        """The run root and ledger row a ``<root>/<workdir>`` path names (``.`` the output root
+        itself); 404 for a path that names none, or that leaves the output root."""
+        root_name, _, workdir = path.partition("/")
+        root = self.out / root_name
+        if (not root_name or ".." in Path(path).parts or not root.resolve().is_relative_to(self.out.resolve())
+                or not (root / EPISODES_JSONL).is_file()):
             raise HTTPException(404, f"no run at {path!r}")
-        rows = [r for r in iter_json_rows(sortie / EPISODES_JSONL) if r.get("workdir")]
-        row = next((r for r in reversed(rows) if r["workdir"] == workdir), rows[-1] if rows and not workdir else None)
+        found = [r for r in iter_json_rows(root / EPISODES_JSONL) if r.get("workdir")]
+        row = next((r for r in reversed(found) if r["workdir"] == workdir), found[-1] if found and not workdir else None)
         if row is None:
             raise HTTPException(404, f"no run at {path!r}")
-        return sortie, row
+        return self.out if root_name == "." else root, row
 
-    def track(self, sortie: Path, row: dict[str, Any]) -> list[dict[str, Any]]:
-        """The run's flown path off the sortie's ``flight_track.jsonl``, mission seconds from its start."""
+    def track(self, root: Path, row: dict[str, Any]) -> list[dict[str, Any]]:
+        """The run's flown path off the root's ``flight_track.jsonl``, mission seconds from its start;
+        empty for a run that recorded none (a bench run: its aircraft was placed, not flown)."""
         t0, length = row.get("started_at_utc"), row.get("elapsed_s")
         if t0 is None:
             return []
-        out = []
-        for fix in iter_json_rows(sortie / TRACK_JSONL):
+        where, out = row.get("map_name"), []
+        for fix in iter_json_rows(root / TRACK_JSONL):
             t = float(fix["t_unix"]) - float(t0)
             if -1e-6 <= t <= (float(length) if length is not None else math.inf) + 1.0:
-                out.append(self._placed({"t_s": round(t, 2), "x": fix["x"], "y": fix["y"],
-                                         "track_deg": fix.get("track_deg") or 0.0,
-                                         "agl_m": fix.get("alt_agl_m") or 0.0,
-                                         "speed_mps": fix.get("ground_speed_mps") or 0.0}, (fix["x"], fix["y"])))
+                out.append(self._placed(where, {"t_s": round(t, 2), "x": fix["x"], "y": fix["y"],
+                                                "track_deg": fix.get("track_deg") or 0.0,
+                                                "agl_m": fix.get("alt_agl_m") or 0.0,
+                                                "speed_mps": fix.get("ground_speed_mps") or 0.0}, (fix["x"], fix["y"])))
         return out
+
+    def replay(self, path: str) -> dict[str, Any]:
+        """One run under review: its state document, the path it flew, and the scrubber's length.
+        A run with a recorded track scrubs along it; one without draws ``visited_xy`` as its path,
+        one sample a pose in order, and has nothing to scrub (``duration_s`` None)."""
+        root, row = self.run_at(path)
+        doc, track = self.run_state(root, row), self.track(root, row)
+        if track:
+            return {**doc, "track": track, "duration_s": row.get("elapsed_s")}
+        where = doc["map_name"]
+        return {**doc, "duration_s": None,
+                "track": [self._placed(where, {"t_s": float(i), "x": float(p[0]), "y": float(p[1]),
+                                               "track_deg": 0.0, "agl_m": 0.0}, p)
+                          for i, p in enumerate(row.get("visited_xy") or [])]}
 
     # -- the aircraft --------------------------------------------------------
 
     def ownship(self, path: str | None, t: float) -> dict[str, Any] | None:
-        """Where the aircraft is: the twin's pose now, or a reviewed run's at mission second ``t``."""
+        """Where the aircraft is: the seat's pose now, or a reviewed run's at mission second ``t``
+        (None for a run with no recorded track)."""
         if path:
-            sortie, row = self.run_at(path)
-            track = self.track(sortie, row)
+            root, row = self.run_at(path)
+            track = self.track(root, row)
             if not track:
                 return None
             at = min(track, key=lambda p: abs(p["t_s"] - t))
@@ -335,67 +509,109 @@ class Station:
         m = self.mission
         if m is None or m.status not in LIVE:
             return None
+        if getattr(m, "kind", "twin") == "bench":
+            # A bench flight is a placement: the aircraft stands at its last stop, its trail the stops in order.
+            pose = m.pose()
+            if pose is None:
+                return None
+            stops = [m.episode.start_xy, *(f["resolved_xy"] for f in m.flights)]
+            return {**self._placed(m.map_name, {"x": pose[0], "y": pose[1], "track_deg": 0.0, "agl_m": pose[2],
+                                                "speed_mps": 0.0, "map": m.map_name, "t_s": m.elapsed_s(),
+                                                "live": True}, pose),
+                    "trail": [ll for p in stops if (ll := self.lonlat(m.map_name, p)) is not None]}
         pose, own = m.live.pose_now(), m.live.ownship()
         if pose is None or own is None:
             return None
-        doc = self._placed({"x": own["x"], "y": own["y"], "track_deg": pose.track_deg, "agl_m": own["agl_m"],
-                            "speed_mps": pose.speed_mps, "map": self.map_name, "t_s": m.elapsed_s(),
-                            "live": True}, (own["x"], own["y"]))
+        doc = self._placed(self.map_name, {"x": own["x"], "y": own["y"], "track_deg": pose.track_deg,
+                                           "agl_m": own["agl_m"], "speed_mps": pose.speed_mps, "map": self.map_name,
+                                           "t_s": m.elapsed_s(), "live": True}, (own["x"], own["y"]))
         if "lon" in doc and (not self._trail or self._trail[-1] != [doc["lon"], doc["lat"]]):
             self._trail = (self._trail + [[doc["lon"], doc["lat"]]])[-TRAIL_POINTS:]
         return {**doc, "trail": list(self._trail)}
 
     # -- the seat ------------------------------------------------------------
 
-    def start(self, episode_id: str | None, instruction: str, effort: str | None) -> dict[str, Any]:
-        """Fly a catalog row, or the operator's own words from the map's centre, on a twin of its own."""
-        if self.ortho is None:
-            raise HTTPException(409, "this station reviews runs only: start it with --ortho <raster dir> to fly")
+    def start(self, episode_id: str | None, instruction: str, effort: str | None,
+              split: str | None = None) -> dict[str, Any]:
+        """Fly a mission from the seat: on Cal City a catalog row, or the operator's own words from
+        the map's centre, on a twin of its own; on CityNav a row of ``split`` through the bench's runner."""
+        if (why := self.why_not_flying()) is not None:
+            raise HTTPException(409, why)
         with self._lock:
             if self.mission is not None and self.mission.status in LIVE:
                 raise HTTPException(409, f"mission {self.mission.episode_id} is flying; stop it first")
-            if episode_id is not None and episode_id not in self.by_id:
-                if OPERATOR not in episode_id:
-                    raise HTTPException(404, f"{self.split} holds no episode {episode_id}")
-                episode_id = None  # an operator's past tasking, picked again: its words fly as a mission of their own
-            start_xy = None
-            if episode_id is None:
-                b = map_bounds(self.tiles_dir, self.map_name)
-                start_xy = ((b.x_min + b.x_max) / 2, (b.y_min + b.y_max) / 2)
-                episode_id = f"{self.map_name}{OPERATOR}{time.strftime('%H%M%S', time.gmtime())}"
-            cfg = flight_config(self.config, self.bench.environ)
-            sensor = resolve_sensor(cfg.sensor)
-            episode = resolve_episode(self.bench, episode_id, self.split, start_xy)
-            start_alt, ground = self.bench.engine.start_altitude_m(cfg, self.map_name, episode.start_z)
-            twin = Twin(tiles_dir=self.tiles_dir, map_name=self.map_name, ortho=self.ortho, sensor=sensor,
-                        start_xy=episode.start_xy, agl_m=start_alt - ground)
-            live = open_live(vehicle=twin, tiles_dir=self.tiles_dir, map_name=self.map_name, sensor=sensor,
-                             register_raster=self.register)
             stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            self._sortie = self.out / stamp
-            ep = open_episode_dir(self._sortie, episode_id=episode_id, benchmark=self.bench.name, run_no=1)
-            mission = Mission(bench=self.bench, episode_id=episode_id, split=self.split, config=self.config, workdir=ep.dir, live=live,
-                              instruction=instruction.strip() or None, recorder=ep.recorder, close_log=ep.close,
-                              run_id=stamp, run_no=1, start_xy=start_xy, reasoning_effort=effort,
-                              agl_m=start_alt - ground)
+            if self.bench.name == "calcity":
+                mission = self._twin_mission(episode_id, instruction, effort, stamp)
+            else:
+                mission = self._bench_mission(episode_id, instruction, effort, split or self.split, stamp)
             self.mission, self._trail = mission, []
             mission.start()
-            # The live source closes when the mission's thread ends, however it ends.
-            threading.Thread(target=lambda: (mission.wait(), live.close()), name="station-close", daemon=True).start()
         return self.seat_state()
 
+    def _bench_mission(self, episode_id: str | None, instruction: str, effort: str | None, split: str,
+                       stamp: str) -> BenchMission:
+        if episode_id is None:
+            raise HTTPException(400, f"a {self.bench.name} mission is a row of its split: pick one, then send")
+        episode = self.catalog(split)[1].get(episode_id)
+        if episode is None:
+            raise HTTPException(404, f"{split} holds no episode {episode_id}")
+        if (why := missing_bake(self.bench.tile_stem(episode.map_name))) is not None:
+            raise HTTPException(409, why)
+        if not map_render.holds_raster(self.bench.rgbd_dir, episode.map_name):
+            raise HTTPException(409, f"no {episode.map_name} raster under {self.bench.rgbd_dir}: "
+                                     f"the flights of this episode have nothing to see")
+        self._sortie = self.out / stamp
+        ep = open_episode_dir(self._sortie, episode_id=episode_id, benchmark=self.bench.name)
+        return BenchMission(bench=self.bench, episode=with_words(episode, instruction), split=split,
+                            config=self.config, objects_by_map=self.objects, sortie=self._sortie, ep=ep,
+                            reasoning_effort=effort)
+
+    def _twin_mission(self, episode_id: str | None, instruction: str, effort: str | None, stamp: str) -> Mission:
+        if episode_id is not None and episode_id not in self.catalog(self.split)[1]:
+            if OPERATOR not in episode_id:
+                raise HTTPException(404, f"{self.split} holds no episode {episode_id}")
+            episode_id = None  # an operator's past tasking, picked again: its words fly as a mission of their own
+        start_xy = None
+        if episode_id is None:
+            b = map_bounds(self.tiles_dir, self.map_name)
+            start_xy = ((b.x_min + b.x_max) / 2, (b.y_min + b.y_max) / 2)
+            episode_id = f"{self.map_name}{OPERATOR}{time.strftime('%H%M%S', time.gmtime())}"
+        cfg = flight_config(self.config, self.bench.environ)
+        sensor = resolve_sensor(cfg.sensor)
+        episode = resolve_episode(self.bench, episode_id, self.split, start_xy)
+        start_alt, ground = self.bench.engine.start_altitude_m(cfg, self.map_name, episode.start_z)
+        twin = Twin(tiles_dir=self.tiles_dir, map_name=self.map_name,
+                    ortho=map_render.load_raster(self.ortho_dir, self.map_name), sensor=sensor,
+                    start_xy=episode.start_xy, agl_m=start_alt - ground)
+        live = open_live(vehicle=twin, tiles_dir=self.tiles_dir, map_name=self.map_name, sensor=sensor,
+                         register_raster=self.register)
+        self._sortie = self.out / stamp
+        ep = open_episode_dir(self._sortie, episode_id=episode_id, benchmark=self.bench.name, run_no=1)
+        mission = Mission(bench=self.bench, episode_id=episode_id, split=self.split, config=self.config,
+                          workdir=ep.dir, live=live, instruction=instruction.strip() or None, recorder=ep.recorder,
+                          close_log=ep.close, run_id=stamp, run_no=1, start_xy=start_xy, reasoning_effort=effort,
+                          agl_m=start_alt - ground)
+        # The live source closes when the mission's thread ends, however it ends.
+        threading.Thread(target=lambda: (mission.wait(), live.close()), name="station-close", daemon=True).start()
+        return mission
+
     def clear(self) -> None:
-        """Stop the mission in the seat and empty it; its run stays under the output root."""
+        """Stop the mission in the seat and empty it; its run stays under the output root. A bench
+        episode is scored as it ends, so its row is waited for."""
         with self._lock:
             mission, self.mission, self._trail = self.mission, None, []
         if mission is not None:
             mission.stop()
+            if isinstance(mission, BenchMission):
+                mission.wait(END_WAIT_S)
 
 
 class _Next(BaseModel):
     episode_id: str | None = None
     instruction: str = ""
     reasoning_effort: str | None = None
+    split: str | None = None
 
 
 class _Tasking(BaseModel):
@@ -405,18 +621,33 @@ class _Tasking(BaseModel):
 def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
     app = FastAPI(title="MAPS station")
 
+    def the_map(name: str | None) -> str:
+        """The map a request names (the station's default when it names none); 404 for a name that is no map's."""
+        name = name or station.map_name
+        if not name or not MAP_NAME.fullmatch(name):
+            raise HTTPException(404, f"no map {name!r}")
+        return name
+
+    @app.get("/station")
+    def about() -> dict[str, Any]:
+        return station.about()
+
     @app.get("/missions")
-    def missions(q: str | None = None, limit: int = 200) -> dict[str, Any]:
+    def missions(q: str | None = None, limit: int = 200, split: str | None = None) -> dict[str, Any]:
+        split = split or station.split
+        catalog, by_id = station.catalog(split)
         words = (q or "").lower().split()
-        hits = [e for e in station.catalog
-                if all(w in e.description.lower() or w in e.episode_id.lower() for w in words)]
-        # A run flown under the operator's own words has no row in the split: it lists first, by its words.
+        hits = [e for e in catalog if all(w in e.description.lower() or w in e.episode_id.lower() for w in words)]
+        # A run with no row in the split shown (flown under the operator's own words, or reviewed on a
+        # station without the split's file) lists first, by its words.
         own = {r["episode_id"]: {"episode_id": r["episode_id"], "instruction": r["instruction"],
                                  "map": r["map_name"], "target_lonlat": None}
-               for r in reversed(station.runs()) if r["episode_id"] not in station.by_id}
-        mine = [m for m in own.values() if all(w in m["instruction"].lower() for w in words)]
-        return {"missions": mine + [station.entry(e) for e in hits[:max(0, limit)]],
-                "total": len(station.catalog) + len(own)}
+               for r in reversed(station.runs())
+               if r["episode_id"] not in by_id and r["split"] in (None, split)}
+        mine = [m for m in own.values()
+                if all(w in m["instruction"].lower() or w in m["episode_id"].lower() for w in words)]
+        return {"split": split, "total": len(catalog) + len(own),
+                "missions": (mine + [station.entry(split, e) for e in hits])[:max(0, limit)]}
 
     @app.get("/reasoner")
     def reasoner() -> dict[str, Any]:
@@ -454,7 +685,7 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
     def mission_next(req: _Next) -> dict[str, Any]:
         if not req.instruction.strip() and req.episode_id is None:
             raise HTTPException(400, "a mission needs a catalog row or the operator's words")
-        return station.start(req.episode_id, req.instruction, req.reasoning_effort)
+        return station.start(req.episode_id, req.instruction, req.reasoning_effort, req.split)
 
     @app.post("/mission/tasking")
     def mission_tasking(req: _Tasking) -> dict[str, Any]:
@@ -471,8 +702,7 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
 
     @app.get("/replay")
     def replay(path: str) -> dict[str, Any]:
-        sortie, row = station.run_at(path)
-        return {**station.run_state(sortie, row), "track": station.track(sortie, row)}
+        return station.replay(path)
 
     @app.get("/mission/ownship")
     def mission_ownship(path: str | None = None, t: float = 0.0) -> dict[str, Any] | None:
@@ -480,44 +710,46 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
 
     @app.get("/mission/prior.json")
     def mission_prior(map: str | None = None) -> Response:
-        name = map or station.map_name
+        name = the_map(map)
         if not (station.tiles_dir / f"{name}_features.json").is_file():
             raise HTTPException(404, f"no features for {name!r}")
         return Response(prior_json(str(station.tiles_dir), name), media_type="application/json",
                         headers={"Cache-Control": "public, max-age=86400"})
 
+    def bbox(name: str, b) -> list[float]:
+        (w, s), (e, n) = station.lonlat(name, (b.x_min, b.y_min)), station.lonlat(name, (b.x_max, b.y_max))
+        return [w, s, e, n]
+
     @app.get("/area")
-    def area() -> dict[str, Any]:
-        if not station.baked:
-            raise HTTPException(404, "no bake: the map has no georef")
-        b = map_bounds(station.tiles_dir, station.map_name)
-        (w, s), (e, n) = station.lonlat((b.x_min, b.y_min)), station.lonlat((b.x_max, b.y_max))
-        return {"map": station.map_name, "bbox": [w, s, e, n]}
+    def area(map: str | None = None) -> dict[str, Any]:
+        """A map's extent, off its bake; 404 for a map with no bake or no placement."""
+        name = the_map(map)
+        if station.place(name) is None or not (station.tiles_dir / f"{name}_meta.json").is_file():
+            raise HTTPException(404, f"{name} has no bake, or no georeference: it is placed nowhere")
+        return {"map": name, "bbox": bbox(name, map_bounds(station.tiles_dir, name))}
 
     @app.get("/location")
-    def location() -> dict[str, Any]:
-        """The basemap: tiles over the raster's (or the picture's) extent; 404 on a station with neither."""
-        if station.basemap is None:
-            raise HTTPException(404, "no raster or picture: the map draws no basemap")
-        b = station.basemap[1]
-        (w, s), (e, n) = station.lonlat((b.x_min, b.y_min)), station.lonlat((b.x_max, b.y_max))
-        return {"name": station.map_name, "label": station.map_name, "bounds": [w, s, e, n],
-                "center": {"lat": (s + n) / 2, "lon": (w + e) / 2}, "tiles": "tiles/{z}/{x}/{y}.png",
+    def location(map: str | None = None) -> dict[str, Any]:
+        """A map's basemap: tiles over its raster's (or its picture's) extent; 404 for a map with neither."""
+        name = the_map(map)
+        basemap = station.basemap(name)
+        if basemap is None:
+            raise HTTPException(404, f"no raster or picture of {name}, or no georeference: it draws no basemap")
+        w, s, e, n = bounds = bbox(name, basemap[1])
+        return {"name": name, "label": name, "bounds": bounds,
+                "center": {"lat": (s + n) / 2, "lon": (w + e) / 2}, "tiles": f"tiles/{name}/{{z}}/{{x}}/{{y}}.png",
                 "minzoom": TILE_ZOOMS[0], "maxzoom": TILE_ZOOMS[1], "attribution": ""}
 
-    tile = functools.lru_cache(maxsize=1024)(
-        lambda z, x, y: tile_png(station.basemap, station.tiles_dir, station.map_name, z, x, y))
-
-    @app.get("/tiles/{z}/{x}/{y}.png")
-    def tiles(z: int, x: int, y: int) -> Response:
-        png = tile(z, x, y) if station.basemap is not None and TILE_ZOOMS[0] <= z <= TILE_ZOOMS[1] else None
+    @app.get("/tiles/{map}/{z}/{x}/{y}.png")
+    def tiles(map: str, z: int, x: int, y: int) -> Response:
+        png = station.tile(the_map(map), z, x, y) if TILE_ZOOMS[0] <= z <= TILE_ZOOMS[1] else None
         if png is None:
             raise HTTPException(404)
         return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/run/file")
     def run_file(path: str) -> FileResponse:
-        """One file of a run, by ``<sortie>/<workdir>/<name>``; nothing outside the output root."""
+        """One file of a run, by ``<root>/<workdir>/<name>``; nothing outside the output root."""
         root = station.out.resolve()
         target = (root / path).resolve()
         if not target.is_relative_to(root) or not target.is_file():
@@ -540,14 +772,21 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--config", default="configs/calcity.yaml")
+    ap.add_argument("--bench", choices=BENCHES, default="citynav",
+                    help="the bench whose catalog, maps and runs the station serves (default citynav)")
+    ap.add_argument("--config", default=None, help="the run config (default configs/<bench>.yaml)")
+    ap.add_argument("--out", type=Path, default=Path("output/station"),
+                    help="where runs land and are reviewed from: one run root, or a directory of them")
     ap.add_argument("--ortho", type=Path, default=None,
-                    help="the raster directory the twin's frames and the basemap are cut from; unset reviews runs only")
+                    help="Cal City: the raster directory the twin's frames and the basemap are cut from; "
+                         "unset reviews runs only")
     ap.add_argument("--register", type=Path, default=None,
-                    help="the raster directory each frame is registered against; unset registers nothing")
+                    help="Cal City: the raster directory each frame is registered against; unset registers nothing")
     ap.add_argument("--basemap", type=Path, default=None,
-                    help="a north-up picture of the bake's whole extent, for a reviewing station's map; --ortho replaces it")
-    ap.add_argument("--out", type=Path, default=Path("output/station"), help="where runs land and are reviewed from")
+                    help="for a map with no raster: a north-up picture of its bake's whole extent, or a "
+                         "directory of them named <map>.jpg or <map>.png")
+    ap.add_argument("--osm-cache", type=Path, default=OSM_CACHE_DIR,
+                    help="the OSM caches a CityNav block is placed by (default tiles/osm_cache)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8788)
     args = ap.parse_args(argv)
@@ -556,11 +795,17 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn  # noqa: PLC0415
 
     args.out.mkdir(parents=True, exist_ok=True)
-    station = Station(bench=calcity_bench(os.environ), config=args.config, out=args.out, ortho_dir=args.ortho, register=args.register,
-                      basemap=args.basemap)
+    station = Station(bench=bench_named(args.bench, os.environ), config=args.config or f"configs/{args.bench}.yaml",
+                      out=args.out, ortho_dir=args.ortho, register=args.register, basemap=args.basemap,
+                      osm_cache_dir=args.osm_cache)
+    if (why := station.why_not_flying()) is not None:
+        log.info("%s", why)
     if not (WEB_DIST / "index.html").is_file():
         log.warning("no built console at %s: run `npm ci && npm run build` in station/web", WEB_DIST)
-    uvicorn.run(build_app(station), host=args.host, port=args.port, log_level="warning")
+    try:
+        uvicorn.run(build_app(station), host=args.host, port=args.port, log_level="warning")
+    finally:
+        station.clear()  # a bench episode holding at its report is scored and its row landed
     return 0
 
 
