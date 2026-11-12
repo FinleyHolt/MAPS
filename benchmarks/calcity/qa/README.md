@@ -27,8 +27,8 @@ The `shape` column says where each target's shape comes from:
 
 | `shape` | Lines | Source |
 |---|---|---|
-| `target_mask` | 1,074 | A polygon drawn in the row |
-| `object <ids>` | 26 | The contour of the linked object in `objects.json` (the "house on the corner of" prompts) |
+| `target_mask` | 1,074 | Polygon drawn in the row |
+| `object <ids>` | 26 | Contour of the linked object in `objects.json` (the "house on the corner of" prompts) |
 
 In scoring, a linked object's contour wins over a drawn `target_mask`
 (`benchmarks/citynav/eval.py`).

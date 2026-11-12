@@ -1,8 +1,8 @@
 # Install and endpoints
 
 MAPS calls two services: an OpenAI-compatible reasoner and the SAM 3.1 serve.
-This page covers the install, both services, and every environment variable
-the engine reads.
+This page covers the install, both services, and the environment variables
+that configure them.
 
 ## Install
 
@@ -72,7 +72,8 @@ The serve runs in its own environment, because Meta's `sam3` package requires
 
 The serve runs on one GPU (`SAM_DEVICE`). The client finds it at
 `SAM_SERVER_URL` (default `http://127.0.0.1:8772`), which also takes a comma
-list of replicas.
+list of replicas. The serve listens on `0.0.0.0`, every interface, by default
+and has no authentication; `--host` sets the address it binds.
 
 ## Reasoner
 
@@ -87,15 +88,24 @@ keys exactly:
 |---|---|
 | `inkling-small`, `qwen38-flash-next-nvfp4`, `gemma4-26b-a4b-nvfp4` | Inkling Small, Qwen 3.8 Flash Next, and Gemma 4 26B-A4B, the models of E2 and E3. |
 | `gemma4-e4b`, `gemma4-e2b` | Gemma 4 E4B and E2B (E2). |
-| `gemma4-26b-a4b-gguf` | Gemma 4 26B-A4B on the llama.cpp serve flown aboard. |
+| `gemma4-26b-a4b-gguf` | Gemma 4 26B-A4B on a llama.cpp serve. |
 | `kimi-k3.1-pro` | Kimi K3.1 Pro. |
 | `deepseek-v4.1-flash-1017` | DeepSeek V4.1 Flash 1017. |
 | `gpt-5.6-sol` | GPT-5.6 Sol on an Azure deployment. See [GPT-5.6 Sol on Azure](#gpt-56-sol-on-azure). |
 
 Startup refuses any other name and prints the list. To fly another model, add
-its card to that table. Every request runs in thinking mode at temperature
-1.0, and `max_tokens` is the output reserve of the discovered window. The
-OpenAI-wire card takes both in OpenAI's own terms.
+its card to that table. A chat-template card's request carries temperature
+1.0 and `enable_thinking: true`, except `gemma4-26b-a4b-nvfp4` at effort
+`none`, which sends `enable_thinking: false`. `max_tokens` is the output
+reserve of the discovered window. The OpenAI-wire card takes the effort and
+the output cap in OpenAI's own terms.
+
+The compactor counts tokens with the card's tokenizer, which it downloads from
+the Hugging Face Hub at first use. A gated tokenizer repository needs
+`HF_TOKEN` with access to it; an offline machine needs
+`SEARCH_COMPACT_TOKENIZER_NAME` naming a local copy. For each card's
+repository and its license, see
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#used-and-not-redistributed).
 
 To check an endpoint before a run:
 
@@ -127,11 +137,24 @@ variables that locate each bench's data, see
 | `SEARCH_REASONER_MODELS_URL` | Client | Where the served models are listed, for an endpoint that lists them somewhere other than `SEARCH_REASONER_URL/models`. |
 | `SEARCH_SAMPLING_REASONING_EFFORT` | Client | Run's reasoning effort, sent verbatim as the request's `reasoning_effort` string (`0.99`, `xhigh`). Discovery refuses a value the served model's card doesn't take. Unset sends none. |
 | `SEARCH_COMPACT_TOKENIZER_NAME` | Client | HF tokenizer repo, or a local checkpoint directory on an offline machine, replacing the model card's. |
-| `SAM_SERVER_URL` | Client | SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset. A set but blank value, or `SAM_VIDEO_SERVER_URL` set without it, is refused. |
+| `SAM_SERVER_URL` | Client | SAM serve's URL, or a comma list of replicas. Default `http://127.0.0.1:8772` when unset. A set but blank value is refused. |
 | `SAM_PORT`, `SAM_DEVICE` | Serve | Port (8772), device. |
 | `SAM3_CHECKPOINT` | Serve | Local checkpoint file. |
 | `SAM_MAX_INFLIGHT`, `SAM_INFLIGHT_WAIT_S`, `SAM_PREWARM`, `SAM_HEALTH_MIN_FREE_GB` | Serve | Admission, prewarm, and health limits (`serving/sam_server.py`). |
-| `MAPS_IMAGE_STORE_URL` | Client | Image store one fast hop from the reasoner: each inline image is PUT once to `<store>/looks/<sha>` and rides as `sha256:<sha>`; a 409 naming missing shas re-sends them. |
+| `PYTORCH_CUDA_ALLOC_CONF` | Serve | PyTorch's allocator settings. The serve sets `expandable_segments:True` when unset. |
+| `MAPS_IMAGE_STORE_URL` | Client | Image store one fast hop from the reasoner: each inline image is PUT once to `<store>/looks/<sha>` and rides as `sha256:<sha>`; a 409 naming missing shas re-sends them. For the protocol, see the docstring of `maps/llm/http.py`. |
+| `SEARCH_SEED_BASE` | Runner | Base of the per-turn request seed. Unset, each mission takes one from the wall clock. The run manifest records it when set; `run_benchmark --seed-base` overrides it. |
+| `SEARCH_LLM_CACHE_KEY` | Client | Prompt-cache key an OpenAI-wire request carries in place of the episode's routing key. `bench_fullset` sets one per worker. |
+
+The bench driver sets these in each attempt child's environment:
+
+| Variable | Description |
+|---|---|
+| `SEARCH_BENCHMARK_NAME` | Bench the child flies (`citynav` when unset). |
+| `CITYNAV_BENCH_CONFIG` | Run config, relative to the repository root. Default `configs/citynav.yaml`; the Cal City driver sets `configs/calcity.yaml`. |
+| `CITYNAV_EPISODE_DEADLINE_EPOCH` | Epoch at which the mission stops flying: the episode's wall cap less a 10% reserve for the model's reply. |
+| `CITYNAV_BENCH_PARENT_PID` | Driver's process ID; the child exits when the driver is gone. |
+| `SEARCH_LLM_CACHE_KEY` | `<out-root name>/w<worker id>`. |
 
 ## GPT-5.6 Sol on Azure
 

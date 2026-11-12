@@ -55,9 +55,9 @@ benchmark.
 | Requirement | Details |
 |---|---|
 | Reasoner | An OpenAI-compatible endpoint, self-hosted or hosted, that serves a model with a card in [`maps/llm/model_cards.py`](maps/llm/model_cards.py). |
-| Segmenter | SAM 3.1 on one GPU. The checkpoint `facebook/sam3.1` is gated on Hugging Face. |
+| Segmenter | SAM 3.1 on one GPU. The checkpoint `facebook/sam3.1` is gated on Hugging Face. Meta's SAM License covers the checkpoint and the `sam3` package, and bars use "for any activities subject to the International Traffic in Arms Regulations (ITAR)" ([`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md#used-and-not-redistributed)). |
 | CityNav annotations | Downloaded by the setup script. |
-| SensatUrban point clouds | Requested from the authors' [form](https://github.com/QingyongHu/SensatUrban). The terms are CC BY-NC-SA, non-commercial research use, and no redistribution, so this repository ships no raster or picture made from them. |
+| SensatUrban point clouds | Requested from the authors' [form](https://github.com/QingyongHu/SensatUrban), under CC BY-NC-SA. For the terms, see [`docs/data.md`](docs/data.md#citynav). |
 
 ### Steps
 
@@ -101,8 +101,8 @@ benchmark.
    python -m station.serve --bench citynav --out output/citynav
    ```
 
-For data details, see [`docs/data.md`](docs/data.md). For endpoints and every
-environment variable, see [`docs/endpoints.md`](docs/endpoints.md). For the
+For data details, see [`docs/data.md`](docs/data.md). For endpoints and their
+environment variables, see [`docs/endpoints.md`](docs/endpoints.md). For the
 run root's layout and the driver's flags, see
 [`benchmarks/citynav`](benchmarks/citynav/README.md).
 
@@ -129,7 +129,7 @@ The model's Python calls this library:
 | Call | Description |
 |---|---|
 | `find` | Reads rows of the world state by name or class, ordered or cut by place, side, and colour. |
-| `look_for` | Names up to four classes for the segmenter to detect on later flights. |
+| `look_for` | Names up to four classes for the segmenter to detect on later flights. With `at=<place>`, also segments that place for them: a stop already flown there at once (on the bench), else on the next flight. |
 | `go_to` | Flies to one row. |
 | `explore` | Flies a covering pass over a row or a set, and returns the rows it detected. |
 | `look` | Returns a close crop of the sensor's pixels at a row. |
@@ -139,6 +139,10 @@ The model's Python calls this library:
 | `more_of` | Returns the next block of a long result. |
 
 Only `go_to` and `explore` move the aircraft.
+
+The `run` tool executes the model's Python in the process that runs the
+mission, with that process's privileges. To fly a model you don't trust, run
+MAPS inside an isolated environment, such as a container or a virtual machine.
 
 To print the exact system turn and tool schema that the model receives:
 
@@ -158,15 +162,19 @@ For the code behind each part, see [`maps/README.md`](maps/README.md) and
   replay reproduce from the tag
   [`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1)
   (`git checkout paper-v1`).
-- The closed-loop flight recordings aren't distributed.
+- For the closed-loop flight's recordings, see
+  [Flight recordings](docs/data.md#flight-recordings).
 
 ## Use your own aircraft
 
 The flight harness reaches an aircraft through one protocol, `Vehicle`
 ([`benchmarks/flight/vehicle.py`](benchmarks/flight/vehicle.py)): post a leg,
-read poses, and read recorded frames. Implement it, and the mission, the
-observation chain, and the console run over your aircraft. The kinematic twin
-flies a Cal City mission through the same harness:
+read poses, and read recorded frames. Implement it, and the mission and the
+observation chain run over your aircraft. The harness keeps the C-12's
+antenna-to-camera lever arm and camera (`benchmarks/flight/airframe.py`), and
+the twin, the measures, and the station build the Cal City bench; the steps
+in [`docs/flight.md`](docs/flight.md#bring-your-own-aircraft) name each. The
+kinematic twin flies a Cal City mission through the same harness:
 
 ```sh
 python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcity::6#6' --ortho <root>/data/rgbd_upstream
