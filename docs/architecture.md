@@ -38,7 +38,9 @@ directions.
    (`maps/mission/surface_state.py`).
 4. **Block of Python.** `MissionPython` (`maps/library/interpreter.py`) scans
    the model's block (`block_scan.py`, `block_ceilings.py`) and runs it in
-   the mission's one namespace. The calls of `Library` (`calls.py`) are that
+   the mission's one namespace, inside the process that runs the mission and
+   with that process's privileges. To fly a model you don't trust, run MAPS
+   inside an isolated environment, such as a container or a virtual machine. The calls of `Library` (`calls.py`) are that
    namespace's builtins, and each runs on one of the loop's verbs
    (`MissionEnv`, `call_arguments.py`).
 5. **Reading call.** `find`, a `.filter`, an `.order`, `intersection`,
@@ -76,8 +78,8 @@ The world state is one graph (`maps/world_state/graph.py`). A node is a
 | Field | Prior node (`prior_<i>`) | Detected node (`detected_<i>`) |
 |---|---|---|
 | `provenance` | `prebaked` | `detected` |
-| Identity | Its OSM `tags`, verbatim, and its `name` where OSM has one. | The segmenter's label (`class_name`). |
-| Geometry | `world_contour` in world metres (a point, an open way, or a closed ring) and its `cells` on the bake's 2 m grid. | The mask's footprint cells and contour, and the tracker's `world_xy`. |
+| Identity | OSM `tags`, verbatim, and `name` where OSM has one. | Segmenter's label (`class_name`). |
+| Geometry | `world_contour` in world metres (a point, an open way, or a closed ring) and its `cells` on the bake's 2 m grid. | Mask's footprint cells and contour, and the tracker's `world_xy`. |
 | Seen attributes | Colour read from a flight's pixels over its footprint (`upsert_prior_percept`). | Colour read from its mask; `track_id` from the world tracker. |
 
 The frame is local metres, x east and y north. The `QueryContext`
@@ -104,10 +106,11 @@ return (`distance to <place>`, `facing <place>`, `<dir> of <place>`).
 | Call | Reads | Extends |
 |---|---|---|
 | `find`, `.filter`, `.order`, `intersection`, `ends_of`, `distance` | Rows of the surface, prior and detected alike. | Nothing. |
-| `look_for` | Nothing. | The watchlist the segmenter is asked for on every later flight (`maps/perception/watchlist.py`). |
-| `go_to`, `explore` | The row or set flown to. | Detected nodes for every watched class in view; perceived colour on in-view priors. |
-| `look` | The pixels flights have collected at a row. | Nothing: it returns a picture. |
-| `show_map` | The graph around a place. | Nothing: it returns a picture. |
+| `look_for` | Nothing. | Watchlist the segmenter is asked for on every later flight (`maps/perception/watchlist.py`). |
+| `look_for(..., at=<place>)` | Place named. | Watchlist, as above. On the bench, a stop already flown at that place is segmented again for the named classes at once and its detections join the graph; a place not yet flown gets the extra segmentation on the next flight. |
+| `go_to`, `explore` | Row or set flown to. | Detected nodes for every watched class in view; perceived colour on in-view priors. |
+| `look` | Pixels flights have collected at a row. | Nothing: it returns a picture. |
+| `show_map` | Graph around a place. | Nothing: it returns a picture. |
 
 ## Where another system connects
 
@@ -117,8 +120,8 @@ Each side of it has one seam.
 | You have | Seam | What you implement |
 |---|---|---|
 | Aircraft with a camera | `Vehicle` (`benchmarks/flight/vehicle.py`) | `post(leg)`, `pose(t)`, `index(since)`, `frame(seq)`, `now()`, `sleep(s)`. The flight harness does the rest. See [`flight.md`](flight.md#bring-your-own-aircraft). |
-| Planner or autonomy stack that executes moves and returns imagery | `MissionSpec` (`maps/mission/spec.py`) | `fly(item)`: execute one move to `item["target_fid"]`, obtain an observation, and return the flight report. `MissionSession` in `mission_engine.py` is the reference: it segments the observation and folds the detections through `EpisodeWorld`. |
-| Another detector | `build_episode`'s `perception_factory` (`benchmarks/bench.py`, `EpisodeEngine`) | An object with `set_concepts(classes)` and `detect(observation)` returning `DetectedObject`s (`maps/perception/detection.py`), as `SamDetectClient` does. |
+| Planner or autonomy stack that executes moves and returns imagery | `MissionSpec` (`maps/mission/spec.py`) | `fly(item)`: execute one move to `item["target_fid"]`, obtain an observation, and return the flight report, which carries `pose_xy` and `stop_id` (`maps/mission/fly_verbs.py`). `declare_concepts(classes)`: arm the watchlist and return an error string or `None`. `MissionSession` in `mission_engine.py` is the reference: it segments the observation and folds the detections through `EpisodeWorld`. |
+| Another detector | `make_perception(settings)` (`benchmarks/citynav/run_benchmark/episode_runner.py`), which `build_episode` calls | An object with `set_concepts(classes)`, `detect(observation)`, and `segment(observation, classes)` returning `DetectedObject`s (`maps/perception/detection.py`), as `SamDetectClient` does. |
 | Another map source | The bake (`<block>_features.json`, `<block>_meta.json`) | Features with OSM-style tags and a `world_contour` in the block's local metres; `build_object_graph` (`maps/world_state/prior_graph.py`) seeds the graph from them. |
 | Another reasoner | Model card (`maps/llm/model_cards.py`) | A card for the served model name on an OpenAI-compatible endpoint. See [`endpoints.md`](endpoints.md). |
 

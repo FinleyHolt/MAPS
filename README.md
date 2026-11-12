@@ -129,7 +129,7 @@ The model's Python calls this library:
 | Call | Description |
 |---|---|
 | `find` | Reads rows of the world state by name or class, ordered or cut by place, side, and colour. |
-| `look_for` | Names up to four classes for the segmenter to detect on later flights. |
+| `look_for` | Names up to four classes for the segmenter to detect on later flights. With `at=<place>`, also segments that place for them: a stop already flown there at once (on the bench), else on the next flight. |
 | `go_to` | Flies to one row. |
 | `explore` | Flies a covering pass over a row or a set, and returns the rows it detected. |
 | `look` | Returns a close crop of the sensor's pixels at a row. |
@@ -139,6 +139,10 @@ The model's Python calls this library:
 | `more_of` | Returns the next block of a long result. |
 
 Only `go_to` and `explore` move the aircraft.
+
+The `run` tool executes the model's Python in the process that runs the
+mission, with that process's privileges. To fly a model you don't trust, run
+MAPS inside an isolated environment, such as a container or a virtual machine.
 
 To print the exact system turn and tool schema that the model receives:
 
