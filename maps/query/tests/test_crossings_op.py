@@ -403,10 +403,37 @@ def test_a_footprint_has_no_ends_and_says_so():
             "search_text": "a shed",
         }
     ]
-    with pytest.raises(ProgramError, match="prior_9.*no line geometry"):
+    with pytest.raises(ProgramError, match=r"prior_9 \(A Shed\) is a footprint"):
         run_program(
             [], anchors, {"ops": [{"ref": "r0", "op": "ends", "args": {"refs": ["prior_9"]}}]}
         )
+
+
+def test_a_footprint_with_a_mask_axis_is_still_refused():
+    # Every baked row carries its mask's principal axis as a centerline; a
+    # building's axis ends are no road's ends.
+    shed = {
+        "fid": "prior_9",
+        "xy": [5.0, 5.0],
+        "name": "A Shed",
+        "mask": [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+        "centerline": [[0.0, 5.0], [10.0, 5.0]],
+        "cells": [],
+        "search_text": "a shed",
+    }
+    road = dict(
+        _road("prior_1", [[0, -100], [0, 100]], "Walker Court"),
+        centerline=[[0, -100], [0, 100]],
+    )
+    prog = {"ops": [{"ref": "r0", "op": "ends", "args": {"refs": ["prior_9"]}}]}
+    with pytest.raises(
+        ProgramError, match=r"prior_9 \(A Shed\) is a footprint, and a footprint has no ends"
+    ):
+        run_program([], [shed, road], prog)
+    # A set holding both reads the road's ends.
+    prog["ops"][0]["args"]["refs"] = [["prior_9", "prior_1"]]
+    rows = run_program([], [shed, road], prog)["results"]["r0"]
+    assert [r["name"] for r in rows] == ["Walker Court end0", "Walker Court end1"]
 
 
 def test_a_sibling_segment_that_crosses_is_named():
