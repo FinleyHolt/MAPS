@@ -12,6 +12,8 @@ from transformers import AutoTokenizer
 from maps.llm.model_cards import CARDS
 
 
+# A pure cache: a tokenizer is immutable once loaded, so one per repo serves
+# every mission in the process.
 _TOKENIZER_CACHE: dict[str, Any] = {}
 
 
