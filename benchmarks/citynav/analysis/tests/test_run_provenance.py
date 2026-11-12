@@ -58,6 +58,6 @@ def test_a_run_resumed_under_other_code_is_an_arm_mismatch(tmp_path):
         (root / "run_manifest.json").write_text(
             json.dumps({"git_commit": "abc1234", "resumes": resumes})
         )
-    _, arm = comparability_issues(_run_provenance(a), _run_provenance(b))
-    assert any("code (git_commit) differs across resumes" in m for m in arm), arm
+    _, varied = comparability_issues(_run_provenance(a), _run_provenance(b))
+    assert any("code (git_commit) differs across resumes" in m for m in varied), varied
     assert comparability_issues(_run_provenance(b), _run_provenance(b)) == ([], [])

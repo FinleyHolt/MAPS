@@ -1,4 +1,4 @@
-"""The CLI reaches its exit, and the arm-waiver warning names the waived keys."""
+"""The CLI reaches its exit, and the waiver warning names the waived keys."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _write_run(root: Path, sha: str, srs: dict[str, int], criterion: str = "ring
     )
 
 
-def test_cli_completes_and_warns_on_waived_arm_mismatch(tmp_path, monkeypatch, capsys):
+def test_cli_completes_and_warns_on_a_waived_mismatch(tmp_path, monkeypatch, capsys):
     _write_run(tmp_path / "a", "aaaaaaa", {"e1": 1, "e2": 0, "e3": 1})
     _write_run(tmp_path / "b", "bbbbbbb", {"e1": 1, "e2": 1, "e3": 0})
     monkeypatch.setattr(

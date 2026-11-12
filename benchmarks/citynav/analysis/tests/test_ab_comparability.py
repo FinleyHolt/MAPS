@@ -2,7 +2,7 @@
 
 An A/B's SR is a score against a split and a tile bake; vary either and the
 two numbers answer different questions. ``--allow-provenance-mismatch``
-waives the arm keys (git_commit, model, ...) and never the ground truth, and
+waives the varied keys (git_commit, model, ...) and never the ground truth, and
 UNRECORDED ground truth refuses like mismatched ground truth.
 """
 
@@ -31,8 +31,8 @@ _SHA_A, _SHA_B = "5fee5f556bc1b4" + "0" * 50, "a8389803eb2322" + "0" * 50
 
 
 def test_identical_runs_raise_nothing():
-    fatal, arm = comparability_issues(_prov(), _prov())
-    assert fatal == [] and arm == []
+    fatal, varied = comparability_issues(_prov(), _prov())
+    assert fatal == [] and varied == []
 
 
 def test_split_mismatch_is_fatal():
@@ -42,30 +42,30 @@ def test_split_mismatch_is_fatal():
 
 def test_same_bake_under_different_site_roots_is_comparable():
     """The bake's identity is its name: one bake under two mount prefixes is comparable."""
-    fatal, arm = comparability_issues(
+    fatal, varied = comparability_issues(
         _prov(tiles="/local/a/MAPS/tiles/citynav_2m_osmv2"),
         _prov(tiles="/scratch/b/MAPS/tiles/citynav_2m_osmv2"),
     )
-    assert fatal == [] and arm == []
+    assert fatal == [] and varied == []
 
 
-def test_code_difference_is_an_arm_key_not_fatal():
+def test_code_difference_is_a_varied_key_not_fatal():
     """The refactor A/B this repo actually runs: same tiles+split, different sha."""
-    fatal, arm = comparability_issues(_prov(sha="8fc0fd8"), _prov(sha="2822471"))
+    fatal, varied = comparability_issues(_prov(sha="8fc0fd8"), _prov(sha="2822471"))
     assert fatal == [], "a code A/B on one bake is legitimate"
-    assert arm and "git_commit" in arm[0]
+    assert varied and "git_commit" in varied[0]
 
 
-def test_waiving_the_arm_keys_cannot_waive_the_tile_bake():
-    """A code A/B that also crossed bakes: the caller waives ``arm``, and
+def test_waiving_the_varied_keys_cannot_waive_the_tile_bake():
+    """A code A/B that also crossed bakes: the caller waives ``varied``, and
     ``fatal`` still refuses."""
-    fatal, arm = comparability_issues(
+    fatal, varied = comparability_issues(
         _prov(sha="8fc0fd8", tiles="tiles/citynav_2m"),
         _prov(sha="2822471", tiles="tiles/citynav_2m_osmv2"),
     )
-    assert arm, "shas differ, so the waivable class is populated"
+    assert varied, "shas differ, so the waivable class is populated"
     assert fatal and "tile bake" in fatal[0], "and the bake mismatch survives the waiver"
-    assert not any("tile" in m for m in arm), "the bake is never a waivable arm key"
+    assert not any("tile" in m for m in varied), "the bake is never a waivable varied key"
 
 
 def test_provenance_records_no_constant():
@@ -75,12 +75,12 @@ def test_provenance_records_no_constant():
     assert "look_tool" not in repo_provenance()
 
 
-def test_absent_arm_provenance_does_not_invent_a_mismatch():
+def test_absent_varied_provenance_does_not_invent_a_mismatch():
     """An old run without a recorded model or sha still baselines a code A/B."""
     a = _prov()
     del a["git_commit"], a["served_model"], a["config_sha256"]
-    fatal, arm = comparability_issues(a, _prov())
-    assert arm == [] and fatal == []
+    fatal, varied = comparability_issues(a, _prov())
+    assert varied == [] and fatal == []
 
 
 def test_unrecorded_ground_truth_is_fatal():
@@ -99,7 +99,7 @@ def test_the_same_bake_name_with_different_content_is_fatal():
     genuinely different bakes; the content hash separates them."""
     a = {**_CALCITY, "bake_sha256": _SHA_A}
     b = {**a, "bake_sha256": _SHA_B}
-    fatal, _arm = comparability_issues(a, b)
+    fatal, _varied = comparability_issues(a, b)
     assert any("CONTENT differs" in f for f in fatal)
     # and the name check alone would have waved it through
     assert not any("tile bake (SEARCH_CITYNAV_TILES) differs" in f for f in fatal)
@@ -108,7 +108,7 @@ def test_the_same_bake_name_with_different_content_is_fatal():
 def test_the_same_bake_content_pairs():
     a = {**_CALCITY, "bake_sha256": _SHA_A}
     b = {**a, "search_env_flags": {"SEARCH_CITYNAV_TILES": "/b/benchmarks/calcity/tiles"}}
-    fatal, _arm = comparability_issues(a, b)
+    fatal, _varied = comparability_issues(a, b)
     assert fatal == [], fatal
 
 
@@ -126,7 +126,7 @@ def test_an_unstamped_bake_does_not_become_fatal():
 
 
 def test_the_served_alias_is_not_the_served_build():
-    """One served alias can name two quantizations; the build is an arm."""
+    """One served alias can name two quantizations; the build is a varied key."""
     gt = {
         "split": "train_seen",
         "search_env_flags": {"SEARCH_CITYNAV_TILES": "/x/tiles/citynav_2m_osmv3"},
@@ -141,21 +141,21 @@ def test_the_served_alias_is_not_the_served_build():
         "served_model": "inkling-small",
         "served_build": "RedHatAI/Inkling-Small-FP8-dynamic",
     }
-    fatal, arm = comparability_issues(a, b)
+    fatal, varied = comparability_issues(a, b)
     assert not fatal
-    assert any("BUILD" in m for m in arm), arm
+    assert any("BUILD" in m for m in varied), varied
     # Absence-tolerant, or every column stored before the key existed would
     # stop pairing against every column stored after it.
-    fatal2, arm2 = comparability_issues(a, {**gt, "served_model": "inkling-small"})
-    assert not fatal2 and not arm2
+    fatal2, varied2 = comparability_issues(a, {**gt, "served_model": "inkling-small"})
+    assert not fatal2 and not varied2
 
 
-def test_a_reasoning_effort_difference_is_an_arm_key():
-    """An E4 arm run without the control's effort is a second variable; unset reads as blank."""
+def test_a_reasoning_effort_difference_is_a_varied_key():
+    """A run without the control's effort is a second variable; unset reads as blank."""
     a, b = _prov(), _prov()
     a["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.99"
-    fatal, arm = comparability_issues(a, b)
-    assert fatal == [] and arm == [
+    fatal, varied = comparability_issues(a, b)
+    assert fatal == [] and varied == [
         "reasoning effort (SEARCH_SAMPLING_REASONING_EFFORT) differs:  A=0.99  B=unset"
     ]
     b["search_env_flags"]["SEARCH_SAMPLING_REASONING_EFFORT"] = "0.99"

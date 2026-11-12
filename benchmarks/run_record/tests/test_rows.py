@@ -263,7 +263,7 @@ def test_every_shared_fixture_case():
 def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_path):
     """A wall-clock timeout before any commit is a miss inside the SR
     denominator; summary.txt counts it, so every reader must."""
-    from benchmarks.citynav.analysis import arm_table, run_report
+    from benchmarks.citynav.analysis import run_report, run_table
 
     root = write_ledger(
         tmp_path / "run",
@@ -277,7 +277,7 @@ def test_every_reader_counts_a_timed_out_episode_with_no_record_as_a_miss(tmp_pa
     assert sorted(scored) == ["e1", "e2", "e3", "e4"]
     assert scored["e3"]["SR"] == 0 and scored["e3"].get("OSR", 0) == 0
     assert len(run_report.report(root, run_report.benches({}))) == 4
-    row = arm_table.arm_row(root)
+    row = run_table.run_row(root)
     assert (row["n"], row["SR_n"], row["SR"]) == (4, 1, 0.25)
 
 
@@ -293,12 +293,12 @@ def _partial_run(tmp_path: Path, episodes_n: int) -> Path:
 
 
 def test_every_reader_refuses_a_partial_root_naming_the_shortfall(tmp_path, capsys, monkeypatch):
-    from benchmarks.citynav.analysis import ab_report, arm_table, run_report
+    from benchmarks.citynav.analysis import ab_report, run_report, run_table
 
     root = _partial_run(tmp_path, 3)
     monkeypatch.setattr(sys, "argv", ["ab_report", str(root), str(root)])
     want = "scores 1 of the 3 episodes its manifest selects (1 only ever infrastructure casualties, 1 never landed a row)"
-    for read in (lambda: arm_table.main([str(root)]), ab_report.main):
+    for read in (lambda: run_table.main([str(root)]), ab_report.main):
         with pytest.raises(SystemExit, match=re.escape(want)) as refused:
             read()
         assert "resume" in str(refused.value) and "--max-infra-attempts" in str(refused.value)
@@ -306,7 +306,7 @@ def test_every_reader_refuses_a_partial_root_naming_the_shortfall(tmp_path, caps
     refused = capsys.readouterr().err
     assert want in refused and "resume" in refused and "--max-infra-attempts" in refused
     assert run_report.main([str(root), "--allow-partial"]) == 0
-    assert arm_table.main(["--allow-partial", str(root)]) == 0
+    assert run_table.main(["--allow-partial", str(root)]) == 0
     assert f"*** PARTIAL (--allow-partial): {root}: {want} ***" in capsys.readouterr().err
 
 
