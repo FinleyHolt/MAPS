@@ -64,7 +64,6 @@ IDENTITY_KEYS = (
     ("config_sha256",),
     ("split",),
     ("selection", "sample_seed"),
-    ("selection", "arrivals"),
     ("selection", "selection_sha"),
     ("endpoints", "model_id"),
     ("endpoints", "max_model_len"),
@@ -161,13 +160,11 @@ def build_manifest(
     allowlist_path: Path | None,
     episodes: list[str],
     mission: dict | None = None,
-    arrivals: str | None = None,
 ) -> dict:
     """The resolved record of a run of ``bench``. ``mission`` is the flight mission's per-mission
     stamp, recorded whole; a ``reasoning_effort`` it names replaces the arm's
     in ``search_env_flags`` (:func:`arm_env_stamp`), since the mission's requests
-    carried it. ``arrivals`` is a capacity session's stream sha256: the
-    stream, not a seed, selects its episodes."""
+    carried it."""
     import yaml  # noqa: PLC0415  (only config runs need it)
 
     resolved = resolve_config(config_path)[0]
@@ -193,7 +190,7 @@ def build_manifest(
         **prov,
         "config_yaml": config_yaml,
         "selection": {
-            **({"arrivals": arrivals} if arrivals is not None else {"sample_seed": sample_seed}),
+            "sample_seed": sample_seed,
             "limit": limit,
             "allowlist": str(allowlist_path) if allowlist_path else None,
             "episodes_n": len(episodes),

@@ -63,7 +63,6 @@ its root.
 | `--limit <n>` | Episodes kept after the seeded shuffle. A seed and a limit select the same episodes on every run. |
 | `--sample-seed <n>` | Seed of the shuffle applied before `--limit`. Default 1234. |
 | `--episode-allowlist <file>` | Keeps only the listed IDs, before the shuffle. A list that names an ID outside the split is refused. |
-| `--arrivals <stream.json>` | Flies a report stream in place of the shuffle: a JSON object whose `reports` list holds `{"episode_id", "arrival_s"}` rows, each episode released at its arrival time on the session clock. |
 | `--max-infra-attempts <n>` | Attempts an episode gets under infrastructure faults. Default 3. |
 | `--dry-run` | Prints the selection and launches nothing. |
 

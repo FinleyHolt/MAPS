@@ -7,25 +7,14 @@ re-run into the same ``--out-root`` resumes: an episode with a non-infra row in
 ``--max-infra-attempts``. The run stops when nothing is left, the wall budget
 (``--max-wall-s``) is spent, or a window of infra casualties aborts it (exit 3).
 The out-root's layout is in ``benchmarks/citynav/README.md``.
-
-``--arrivals <stream.json>`` flies a report stream instead (a JSON object
-whose ``reports`` list holds ``{"episode_id", "arrival_s"}`` rows): the
-stream's episodes in arrival order, each claimable only once its
-``arrival_s`` has passed on the session clock, so a report that lands while
-every worker is busy waits its turn. Each row then carries ``arrival_s`` and
-``claimed_s`` (session seconds), and the stream is copied to
-``<out-root>/arrivals.json``.
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
 import io
-import json
 import logging
-import shutil
 import os
 import random
 import signal
@@ -181,12 +170,8 @@ class Driver:
         self.driver_log = self.out_root / "driver.log"
         self.summary_file = self.out_root / "summary.txt"
         self.limit = args.limit
-        self.sample_seed = SAMPLE_SEED if args.sample_seed is None else args.sample_seed
+        self.sample_seed = args.sample_seed
         self.allowlist_path = Path(args.episode_allowlist).resolve() if args.episode_allowlist else None
-        self.arrivals_path = Path(args.arrivals).resolve() if args.arrivals else None
-        # episode -> arrival_s, and the session clock's zero; a capacity session only.
-        self._arrival: dict[str, float] = {}
-        self._t0: float | None = None
         # Fixed by main() before anything runs; guarded by _dispatch_lock.
         self._selection: list[str] = []
         # The allowlist's count line, for the preview or the driver log.
@@ -295,31 +280,17 @@ class Driver:
         """The next episode not done, not in flight and not past its infra
         attempts; ``None`` once nothing is left, the wall budget is spent, or
         the run aborted (in-flight attempts finish)."""
-        while not self._wall_spent() and self._abort is None:
-            # The earliest report still to arrive, which a worker with nothing released waits for.
-            due = float("inf")
-            with self._dispatch_lock:
-                n = len(self._selection)
-                scanned = 0
-                while scanned < n:
-                    eid = self._selection[self._cursor % n]
-                    self._cursor += 1
-                    scanned += 1
-                    if eid in self._in_flight or not self._left(eid):
-                        continue
-                    if self._session_s() < self._arrival.get(eid, 0.0):
-                        due = min(due, self._arrival[eid])
-                        continue
-                    self._in_flight.add(eid)
-                    return eid
-            if due == float("inf"):
-                return None
-            time.sleep(max(0.0, min(due - self._session_s(), 1.0)))
+        if self._wall_spent() or self._abort is not None:
+            return None
+        with self._dispatch_lock:
+            for _ in range(len(self._selection)):
+                eid = self._selection[self._cursor % len(self._selection)]
+                self._cursor += 1
+                if eid in self._in_flight or not self._left(eid):
+                    continue
+                self._in_flight.add(eid)
+                return eid
         return None
-
-    def _session_s(self) -> float:
-        """Seconds on the capacity session's clock; 0 before it starts."""
-        return 0.0 if self._t0 is None else time.monotonic() - self._t0
 
     def _infra_attempts(self, eid: str) -> int:
         return self._infra_errors.get(eid, Counter()).total()
@@ -482,10 +453,7 @@ class Driver:
     def run_one(self, worker_id: int, episode_id: str) -> None:
         """Fly one attempt and land its row."""
         self.log(f"[w{worker_id}] START {episode_id}")
-        claimed = self._session_s()
         row = self._run_attempt(worker_id, episode_id)
-        if episode_id in self._arrival:
-            row |= {"arrival_s": self._arrival[episode_id], "claimed_s": round(claimed, 1)}
         m = row.get("metrics") or {}
         summary = ("" if _rows.is_infra_abort(row)
                    else f" NE={m.get('NE')} SR={m.get('SR')}" if m else " MISSING")
@@ -557,17 +525,6 @@ class Driver:
         """The selection, in flying order; a refusal raises ``SystemExit``
         with its FATAL line. An allowlist's count line is kept in
         ``_selection_note``."""
-        if self.arrivals_path is not None:
-            try:
-                reports = json.loads(self.arrivals_path.read_text())["reports"]
-                self._arrival = {r["episode_id"]: float(r["arrival_s"]) for r in reports}
-            except (OSError, ValueError, KeyError, TypeError) as exc:
-                raise SystemExit(f"FATAL: --arrivals read failed: {self.arrivals_path}: {exc!r}") from exc
-            unknown = set(self._arrival) - set(_enumerate_split(self.bench, self.split))
-            if unknown:
-                raise SystemExit(f"FATAL: --arrivals names {len(unknown)} episodes not in the {self.split} "
-                                 f"split, e.g. {sorted(unknown)[0]}")
-            return sorted(self._arrival, key=self._arrival.get)
         episodes = _enumerate_split(self.bench, self.split)
         if self.allowlist_path is not None:
             try:
@@ -593,12 +550,6 @@ class Driver:
             episodes = episodes[: self.limit]
         return episodes
 
-    def _selected_by(self) -> tuple[str, object]:
-        """What picks the selection: a session's stream, else the shuffle seed."""
-        if self.arrivals_path is not None:
-            return "arrivals", self.arrivals_path
-        return "sample_seed", self.sample_seed
-
     def dry_run(self) -> int:
         """Selection preview. Launches nothing and writes nothing."""
         episodes = self._selection
@@ -607,8 +558,7 @@ class Driver:
         self._absorb_ledger()
         done = self._done_cache
         pending = [e for e in episodes if self._left(e)]
-        key, value = self._selected_by()
-        print(f"{key}: {value}   split: {self.split}   limit: {self.limit}")
+        print(f"sample_seed: {self.sample_seed}   split: {self.split}   limit: {self.limit}")
         print(
             f"selected: {len(episodes)}   done: "
             f"{len(done & set(episodes))}   pending: {len(pending)}"
@@ -632,13 +582,6 @@ class Driver:
             lock.close()
 
     def _run(self) -> int:
-        # A session's clock cannot resume: its reports would arrive against a
-        # fresh zero. Refused before the manifest records a resume.
-        if (self.arrivals_path is not None and self.episodes_file.exists()
-                and self.episodes_file.stat().st_size):
-            self.log(f"FATAL: {self.out_root} already holds a ledger; a capacity session flies "
-                     f"into a fresh --out-root")
-            return 2
         episodes = self._selection
         if self._selection_note:
             self.log(self._selection_note)
@@ -654,8 +597,6 @@ class Driver:
                 limit=self.limit,
                 allowlist_path=self.allowlist_path,
                 episodes=episodes,
-                arrivals=(hashlib.sha256(self.arrivals_path.read_bytes()).hexdigest()
-                          if self.arrivals_path is not None else None),
             )
             _rm.emit_or_verify(self.out_root, fresh_manifest, log=self.log)
         except _rm.ManifestIdentityError as exc:
@@ -664,12 +605,9 @@ class Driver:
         # A root with a manifest is a run root, flown or not: its ledger exists.
         self.episodes_file.touch()
         self._absorb_ledger()
-        if self.arrivals_path is not None:
-            shutil.copyfile(self.arrivals_path, self.out_root / "arrivals.json")
         pending = [e for e in episodes if self._left(e)]
-        key, value = self._selected_by()
         self.log(
-            f"split={self.split} {key}={value} selection={len(episodes)} "
+            f"split={self.split} sample_seed={self.sample_seed} selection={len(episodes)} "
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
             f"workers={self.workers}"
         )
@@ -679,14 +617,11 @@ class Driver:
         # none flies on once an interrupt has released the root.
         if pending and not self._wall_spent():
             threads = []
-            self._t0 = time.monotonic()
             for wid in range(self.workers):
                 t = threading.Thread(target=self.worker_loop, args=(wid,), daemon=True)
                 t.start()
                 threads.append(t)
-                # A session's arrivals stagger its starts, and a held worker would delay a report.
-                if self.arrivals_path is None:
-                    time.sleep(WORKER_STAGGER_S)
+                time.sleep(WORKER_STAGGER_S)
             for t in threads:
                 t.join()
         persistent = self._persistent_infra()
@@ -762,7 +697,7 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     p.add_argument(
         "--sample-seed",
         type=int,
-        default=None,
+        default=SAMPLE_SEED,
         help=f"seed for the pre-limit episode shuffle (default {SAMPLE_SEED}). "
         "Fixes WHICH N episodes run so "
         "an A/B across code versions is on the identical subset.",
@@ -773,13 +708,6 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
         help="path to a newline-delimited file of episode_ids. When set, "
         "only those ids run; every id must be in the split, else the run is "
         "refused. The seeded shuffle + --limit still apply on top of the allowlist.",
-    )
-    p.add_argument(
-        "--arrivals",
-        default=None,
-        help="a report stream (JSON, reports: [{episode_id, arrival_s}]): its "
-        "episodes, each released at its arrival time; refused with --episode-allowlist, "
-        "--limit or --sample-seed",
     )
     p.add_argument(
         "--dry-run",
@@ -802,10 +730,6 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     config = _config_path(bench.environ)
     parser = _build_parser(bench)
     args = parser.parse_args(argv)
-    if args.arrivals and (args.episode_allowlist or args.limit
-                          or args.sample_seed is not None):
-        parser.error("--arrivals selects the session's episodes; drop --episode-allowlist, --limit "
-                     "and --sample-seed")
     # The config is refused here, before an out-root exists or a serve is asked.
     try:
         resolve_config(config)

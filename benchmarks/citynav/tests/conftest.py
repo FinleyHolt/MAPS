@@ -49,9 +49,6 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         d.sample_seed = 1234
         d.limit = 0
         d.allowlist_path = None
-        d.arrivals_path = None
-        d._arrival = {}
-        d._t0 = None
         d.max_infra_attempts = 3
         d._infra_errors = {}
         return d
