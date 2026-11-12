@@ -104,11 +104,10 @@ def resolve_window_center(
     ctr_xy,
     bounds,
     half_ctx: float,
-    car_margin_m: float,
 ) -> tuple[float, float]:
     """The window centre: ``ctr_xy`` shifted inside the raster ``bounds``
     (None: unshifted), with its total offset from the subject ``true_xy``
-    capped per axis at ``half_ctx - car_margin_m / 2`` so the subject stays
+    capped per axis at ``half_ctx - LOOK_CAR_MARGIN_M / 2`` so the subject stays
     in frame; past the cap the off-raster part renders black."""
     px, py = float(ctr_xy[0]), float(ctr_xy[1])
     tx, ty = float(true_xy[0]), float(true_xy[1])
@@ -121,7 +120,7 @@ def resolve_window_center(
 
         px = _clamp(px, bx0 + half_ctx, bx1 - half_ctx)
         py = _clamp(py, by0 + half_ctx, by1 - half_ctx)
-    keep = max(0.0, half_ctx - car_margin_m / 2.0)
+    keep = max(0.0, half_ctx - LOOK_CAR_MARGIN_M / 2.0)
     px = min(max(px, tx - keep), tx + keep)
     py = min(max(py, ty - keep), ty + keep)
     return px, py
@@ -361,7 +360,6 @@ def render_candidate_crops(
             ((max(xs) + min(xs)) / 2.0, (max(ys) + min(ys)) / 2.0),
             raster_bounds,
             half_ctx,
-            LOOK_CAR_MARGIN_M,
         )
         # the window is placed off the 2 dp values the record states
         rec = _crop_record(
