@@ -55,7 +55,7 @@ benchmark.
 | Requirement | Details |
 |---|---|
 | Reasoner | An OpenAI-compatible endpoint, self-hosted or hosted, that serves a model with a card in [`maps/llm/model_cards.py`](maps/llm/model_cards.py). |
-| Segmenter | SAM 3.1 on one GPU. The checkpoint `facebook/sam3.1` is gated on Hugging Face. |
+| Segmenter | SAM 3.1 on one GPU. The checkpoint `facebook/sam3.1` is gated on Hugging Face. Meta's SAM License covers the checkpoint and the `sam3` package, and bars use "for any activities subject to the International Traffic in Arms Regulations (ITAR)" ([`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md#used-and-not-redistributed)). |
 | CityNav annotations | Downloaded by the setup script. |
 | SensatUrban point clouds | Requested from the authors' [form](https://github.com/QingyongHu/SensatUrban). The terms are CC BY-NC-SA, non-commercial research use, and no redistribution, so this repository ships no raster or picture made from them. |
 
@@ -101,8 +101,8 @@ benchmark.
    python -m station.serve --bench citynav --out output/citynav
    ```
 
-For data details, see [`docs/data.md`](docs/data.md). For endpoints and every
-environment variable, see [`docs/endpoints.md`](docs/endpoints.md). For the
+For data details, see [`docs/data.md`](docs/data.md). For endpoints and their
+environment variables, see [`docs/endpoints.md`](docs/endpoints.md). For the
 run root's layout and the driver's flags, see
 [`benchmarks/citynav`](benchmarks/citynav/README.md).
 
