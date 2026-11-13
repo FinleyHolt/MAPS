@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -26,6 +27,38 @@ jobs:
         run: ruff check . && ruff format --check .
       - name: Test
         run: pytest -q
+
+  macos:
+    name: Tests and quickstart (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e '.[dev]'
+      - name: Test
+        run: pytest -q
+      - name: Quickstart
+        run: .github/quickstart.sh
+
+  quickstart:
+    name: Quickstart (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e '.[station]'
+      - name: Quickstart
+        run: .github/quickstart.sh
 
   console:
     name: Console
