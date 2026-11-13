@@ -1,16 +1,31 @@
 # Flight: harness and twin
 
-This page is the short guide to the flight harness. MAPS flew 75 searches
-on a C-12 over California City, CA, on six days from 11 to 18 September 2026,
-at about 3,000 to 6,500 ft above ground. A search counts as flown when it ran a
-California City episode in the air. Of the 75, 57 are complete searches: not
-removed for an outage or by the crew, with ground truth labelled and an answer
-committed. The reasoner and SAM 3.1 ran on ground
-compute over the datalink; a computer aboard held the mission.
+This page is the short guide to the flight harness.
 [`benchmarks/flight`](../benchmarks/flight/README.md) is the method half of
-the station that flew them. Its README is the reference: the flown chain step
+the station that flew the campaign below. Its README is the reference: the flown chain step
 by step, the `Vehicle` protocol, the run's records, and the closed-loop
 measures.
+
+## Flight campaign
+
+MAPS flew a crewed C-12 over California City, CA, on six days from 11 to 18
+September 2026, at about 3,000 to 6,500 ft above ground. The crew flew each
+leg the model requested off a cockpit display. The counts are the paper's.
+
+| Count | Searches | Rule |
+|---|---|---|
+| Flown | 75 | A California City search flown in the air. |
+| Excluded | 18 | 11 lost to the infrastructure, 4 ended by the crew, 1 without ground truth, 2 never answered. None of the 11 excluded searches that answered was correct. |
+| Complete | 57 | Not excluded: ground truth labelled and an answer committed. |
+| Identified | 34 of 57 | The committed point lies inside the described object's hand-drawn mask. |
+
+| Component | Location |
+|---|---|
+| Reasoner (Inkling Small) and SAM 3.1 | NPS GB300 on the ground, over the datalink, for all 57 complete searches. |
+| Mission (the engine and the flight harness) | Jetson Thor aboard the aircraft. |
+
+The flight recordings and their adjudications are not in this repository or
+its release.
 
 | Task | Tool | Requirement |
 |---|---|---|
