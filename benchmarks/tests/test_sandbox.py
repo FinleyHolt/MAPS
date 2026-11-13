@@ -167,3 +167,21 @@ def test_a_bound_path_reached_through_a_symlink_in_home_resolves_inside(tmp_path
     ]
     binds = [k for k, a in enumerate(argv) if a == "--ro-bind" and argv[k + 1] == str(data)]
     assert argv.index(str(home)) < i < binds[0]
+
+
+@pytest.mark.skipif(not sandbox.scope_works(), reason="no systemd user manager here")
+def test_a_failed_attempt_scope_leaves_no_unit_behind():
+    """An attempt that fails (an OOM kill, an error exit) unloads its scope with it, so
+    the user manager does not collect one failed unit per crashed attempt."""
+    unit = f"maps-attempt-test-{os.getpid()}"
+    subprocess.run(
+        sandbox.scope_argv(unit, 1.0) + [sys.executable, "-c", "b = b'x' * 2**31"],
+        capture_output=True,
+    )
+    left = subprocess.run(
+        ["systemctl", "--user", "list-units", f"{unit}.scope", "--all", "--no-legend"],
+        capture_output=True,
+        text=True,
+    ).stdout
+    subprocess.run(["systemctl", "--user", "reset-failed", f"{unit}.scope"], capture_output=True)
+    assert left == "", left

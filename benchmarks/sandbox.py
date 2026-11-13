@@ -160,7 +160,9 @@ def scope_argv(unit: str, gib: float) -> list[str]:
     every process (shared memory and tmpfs pages included) counts against ``gib``."""
     n = int(gib * 2**30)
     return ["systemd-run", "--user", "--scope", "-q", f"--unit={unit}",
-            "-p", f"MemoryMax={n}", "-p", "MemorySwapMax=0", "--"]  # fmt: skip
+            "-p", f"MemoryMax={n}", "-p", "MemorySwapMax=0",
+            # An OOM-killed scope ends "failed"; unloaded, it leaves no unit per crash.
+            "-p", "CollectMode=inactive-or-failed", "--"]  # fmt: skip
 
 
 def kill_scope(unit: str) -> None:
