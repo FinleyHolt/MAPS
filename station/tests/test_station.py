@@ -394,6 +394,32 @@ def test_a_sandboxed_station_serves_the_discovery_s_own_failure_and_the_step_it_
     )
 
 
+def test_a_sandboxed_station_whose_reasoner_answers_names_the_uncached_tokenizer(
+    calcity,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+):
+    """The reasoner answers but its tokenizer is absent from the hub cache: the refusal
+    names the tokenizer and the remedy on one line, without the loader's own advice."""
+    from benchmarks import sandbox
+    from benchmarks.flight.tests.test_twin_mission import uncached_tokenizer
+
+    monkeypatch.setenv(sandbox.TOKENIZER_ENV, "EndpointDiscoveryError")
+    station = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        ortho_dir=calcity.rgbd,
+    )
+    uncached_tokenizer(monkeypatch)
+    monkeypatch.setattr(sandbox, "hf_hub_cache", lambda: str(tmp_path))
+    why = station.tokenizer_refusal()
+    assert len(why.splitlines()) == 1, why
+    assert "the reasoner's tokenizer 'org/tok' is not in the hub cache" in why, why
+    assert "internet" not in why and "SEARCH_COMPACT_TOKENIZER_NAME" not in why, why
+    assert why.endswith(f"{sandbox.TOKENIZER_REMEDY}, then send the mission again")
+
+
 def test_a_station_whose_ortho_lacks_the_raster_exits_2_with_no_out(calcity, tmp_path, monkeypatch):  # noqa: F811
     """A bad --ortho is refused before the station confines itself, so --out is not made,
     with the twin's exit code."""

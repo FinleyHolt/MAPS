@@ -383,9 +383,17 @@ def tokenizer_refusal(environ, process: str, again: str) -> str | None:
 
     try:
         endpoint_spec.discover_from_settings(from_environ(environ), probe_sam=False)
-    except Exception as exc:
+    except endpoint_spec.TokenizerUnavailable as exc:
+        # The loader's own message advises a connection and a second remedy, both
+        # beside the point offline; the repo name and the one remedy are what helps.
         return (
-            f"the reasoner's discovery failed ({type(exc).__name__}: {exc}); this sandboxed "
+            f"the reasoner's tokenizer {exc.tokenizer!r} is not in the hub cache this "
+            f"sandboxed {process} reads offline: {TOKENIZER_REMEDY}, then {again}"
+        )
+    except Exception as exc:
+        why = " ".join(str(exc).split())  # a refusal is one line
+        return (
+            f"the reasoner's discovery failed ({type(exc).__name__}: {why}); this sandboxed "
             f"{process} reads the reasoner's tokenizer from the hub cache offline: "
             f"{TOKENIZER_REMEDY}, then {again}"
         )
