@@ -118,7 +118,7 @@ mission's height, and renders frames from the raster pair on request.
 | `--reasoning-effort <effort>` | Run's reasoning effort. |
 | `--register <raster dir>` | Registers each frame. |
 | `--out <dir>` | Where the sortie lands, as `<dir>/<UTC stamp>/`. Default `output/flight`. |
-| `--memory-gib <GiB>` | Process's memory cap, GiB. Default 16. A block that allocates past it raises `MemoryError`, served as the block's error. |
+| `--memory-gib <GiB>` | Process's memory cap, GiB: a finite number of at least 1. Default 16. A block that allocates past it raises `MemoryError`, served as the block's error. |
 
 The run lands under `<out>/<UTC stamp>/` with the run records a flown
 run carries, the ownship track (`flight_track.jsonl`,

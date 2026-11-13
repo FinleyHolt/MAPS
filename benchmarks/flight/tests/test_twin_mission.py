@@ -798,24 +798,63 @@ def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeyp
     from benchmarks.calcity.paths import calcity_bench
     from benchmarks.flight import twin
 
-    def confine(*a):
-        raise SystemExit(a)
+    def confine(*a, **kw):
+        raise SystemExit((*a, kw))
 
     monkeypatch.setattr(sandbox, "confine", confine)
+    monkeypatch.setattr(twin, "resolve_episode", lambda *a: SimpleNamespace(map_name="m"))
+    monkeypatch.setattr(twin, "check_map", lambda *a: None)
     monkeypatch.setattr(
         "sys.argv",
         ["twin", "--episode", "e", "--ortho", str(tmp_path / "o"), "--out", str(tmp_path / "out")],
     )
     with pytest.raises(SystemExit) as stop:
         twin.main()
-    writable, gib, _log, readable = stop.value.code
+    writable, gib, _log, readable, kw = stop.value.code
     bench = calcity_bench(os.environ)
     rgbd = Path(bench.rgbd_dir)
-    assert gib == sandbox.STATION_MEMORY_GIB
-    assert writable == [
-        tmp_path / "out",
-        rgbd / "ortho",
-        tmp_path / "o" / "ortho",
-        sandbox.hf_hub_cache(),
-    ]
+    assert gib == sandbox.STATION_MEMORY_GIB and kw == {"flies": True}
+    assert writable == [tmp_path / "out", rgbd / "ortho", tmp_path / "o" / "ortho"]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)
+
+
+def test_a_refused_twin_leaves_no_run_folder(tmp_path, monkeypatch, capsys):
+    """An episode the split does not hold is refused before the twin confines itself,
+    so ``--out`` is not made."""
+    from benchmarks import sandbox
+    from benchmarks.flight import twin
+
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: None)
+    monkeypatch.setattr(twin, "resolve_episode", lambda *a: (_ for _ in ()).throw(ValueError("no")))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["twin", "--episode", "e", "--ortho", str(tmp_path), "--out", str(tmp_path / "out")],
+    )
+    assert twin.main() == 2
+    assert not (tmp_path / "out").exists()
+
+
+def test_ctrl_c_mid_mission_ends_it_and_waits_for_its_row(monkeypatch):
+    """The twin's Ctrl-C ends the mission the way the station's clear does: stop, wait for
+    the row to land, close the live source, then the interrupt goes on."""
+    from types import SimpleNamespace
+
+    from benchmarks.flight import mission as m
+
+    calls: list = []
+    mission = SimpleNamespace(
+        status=m.STATE_FLYING,
+        replies=0,
+        start=lambda: None,
+        stop=lambda: calls.append("stop"),
+        wait=lambda timeout=None: calls.append(("wait", timeout)),
+        live=SimpleNamespace(close=lambda: calls.append("close")),
+    )
+
+    def interrupted(_s):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(m.time, "sleep", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        m.converse(mission, [])
+    assert calls == ["stop", ("wait", m.END_WAIT_S), "close"], calls

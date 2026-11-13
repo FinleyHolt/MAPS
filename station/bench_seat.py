@@ -49,9 +49,6 @@ from maps.settings import from_environ
 
 log = logging.getLogger("station.bench")
 
-#: How long ending a mission waits for its row to land before answering anyway.
-END_WAIT_S = 60.0
-
 
 class BenchMission:
     """A bench episode in the seat: its thread, its tasking queue, and the

@@ -53,8 +53,8 @@ python -m benchmarks.citynav.run_benchmark --config configs/citynav.yaml --split
 
 `bench_fullset` runs a split at a fixed worker count, one fresh
 `run_benchmark --attempt-root` child per attempt. Rerun a command to resume
-its root. Each attempt, and a runner run directly, runs sandboxed; see
-[Security](../../README.md#security).
+its root. Each attempt, and a runner run directly, runs under the isolation
+its host allows; see [Security](../../README.md#security).
 
 | Flag | Description |
 |---|---|
@@ -66,7 +66,7 @@ its root. Each attempt, and a runner run directly, runs sandboxed; see
 | `--episode-allowlist <file>` | Keeps only the listed IDs, before the shuffle. A list that names an ID outside the split is refused. |
 | `--max-infra-attempts <n>` | Attempts an episode gets under infrastructure faults. Default 3. |
 | `--episode-timeout-s <s>` | Per-episode wall cap, seconds. Default 14400 (4 h). |
-| `--attempt-memory-gib <n>` | Each attempt's memory cap, GiB, at least 1. Default 4. |
+| `--attempt-memory-gib <GiB>` | Each attempt's memory cap, GiB: a finite number of at least 1. Default 4. A block that allocates past it raises `MemoryError`, served as the block's error. |
 | `--dry-run` | Prints the selection and launches nothing. |
 
 For the remaining flags, run

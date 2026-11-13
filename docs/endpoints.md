@@ -154,6 +154,14 @@ The bench driver sets these in each attempt child's environment:
 | `SEARCH_BENCHMARK_NAME` | Bench the child flies, from the bench's own environment: Cal City's carries `calcity`, and the child flies CityNav when it is unset. |
 | `CITYNAV_EPISODE_DEADLINE_EPOCH` | Epoch at which the mission stops flying: the episode's wall cap less a 10% reserve for the model's reply. |
 | `CITYNAV_BENCH_PARENT_PID` | Driver's process ID, or `1` under bubblewrap (the sandbox's init, killed with the driver); the child exits when that parent is gone. |
+| `HF_HUB_OFFLINE` | `1` under bubblewrap: the child reads the hub cache read-only, holding the tokenizer the driver's discovery cached. |
+| `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENCV_FOR_THREADS_NUM`, `RAYON_NUM_THREADS`, `MALLOC_ARENA_MAX` | One thread per native pool and two malloc arenas, unless the shell set its own. |
+
+Each attempt child sees the launcher's environment cut to an allowlist
+(`benchmarks/sandbox.py`, `child_env`): the `SEARCH_`, `CITYNAV_`, `SAM_`,
+`MAPS_`, `HF_`, and `LC_` variables, Hugging Face's token excepted, and the
+locale, path, proxy, and thread-count variables. The station, the twin CLI,
+and the runner restart themselves under the same allowlist.
 
 ## GPT-5.6 Sol on Azure
 

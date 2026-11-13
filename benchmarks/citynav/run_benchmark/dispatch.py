@@ -92,12 +92,12 @@ def _exc_is_transient_infra(exc: BaseException) -> bool:
 
 def is_infra_fault(exc: BaseException) -> bool:
     """The infra rule for a raised attempt: a harness fault (a SAM outage),
-    a transient shared-server fault, an image-store refusal or a reasoner that
-    did not answer discovery. Any other exception is the method's own, a
-    scored miss."""
-    return _exc_is_transient_infra(exc) or any(
-        isinstance(cur, (HarnessFault, ImageStoreError, EndpointUnreachable)) for cur in _chain(exc)
-    )
+    a transient shared-server fault, an image-store refusal, a reasoner that
+    did not answer discovery, or a MemoryError (a block's own is served inside
+    ``run_block``, so one that reaches here is the harness's). Any other
+    exception is the method's own, a scored miss."""
+    infra = (HarnessFault, ImageStoreError, EndpointUnreachable, MemoryError)
+    return _exc_is_transient_infra(exc) or any(isinstance(cur, infra) for cur in _chain(exc))
 
 
 def dispatch_one(

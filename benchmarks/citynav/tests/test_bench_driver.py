@@ -104,8 +104,25 @@ def test_a_block_past_the_attempt_cap_is_the_model_s_error_not_a_crash(driver, m
     assert row["status"] == "ok" and row["error"].startswith("line 1: MemoryError"), row
 
 
+def test_an_attempt_gets_the_reasoner_key_and_none_of_the_launcher_s_other_secrets(
+    driver, monkeypatch
+):
+    """The attempt's environment is the allowlist: a token in the launching shell never
+    reaches model code, the key the attempt calls the reasoner with does."""
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    monkeypatch.setenv("FAKE_SECRET", "s")
+    monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
+    d = driver(selection=["env::1#0"])
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    (row,) = iter_json_rows(d.episodes_file)
+    assert row["env"] == {"FAKE_SECRET": None, "SEARCH_REASONER_API_KEY": "k"}, row
+
+
 @pytest.mark.skipif(
-    not sandbox.bwrap_works(), reason="bwrap is absent or this host blocks user namespaces"
+    sandbox.bwrap_refusal() is not None,
+    reason="bwrap is absent or this host blocks user namespaces",
 )
 def test_an_attempt_under_bubblewrap_lands_its_row_and_a_timeout_kills_it(driver, monkeypatch):
     monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
@@ -534,6 +551,19 @@ def test_an_interrupted_driver_exits_with_its_workers(sig, code, tmp_path) -> No
         proc.wait()
 
 
+def test_after_an_interrupt_no_worker_claims_another_episode(driver, monkeypatch) -> None:
+    """Workers are daemon threads that run on until the process exits: once the driver
+    is interrupted, the next claim is none, so no START lands without its END."""
+    d = driver(selection=["ep0", "ep1"])
+
+    def interrupted():
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(d, "_run", interrupted)
+    assert d.run() == 130
+    assert d._next_claimed_episode() is None
+
+
 def test_the_split_defaults_to_the_benchmarks_own() -> None:
     assert bf._build_parser(citynav_bench({})).parse_args([]).split == "val_seen"
     assert bf._build_parser(calcity_bench({})).parse_args([]).split == "calcity"
@@ -895,14 +925,14 @@ def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monke
     from benchmarks.citynav.run_benchmark import cli
 
     confined: list = []
-    monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append((*a, kw)))
     monkeypatch.setattr(sandbox, "cap_memory", lambda gib: confined.append(gib))
     monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(tmp_path / "absent"))
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
     assert cli.main() == 1
-    ((writable, gib, _log, readable),) = confined
+    ((writable, gib, _log, readable, kw),) = confined
     assert writable[0] == tmp_path / "out" and gib == sandbox.ATTEMPT_MEMORY_GIB
-    assert sandbox.hf_hub_cache() in writable and str(tmp_path / "absent") in map(str, readable)
+    assert kw == {"flies": True} and str(tmp_path / "absent") in map(str, readable)
     confined.clear()
     monkeypatch.setattr(
         sys, "argv", ["run_benchmark", "--attempt-root", str(tmp_path), "--episode-id", "e"]
@@ -912,12 +942,26 @@ def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monke
     assert confined == [sandbox.ATTEMPT_MEMORY_GIB]
 
 
+def test_the_cal_city_runner_run_directly_confines_itself(tmp_path, monkeypatch) -> None:
+    """``python -m benchmarks.calcity.run_benchmark`` hands the shared main its bench and
+    flies model code in its own process: it confines itself like the CityNav runner."""
+    from benchmarks.calcity import run_benchmark
+
+    confined: list = []
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append(a))
+    monkeypatch.setenv("SEARCH_CALCITY_DATA", str(tmp_path / "absent"))
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
+    assert run_benchmark.main() == 1
+    assert len(confined) == 1 and confined[0][0][0] == tmp_path / "out", confined
+
+
 def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
     tmp_path, monkeypatch, capsys
 ) -> None:
     from benchmarks.citynav.run_benchmark import cli
 
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
-    assert cli.main(citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})) == 1
+    bench = citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})
+    assert cli.main(bench, confine=False) == 1
     err = capsys.readouterr().err
     assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err

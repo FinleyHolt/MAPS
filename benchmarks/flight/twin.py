@@ -282,10 +282,6 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     bench = calcity_bench(os.environ)
-    if argv is None:
-        # A command-line twin runs model code in this process, so it confines itself;
-        # a caller handing argv owns its process.
-        sandbox.confine_cli(args, bench, logging.getLogger("twin").info)
     split = args.split or bench.default_split
     cfg = load_config(args.config)
     sensor = resolve_sensor(cfg.sensor)
@@ -303,6 +299,10 @@ def main(argv: list[str] | None = None) -> int:
     if (why := effort_refusal(bench, args.reasoning_effort)) is not None:
         print(why, file=sys.stderr)
         return 2
+    if argv is None:
+        # A command-line twin runs model code in this process, so it confines itself once
+        # the refusals pass (its --out is made then); a caller handing argv owns its process.
+        sandbox.confine_cli(args, bench, logging.getLogger("twin").info)
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
         print(

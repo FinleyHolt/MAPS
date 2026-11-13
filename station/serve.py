@@ -53,6 +53,7 @@ from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, open_live
 from benchmarks.flight.mission import (
+    END_WAIT_S,
     STATE_AWAITING,
     STATE_ENDED,
     STATE_FAILED,
@@ -77,7 +78,7 @@ from maps.llm import endpoint_spec, model_cards
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.settings import from_environ
-from station.bench_seat import END_WAIT_S, BenchMission, with_words
+from station.bench_seat import BenchMission, with_words
 from station.placement import OSM_CACHE_DIR, Placement, placement
 
 log = logging.getLogger("station")
@@ -286,8 +287,11 @@ class Station:
 
     def shown_split(self) -> str:
         """The split the mission list opens on: the newest run's under the output root, so its
-        runs are in view, else the bench's default."""
-        return next((r["split"] for r in self.runs() if r.get("split")), self.split)
+        runs are in view, else the bench's default when its file is there, else the first
+        split held."""
+        held = [s for s in self.bench.split_files if self.bench.split_path(s).is_file()]
+        fallback = self.split if self.split in held or not held else held[0]
+        return next((r["split"] for r in self.runs() if r.get("split")), fallback)
 
     def about(self) -> dict[str, Any]:
         """What the console asks once: the bench, its splits, and what the seat can do."""
@@ -898,6 +902,9 @@ def why_not_flying(bench: Bench, ortho_dir: Path | None) -> str | None:
         bench.assert_available()
     except (FileNotFoundError, RuntimeError) as exc:
         return f"this station reviews runs only: {str(exc).splitlines()[0]}"
+    # A mission crops its pictures from its block's raster.
+    if not any(Path(bench.rgbd_dir).glob("*.tif")):
+        return f"this station reviews runs only: no block raster under {bench.rgbd_dir}"
     return None
 
 

@@ -218,14 +218,14 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
 @pytest.mark.parametrize("flies", [True, False])
 def test_the_command_line_station_confines_itself_before_it_serves(flies, tmp_path, monkeypatch):
     """Missions fly in the station's own threads: the process takes the memory cap and,
-    where bubblewrap runs, writes only its runs and, when it flies, the ortho caches and
-    the hub cache. A station that reviews runs only writes ``--out`` alone."""
+    where bubblewrap runs, writes only its runs and, when it flies, the ortho caches, and
+    reads the hub cache offline. A station that reviews runs only writes ``--out`` alone."""
     import uvicorn
 
     from benchmarks import sandbox
 
     confined: list = []
-    monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append((*a, kw)))
     monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: confined.append("served"))
     # The station itself is the other tests' subject; this one asks only what it is started under.
     monkeypatch.setattr(
@@ -239,9 +239,39 @@ def test_the_command_line_station_confines_itself_before_it_serves(flies, tmp_pa
         "sys.argv", ["serve", "--out", str(tmp_path / "out"), "--ortho", str(tmp_path / "o")]
     )
     assert serve.main() == 0
-    (writable, gib, _log, readable), served = confined
+    (writable, gib, _log, readable, kw), served = confined
     bench = serve.bench_named("citynav", os.environ)
-    assert served == "served" and gib == sandbox.STATION_MEMORY_GIB
-    caches = [Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho", sandbox.hf_hub_cache()]
+    assert served == "served" and gib == sandbox.STATION_MEMORY_GIB and kw == {"flies": flies}
+    caches = [Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho"]
     assert writable == [tmp_path / "out", *(caches if flies else [])]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)
+
+
+def test_a_citynav_station_without_rasters_reviews_runs_only(tmp_path):
+    """Annotations alone fly nothing: a mission crops its pictures from the block's
+    raster, so a station with no raster under its raster directory reports why."""
+    from benchmarks.citynav.paths import citynav_bench
+
+    root = tmp_path / "citynav"
+    (root / "data" / "citynav").mkdir(parents=True)
+    (root / "data" / "cityrefer").mkdir(parents=True)
+    (root / "data" / "cityrefer" / "objects.json").write_text("{}")
+    bench = citynav_bench({"SEARCH_CITYNAV_DATA": str(root)})
+    why = serve.why_not_flying(bench, None)
+    assert why is not None and str(bench.rgbd_dir) in why, why
+    (root / "data" / "rgbd_upstream").mkdir()
+    (root / "data" / "rgbd_upstream" / "birmingham_block_1.tif").write_bytes(b"")
+    assert serve.why_not_flying(bench, None) is None
+
+
+def test_a_station_opens_on_a_split_its_list_carries(tmp_path):
+    """A splits directory without the bench's default split opens the console on a
+    split it holds, so the shown split is one the list offers."""
+    from types import SimpleNamespace
+
+    from benchmarks.citynav.paths import citynav_bench
+
+    bench = citynav_bench({"SEARCH_CITYNAV_SPLITS": str(tmp_path)})
+    (tmp_path / bench.split_files["test_unseen"]).write_text("[]")
+    seat = SimpleNamespace(bench=bench, split=bench.default_split, runs=lambda: [])
+    assert serve.Station.shown_split(seat) == "test_unseen"

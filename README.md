@@ -92,7 +92,7 @@ benchmark.
    python -m benchmarks.citynav.analysis.run_report output/citynav
    ```
 
-   `run_report` prints SR, NE, and OSR. Rerun the first command to resume
+   `run_report` prints SR, NE, OSR, and SPL (`spl_pos`, CityNav only). Rerun the first command to resume
    an interrupted run.
 
 5. Review the searches, or fly one from the console:
@@ -157,39 +157,60 @@ mission. The interpreter's block scan and line ceilings keep a cooperative
 model on the library; a hostile block reaches `os`, `subprocess`, and the file
 system through Python's reflection.
 
-The bench driver starts each attempt, and the station, the twin CLI, and the
-runner run from the command line start themselves, under OS isolation
-(`benchmarks/sandbox.py`). Each launcher logs one `sandbox:` line naming the
-mode it runs in.
+Each entry point that runs model code isolates it as far as its host allows
+and logs one `sandbox:` line (`benchmarks/sandbox.py`). The entry points are
+the bench driver's attempts, and the station, the twin CLI, and the runner
+started from the command line.
 
 | Layer | Bench attempt | Station, twin CLI, runner |
 |---|---|---|
 | Memory cap (`RLIMIT_DATA`) | 4 GiB, `--attempt-memory-gib` | 16 GiB (runner 4 GiB), `--memory-gib` |
-| Memory and processes (systemd user scope) | `MemoryMax` at the cap, shared memory and child processes included; every process killed with the attempt | None |
-| File system (bubblewrap) | `/` read-only. Home, `/tmp`, `/dev/shm`, and `/run` empty. Read-only: the repo with its `.env` masked, the interpreter, the bench's data, the config, the Hugging Face hub cache (offline). Writable: the worker's attempt root, the ortho cache | `/` read-only. Home, `/tmp`, `/dev/shm`, and `/run` empty. Read-only: the repo with its `.env` masked, the interpreter, the bench's data, every path argument. Writable: `--out`; when the process flies, the ortho caches and the hub cache |
+| Memory and processes (systemd user scope) | `MemoryMax` at the cap, shared memory and child processes included. Every process is killed with the attempt. | None |
+| Environment | An allowlist: MAPS's own variables, the reasoner key, Hugging Face settings without the token, locale, paths, proxies, and one thread per native pool | The same allowlist, after a restart |
+| File system: hidden (bubblewrap) | Home, `/tmp`, `/dev/shm`, and `/run` empty; the repo's `.env` and the Hugging Face token masked | Same |
+| File system: read-only (bubblewrap) | `/`, the repo, the interpreter, the bench's data, the config, the Hugging Face hub cache (offline) | `/`, the repo, the interpreter, the bench's data, every path argument, the hub cache (offline) when the process flies |
+| File system: writable (bubblewrap) | The worker's attempt root, the ortho cache | `--out`; the ortho caches when the process flies |
 | Processes (bubblewrap) | Own PID namespace and session | Own PID namespace |
 | Network | Shared with the host | Shared with the host |
+
+The systemd scope applies to bench attempts only. A process that flies caches
+the reasoner's tokenizer before it confines itself, so a reasoner first
+reached after the station starts needs its tokenizer in the hub cache already
+(`python -m maps.mission.endpoint_preflight` caches it).
 
 The layers that apply depend on the host:
 
 | Host | Layers |
 |---|---|
 | `bwrap` runs and a systemd user manager starts scopes (a desktop Linux) | All |
-| User namespaces blocked, systemd user manager present (Ubuntu 24.04's AppArmor default) | Memory cap and scope |
-| No `bwrap`, no user manager (a typical HPC compute node) | Memory cap alone: shared memory, a child process, and a daemon that leaves the attempt's session escape it |
+| `bwrap` runs, no user manager | All but the scope: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap |
+| User namespaces blocked, systemd user manager present (Ubuntu 24.04's AppArmor default) | Memory cap, environment, and scope. The scope binds a cooperative block only: a block reaches the user manager and can lift its own `MemoryMax` or start units outside the scope. |
+| No `bwrap`, no user manager (a typical HPC compute node) | Memory cap and environment: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap |
 
 A block that allocates past the cap gets `MemoryError` as its block error, and
-the mission continues. An allocation that fails in native code (a Rust
-tokenizer's abort, the scope's out-of-memory kill) ends the attempt with a
-signal, which the driver books as infrastructure and flies again.
+the mission continues. A `MemoryError` raised outside a block, in the
+harness, books the attempt as infrastructure. An allocation that fails in
+native code (a Rust tokenizer's abort, the scope's out-of-memory kill) ends
+the attempt with a signal, which the driver books as infrastructure and flies
+again.
 
 The network stays shared because the mission calls the reasoner and the
-segmenter over HTTP, so a block reaches any host the machine reaches, the
-host's abstract Unix sockets, and the reasoner's key in the process
-environment. The attempt also scores itself, so a block that escapes the
-library can rewrite its own score. To fly a model you don't trust, or to
-report benchmark numbers from one, run MAPS in a container or a virtual
-machine whose egress reaches only the reasoner and the segmenter.
+segmenter over HTTP. A block therefore reaches any host the machine reaches,
+the host's abstract Unix sockets, and the reasoner's key in the process
+environment. An X server that admits the user's uid over its abstract socket
+hands an escaped block the desktop, keystroke injection included.
+
+The attempt also scores itself. A block that escapes the library can rewrite
+its own score and the caches later attempts read: the ortho cache is shared
+across attempts, and its stamp is a file the block can forge. To fly a model
+you don't trust, or to report benchmark numbers from one, run MAPS in a
+container or a virtual machine whose egress reaches only the reasoner and the
+segmenter.
+
+The SAM serve (`python -m serving.sam_server`) binds `0.0.0.0` with no
+authentication by default, so any host that reaches its port can use the GPU
+behind it. On a shared network, start it with `--host 127.0.0.1` and reach it
+through an SSH tunnel.
 
 ## Reproduce the paper
 
