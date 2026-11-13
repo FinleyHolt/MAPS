@@ -47,7 +47,6 @@ import argparse
 import contextlib
 import math
 import os
-import resource
 import shutil
 import subprocess
 import sys
@@ -158,6 +157,8 @@ def cap_memory(gib: float) -> None:
     or ignores ``RLIMIT_DATA``."""
     if not sys.platform.startswith("linux"):
         return
+    import resource  # POSIX only, and the review station runs on Windows
+
     n = int(gib * 2**30)
     resource.setrlimit(resource.RLIMIT_DATA, (n, n))
 
@@ -413,6 +414,12 @@ def tokenizer_refusal(environ, process: str, again: str) -> str | None:
     return None
 
 
+#: Why a process that flies model code refuses on Windows: the sandbox's layers are POSIX.
+WINDOWS_REFUSAL = (
+    "MAPS flies model code on Linux and macOS; on Windows the station reviews recorded runs only"
+)
+
+
 def confine(
     writable: list[Path],
     gib: float,
@@ -436,6 +443,11 @@ def confine(
     inject keystrokes into its terminal; run it under a supervisor with no terminal
     there. Relative paths resolve inside the sandbox only from a bound working
     directory (the repo root)."""
+    if sys.platform == "win32":
+        if flies:
+            raise SystemExit(f"FATAL: {WINDOWS_REFUSAL}")
+        log("sandbox: Windows: review only, no model code runs")
+        return
     if os.environ.pop(SANDBOXED_ENV, None) == "1" and _confined():
         cap_memory(gib)
         log(mode_line(None, gib))

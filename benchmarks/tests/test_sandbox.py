@@ -362,7 +362,27 @@ def test_a_host_that_refuses_rlimit_data_runs_uncapped_and_says_so(monkeypatch):
         raise ValueError("current limit exceeds maximum limit")
 
     monkeypatch.setattr(sandbox.sys, "platform", "darwin")
-    monkeypatch.setattr(sandbox.resource, "setrlimit", refuse)
+    import resource
+
+    monkeypatch.setattr(resource, "setrlimit", refuse)
     sandbox.cap_memory(4.0)
     line = sandbox.mode_line("bwrap is not installed", 4.0)
     assert "no memory cap" in line and "memory cap 4" not in line, line
+
+
+def test_windows_reviews_recorded_runs_and_refuses_to_fly(monkeypatch, tmp_path):
+    """On Windows a process that runs no model code serves as it is, with one sandbox
+    line; one that would fly model code refuses in one line."""
+
+    def no_exec(*_a):
+        raise AssertionError("confine restarted the process")
+
+    monkeypatch.setattr(sandbox.sys, "platform", "win32")
+    monkeypatch.setattr(sandbox.os, "execve", no_exec)
+    monkeypatch.setattr(sandbox.os, "execvpe", no_exec)
+    lines = []
+    sandbox.confine([tmp_path], 16.0, lines.append, flies=False)
+    assert lines == ["sandbox: Windows: review only, no model code runs"]
+    with pytest.raises(SystemExit) as stop:
+        sandbox.confine([tmp_path], 16.0, lines.append, flies=True)
+    assert str(stop.value) == f"FATAL: {sandbox.WINDOWS_REFUSAL}"
