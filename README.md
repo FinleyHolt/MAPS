@@ -1,9 +1,11 @@
 # MAPS: Multimodal Agentic Planning and Search
 
-MAPS finds a target on the ground from a description in words. A multimodal
-language model flies the aircraft by writing Python against a small library
-over a structured world state: an OpenStreetMap prior joined with the
-detections of an open-vocabulary segmenter (SAM 3.1).
+City-scale agentic search from a crewed aircraft. MAPS searches for objects
+described in natural language using a world-state graph built from
+OpenStreetMap priors and onboard imagery. The model queries this graph,
+directs flight, and configures segmentation of the aircraft's imagery (SAM
+3.1) through self-authored short Python programs, without task-specific
+training.
 
 ![A MAPS search flown on a C-12 over California City: the description, the flown track, and each call the model made, at the place it made it.](docs/figures/overview.webp)
 
