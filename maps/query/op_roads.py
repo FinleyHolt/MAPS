@@ -190,6 +190,13 @@ def _points_held(cx, el) -> list:
     return said
 
 
+def _names_a_crossing(cx, said: str) -> bool:
+    """Whether ``said`` reads as a crossing's served name: each side of its
+    " x " a row's name or fid."""
+    known = {str(r.get(k)).casefold() for r in cx.by_fid.values() for k in ("name", "fid")}
+    return all(side.strip().casefold() in known for side in said.split(" x "))
+
+
 def run_ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
     rows = []
@@ -212,7 +219,9 @@ def run_ends(cx, a):
         points += held
         # A crossing's served name grounds on the roads it names.
         if isinstance(said, str) and " x " in said and all(n.get("name") != said for n in nodes):
-            raise ProgramError(f"{quote_value(said)} is a point {_NO_ENDS}")
+            if _names_a_crossing(cx, said):
+                raise ProgramError(f"{quote_value(said)} is a point {_NO_ENDS}")
+            nodes = []
         if not nodes:
             refuse_if_empty(cx, el, "take the ends of")
             raise ProgramError(

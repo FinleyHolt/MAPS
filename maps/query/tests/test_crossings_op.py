@@ -684,3 +684,8 @@ def test_a_point_is_quoted_as_its_xy_token(code, said):
 def test_a_crossing_refusal_quotes_a_point_as_its_xy_token():
     err = _ends_block('intersection([100, 100], "Cross Street")\n')["error"]
     assert err.startswith("'[100, 100]' names no geometry"), err
+
+
+def test_a_crossing_name_with_a_side_naming_no_row_names_no_row():
+    err = _ends_block('ends_of("Long Road x Nowhere")\n')["error"]
+    assert err.startswith("'Long Road x Nowhere' names no row on this surface."), err
