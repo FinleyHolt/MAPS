@@ -116,9 +116,3 @@ the model saw, and its score), the bake they were flown on, and a basemap
 picture. It needs none of the data above: the station opens it as it is. For
 the steps, see the
 [Quickstart](../README.md#quickstart-review-recorded-searches).
-
-## Flight recordings
-
-The camera recordings, sortie folders, and analysts' adjudications of the
-closed-loop flight aren't distributed. The closed-loop measures
-([`flight.md`](flight.md)) run on sorties of your own.
