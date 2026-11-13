@@ -324,6 +324,10 @@ class Library:
             # what the find matched before the cut
             node = self.names.running_node()
             if isinstance(node, ast.Call):
+                if node.args and not isinstance(node.args[0], ast.Constant):
+                    # a query the block computed (a loop variable) is
+                    # labelled with the value it ran, so each set keeps its own
+                    node = ast.Call(node.func, [ast.Constant(query), *node.args[1:]], node.keywords)
                 label = ast.unparse(node)
         if q:
             self.names.labels[ref] = label

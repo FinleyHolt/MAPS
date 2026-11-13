@@ -624,6 +624,14 @@ def test_a_side_cut_find_that_keeps_rows_serves_under_the_call_as_written(block,
     assert keys == [key], keys
 
 
+def test_a_side_cut_find_over_a_loop_variable_is_labelled_with_the_query_it_ran():
+    block = 'for k in ["car", "zzz"]:\n    print(find(k, north_of="prior_7"))\n'
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    printed = tool_results(fr)[0]["printed"].splitlines()
+    assert printed[0].startswith("<find('car', north_of='prior_7'): 2 row(s)"), printed
+    assert printed[1] == "<find('zzz', north_of='prior_7'): 0 rows>", printed
+
+
 def test_a_printed_window_of_an_emptied_dwithin_chain_serves_the_cuts_stats():
     # calcity::3260#3259 request 7: a lambda-kept set, a dwithin cut that
     # empties it (42->0 there), side cuts over nothing and an order, then a
