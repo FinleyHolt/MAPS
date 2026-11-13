@@ -1626,9 +1626,9 @@ def test_two_unnamed_results_with_one_label_stay_two_results():
     assert cmp_op["args"]["refs"] == [{"ref": [second["ref"]], "as": "find('car')"}], ops
 
 
-def test_more_of_on_a_one_block_handle_says_to_show_it():
-    """A handle that fits one block has no page past it: more_of says how
-    to see it, never that its rows are already served (a bound find that
+def test_more_of_on_a_one_block_handle_says_there_is_no_further_block():
+    """A handle that fits one block has no page past it: more_of says so and
+    how to see it, never that its rows are already served (a bound find that
     was never shown has served none)."""
     reply, fr, _f, _d = drive(
         [
@@ -1638,7 +1638,10 @@ def test_more_of_on_a_one_block_handle_says_to_show_it():
         ]
     )
     err = tool_results(fr)[1]["error"]
-    assert err == "cars holds 2 row(s), one block: show it with a bare `cars` line.", err
+    assert err == (
+        "cars holds 2 row(s), one block, and a bare `cars` line serves all of it: "
+        "there is no further block."
+    ), err
 
 
 def test_a_block_that_calls_one_kind_twice_serves_both_parts():

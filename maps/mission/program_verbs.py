@@ -237,7 +237,11 @@ class Programs:
             held = len(self.carry.read(ref) or [])
             if held and held <= BROAD_DUMP_SOFT_ROWS:
                 return self.rejections.error(
-                    {}, (f"{h} holds {held} row(s), one block: show it with a bare `{h}` line.")
+                    {},
+                    (
+                        f"{h} holds {held} row(s), one block, and a bare `{h}` line "
+                        "serves all of it: there is no further block."
+                    ),
                 )
             if held and lo >= held:
                 return self.rejections.error(
