@@ -545,3 +545,11 @@ def test_grey_is_gray_on_the_palette():
     err = tool_results(fr)[0].get("error", "")
     # the fake rows carry no perceived colour, so the gray column orders nothing
     assert "not a color on the closed palette" not in err and "'color_gray'" in err, err
+
+
+def test_a_find_a_side_cut_emptied_is_never_said_to_have_matched_nothing():
+    """find("car", south_of=...) matched two cars and the cut dropped both:
+    no step line says find('car') returned no rows."""
+    _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7")\n')], "done"])
+    (env,) = tool_results(fr)[0]["result"]["results"].values()
+    assert "find('car'): this call returned no rows" not in env["hint"], env

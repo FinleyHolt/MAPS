@@ -6,6 +6,7 @@ reads them, the grounding that opens it and the ack that closes it."""
 
 from __future__ import annotations
 
+import ast
 import re
 
 from maps.library.block_scan import MOVE_SAYS
@@ -307,6 +308,11 @@ class Library:
         self._near_miss_note(ref, query)
         if q:
             self.names.labels[ref] = f"find({query!r})"
+            node = self.names.running_node()
+            if cards and not self.env.rows_of_ref(ref) and isinstance(node, ast.Call):
+                # a side cut emptied what the find matched: the bare
+                # find('<q>') label would say the find matched nothing
+                self.names.labels[ref] = ast.unparse(node)
         return Rows(ref, self, label=f"find({query!r})" if q else "")
 
     _NEAR_MISS_M = 500.0
