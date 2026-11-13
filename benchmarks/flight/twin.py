@@ -355,7 +355,11 @@ def main(argv: list[str] | None = None) -> int:
         reasoning_effort=args.reasoning_effort,
         agl_m=start_alt - ground_z,
     )
-    converse(mission, args.then)
+    try:
+        converse(mission, args.then)
+    except KeyboardInterrupt:  # converse stopped the mission and waited for its row
+        print(summary_line(mission))
+        return 130
     print(summary_line(mission))
     return 0 if mission.status == STATE_ENDED else 1
 

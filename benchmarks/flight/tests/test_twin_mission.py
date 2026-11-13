@@ -868,3 +868,18 @@ def test_ctrl_c_mid_mission_ends_it_and_waits_for_its_row(monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         m.converse(mission, [])
     assert calls == ["stop", ("wait", m.END_WAIT_S), "close"], calls
+
+
+def test_ctrl_c_ends_the_twin_with_its_summary_line_and_exit_130(
+    calcity, serves, tmp_path, capsys, monkeypatch
+):
+    """The twin's Ctrl-C prints the mission's summary line and exits 130, with no traceback."""
+    from benchmarks.flight import twin
+
+    def interrupted(mission, taskings):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(twin, "converse", interrupted)
+    argv = ["--episode", "calcity::0#0", "--ortho", str(calcity.rgbd), "--out", str(tmp_path)]
+    assert twin.main(argv) == 130
+    assert "ended by" in capsys.readouterr().out
