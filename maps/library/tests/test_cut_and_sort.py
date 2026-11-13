@@ -600,3 +600,16 @@ def test_a_tier_of_a_side_cut_over_a_find_that_matched_nothing_keeps_the_finds_w
     _r, fr, _f, _d = drive([[run('find("zzz", south_of="prior_7").exact\n')], "done"])
     err = tool_results(fr)[0]["error"]
     assert err.startswith("these rows carry no match tiers"), err
+
+
+@pytest.mark.parametrize(
+    "block, key",
+    [
+        ('find("car", north_of="prior_7").exact\n', "find('car', north_of='prior_7').exact"),
+        ('find("car", west_of="prior_7").tagged\n', "find('car', west_of='prior_7').tagged"),
+    ],
+)
+def test_a_side_cut_find_that_keeps_rows_serves_under_the_call_as_written(block, key):
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    keys = list(tool_results(fr)[0]["result"]["results"])
+    assert keys == [key], keys

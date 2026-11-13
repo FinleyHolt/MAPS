@@ -311,9 +311,9 @@ class Library:
         self._analyze(p, ref)
         self._near_miss_note(ref, query)
         label = f"find({query!r})" if q else ""
-        if q and cards and not self.env.rows_of_ref(ref):
-            # a side cut emptied what the find matched: the bare
-            # find('<q>') label would say the find matched nothing
+        if q and cards:
+            # a side cut changes the set: the bare find('<q>') label names
+            # what the find matched before the cut
             node = self.names.running_node()
             if isinstance(node, ast.Call):
                 label = ast.unparse(node)
