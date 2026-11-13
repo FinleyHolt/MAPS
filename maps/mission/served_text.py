@@ -270,9 +270,9 @@ before it ran and stands. Names persist for the whole mission.
   is read from a crop and nowhere else. Crops are earned by flying: a
   look at ground no pass has covered has nothing to show yet.
 - Rows display when a result has an order -- a find's match ranking,
-  tied or not, or a sort -- and a cut keeps its input's. An UNORDERED
-  result (the rows a flight added) displays census + len only. Every
-  result stays live behind its handle.
+  tied or not, a sort, or a road's ends or crossings -- and a cut keeps
+  its input's. An UNORDERED result (the rows a flight added) displays
+  census + len only. Every result stays live behind its handle.
 - A NAME is not a PLACE: a name match says the NAME matched, never WHICH
   instance the cue means.
 - A SPATIAL relation is what drops rows; a colour ORDERS and never drops.

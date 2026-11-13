@@ -232,3 +232,10 @@ def test_the_transcript_says_what_json_says():
     kinds = {t.get("kind") for t in tr}
     assert "run" in kinds, kinds
     assert not (kinds & {"program", "say", "act", "view"}), kinds
+
+
+def test_the_system_turn_names_every_order_whose_rows_display():
+    """ends_of and intersection answer ordered rows, so the sentence on
+    which results display rows names them beside a find and a sort."""
+    flat = " ".join(served_text.served_system_prompt().split())
+    assert "a find's match ranking, tied or not, a sort, or a road's ends or crossings" in flat
