@@ -57,6 +57,8 @@ def spend(out_root: Path, prices: dict = PRICES, tokenizer_name: str = "") -> di
     ``tokenizer_name`` is the reader's tokenizer override
     (``SEARCH_COMPACT_TOKENIZER_NAME``), for a reasoning span no serve counted."""
     out_root = Path(out_root)
+    if not out_root.is_dir():
+        raise SystemExit(f"{out_root}: not a run root (no such directory)")
     ledger = {r.get("workdir"): r for r in _rows.iter_json_rows(out_root / EPISODES_JSONL)}
     # A cache meter stays None until an attempt reports it.
     totals: dict = {
