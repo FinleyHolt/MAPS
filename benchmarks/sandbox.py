@@ -67,6 +67,9 @@ ATTEMPT_MEMORY_GIB = 4.0
 STATION_MEMORY_GIB = 16.0
 #: Set in a process this module re-executed under bubblewrap.
 SANDBOXED_ENV = "MAPS_SANDBOXED"
+#: Set on the restart under :func:`child_env`'s environment, so the restarted process
+#: serves even where the host adds variables at every start (macOS).
+RESTARTED_ENV = "MAPS_RESTARTED"
 #: Set, to the discovery's exception name, in a process confined offline after its
 #: launcher could not cache the reasoner's tokenizer.
 TOKENIZER_ENV = "MAPS_TOKENIZER_UNCACHED"
@@ -455,8 +458,8 @@ def confine(
     env, argv = child_env(os.environ), [sys.executable, *sys.orig_argv[1:]]
     env.pop(TOKENIZER_ENV, None)
     if (why := bwrap_refusal()) is not None:
-        if env != dict(os.environ):
-            os.execve(sys.executable, argv, env)
+        if os.environ.pop(RESTARTED_ENV, None) != "1" and env != dict(os.environ):
+            os.execve(sys.executable, argv, env | {RESTARTED_ENV: "1"})
         cap_memory(gib)
         log(mode_line(why, gib))
         return
