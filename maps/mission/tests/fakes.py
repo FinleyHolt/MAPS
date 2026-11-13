@@ -568,7 +568,11 @@ def quiet_env(**kw):
 
 
 def record_block(
-    code: str, bound: dict | None = None, rn: int = 0, widened: dict | None = None
+    code: str,
+    bound: dict | None = None,
+    rn: int = 0,
+    widened: dict | None = None,
+    row_of_fid=lambda fid: None,
 ) -> tuple[list[tuple], dict]:
     """Run ONE block against an env whose verbs record: (calls, ack).
 
@@ -607,6 +611,7 @@ def record_block(
             widened=widened if widened is not None else {},
             ground=ground,
             analyze=analyze,
+            row_of_fid=row_of_fid,
             **{v: verb(v) for v in ("stand", "move", "cover", "crops", "map", "watch", "boost")},
         )
     )

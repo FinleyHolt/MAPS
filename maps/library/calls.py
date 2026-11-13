@@ -149,11 +149,11 @@ class Library:
             return Bind(v, name)
         return None
 
-    def _slot(self, v):
+    def _slot(self, v, *, ends=True):
         """A Python value -> the argument the compiler reads: a result is a
         :class:`Ref` and a row a :class:`Bind`, labelled with the model's
-        own name (as is a string naming one); anything else rides verbatim,
-        a bare name to ground."""
+        own name (as is a string naming one, and with ``ends`` a quoted road
+        end's fid); anything else rides verbatim, a bare name to ground."""
         if isinstance(v, Rows):
             # A nameless set is numbered, once per mission, so two of them
             # in one call stay two places (two columns, two cuts).
@@ -169,8 +169,9 @@ class Library:
                 return held
             # A quoted terminus is the row it names, as the bare name is: the
             # compiler's fid lookup covers only the surface's own rows.
-            end = self.env.row_of_fid(v) if END_RE.fullmatch(v.strip().lower()) else None
-            return Bind(bind_row(end), v.strip()) if end is not None else v
+            # An act resolves the fid itself, so it keeps the fid as said.
+            end = ends and END_RE.fullmatch(v.strip().lower()) and self.env.row_of_fid(v)
+            return Bind(bind_row(end), v.strip()) if end else v
         if isinstance(v, dict):
             raise CodeError(f"a place is a row, a set, a fid or an [x, y]; got a dict ({v!r:.60}).")
         if isinstance(v, (set, frozenset)):
@@ -178,7 +179,7 @@ class Library:
         if isinstance(v, (list, tuple)) and not is_xy(v):
             # a LIST of things -- order(nearest=[roadA, roadB]) -- maps
             # element-wise.
-            out = [self._slot(x) for x in v]
+            out = [self._slot(x, ends=ends) for x in v]
             return out if any(isinstance(x, (Row, Rows)) for x in v) else type(v)(out)
         return v
 
@@ -492,7 +493,10 @@ class Library:
         # badges.
         mk = None
         if marks is not None:
-            mk = [self._slot(m) for m in (marks if isinstance(marks, (list, tuple)) else [marks])]
+            mk = [
+                self._slot(m, ends=False)
+                for m in (marks if isinstance(marks, (list, tuple)) else [marks])
+            ]
         # The marks ride the SAME crop request as its subject, so the
         # renderer's frame decision and its mark projection see one window.
         lead: list = []
@@ -522,7 +526,7 @@ class Library:
                         "look([s[0], ...])"
                     )
             else:
-                x = self._slot(x)
+                x = self._slot(x, ends=False)
                 many = isinstance(x, (list, tuple)) and not is_xy(x)
                 held = many and next((a.label for a in x if isinstance(a, Ref)), None)
             if held:
@@ -576,7 +580,7 @@ class Library:
                     else "."
                 )
             )
-        around = self._slot(around)
+        around = self._slot(around, ends=False)
         self._act(self.env.map, [(place_token(around, "map"), "map")])
         return None
 
@@ -598,7 +602,7 @@ class Library:
             raise CodeError(refused)
         if isinstance(at, Rows):
             raise CodeError(self.names.not_one_place("at", at) + ".")
-        at = self._slot(at)
+        at = self._slot(at, ends=False)
         if at is None:
             self._act(self.env.watch, [], words)
         else:
@@ -611,12 +615,12 @@ class Library:
         for kw, v in (("at", at), ("facing", facing)):
             if isinstance(v, Rows):
                 raise CodeError(self.names.not_one_place(kw, v) + ".")
-        at = self._slot(at)
+        at = self._slot(at, ends=False)
         # A heading: a compass word rides as itself, anything else is a
         # place to look TOWARD.
         word = facing.strip().lower() if isinstance(facing, str) else None
         if word not in COMPASS_UNIT:
-            facing = self._slot(facing)
+            facing = self._slot(facing, ends=False)
         at_site = place_token(at, "stage")
         f_site = word if word in COMPASS_UNIT else place_token(facing, "facing")
         self._act(self.env.stand, [(at_site, "stage"), (f_site, "facing")])
@@ -688,7 +692,7 @@ class Library:
                 "looking -- its sides ride every find row. To move, "
                 f"{call}() a row: r1[0], or a fid off one."
             )
-        x = self._slot(x)
+        x = self._slot(x, ends=False)
         if call == "go_to":
             self._act(self.env.move, [(place_token(x, "move"), "move")])
         else:

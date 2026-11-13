@@ -788,3 +788,18 @@ def test_a_typed_terminus_fid_is_read_in_either_case_as_a_stop_id_is(code, print
 def test_find_refuses_an_end_fid_no_road_end_carries_as_it_refuses_a_prior_fid():
     err = _ends_block('find("end_7")\n')["error"]
     assert err == "line 2: there is no end_7 on this surface; say a fid off a served row.", err
+
+
+def test_an_act_hands_a_quoted_terminus_fid_on_as_said():
+    # The act verbs resolve an end fid themselves; only a program slot binds it.
+    from maps.mission.tests.fakes import record_block
+
+    end = {"fid": "end_1", "xy": [120.0, 100.0], "name": "Long Road end1"}
+    code = (
+        'look("end_1", marks="end_1")\ngo_to("end_1")\nexplore("end_1")\n'
+        'show_map(around="end_1")\nstand(at="end_1", facing="end_1")\n'
+    )
+    # the recording stand serves no stance, so the block stops after it
+    calls, _out = record_block(code, row_of_fid=lambda f: end if f == "end_1" else None)
+    assert [c[0] for c in calls] == ["crops", "move", "cover", "map", "stand"], calls
+    assert "[120, 100]" not in repr(calls), calls
