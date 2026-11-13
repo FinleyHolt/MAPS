@@ -18,6 +18,10 @@ searches, and the readers that derive every reported number from run records.
 
 ## Quickstart: review recorded searches
 
+[![A one-minute silent walkthrough of this quickstart: install, unzip the example runs, open the console, and review one search.](docs/figures/welcome.jpg)](docs/figures/welcome.mp4)
+
+*The quickstart in one minute, without sound. Every command it shows is below.*
+
 Requires Python 3.12 or later. No model, GPU, or dataset.
 
 1. Install MAPS with the console:
