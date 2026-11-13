@@ -95,7 +95,12 @@ def is_infra_fault(exc: BaseException) -> bool:
     a transient shared-server fault, an image-store refusal, a reasoner that
     did not answer discovery, or a MemoryError (a block's own is served inside
     ``run_block``, so one that reaches here is the harness's). Any other
-    exception is the method's own, a scored miss."""
+    exception is the method's own, a scored miss.
+
+    ponytail: memory a block keeps bound (a global it filled) stays counted against
+    the cap, so the harness's next allocation raises the MemoryError here and books
+    the block's exhaustion as infra; telling them apart takes the block's footprint
+    measured at its end."""
     infra = (HarnessFault, ImageStoreError, EndpointUnreachable, MemoryError)
     return _exc_is_transient_infra(exc) or any(isinstance(cur, infra) for cur in _chain(exc))
 
