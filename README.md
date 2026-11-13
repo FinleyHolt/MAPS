@@ -221,12 +221,14 @@ the host's abstract Unix sockets, and the reasoner's key in the process
 environment. An X server that admits the user's uid over its abstract socket
 hands an escaped block the desktop, keystroke injection included.
 
-The attempt also scores itself. A block that escapes the library can rewrite
+The attempt also scores itself: it writes its own record, and the driver
+reads that record as written. A block that escapes the library can rewrite
 its own score and the caches later attempts read: the ortho cache is shared
-across attempts, and its stamp is a file the block can forge. To fly a model
-you don't trust, or to report benchmark numbers from one, run MAPS in a
-container or a virtual machine whose egress reaches only the reasoner and the
-segmenter.
+across attempts, and its stamp is a file the block can forge. No layer here
+makes an untrusted model's scores trustworthy; benchmark numbers are only as
+trustworthy as the model that produced them. To fly a model you don't trust,
+run MAPS in a container or a virtual machine whose egress reaches only the
+reasoner and the segmenter: that bounds what an escaped block reaches.
 
 The SAM serve (`python -m serving.sam_server`) binds `0.0.0.0` with no
 authentication by default, so any host that reaches its port can use the GPU
