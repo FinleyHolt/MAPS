@@ -1011,8 +1011,9 @@ def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
     from benchmarks.citynav.run_benchmark import cli
 
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: None)
     bench = citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})
-    assert cli.main(bench, confine=False) == 1
+    assert cli.main(bench) == 1
     err = capsys.readouterr().err
     assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err
 

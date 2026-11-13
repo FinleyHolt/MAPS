@@ -149,6 +149,7 @@ def _tile(lon: float, lat: float, z: int) -> tuple[int, int]:
 def bench_root(citynav, serves, tmp_path, monkeypatch):  # noqa: F811
     """A bench out-root as the driver leaves one: the runner's own row for one
     flown episode, its attempt folder under a worker's ``w3/``."""
+    from benchmarks import sandbox
     from benchmarks.citynav.run_benchmark import cli
     from maps.llm import http
 
@@ -188,7 +189,8 @@ def bench_root(citynav, serves, tmp_path, monkeypatch):  # noqa: F811
                 str(root),
             ],
         )
-        assert cli.main(citynav, confine=False) == 0
+        m.setattr(sandbox, "confine", lambda *a, **kw: None)
+        assert cli.main(citynav) == 0
     (row,) = [json.loads(line) for line in (root / "episodes.jsonl").read_text().splitlines()]
     (root / "w3").mkdir()
     (root / row["workdir"]).rename(root / "w3" / row["workdir"])

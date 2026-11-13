@@ -122,13 +122,12 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     return parser
 
 
-def main(bench: Bench | None = None, *, confine: bool = True) -> int:
+def main(bench: Bench | None = None) -> int:
     """The runner's CLI, for ``bench``; unset, for the bench the environment
     selects (``paths.selected_bench``), which is how an attempt child of
     either driver learns its bench. A run flies model code in this process, so
     it confines itself unless a driver spawned it (``--attempt-root``: the
-    driver sandboxes it) or an in-process caller that owns its process passes
-    ``confine=False``."""
+    driver sandboxes it)."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
@@ -148,7 +147,7 @@ def main(bench: Bench | None = None, *, confine: bool = True) -> int:
         # The driver sandboxes its attempts; the child takes the memory cap itself.
         sandbox.cap_memory(args.memory_gib)
         _die_with_parent(bench.environ)
-    elif confine:
+    else:
         sandbox.confine(
             [Path(args.out or f"output/{bench.name}"), *sandbox.ortho_caches([bench.rgbd_dir])],
             args.memory_gib,
