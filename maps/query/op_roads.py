@@ -16,7 +16,7 @@ from maps.query.op_io import (
     refuse_if_empty,
 )
 from maps.query.row_geometry import chains_of
-from maps.xy_token import format_xy_token, parse_xy_token
+from maps.xy_token import format_xy_token, is_xy, parse_xy_token
 
 
 def _x_label(nodes, el):
@@ -173,10 +173,11 @@ def run_ends(cx, a):
     footprints: list = []
     for el in a["refs"]:
         nodes = named_rows(cx, el, "centerline")
-        if not nodes and isinstance(el, str) and parse_xy_token(el):
+        ref = el.get("ref") if isinstance(el, dict) else el
+        if not nodes and (is_xy(ref) or isinstance(ref, str) and parse_xy_token(ref)):
             # a crossing's fid is its [x, y] token
             raise ProgramError(
-                f"{quote_value(el)} is a point (a crossing or an [x, y]), and a point "
+                f"{quote_value(as_said(el))} is a point (a crossing or an [x, y]), and a point "
                 "has no ends -- ends_of reads a road."
             )
         if not nodes:

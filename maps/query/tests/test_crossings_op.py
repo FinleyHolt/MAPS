@@ -437,11 +437,13 @@ def test_a_footprint_with_a_mask_axis_is_still_refused():
     assert "1 footprint skipped (prior_9 (A Shed)): a footprint has no ends" in rows.notes[-1]
 
 
-def test_a_crossing_is_a_point_with_no_ends():
-    prog = {"ops": [{"ref": "r0", "op": "ends", "args": {"refs": ["[960, 960]"]}}]}
-    with pytest.raises(
-        ProgramError, match=r"'\[960, 960\]' is a point \(a crossing or an \[x, y\]\)"
-    ):
+@pytest.mark.parametrize(
+    "ref",
+    ["[960, 960]", {"ref": "[960, 960]", "as": "x[0]"}, {"ref": [960.0, 960.0], "as": "x[0]"}],
+)
+def test_a_crossing_is_a_point_with_no_ends(ref):
+    prog = {"ops": [{"ref": "r0", "op": "ends", "args": {"refs": [ref]}}]}
+    with pytest.raises(ProgramError, match=r"is a point \(a crossing or an \[x, y\]\)"):
         run_program([], [], prog)
 
 
