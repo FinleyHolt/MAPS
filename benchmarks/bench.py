@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -76,6 +76,33 @@ def missing_bake(stem: str) -> str | None:
         if not path.exists():
             return f"Missing {path}: bake this block first ({recipe})."
     return None
+
+
+def block_asset_refusal(bench: Bench, map_names: Iterable[str]) -> str | None:
+    """Why ``bench`` cannot fly the blocks ``map_names``, or None: each block's bake
+    (:func:`missing_bake`) and its raster pair, ``<map>.tif`` beside ``<map>_rgb.tif``
+    or ``<map>.png``, each missing raster on a line with the command that builds it.
+    The runners and the station refuse on it, since an episode on such a block books a
+    miss whatever the model writes."""
+    build = (
+        "python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
+        if bench.name == "calcity"
+        else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh"
+    )
+    rgbd, missing = Path(bench.rgbd_dir), []
+    for map_name in sorted(set(map_names)):
+        if why := missing_bake(bench.tile_stem(map_name)):
+            missing.append(why)
+        if not (rgbd / f"{map_name}.tif").is_file():
+            missing.append(f"Missing {rgbd / f'{map_name}.tif'} (built by {build})")
+        if not any((rgbd / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png")):
+            missing.append(f"Missing {rgbd / f'{map_name}_rgb.tif'} (built by {build})")
+    if not missing:
+        return None
+    return (
+        "block assets missing (every episode on these blocks would book a miss whatever "
+        "the model writes):\n" + "\n".join(f"  {p}" for p in missing)
+    )
 
 
 class EpisodeEngine(Protocol):

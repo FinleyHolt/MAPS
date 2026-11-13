@@ -456,7 +456,7 @@ def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(
         in capsys.readouterr().err.splitlines()
     )
     (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
-    assert bf._missing_block_assets(citynav_bench(os.environ), ["blk::1#0"]) == []
+    assert bf.block_asset_refusal(citynav_bench(os.environ), ["blk"]) is None
 
 
 def test_a_ledger_the_worker_cannot_write_stops_the_run(driver, monkeypatch) -> None:
@@ -860,7 +860,7 @@ def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(
     tmp_path, monkeypatch, capsys, bench_data
 ) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
-    monkeypatch.setattr(bf, "_missing_block_assets", lambda bench, eps: [])
+    monkeypatch.setattr(bf, "block_asset_refusal", lambda bench, maps: None)
     (tmp_path / "ids.txt").write_text("a\n")
     assert (
         bf.main(
@@ -886,7 +886,7 @@ def test_a_dry_run_into_a_root_of_another_selection_is_refused_as_the_launch_is(
     from maps.llm.endpoint_spec import EndpointSpec
 
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
-    monkeypatch.setattr(bf, "_missing_block_assets", lambda bench, eps: [])
+    monkeypatch.setattr(bf, "block_asset_refusal", lambda bench, maps: None)
     root = tmp_path / "r"
     root.mkdir()
     spec = EndpointSpec("http://127.0.0.1:1/v1", "inkling-small", 65536, "tok", 4096)
@@ -968,22 +968,61 @@ def test_calcity_without_its_catalog_exits_2_with_its_recipe_before_any_out_root
     assert "build_objects_json" in err and "objects.json" in err
 
 
-def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monkeypatch) -> None:
+def _runner_tree(tmp_path: Path, bench_data: Path, monkeypatch, *, rgb: bool = False) -> Path:
+    """One val_seen row on ``birmingham_block_1``, its bake and its height raster (its
+    ``_rgb.tif`` too when ``rgb``); returns the raster directory."""
+    from benchmarks.bench import BAKE_OUTPUT_SUFFIXES
+
+    row = {
+        "area": "birmingham",
+        "block": 1,
+        "ann_ids": [0],
+        "descriptions": ["d"],
+        "target_positions": [[1.0, 2.0, 0.0]],
+        "trajectory": [[0.0, 0.0, 50.0]],
+    }
+    (bench_data / "data" / "citynav" / "citynav_val_seen.json").write_text(json.dumps([row]))
+    tiles, rgbd = tmp_path / "tiles", tmp_path / "rgbd"
+    tiles.mkdir()
+    rgbd.mkdir()
+    for suffix in BAKE_OUTPUT_SUFFIXES:
+        (tiles / f"birmingham_block_1{suffix}").write_text("{}")
+    for name in ["birmingham_block_1.tif", *(["birmingham_block_1_rgb.tif"] if rgb else [])]:
+        (rgbd / name).write_bytes(b"")
+    monkeypatch.setenv("SEARCH_CITYNAV_TILES", str(tiles))
+    monkeypatch.setenv("SEARCH_CITYNAV_RGBD_DIR", str(rgbd))
+    return rgbd
+
+
+class _Confined(Exception):
+    """What a test's ``sandbox.confine`` raises once it has recorded its call."""
+
+
+def test_the_runner_run_directly_confines_itself_before_it_flies(
+    tmp_path, monkeypatch, bench_data
+) -> None:
     """``python -m benchmarks.citynav.run_benchmark`` runs model code in its own process: it
     takes the attempt's memory cap and, where bubblewrap runs, writes only its runs and the
     caches. A runner the driver spawns caps itself alone (the driver sandboxes it)."""
     from benchmarks.citynav.run_benchmark import cli
 
+    _runner_tree(tmp_path, bench_data, monkeypatch, rgb=True)
     confined: list = []
-    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append((*a, kw)))
+
+    def confine(*a, **kw):
+        confined.append((*a, kw))
+        raise _Confined
+
+    monkeypatch.setattr(sandbox, "confine", confine)
     monkeypatch.setattr(sandbox, "cap_memory", lambda gib: confined.append(gib))
-    monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(tmp_path / "absent"))
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
-    assert cli.main() == 1
+    with pytest.raises(_Confined):
+        cli.main()
     ((writable, gib, _log, readable, kw),) = confined
     assert writable[0] == tmp_path / "out" and gib == sandbox.ATTEMPT_MEMORY_GIB
-    assert kw == {"flies": True} and str(tmp_path / "absent") in map(str, readable)
+    assert kw == {"flies": True} and str(bench_data) in map(str, readable)
     confined.clear()
+    monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(tmp_path / "absent"))
     monkeypatch.setattr(
         sys, "argv", ["run_benchmark", "--attempt-root", str(tmp_path), "--episode-id", "e"]
     )
@@ -995,13 +1034,27 @@ def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monke
 def test_the_cal_city_runner_run_directly_confines_itself(tmp_path, monkeypatch) -> None:
     """``python -m benchmarks.calcity.run_benchmark`` hands the shared main its bench and
     flies model code in its own process: it confines itself like the CityNav runner."""
+    import dataclasses
+
     from benchmarks.calcity import run_benchmark
+    from benchmarks.citynav.run_benchmark import cli
 
     confined: list = []
-    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append(a))
-    monkeypatch.setenv("SEARCH_CALCITY_DATA", str(tmp_path / "absent"))
+
+    def confine(*a, **kw):
+        confined.append(a)
+        raise _Confined
+
+    monkeypatch.setattr(sandbox, "confine", confine)
+    monkeypatch.setattr(
+        run_benchmark,
+        "calcity_bench",
+        lambda environ: dataclasses.replace(calcity_bench(environ), availability=lambda b: None),
+    )
+    monkeypatch.setattr(cli, "block_asset_refusal", lambda bench, maps: None)
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
-    assert run_benchmark.main() == 1
+    with pytest.raises(_Confined):
+        run_benchmark.main()
     assert len(confined) == 1 and confined[0][0][0] == tmp_path / "out", confined
 
 
@@ -1024,3 +1077,23 @@ def test_the_runner_s_config_defaults_to_the_bench_s_own() -> None:
 
     assert cli._build_parser(calcity_bench({})).parse_args([]).config == "configs/calcity.yaml"
     assert cli._build_parser(citynav_bench({})).parse_args([]).config == "configs/citynav.yaml"
+
+
+def test_the_runner_refuses_a_block_without_its_raster_pair_before_its_out(
+    tmp_path, monkeypatch, capsys, bench_data
+) -> None:
+    """A direct run checks the blocks it flies as the driver does: a block whose
+    ``<map>_rgb.tif`` is absent would serve every flight a block error and book a miss."""
+    from benchmarks.citynav.run_benchmark import cli
+
+    rgbd = _runner_tree(tmp_path, bench_data, monkeypatch)
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: pytest.fail("confined"))
+    monkeypatch.setattr(cli, "dispatch_one", lambda **kw: pytest.fail("flew"))
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
+    assert cli.main() == 2
+    assert not (tmp_path / "r").exists()
+    assert (
+        f"  Missing {rgbd / 'birmingham_block_1_rgb.tif'} (built by "
+        "benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
+        in capsys.readouterr().err.splitlines()
+    )

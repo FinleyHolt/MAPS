@@ -50,7 +50,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from benchmarks import sandbox
-from benchmarks.bench import Bench, missing_bake
+from benchmarks.bench import Bench, block_asset_refusal
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, open_live
 from benchmarks.flight.mission import (
@@ -835,14 +835,8 @@ class Station:
         episode = self.catalog(split)[1].get(episode_id)
         if episode is None:
             raise HTTPException(404, f"{split} holds no episode {episode_id}")
-        if (why := missing_bake(self.bench.tile_stem(episode.map_name))) is not None:
+        if (why := block_asset_refusal(self.bench, [episode.map_name])) is not None:
             raise HTTPException(409, why)
-        if not map_render.holds_raster(self.bench.rgbd_dir, episode.map_name):
-            raise HTTPException(
-                409,
-                f"no {episode.map_name} raster under {self.bench.rgbd_dir}: "
-                f"the flights of this episode have nothing to see",
-            )
         self._sortie = self.out / stamp
         ep = open_episode_dir(self._sortie, episode_id=episode_id, benchmark=self.bench.name)
         return BenchMission(

@@ -430,3 +430,19 @@ def test_no_request_reads_outside_the_output_root(citynav, bench_root, tmp_path)
     # A link inside the root that points out of it is not followed.
     (root / "leak.txt").symlink_to(secret)
     assert client.get("/run/file", params={"path": "val_seen_a/leak.txt"}).status_code == 404
+
+
+def test_a_row_on_a_block_without_its_raster_pair_is_refused_before_its_sortie(citynav, tmp_path):
+    """The seat checks a row's block as the runners do: without ``<map>.png`` or
+    ``<map>_rgb.tif`` every flight would serve a block error and book a miss."""
+    (citynav.rgbd_dir / f"{BLOCK}.png").unlink()
+    out = tmp_path / "out"
+    client = TestClient(serve.build_app(_station(citynav, out), web=None))
+    refused = client.post("/mission/next", json={"episode_id": EPISODE, "instruction": ""})
+    assert refused.status_code == 409
+    assert (
+        f"  Missing {citynav.rgbd_dir / f'{BLOCK}_rgb.tif'} (built by "
+        "benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
+        in refused.json()["detail"].splitlines()
+    )
+    assert not out.exists()
