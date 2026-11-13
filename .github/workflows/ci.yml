@@ -41,7 +41,7 @@ jobs:
       - name: Install
         run: pip install -e '.[dev]'
       - name: Test
-        run: pytest -q
+        run: pytest -q -rfE -o faulthandler_timeout=120
       - name: Quickstart
         run: .github/quickstart.sh
 
