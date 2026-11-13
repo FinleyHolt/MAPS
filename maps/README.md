@@ -18,6 +18,7 @@ mission followed through these packages, see
 | `perception/` | Orthographic observation, SAM 3.1 client, watchlist, world-space tracking, seen colour, sensor geometry. | `perception/observation.py`, `perception/sam/detect_client.py`, `perception/detection.py` |
 | `render/` | `look` crop, `show_map` schematic, and the marks drawn on them. | `render/look_render.py`, `render/map_render.py` |
 | `llm/` | Endpoint discovery, per-model sampling cards, the chat-completions transport, the hosted OpenAI wire. | `llm/model_cards.py`, `llm/endpoint_spec.py`, `llm/http.py` |
+| `harness_faults.py` | Faults that are the harness's, never the model's: a run block re-raises them, and the bench scores the attempt infra. | |
 | `settings.py` | Run settings, read from the environment once. | |
 | `xy_token.py` | `[x, y]` point grammar that every slot taking a fid or a point reads. | |
 
