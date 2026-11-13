@@ -81,11 +81,12 @@ def block_line(codes: set) -> int:
     return line
 
 
-def outer_block_line() -> int:
-    """The line of the block's top-level statement that was running when it
-    raised: the first block frame of the live traceback."""
+def outer_block_line() -> tuple[int, int | None]:
+    """The (line, column) the block's top-level code was running when it
+    raised: the first block frame of the live traceback. The column tells
+    apart two statements on one line; ``None`` without position info."""
     _, _, tb = sys.exc_info()
     for fr in traceback.extract_tb(tb):
         if fr.filename == BLOCK_FILENAME:
-            return fr.lineno or 0
-    return 0
+            return fr.lineno or 0, fr.colno
+    return 0, None

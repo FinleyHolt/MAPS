@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import ast
 import difflib
+import functools
 import re
 import time
 
+from maps.harness_faults import HARNESS_FAULTS
 from maps.library.block_ceilings import (
     block_line,
     charging_lines,
@@ -135,7 +137,9 @@ class MissionPython:
         # The mission calls are builtins, as len is: a name the model binds
         # over one shadows it until ``del`` gives the call back.
         for name in LIBRARY_CALLS:
-            self.ns["__builtins__"][name] = as_called(getattr(self.library, name), name)
+            self.ns["__builtins__"][name] = self._harness_guard(
+                as_called(getattr(self.library, name), name)
+            )
         self._picked: dict = {}  # fids the model's Row names hold
         # Every block's code objects: a def from an earlier block is still
         # the model's own lines.
@@ -145,6 +149,21 @@ class MissionPython:
         self._printed = ""
         self._lines = 0
         self._deadline = 0.0
+        self._harness_fault: BaseException | None = None
+
+    def _harness_guard(self, call):
+        """``call``, noting a harness fault it raises so the block re-raises
+        it even past the model's own ``except``."""
+
+        @functools.wraps(call)
+        def guarded(*args, **kwargs):
+            try:
+                return call(*args, **kwargs)
+            except HARNESS_FAULTS as e:
+                self._harness_fault = e
+                raise
+
+        return guarded
 
     def _print(self, *parts, sep=" ", end="\n", flush=False):
         # print()'s own signature; the block's output is one text, cut into
@@ -180,11 +199,14 @@ class MissionPython:
         self._codes.extend(codes)
 
         self._deadline = time.monotonic() + TRACE_DEADLINE_S
+        self._harness_fault = None
         try:
             with charging_lines(self):
                 exec(compiled, self.ns)
+        except HARNESS_FAULTS:
+            raise
         except Exception as e:
-            self._unbind_failed_assign(tree, outer_block_line())
+            self._unbind_failed_assign(tree, *outer_block_line())
             if not isinstance(e, _Stop):  # a _Stop's refusal is in the receipt
                 line = block_line(self._block_codes)
                 what = str(e) if isinstance(e, CodeError) else f"{type(e).__name__}: {e}"
@@ -211,6 +233,8 @@ class MissionPython:
                     if shadowed:
                         what += f": {shadowing_remedy(shadowed)}"
                 out.update(self.env.say_err({}, f"line {line}: {what}"))
+        if self._harness_fault is not None:
+            raise self._harness_fault
         return self._finish(out)
 
     def _tick(self) -> None:
@@ -229,12 +253,23 @@ class MissionPython:
                 " or split it across turns."
             )
 
-    def _unbind_failed_assign(self, tree: ast.Module, line: int) -> None:
+    def _unbind_failed_assign(self, tree: ast.Module, line: int, col: int | None) -> None:
         """A rebind that failed UNBINDS the name: Python leaves the target
         holding its OLD value when the right-hand side raises, and a stale
-        pick that stays bound is a wrong commit."""
+        pick that stays bound is a wrong commit. ``(line, col)`` is where the
+        block raised; ``col`` None matches by line alone."""
         for node in ast.walk(tree):
-            if isinstance(node, ast.Assign) and node.lineno <= line <= node.end_lineno:
+            if not isinstance(node, ast.Assign):
+                continue
+            if col is None:
+                failed = node.lineno <= line <= node.end_lineno
+            else:
+                failed = (
+                    (node.lineno, node.col_offset)
+                    <= (line, col)
+                    < (node.end_lineno, node.end_col_offset)
+                )
+            if failed:
                 for t in node.targets:
                     # ast.walk reaches Names inside tuple/list unpacking
                     # too -- `a, b = <raises>` must unbind BOTH.

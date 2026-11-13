@@ -76,11 +76,14 @@ The driver refuses or records faults as follows:
 | Case | Result |
 |---|---|
 | Refused selection | Exits 2 before the out-root exists or a serve is asked. |
+| Missing bench data (the splits, `objects.json`) | Exits 2 with the fetch recipe before the out-root exists. |
 | Selection whose blocks lack their bake files or raster pair | Refused at startup, naming the files. |
 | Second run into a root | Refused. A run holds its root for its lifetime (`.bench.lock`). |
 | Exception raised by the method | A scored miss: status `ok` with its `error` and `traceback` and no metrics. |
 | Infrastructure fault (a serve or segmenter outage, an image-store refusal, a runner that died) | Status `infra`. The episode flies again, up to `--max-infra-attempts` attempts, and past that is reported as persistent infra with its errors. |
+| Segmenter outage or transport fault inside a flight | Leaves the model's block and ends the mission, unserved. Status `infra`, re-queued as any infrastructure fault. |
 | Episode past its wall cap (`--episode-timeout-s`) | The mission stops flying at 90% of the cap so the model can still reply, and the driver ends the attempt at the cap. Status `timed_out`: scored as recorded, a miss without metrics, and counted apart in the readers. |
+| Ctrl-C (SIGINT) | `driver.log` records the interrupt and the driver exits 130. The ledger keeps every landed row, so a relaunch into the root resumes. |
 
 ### Run root
 

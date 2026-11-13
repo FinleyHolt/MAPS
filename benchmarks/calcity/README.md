@@ -98,8 +98,10 @@ python -m benchmarks.calcity.run_benchmark --config configs/calcity.yaml --episo
 
 `bench_fullset` takes the [CityNav driver's flags](../citynav/README.md#run-the-bench)
 and reads `configs/calcity.yaml`: the C-12's Oryx camera at 3,000 ft above
-ground from a seeded uniform start. Read a root with
-[`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
+ground from a seeded uniform start, and handles faults as the
+[CityNav driver's fault table](../citynav/README.md#run-the-bench) lists. Missing
+Cal City data exits 2 with the preparation recipe before the out-root exists.
+Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
 
 Each launcher builds its bench once, from the process environment, and passes
 it down. Nothing selects a bench for the process, so one process can hold a

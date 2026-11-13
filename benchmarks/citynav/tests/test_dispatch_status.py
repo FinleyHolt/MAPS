@@ -125,6 +125,31 @@ def test_an_image_store_refusal_is_infra(code):
         assert dispatch.is_infra_fault(exc) is True
 
 
+@pytest.mark.parametrize("fault", ["outage", "transport"])
+def test_a_segmenter_fault_inside_a_block_is_infra(tmp_path, light, monkeypatch, fault):
+    """A fault a flight raises leaves the model's block and the mission:
+    the attempt is infra, re-queued and out of SR."""
+    import httpx
+
+    from maps.harness_faults import HARNESS_FAULTS
+    from maps.mission.tests.fakes import drive, run
+    from maps.perception.sam.detect_client import SamServerOutage
+
+    exc = SamServerOutage("no tile answered") if fault == "outage" else httpx.ConnectError("down")
+    assert isinstance(exc, HARNESS_FAULTS)
+
+    def fly(item):
+        raise exc
+
+    def episode(*a, **k):
+        drive([[run('go_to("prior_7")')], "done"], fly=fly)
+        return _rec()
+
+    monkeypatch.setattr(dispatch, "run_episode", episode)
+    row = _dispatch(tmp_path)
+    assert row["status"] == episodes.STATUS_INFRA and "traceback" not in row
+
+
 def test_a_serve_death_under_the_mission_is_infra(tmp_path, light, monkeypatch):
     monkeypatch.setattr(dispatch, "run_episode", lambda *a, **k: _rec("transient_failures"))
     row = _dispatch(tmp_path)

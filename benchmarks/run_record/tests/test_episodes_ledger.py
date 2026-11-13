@@ -55,3 +55,22 @@ def test_a_write_that_fails_leaves_the_ledger_it_found(tmp_path, monkeypatch) ->
         episodes.upsert_row(tmp_path, {"run_no": 1, "n": 1})
     assert (tmp_path / "episodes.jsonl").read_bytes() == before
     assert sorted(p.name for p in tmp_path.iterdir()) == ["episodes.jsonl"]
+
+
+def test_a_rewritten_ledger_keeps_its_mode(tmp_path):
+    """The rewrite lands through a tempfile; the ledger keeps the mode it had,
+    and a ledger the upsert starts gets the mode an append gives."""
+    import os
+    import stat
+
+    appended, upserted = tmp_path / "a", tmp_path / "u"
+    appended.mkdir()
+    upserted.mkdir()
+    episodes.append_row(appended, {"episode_id": "e", "run_no": 1})
+    episodes.upsert_row(upserted, {"episode_id": "e", "run_no": 1})
+    mode = lambda root: stat.S_IMODE((root / episodes.EPISODES_JSONL).stat().st_mode)
+    assert mode(upserted) == mode(appended)
+
+    os.chmod(upserted / episodes.EPISODES_JSONL, 0o640)
+    episodes.upsert_row(upserted, {"episode_id": "e", "run_no": 1, "status": "ok"})
+    assert mode(upserted) == 0o640

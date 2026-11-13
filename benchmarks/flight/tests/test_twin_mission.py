@@ -292,7 +292,7 @@ def _fly_failing(tmp_path, monkeypatch, fault):
 
     def reply(url, headers, body, **kw):
         calls.append(1)
-        if len(calls) == 2:
+        if fault is not None and len(calls) == 2:
             raise fault
         return scripted(url, headers, body, **kw)
 
@@ -332,6 +332,24 @@ def test_a_segmenter_outage_that_ends_the_mission_is_infra(calcity, serves, tmp_
     from maps.perception.sam.detect_client import SamServerOutage
 
     row = _fly_failing(tmp_path, monkeypatch, SamServerOutage("no tile answered"))
+    assert row["status"] == "infra" and row["error"] == "SamServerOutage: no tile answered"
+
+
+def test_a_segmenter_outage_inside_a_flight_ends_the_mission_as_infra(
+    calcity, serves, tmp_path, monkeypatch
+):
+    """The outage leaves the model's block: the mission fails before its
+    report and the row is infra."""
+    from benchmarks.citynav.run_benchmark import episode_runner
+    from maps.perception.sam.detect_client import SamDetectClient, SamServerOutage
+
+    def outage(obs):
+        raise SamServerOutage("no tile answered")
+
+    blind = SamDetectClient()
+    blind.detect = outage
+    monkeypatch.setattr(episode_runner, "make_perception", lambda settings: blind)
+    row = _fly_failing(tmp_path, monkeypatch, None)
     assert row["status"] == "infra" and row["error"] == "SamServerOutage: no tile answered"
 
 

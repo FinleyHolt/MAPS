@@ -13,7 +13,8 @@ import contextlib
 import json
 import math
 import os
-import tempfile
+import secrets
+import stat
 import threading
 from pathlib import Path
 from typing import Any
@@ -176,11 +177,15 @@ def json_default(obj: Any) -> Any:
 def atomic_write_text(path: Path, text: str) -> None:
     """Write ``text`` via a tempfile in the destination directory, flushed to
     disk, then ``os.replace``: a reader never sees a half-written file and
-    two writers never share a tempfile."""
+    two writers never share a tempfile. The file keeps its mode; a new one
+    gets the mode ``open`` gives, under the umask."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".tmp.", dir=str(path.parent))
+    tmp = path.parent / f".tmp.{secrets.token_hex(8)}"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            with contextlib.suppress(FileNotFoundError):
+                os.fchmod(fh.fileno(), stat.S_IMODE(path.stat().st_mode))
             fh.write(text)
             fh.flush()
             os.fsync(fh.fileno())
