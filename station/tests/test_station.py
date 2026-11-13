@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from benchmarks.flight.tests.test_twin_mission import calcity, serves  # noqa: F401  (fixtures)
@@ -187,9 +188,11 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
     assert "building" in groups and len(client.get("/area").json()["bbox"]) == 4
 
 
-def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, monkeypatch):
+@pytest.mark.parametrize("flies", [True, False])
+def test_the_command_line_station_confines_itself_before_it_serves(flies, tmp_path, monkeypatch):
     """Missions fly in the station's own threads: the process takes the memory cap and,
-    where bubblewrap runs, writes only its runs and the ortho caches."""
+    where bubblewrap runs, writes only its runs and, when it flies, the ortho caches and
+    the hub cache. A station that reviews runs only writes ``--out`` alone."""
     import uvicorn
 
     from benchmarks import sandbox
@@ -204,6 +207,7 @@ def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, mon
         lambda **kw: SimpleNamespace(why_not_flying=lambda: None, clear=lambda: None),
     )
     monkeypatch.setattr(serve, "build_app", lambda station: None)
+    monkeypatch.setattr(serve, "why_not_flying", lambda bench, ortho: None if flies else "no")
     monkeypatch.setattr(
         "sys.argv", ["serve", "--out", str(tmp_path / "out"), "--ortho", str(tmp_path / "o")]
     )
@@ -211,5 +215,6 @@ def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, mon
     (writable, gib, _log, readable), served = confined
     bench = serve.bench_named("citynav", os.environ)
     assert served == "served" and gib == sandbox.STATION_MEMORY_GIB
-    assert writable == [tmp_path / "out", Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho"]
+    caches = [Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho", sandbox.hf_hub_cache()]
+    assert writable == [tmp_path / "out", *(caches if flies else [])]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)

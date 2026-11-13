@@ -798,5 +798,10 @@ def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeyp
     bench = calcity_bench(os.environ)
     rgbd = Path(bench.rgbd_dir)
     assert gib == sandbox.STATION_MEMORY_GIB
-    assert writable == [tmp_path / "out", rgbd / "ortho", tmp_path / "o" / "ortho"]
+    assert writable == [
+        tmp_path / "out",
+        rgbd / "ortho",
+        tmp_path / "o" / "ortho",
+        sandbox.hf_hub_cache(),
+    ]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)

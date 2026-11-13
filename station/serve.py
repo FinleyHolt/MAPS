@@ -274,17 +274,7 @@ class Station:
 
     def why_not_flying(self) -> str | None:
         """Why this station flies nothing, or None when it can."""
-        if self.bench.name == "calcity":
-            return (
-                None
-                if self.ortho_dir is not None
-                else "this station reviews runs only: start it with --ortho <raster dir> to fly the twin"
-            )
-        try:
-            self.bench.assert_available()
-        except (FileNotFoundError, RuntimeError) as exc:
-            return f"this station reviews runs only: {str(exc).splitlines()[0]}"
-        return None
+        return why_not_flying(self.bench, self.ortho_dir)
 
     def shown_split(self) -> str:
         """The split the mission list opens on: the newest run's under the output root, so its
@@ -886,6 +876,22 @@ class Station:
                 mission.wait(END_WAIT_S)
 
 
+def why_not_flying(bench: Bench, ortho_dir: Path | None) -> str | None:
+    """Why a station of ``bench`` with twin rasters ``ortho_dir`` flies nothing, or None
+    when it can."""
+    if bench.name == "calcity":
+        return (
+            None
+            if ortho_dir is not None
+            else "this station reviews runs only: start it with --ortho <raster dir> to fly the twin"
+        )
+    try:
+        bench.assert_available()
+    except (FileNotFoundError, RuntimeError) as exc:
+        return f"this station reviews runs only: {str(exc).splitlines()[0]}"
+    return None
+
+
 class _Next(BaseModel):
     episode_id: str | None = None
     instruction: str = ""
@@ -1163,7 +1169,8 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         # A command-line station runs model code in its own threads, so it confines
         # itself; a caller handing argv owns its process.
-        sandbox.confine_cli(args, bench, log.info)
+        flies = why_not_flying(bench, args.ortho) is None
+        sandbox.confine_cli(args, bench, log.info, flies=flies)
     station = Station(
         bench=bench,
         config=args.config or f"configs/{args.bench}.yaml",

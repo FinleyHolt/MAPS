@@ -698,8 +698,9 @@ class Driver:
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
             f"workers={self.workers}"
         )
-        self._bwrap, self._scope = sandbox.bwrap_works(), sandbox.scope_works()
-        self.log(sandbox.mode_line(self._bwrap, self.memory_gib, scope=self._scope))
+        why, self._scope = sandbox.bwrap_refusal(), sandbox.scope_works()
+        self._bwrap = why is None
+        self.log(sandbox.mode_line(why, self.memory_gib, scope=self._scope))
         # Workers claim until nothing is left, the wall budget is spent, or the
         # run aborts; an infra attempt is re-claimed by whichever worker is free.
         # Daemon workers end with the driver (their children die with it), so

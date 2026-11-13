@@ -23,7 +23,7 @@ def test_the_probe_builds_the_sandbox_the_attempts_run_under(monkeypatch):
         "run",
         lambda argv, **kw: asked.append(argv) or subprocess.CompletedProcess(argv, 0),
     )
-    assert sandbox.bwrap_works()
+    assert sandbox.bwrap_refusal() is None
     assert asked == [sandbox.bwrap_argv([]) + ["true"]]
 
 
@@ -33,9 +33,9 @@ def test_an_inherited_marker_outside_the_sandbox_is_not_trusted(monkeypatch):
     lines: list[str] = []
     monkeypatch.setenv(sandbox.SANDBOXED_ENV, "1")
     monkeypatch.setattr(sandbox, "cap_memory", lambda gib: None)
-    monkeypatch.setattr(sandbox, "bwrap_works", lambda: False)
+    monkeypatch.setattr(sandbox, "bwrap_refusal", lambda: "bwrap is not installed")
     sandbox.confine([], 1.0, lines.append)
-    assert lines == [sandbox.mode_line(False, 1.0)]
+    assert lines == [sandbox.mode_line("bwrap is not installed", 1.0)]
     assert sandbox.SANDBOXED_ENV not in os.environ
 
 
@@ -132,3 +132,17 @@ def test_a_memory_cap_that_is_no_cap_or_starves_the_process_is_refused(raw, caps
         ap.parse_args(["--memory-gib", raw])
     assert "at least 1 GiB" in capsys.readouterr().err
     assert ap.parse_args(["--memory-gib", "2.5"]).memory_gib == 2.5
+
+
+def test_the_unconfined_line_names_why_bubblewrap_does_not_run(monkeypatch):
+    monkeypatch.setattr(sandbox.shutil, "which", lambda exe: None)
+    assert sandbox.bwrap_refusal() == "bwrap is not installed"
+    monkeypatch.setattr(sandbox.shutil, "which", lambda exe: f"/usr/bin/{exe}")
+    monkeypatch.setattr(
+        sandbox.subprocess,
+        "run",
+        lambda argv, **kw: subprocess.CompletedProcess(argv, 1, "", "bwrap: setting up uid map\n"),
+    )
+    why = sandbox.bwrap_refusal()
+    assert why == "bwrap cannot build the sandbox here (bwrap: setting up uid map)", why
+    assert sandbox.mode_line(why, 4.0).startswith(f"sandbox: {why}; model code runs without")

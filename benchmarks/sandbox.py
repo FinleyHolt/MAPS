@@ -69,14 +69,23 @@ def cap_memory(gib: float) -> None:
     resource.setrlimit(resource.RLIMIT_DATA, (n, n))
 
 
-def bwrap_works() -> bool:
-    """True when ``bwrap`` is installed and can build the sandbox :func:`bwrap_argv`
-    describes here (a host may block unprivileged user namespaces, e.g. Ubuntu's
-    AppArmor default, or refuse a ``/proc`` mount)."""
+def bwrap_refusal() -> str | None:
+    """Why bubblewrap cannot build the sandbox :func:`bwrap_argv` describes here, or
+    None when it can: ``bwrap`` absent, or its probe refused (a host blocking
+    unprivileged user namespaces, e.g. Ubuntu's AppArmor default, or a ``/proc``
+    mount)."""
     if shutil.which("bwrap") is None:
-        return False
-    probe = bwrap_argv([]) + ["true"]
-    return subprocess.run(probe, capture_output=True).returncode == 0
+        return "bwrap is not installed"
+    probe = subprocess.run(bwrap_argv([]) + ["true"], capture_output=True, text=True)
+    if probe.returncode == 0:
+        return None
+    said = (probe.stderr or "").strip().splitlines()
+    return "bwrap cannot build the sandbox here" + (f" ({said[0]})" if said else "")
+
+
+def bwrap_works() -> bool:
+    """True when bubblewrap builds the sandbox here (:func:`bwrap_refusal`)."""
+    return bwrap_refusal() is None
 
 
 def scope_works() -> bool:
@@ -186,8 +195,9 @@ def bwrap_argv(
     ]  # fmt: skip
 
 
-def mode_line(bwrap: bool, gib: float, *, scope: bool | None = None) -> str:
-    """The line a launcher logs for the isolation it runs code under; ``scope`` is
+def mode_line(refusal: str | None, gib: float, *, scope: bool | None = None) -> str:
+    """The line a launcher logs for the isolation it runs code under: bubblewrap when
+    ``refusal`` (:func:`bwrap_refusal`) is None, else the refusal; ``scope`` is
     whether each bench attempt runs in a systemd scope (None: a mission process,
     which runs in none)."""
     cap = f"memory cap {gib:g} GiB of data segment"
@@ -195,15 +205,12 @@ def mode_line(bwrap: bool, gib: float, *, scope: bool | None = None) -> str:
         cap += " and of the attempt's scope (shared memory and children included)"
     elif scope is False:
         cap += "; no systemd user manager: shared memory and child processes escape the cap"
-    if bwrap:
+    if refusal is None:
         return (
             "sandbox: bubblewrap, / read-only, home /tmp /run empty, readable the run's "
-            f"inputs, writable only the run's output and the ortho cache; network shared; {cap}"
+            f"inputs, writable only the run's output and caches; network shared; {cap}"
         )
-    return (
-        "sandbox: bwrap absent or user namespaces blocked; model code runs without "
-        f"file-system isolation; {cap}"
-    )
+    return f"sandbox: {refusal}; model code runs without file-system isolation; {cap}"
 
 
 def _confined() -> bool:
@@ -224,7 +231,7 @@ def confine(
 ) -> None:
     """Confine this process before it serves or flies anything: cap its memory and,
     where bubblewrap runs, re-execute it under bubblewrap with ``writable`` its
-    writable directories, ``readable`` and the Hugging Face hub cache besides; log
+    writable directories and ``readable`` besides the repo and interpreter; log
     which mode it runs in. The re-executed process keeps the terminal, so the
     operator's Ctrl-C still shuts it down cleanly. An inherited marker without the
     sandbox around it is ignored.
@@ -235,13 +242,13 @@ def confine(
     directory (the repo root)."""
     cap_memory(gib)
     if os.environ.pop(SANDBOXED_ENV, None) == "1" and _confined():
-        log(mode_line(True, gib))
+        log(mode_line(None, gib))
         return
-    if not bwrap_works():
-        log(mode_line(False, gib))
+    if (why := bwrap_refusal()) is not None:
+        log(mode_line(why, gib))
         return
     os.environ[SANDBOXED_ENV] = "1"
-    argv = bwrap_argv([*writable, hf_hub_cache()], readable, new_session=False)
+    argv = bwrap_argv(writable, readable, new_session=False)
     argv += [sys.executable, *sys.orig_argv[1:]]
     os.execvp(argv[0], argv)
 
@@ -271,14 +278,16 @@ def add_memory_flag(ap, default: float = STATION_MEMORY_GIB) -> None:
     )
 
 
-def confine_cli(args, bench, log: Callable[[str], None]) -> None:
-    """:func:`confine` for a mission CLI: writable its ``--out`` and the ortho caches
-    beside the bench's and the ``--ortho``/``--register`` rasters, readable the
-    bench's inputs and every path argument the operator named."""
+def confine_cli(args, bench, log: Callable[[str], None], *, flies: bool = True) -> None:
+    """:func:`confine` for a mission CLI: writable its ``--out`` and, when it ``flies``,
+    the ortho caches beside the bench's and the ``--ortho``/``--register`` rasters and
+    the hub cache; readable the bench's inputs and every path argument the operator
+    named."""
     args.out.mkdir(parents=True, exist_ok=True)
+    caches = [*ortho_caches([bench.rgbd_dir, args.ortho, args.register]), hf_hub_cache()]
     named = [v for v in vars(args).values() if isinstance(v, (str, Path)) and os.path.exists(v)]
     confine(
-        [args.out, *ortho_caches([bench.rgbd_dir, args.ortho, args.register])],
+        [args.out, *(caches if flies else [])],
         args.memory_gib,
         log,
         [*bench_inputs(bench), *named],
