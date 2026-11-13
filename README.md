@@ -183,7 +183,8 @@ started from the command line.
 The systemd scope applies to bench attempts only. A process that flies caches
 the reasoner's tokenizer before it confines itself, so a reasoner first
 reached after the station starts needs its tokenizer in the hub cache already
-(`python -m maps.mission.endpoint_preflight` caches it).
+(`python -m maps.mission.endpoint_preflight` caches it). Until then a station
+under bubblewrap refuses each mission with that command.
 
 The layers that apply depend on the host:
 

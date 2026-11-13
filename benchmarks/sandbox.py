@@ -63,6 +63,13 @@ ATTEMPT_MEMORY_GIB = 4.0
 STATION_MEMORY_GIB = 16.0
 #: Set in a process this module re-executed under bubblewrap.
 SANDBOXED_ENV = "MAPS_SANDBOXED"
+#: Set, to the discovery's exception name, in a process confined offline after its
+#: launcher could not cache the reasoner's tokenizer.
+TOKENIZER_ENV = "MAPS_TOKENIZER_UNCACHED"
+#: What caches the tokenizer a confined process reads offline.
+TOKENIZER_REMEDY = (
+    "run python -m maps.mission.endpoint_preflight once the reasoner answers, then restart"
+)
 #: The repository root: code and configs an attempt reads.
 REPO = Path(__file__).resolve().parents[1]
 
@@ -341,17 +348,23 @@ def _confined() -> bool:
     return bool(os.statvfs("/").f_flag & os.ST_RDONLY) and init == "bwrap"
 
 
-def _cache_tokenizer(log: Callable[[str], None]) -> None:
+def _cache_tokenizer(log: Callable[[str], None]) -> str | None:
     """Discover the reasoner once before confining, so the tokenizer the confined
     process loads is already in the hub cache it reads offline; a reasoner that does
-    not answer yet leaves the confined process to report it."""
+    not answer yet is logged with the remedy, and its exception's name returned."""
     from maps.llm import endpoint_spec
     from maps.settings import from_environ
 
     try:
         endpoint_spec.discover_from_settings(from_environ(os.environ), probe_sam=False)
     except Exception as exc:  # the confined process discovers again and refuses by name
-        log(f"sandbox: reasoner tokenizer not cached before confining ({type(exc).__name__})")
+        why = type(exc).__name__
+        log(
+            f"sandbox: reasoner tokenizer not cached before confining ({why}); a mission "
+            f"finds it only if an earlier run cached it: {TOKENIZER_REMEDY}"
+        )
+        return why
+    return None
 
 
 def confine(
@@ -382,6 +395,7 @@ def confine(
         log(mode_line(None, gib))
         return
     env, argv = child_env(os.environ), [sys.executable, *sys.orig_argv[1:]]
+    env.pop(TOKENIZER_ENV, None)
     if (why := bwrap_refusal()) is not None:
         if env != dict(os.environ):
             os.execve(sys.executable, argv, env)
@@ -389,7 +403,8 @@ def confine(
         log(mode_line(why, gib))
         return
     if flies:
-        _cache_tokenizer(log)
+        if (why := _cache_tokenizer(log)) is not None:
+            env[TOKENIZER_ENV] = why
         readable = [*readable, hf_hub_cache()]
         env["HF_HUB_OFFLINE"] = "1"
     env[SANDBOXED_ENV] = "1"

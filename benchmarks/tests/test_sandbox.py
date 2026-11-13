@@ -255,7 +255,7 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
     monkeypatch.setattr(sandbox, "cap_memory", capped.append)
     monkeypatch.setattr(sandbox, "bwrap_refusal", lambda: None if bwrap else "bwrap is absent")
     cached: list = []
-    monkeypatch.setattr(sandbox, "_cache_tokenizer", lambda log: cached.append(1), raising=False)
+    monkeypatch.setattr(sandbox, "_cache_tokenizer", lambda log: cached.append(1) or "ConnectError")
     hub = tmp_path / "hub"
     hub.mkdir()
     monkeypatch.setattr(sandbox, "hf_hub_cache", lambda: str(hub))
@@ -269,6 +269,7 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
     assert env["CALCITY_ROOT"] == "/data/calcity" and env["HUGGINGFACE_HUB_CACHE"] == "/data/hub"
     if bwrap:
         assert env["HF_HUB_OFFLINE"] == "1" and cached == [1]
+        assert env[sandbox.TOKENIZER_ENV] == "ConnectError"
         binds = [argv[i - 1] for i, a in enumerate(argv) if a == str(hub) and argv[i - 1] != a]
         assert binds == ["--ro-bind"], binds
     else:
@@ -324,3 +325,18 @@ def test_a_launcher_past_the_cap_restarts_and_caps_the_process_that_keeps_runnin
     )
     assert out.returncode == 0, out.stderr
     assert out.stdout.splitlines()[-1] == f"cap {2**30}", out.stdout
+
+
+def test_a_tokenizer_left_uncached_names_the_remedy(monkeypatch):
+    """A reasoner that does not answer before the process confines itself leaves the
+    tokenizer out of the offline hub cache: the line names what caches it."""
+    from maps.llm import endpoint_spec
+
+    def down(settings, **kw):
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", down)
+    lines: list[str] = []
+    assert sandbox._cache_tokenizer(lines.append) == "ConnectionError"
+    (line,) = lines
+    assert "python -m maps.mission.endpoint_preflight" in line and "restart" in line, line

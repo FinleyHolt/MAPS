@@ -281,6 +281,7 @@ def test_a_station_opens_on_a_split_its_list_carries(tmp_path):
     flown: list = []
     seat.__dict__.update(
         why_not_flying=lambda: None,
+        tokenizer_refusal=lambda: None,
         _lock=threading.Lock(),
         mission=None,
         shown_split=lambda: serve.Station.shown_split(seat),
@@ -327,3 +328,34 @@ def test_a_raster_that_fails_to_load_falls_back_to_the_picture(calcity, tmp_path
     )
     monkeypatch.setattr(map_render, "load_raster", read_only)
     assert station.basemap("calcity")[0].shape == (480, 640, 3)
+
+
+def test_a_sandboxed_station_without_its_tokenizer_refuses_a_mission_naming_the_remedy(
+    calcity,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+):
+    """The station's launcher could not cache the reasoner's tokenizer and the hub is
+    read offline: a mission is refused before its run folder opens, naming what caches
+    the tokenizer; once discovery loads it, missions fly."""
+    from benchmarks import sandbox
+
+    monkeypatch.setenv(sandbox.TOKENIZER_ENV, "ConnectError")
+    station = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        ortho_dir=calcity.rgbd,
+    )
+
+    def offline(settings, **kw):
+        raise RuntimeError("tokenizer 'x' failed to load: check your internet connection")
+
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", offline)
+    client = TestClient(serve.build_app(station, web=None))
+    refused = client.post("/mission/next", json={"instruction": "fly"})
+    assert refused.status_code == 409, refused.json()
+    assert "python -m maps.mission.endpoint_preflight" in refused.json()["detail"]
+    assert not (tmp_path / "out").exists() or not any((tmp_path / "out").iterdir())
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings, **kw: None)
+    assert station.tokenizer_refusal() is None and sandbox.TOKENIZER_ENV not in os.environ

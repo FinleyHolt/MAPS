@@ -293,6 +293,22 @@ class Station:
                 return f"this station reviews runs only: {exc}"
         return None
 
+    def tokenizer_refusal(self) -> str | None:
+        """Why a mission cannot load the reasoner's tokenizer, or None: asked only in a
+        process confined offline after its launcher could not cache it
+        (:data:`sandbox.TOKENIZER_ENV`); a discovery that loads it clears the mark."""
+        if sandbox.TOKENIZER_ENV not in os.environ:
+            return None
+        try:
+            endpoint_spec.discover_from_settings(from_environ(self.bench.environ), probe_sam=False)
+        except Exception as exc:
+            return (
+                "the reasoner's tokenizer is not in the hub cache this sandboxed station reads "
+                f"offline ({type(exc).__name__}): {sandbox.TOKENIZER_REMEDY} the station"
+            )
+        os.environ.pop(sandbox.TOKENIZER_ENV, None)
+        return None
+
     def shown_split(self) -> str:
         """The split the mission list opens on: the newest run's under the output root, so its
         runs are in view, else the bench's default when its file is there, else the first
@@ -791,7 +807,7 @@ class Station:
     ) -> dict[str, Any]:
         """Fly a mission from the seat: on Cal City a catalog row, or the operator's own words from
         the map's centre, on a twin of its own; on CityNav a row of ``split`` through the bench's runner."""
-        if (why := self.why_not_flying()) is not None:
+        if (why := self.why_not_flying() or self.tokenizer_refusal()) is not None:
             raise HTTPException(409, why)
         if (why := effort_refusal(self.bench, effort)) is not None:
             raise HTTPException(400, why)
