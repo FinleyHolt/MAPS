@@ -424,7 +424,7 @@ def gib(raw: str) -> float:
     value = float(raw)
     if not (math.isfinite(value) and value >= MIN_MEMORY_GIB and value * 2**30 < 2**63):
         raise argparse.ArgumentTypeError(
-            f"must be a finite number of at least {MIN_MEMORY_GIB:g} GiB, got {raw}"
+            f"must be a finite number between {MIN_MEMORY_GIB:g} and {2**33} GiB, got {raw}"
         )
     return value
 

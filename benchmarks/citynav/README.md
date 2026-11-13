@@ -66,7 +66,7 @@ its host allows; see [Security](../../README.md#security).
 | `--episode-allowlist <file>` | Keeps only the listed IDs, before the shuffle. A list that names an ID outside the split is refused. |
 | `--max-infra-attempts <n>` | Attempts an episode gets under infrastructure faults. Default 3. |
 | `--episode-timeout-s <s>` | Per-episode wall cap, seconds. Default 14400 (4 h). |
-| `--attempt-memory-gib <GiB>` | Each attempt's memory cap, GiB: a finite number of at least 1. Default 4. A block that allocates past it raises `MemoryError`, served as the block's error. |
+| `--attempt-memory-gib <GiB>` | Each attempt's memory cap, GiB: a finite number between 1 and 2^33. Default 4. A block that allocates past it raises `MemoryError`, served as the block's error. |
 | `--dry-run` | Prints the selection and launches nothing. |
 
 For the remaining flags, run

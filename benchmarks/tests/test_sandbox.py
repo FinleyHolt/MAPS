@@ -136,7 +136,7 @@ def test_a_memory_cap_that_is_no_cap_or_starves_the_process_is_refused(raw, caps
     sandbox.add_memory_flag(ap)
     with pytest.raises(SystemExit):
         ap.parse_args(["--memory-gib", raw])
-    assert "a finite number of at least 1 GiB" in capsys.readouterr().err
+    assert "a finite number between 1 and 8589934592 GiB" in capsys.readouterr().err
     assert ap.parse_args(["--memory-gib", "2.5"]).memory_gib == 2.5
 
 
