@@ -12,6 +12,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from maps.harness_faults import HARNESS_FAULTS
 from maps.xy_token import parse_xy_token
 
 log = logging.getLogger(__name__)
@@ -131,6 +132,8 @@ class SegmenterTasking:
             }
         try:
             res = self.retro_perceiver(dict(flown), list(concepts))
+        except HARNESS_FAULTS:
+            raise  # the serve's fault leaves the block, as inside a flight
         except Exception as exc:
             log.exception("retro perceiver raised")
             res = {"error": f"retrospective re-segmentation failed: {type(exc).__name__}: {exc}"}
