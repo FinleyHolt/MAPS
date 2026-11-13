@@ -10,7 +10,7 @@ from maps.mission.reasoner import DegenerateCompletion, Reasoner
 from maps.mission.tests.fakes import TEST_SPEC
 
 
-def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop", tool_calls=()):
+def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop", tool_calls=(), items=()):
     """Pin the transport to one canned completion; return the sent kwargs."""
     sent: dict = {}
 
@@ -24,6 +24,7 @@ def _serve(monkeypatch, *, content="", reasoning="", finish_reason="stop", tool_
                         "content": content,
                         "reasoning_content": reasoning,
                         "tool_calls": list(tool_calls),
+                        **({"reasoning_items": list(items)} if items else {}),
                     },
                 }
             ]
@@ -84,3 +85,21 @@ def test_a_tool_call_the_output_cap_cut_off_is_no_call(monkeypatch):
     assert out["kind"] == "text" and "tool_calls" not in out, out
     assert out["finish_reason"] == "length"
     assert "tool_calls" not in r.messages[-1], r.messages[-1]
+
+
+def test_a_cut_turn_carries_no_reasoning_item_without_its_call(monkeypatch):
+    """On the Responses wire a reasoning item rides only with the output item
+    it preceded; a cut call is dropped, so its reasoning items go with it."""
+    call = {"id": "c1", "type": "function"}
+    call["function"] = {"name": "run", "arguments": '{"code": "go_to(prior_0'}
+    item = {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "E"}
+    _serve(
+        monkeypatch,
+        reasoning="settled",
+        finish_reason="length",
+        tool_calls=[call],
+        items=[item],
+    )
+    r = _reasoner()
+    r.step_tool_call([])
+    assert "reasoning_items" not in r.messages[-1], r.messages[-1]
