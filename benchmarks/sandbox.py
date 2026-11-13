@@ -156,6 +156,24 @@ def _existing(paths: Iterable[str | Path], *, make: bool = False) -> list[str]:
     return out
 
 
+def _hops(path: str | Path) -> list[tuple[str, str]]:
+    """The symlinks met on the way from ``path`` to what it names, as ``(target, link)``."""
+    hops: list[tuple[str, str]] = []
+    todo = os.path.abspath(path)
+    for _ in range(40):  # the kernel's own bound on a symlink chain
+        cur, parts = "/", Path(todo).parts[1:]
+        for i, part in enumerate(parts):
+            cur = os.path.join(cur, part)
+            if os.path.islink(cur):
+                target = os.readlink(cur)
+                hops.append((target, cur))
+                todo = os.path.normpath(os.path.join(os.path.dirname(cur), target, *parts[i + 1 :]))
+                break
+        else:
+            break
+    return hops
+
+
 def bwrap_argv(
     writable: Iterable[str | Path],
     readable: Iterable[str | Path] = (),
@@ -175,15 +193,24 @@ def bwrap_argv(
     resolver = os.path.realpath("/etc/resolv.conf")
     if resolver.startswith("/run/"):
         readable = [os.path.dirname(resolver), *readable]
-    ro = _existing([REPO, sys.prefix, sys.base_prefix, *readable])
-    rw = _existing(writable, make=True)
+    readable, writable = [REPO, sys.prefix, sys.base_prefix, *readable], list(writable)
+    ro, rw = _existing(readable), _existing(writable, make=True)
     masked = [p for p in (REPO / ".env",) if os.path.exists(p)]
+    # Each path is bound at its real location; a symlink on the way that lies in an
+    # emptied directory is made again, so the path as named still resolves.
+    links = {
+        hop: None
+        for p in [sys.executable, *readable, *writable]
+        for hop in _hops(p)
+        if any(hop[1].startswith(d + "/") for d in empty)
+    }
     return [
         "bwrap",
         "--ro-bind", "/", "/",
         "--dev", "/dev",
         "--proc", "/proc",
         *(a for d in empty for a in ("--tmpfs", d)),
+        *(a for t, link in links for a in ("--dir", os.path.dirname(link), "--symlink", t, link)),
         *(a for d in ro for a in ("--ro-bind", d, d)),
         *(a for p in masked for a in ("--ro-bind", "/dev/null", str(p))),
         *(a for d in rw for a in ("--bind", d, d)),

@@ -146,3 +146,24 @@ def test_the_unconfined_line_names_why_bubblewrap_does_not_run(monkeypatch):
     why = sandbox.bwrap_refusal()
     assert why == "bwrap cannot build the sandbox here (bwrap: setting up uid map)", why
     assert sandbox.mode_line(why, 4.0).startswith(f"sandbox: {why}; model code runs without")
+
+
+def test_a_bound_path_reached_through_a_symlink_in_home_resolves_inside(tmp_path, monkeypatch):
+    """Home is empty inside, so a symlink there on the way to a bound path (a venv's
+    interpreter into uv's pythons, a data directory linked from home) is made again."""
+    home, data = tmp_path / "home", tmp_path / "data"
+    (home / "d").mkdir(parents=True)
+    data.mkdir()
+    (home / "d" / "link").symlink_to(data)
+    monkeypatch.setenv("HOME", str(home))
+    argv = sandbox.bwrap_argv([], [home / "d" / "link"])
+    i = argv.index("--symlink")
+    assert argv[i - 2 : i + 3] == [
+        "--dir",
+        str(home / "d"),
+        "--symlink",
+        str(data),
+        str(home / "d" / "link"),
+    ]
+    binds = [k for k, a in enumerate(argv) if a == "--ro-bind" and argv[k + 1] == str(data)]
+    assert argv.index(str(home)) < i < binds[0]
