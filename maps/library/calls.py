@@ -453,8 +453,10 @@ class Library:
         p = self._program(x)
         el = p.ref_of(x, points=True)
         if isinstance(el, dict) and any(is_xy(m) for m in el["ref"]) and not is_xy(el["ref"]):
-            # a written list holding a point is quoted as written
+            # a written list holding a point is quoted as written, and a row
+            # among them that binds its point (a road end) skips as said
             el["as"] = self.names.call_arg("ends_of") or el["as"]
+            el["said"] = [m.label if isinstance(m, Bind) else None for m in x]
         return Rows(self._analyze(p, p.add("ends", {"refs": [el]})), self)
 
     def more_of(self, x):
