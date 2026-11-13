@@ -33,9 +33,10 @@ TRUNCATED_TURN_NUDGE = (
     "call you settled on, or your plain-text reply."
 )
 
-#: A turn the output cap cut off empty is the serve's truncation, not a
-#: dropped reply: it gets its own nudge and spends no repair, up to this many
-#: in a row, after which it reads as an empty turn.
+#: A turn the output cap cut off (empty, cut prose or a cut call, which never
+#: runs) is the serve's truncation, not a dropped reply or the mission's
+#: answer: it gets its own nudge and spends no repair, up to this many in a
+#: row, after which it reads as the turn it is.
 TRUNCATED_TURN_STREAK = 3
 
 CODE_REPLY_NUDGE = (

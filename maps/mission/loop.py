@@ -117,7 +117,7 @@ class _Streaks:
     no_call: int = 0
     #: Clean replies with no flight behind them (NO_FLIGHT_ABSTAIN_STREAK).
     no_flight: int = 0
-    #: Empty turns the output cap cut off (TRUNCATED_TURN_STREAK).
+    #: Turns the output cap cut off (TRUNCATED_TURN_STREAK).
     truncated: int = 0
     #: Transient request failures (_MAX_TRANSIENT).
     transient: int = 0
@@ -346,20 +346,16 @@ class _Mission:
         """The nudge a text turn draws, or None when it stands as the reply
         that ends the mission."""
         content = str(r.get("content") or "")
+        # Whatever the cap cut off, prose or a call, is no whole turn.
+        if r.get("finish_reason") != "length":
+            streaks.truncated = 0
+        elif streaks.truncated < TRUNCATED_TURN_STREAK:
+            return self._truncated_turn(streaks, turn_idx)
         if envelope_residue(content) or envelope_residue(str(r.get("reasoning") or "")):
             log.info("%s MALFORMED_ENVELOPE at turn %d -> repair", self.progress.rid_tag, turn_idx)
             self._log("malformed_envelope", turn_idx=turn_idx)
             return MALFORMED_ENVELOPE_NUDGE
         dropped = not_a_reply(content)
-        cut_off = (
-            dropped is not None
-            and dropped[0] == "empty_turn"
-            and r.get("finish_reason") == "length"
-        )
-        if not cut_off:
-            streaks.truncated = 0
-        elif streaks.truncated < TRUNCATED_TURN_STREAK:
-            return self._truncated_turn(streaks, turn_idx)
         if dropped is not None:
             return self._dropped_message(dropped, streaks, turn_idx)
         streaks.no_call = 0
@@ -368,7 +364,7 @@ class _Mission:
         return None
 
     def _truncated_turn(self, streaks: _Streaks, turn_idx: int) -> str:
-        """A turn the output cap cut off empty: the serve's truncation, so
+        """A turn the output cap cut off: the serve's truncation, so
         it spends no repair."""
         streaks.truncated += 1
         self._log("truncated_turn", turn_idx=turn_idx, streak=streaks.truncated)

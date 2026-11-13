@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from maps.mission.reply_repair import TRUNCATED_TURN_NUDGE
 from maps.mission.tests.fakes import drive, run, tool_results
 
 
@@ -261,6 +262,14 @@ def test_three_cut_off_turns_in_a_row_each_get_their_own_nudge():
     reply, fr, flights, _ = drive([cut, cut, cut, "", [run("go_to(prior_7)\n")], "done"])
     assert reply.ended_by == "reply" and reply.turns_used == 6, reply
     assert len(flights) == 1
+
+
+def test_prose_the_output_cap_cut_off_is_nudged_and_never_the_reply():
+    # A flight first, so a whole reply would end the mission.
+    cut = {"content": "It is the car by the", "finish_reason": "length"}
+    reply, fr, flights, _ = drive([[run("go_to(prior_7)\n")], cut, "It is prior_7."])
+    assert reply.ended_by == "reply" and reply.turns_used == 3, reply
+    assert fr.messages[-2]["content"] == f"[Repair] {TRUNCATED_TURN_NUDGE}", fr.messages[-2]
 
 
 def test_repeated_cut_off_turns_still_end_the_mission():
