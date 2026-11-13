@@ -130,3 +130,43 @@ def test_a_raster_within_a_cell_of_the_frame_is_accepted(tmp_path: Path):
     nudged = from_origin(lf.origin_e + 0.4 * PX, lf.origin_n + lf.height_m - 0.4 * PX, PX, PX)
     path = _write(tmp_path / "nudged.tif", "EPSG:32611", nudged, H, W)
     build_block(tmp_path / "root", "patch", BBOX, path)
+
+
+def _fatal_one_line(capsys, *argv: str) -> str:
+    from benchmarks.calcity.data_prep import build_rgbd_ortho
+
+    assert build_rgbd_ortho.main(list(argv)) == 1
+    err = capsys.readouterr().err.strip()
+    assert err.startswith("FATAL: ") and "\n" not in err and "Traceback" not in err
+    return err
+
+
+def test_a_missing_raster_exits_1_with_one_fatal_line(tmp_path: Path):
+    """Run as the operator runs it: GDAL's own log of the failed open stays off stderr too."""
+    import subprocess
+    import sys
+
+    argv = ["--root", str(tmp_path), "--raster", str(tmp_path / "absent.tif")]
+    proc = subprocess.run(
+        [sys.executable, "-m", "benchmarks.calcity.data_prep.build_rgbd_ortho", *argv],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parents[3],
+    )
+    err = proc.stderr.strip()
+    assert proc.returncode == 1
+    assert err.startswith("FATAL: ") and "\n" not in err and "Traceback" not in err
+    assert "absent.tif" in err
+
+
+def test_a_wrong_size_raster_exits_1_with_one_fatal_line(tmp_path: Path, capsys):
+    lf = build_local_frame(BBOX)
+    path = _write(
+        tmp_path / "small.tif",
+        lf.crs_utm,
+        from_origin(lf.origin_e, lf.origin_n + lf.height_m, PX, PX),
+        8,
+        8,
+    )
+    err = _fatal_one_line(capsys, "--root", str(tmp_path), "--raster", str(path))
+    assert "small.tif" in err

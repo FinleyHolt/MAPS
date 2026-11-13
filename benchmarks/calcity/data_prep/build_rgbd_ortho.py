@@ -127,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s", datefmt="%H:%M:%S"
     )
+    # rasterio logs each GDAL error at INFO before raising it; the FATAL line carries it.
+    logging.getLogger("rasterio").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=calcity_bench(os.environ).root)
     parser.add_argument(
@@ -136,7 +138,13 @@ def main(argv: list[str] | None = None) -> int:
         help="the block's RGB GeoTIFF at the cell the bench runs on",
     )
     args = parser.parse_args(argv)
-    build_block(args.root, "calcity", AOI_BBOX, args.raster)
+    from rasterio.errors import RasterioIOError
+
+    try:
+        build_block(args.root, "calcity", AOI_BBOX, args.raster)
+    except (RasterioIOError, ValueError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

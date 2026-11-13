@@ -200,3 +200,13 @@ def test_a_bundle_missing_a_layer_is_refused_by_name(tmp_path):
             (tmp_path / "osm" / f"{layer}.geojson").write_text('{"features": []}')
     with pytest.raises(FileNotFoundError, match="roads.geojson"):
         list(iter_features(tmp_path))
+
+
+def test_a_missing_bundle_exits_1_with_one_fatal_line(tmp_path, capsys):
+    from benchmarks.calcity.data_prep import bake_tiles
+
+    argv = ["--bundle", str(tmp_path / "absent"), "--tiles-dir", str(tmp_path / "tiles")]
+    assert bake_tiles.main(argv) == 1
+    err = capsys.readouterr().err.strip()
+    assert err.startswith("FATAL: the world bundle has no ")
+    assert "\n" not in err and "Traceback" not in err
