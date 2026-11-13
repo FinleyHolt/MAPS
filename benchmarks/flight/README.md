@@ -154,7 +154,7 @@ rows. No measure or decision reads the following fields:
 |---|---|
 | `frames.jsonl`: `log_time`, `t_host`, `age_s`, `attitude`, `boresight`, `registration` (with its `frames` count). Ledger row: `ts` (the host's wall clock at the start). | Provenance of the recording, for a person auditing a flight against its camera recording. |
 | `waypoint` row: the leg posted (`flight`, `n`, `label`, `lon`, `lat`, `coverageFloor`). `leg` row that ends a posted leg: its `area` and the `coverage` the recording held of it (`fraction`, one `held` flag per area point, `frames`). `frames.jsonl` row: the observation's ground (`world_window`, `shape`) and time (`t_s`). | What the station ([`station/`](../../station/README.md)) draws. |
-| `conversation.jsonl` diagnostic rows: `malformed_envelope`, `empty_turn`, `code_shaped_reply`, `truncated_turn`, `no_flight_reply`, `transient_error`, `oversize_rejection`, `content_filter`, `request_refused`, and a `run` row's `reasoning`, `said`, `printed`, `errored`, and `frames`. | Turn-by-turn audit record. |
+| `conversation.jsonl` diagnostic rows: `malformed_envelope`, `empty_turn`, `code_shaped_reply`, `truncated_turn`, `no_flight_reply`, `transient_error`, `oversize_rejection`, `content_filter`, `request_refused`, and a `run` row's `reasoning`, `said`, `printed`, `errored`, `error`, and `frames`. | Turn-by-turn audit record. |
 
 ## Closed-loop measures
 

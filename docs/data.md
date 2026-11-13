@@ -72,9 +72,10 @@ The raster must lie on the block's frame (`benchmarks/calcity/data_prep/aoi.py`)
 | Size | `round(13455.81 / cell)` columns by `round(10210.38 / cell)` rows |
 | Bands | RGB in bands 1 to 3, 8-bit |
 
-`build_rgbd_ortho` reads the raster's cell and size, refuses a raster of any
-other size, and takes its extent as the block's. For example, to lay a public
-orthophoto, such as USDA NAIP, on the frame at 0.5 m:
+`build_rgbd_ortho` reads the raster's CRS, extent, cell and size, and refuses a
+raster in another CRS, off the frame's extent by more than one cell, or of any
+other size. For example, to lay a public orthophoto, such as USDA NAIP, on the
+frame at 0.5 m:
 
 ```sh
 gdalwarp -t_srs EPSG:32611 -te 405494.66 3881866.66 418950.47 3892077.04 -tr 0.5 0.5 -r bilinear \
