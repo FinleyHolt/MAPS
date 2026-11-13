@@ -22,8 +22,9 @@ Buildings are NOT stamped onto the height plane: a 2D imagery world carries
 no observed geometry, and a fabricated extrusion would put parallax into
 ``depth = altitude - height`` that the imagery cannot corroborate.
 
-Nothing here resamples: the raster must be the block's frame at its own
-cell, ``bundle.grid_shape`` rows by columns, or it is refused by name.
+Nothing here resamples: the raster must be the block's frame (its UTM CRS and
+extent, to within one cell) at its own cell, ``bundle.grid_shape`` rows by
+columns, or it is refused by name.
 """
 
 from __future__ import annotations
@@ -48,6 +49,11 @@ from benchmarks.calcity.paths import calcity_bench
 log = logging.getLogger("build_rgbd_ortho")
 
 
+def _span(b) -> str:
+    """``(left, bottom, right, top)`` in metres as E/N ranges."""
+    return f"E {b[0]:,.2f} to {b[2]:,.2f} m, N {b[1]:,.2f} to {b[3]:,.2f} m"
+
+
 def build_block(root: Path, map_name: str, bbox, raster: Path) -> tuple[Path, Path]:
     """Write one block's ``<map>.tif`` (flat height) and ``<map>_rgb.tif`` (the raster)."""
     import rasterio
@@ -58,15 +64,29 @@ def build_block(root: Path, map_name: str, bbox, raster: Path) -> tuple[Path, Pa
     with rasterio.open(raster) as src:
         px = float(abs(src.transform.a))
         W, H = src.width, src.height
+        crs, bounds = src.crs, tuple(src.bounds)
         if abs(src.transform.e) != px:
             raise ValueError(
                 f"{raster}: the cell is {px} x {abs(src.transform.e)} m; a block raster's is square"
             )
     lf = build_local_frame(bbox)
+    want_epsg = lf.crs_utm.to_epsg()
+    found = "no CRS" if crs is None else (crs.to_string() or crs.to_wkt())
+    if crs is None or crs.to_epsg() != want_epsg:
+        raise ValueError(f"{raster} is in {found}; the block's frame is in EPSG:{want_epsg}")
     want_h, want_w = grid_shape(lf, px)
     if (want_w, want_h) != (W, H):
         raise ValueError(
             f"{raster} is {W}x{H} at {px} m; the block's frame at that cell is {want_w}x{want_h}"
+        )
+    # Every crop is cut by pixel offset from the frame's corner, so a raster
+    # displaced from the frame shifts every view; a sub-cell offset is the
+    # snapping a warp to whole cells leaves.
+    frame = (lf.origin_e, lf.origin_n, lf.origin_e + lf.width_m, lf.origin_n + lf.height_m)
+    if max(abs(a - b) for a, b in zip(bounds, frame)) > px:
+        raise ValueError(
+            f"{raster} spans {_span(bounds)}; the block's frame spans {_span(frame)}"
+            f" (within one {px} m cell)"
         )
 
     # Task-frame affine: row 0 = runtime y_max = geographic north.
@@ -107,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s", datefmt="%H:%M:%S"
     )
+    # rasterio logs each GDAL error at INFO before raising it; the FATAL line carries it.
+    logging.getLogger("rasterio").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=calcity_bench(os.environ).root)
     parser.add_argument(
@@ -116,7 +138,13 @@ def main(argv: list[str] | None = None) -> int:
         help="the block's RGB GeoTIFF at the cell the bench runs on",
     )
     args = parser.parse_args(argv)
-    build_block(args.root, "calcity", AOI_BBOX, args.raster)
+    from rasterio.errors import RasterioIOError
+
+    try:
+        build_block(args.root, "calcity", AOI_BBOX, args.raster)
+    except (RasterioIOError, ValueError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

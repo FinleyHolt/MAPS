@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -85,9 +86,13 @@ def main(argv: list[str] | None = None) -> int:
     bench = calcity_bench(os.environ)
     parser.add_argument("--tiles-dir", type=Path, default=bench.tiles_dir)
     args = parser.parse_args(argv)
-    count = bake_block(
-        args.bundle or bundle_root(bench.root, os.environ), args.tiles_dir, "calcity"
-    )
+    try:
+        count = bake_block(
+            args.bundle or bundle_root(bench.root, os.environ), args.tiles_dir, "calcity"
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
     print(f"[calcity-bake] calcity: {count} priors")
     return 0
 
