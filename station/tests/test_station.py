@@ -24,6 +24,29 @@ def _until(what, timeout_s: float = 120.0):
     raise AssertionError("the station never got there")
 
 
+def test_a_seat_read_as_the_mission_parks_pairs_its_status_with_its_report(tmp_path):
+    """The mission thread parks the mission while the console reads the seat: the state
+    returned reads the status once, so a parked status always carries its report."""
+    m = SimpleNamespace(
+        kind="twin", status=serve.STATE_FLYING, map_name="m", flights=[], transcript=[],
+        workdir=tmp_path / "r" / "w", split="s", episode_id="e", waiting=None, error=None,
+        run_no=1, instruction="i", ended_by=None, turns=lambda: 1, started_at=None,
+        git_commit=None, git_dirty=None, score=None,
+    )  # fmt: skip
+
+    def parks_now(split, eid):
+        m.status = serve.STATE_AWAITING
+        return None, None
+
+    seat = SimpleNamespace(
+        mission=m, map_name="m", _observations=lambda w, t: [], _reported=lambda w, t: "Here.",
+        target=parks_now, lonlat=lambda *a: None, _flights=lambda *a: [],
+    )  # fmt: skip
+    state = serve.Station.seat_state(seat)
+    assert state["status"] == serve.STATE_FLYING and state["reply_text"] is None, state
+    assert serve.Station.seat_state(seat)["reply_text"] == "Here."
+
+
 def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monkeypatch):  # noqa: F811
     station = serve.Station(
         bench=calcity.bench,

@@ -534,6 +534,9 @@ class Station:
         m = self.mission
         if m is None:
             return None
+        # Read once, before what it gates: the mission thread parks the mission while
+        # this runs, and a status read again later could claim a report not read here.
+        status = m.status
         kind = getattr(m, "kind", "twin")
         row = m.row if kind == "bench" else None  # the scored row of a bench episode that has ended
         where = m.map_name or self.map_name
@@ -543,14 +546,14 @@ class Station:
         observations = self._observations(m.workdir, targets)
         report = (
             self._reported(m.workdir, transcript)
-            if m.status in (STATE_AWAITING, STATE_ENDED)
+            if status in (STATE_AWAITING, STATE_ENDED)
             else None
         )
         ring, point = self.target(m.split, m.episode_id)
         return {
             "version": hash(
                 (
-                    m.status,
+                    status,
                     len(transcript),
                     len(flights),
                     len(observations),
@@ -564,7 +567,7 @@ class Station:
             "split": m.split,
             "kind": kind,
             "run_no": m.run_no,
-            "status": "ready" if m.status == STATE_IDLE else m.status,
+            "status": "ready" if status == STATE_IDLE else status,
             "instruction": m.instruction,
             "ended_by": m.ended_by,
             "error": m.error,
