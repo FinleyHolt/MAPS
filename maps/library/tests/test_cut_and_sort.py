@@ -537,3 +537,11 @@ def test_the_side_note_drops_the_look_for_remedy_when_a_detection_was_dropped():
     seen = [*CANDS, {"fid": "detected_3", "xy": [5.0, 25.0], "class": "car", "search_text": "car"}]
     note = _side_note('find("car", south_of="prior_7")\n', cands=seen)
     assert note == "nothing in the world state lies on that side", note
+
+
+def test_grey_is_gray_on_the_palette():
+    """look_for("grey roof") answers find("<class>", color="grey"); find takes it."""
+    _r, fr, _f, _d = drive([[run('find("car", color="grey")\n')], "done"])
+    err = tool_results(fr)[0].get("error", "")
+    # the fake rows carry no perceived colour, so the gray column orders nothing
+    assert "not a color on the closed palette" not in err and "'color_gray'" in err, err

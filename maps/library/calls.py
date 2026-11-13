@@ -64,9 +64,7 @@ def _refuse_unplain_class(cls: str, names: set[str]) -> None:
         )
     # ponytail: any palette word refuses, so "orange tree" does too; a
     # head-noun parse if a real class ever needs a colour word.
-    colour = next(
-        (w for w in words if w.lower() == "grey" or normalize_color(w) in COLOR_ENUM), None
-    )
+    colour = next((w for w in words if normalize_color(w) in COLOR_ENUM), None)
     if colour:
         raise CodeError(
             f'look_for takes plain visual classes, each naming a THING, never a colour: "{cls}" '
