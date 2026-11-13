@@ -767,3 +767,24 @@ def test_a_name_in_a_written_list_grounds_as_a_lone_name_does(code, fids, skippe
     (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
     assert env["fids"] == fids, env
     assert skipped is None or skipped in env["hint"], env
+
+
+@pytest.mark.parametrize(
+    "code, printed",
+    [
+        ('go_to("END_1")\n', None),
+        ('print(distance("END_0", [80, 100]))\n', "0.0"),
+    ],
+)
+def test_a_typed_terminus_fid_is_read_in_either_case_as_a_stop_id_is(code, printed):
+    out = _ends_block(code)
+    assert "error" not in out, out
+    if printed is None:
+        assert out["flown"]["flown"][0]["target"] == "[120, 100]", out
+    else:
+        assert out["printed"] == printed, out
+
+
+def test_find_refuses_an_end_fid_no_road_end_carries_as_it_refuses_a_prior_fid():
+    err = _ends_block('find("end_7")\n')["error"]
+    assert err == "line 2: there is no end_7 on this surface; say a fid off a served row.", err

@@ -297,7 +297,11 @@ class Library:
             raise CodeError(f"the name IS the query: find({name!r})")
         q = str(query)
         # A fid is no name to search for: one no row carries is refused.
-        if q.startswith(("prior_", "detected_")) and fid_like(q) and self.env.row_of_fid(q) is None:
+        if (
+            q.startswith(("prior_", "detected_", "end_"))
+            and fid_like(q)
+            and self.env.row_of_fid(q) is None
+        ):
             raise no_such_fid(q)
         refuse_metres_in_within(within)
         nearest = self._slot(nearest)
