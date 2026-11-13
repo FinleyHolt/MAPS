@@ -878,6 +878,33 @@ def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(
     assert "1 ids requested -> 1 match" in capsys.readouterr().out
 
 
+def test_a_dry_run_into_a_root_of_another_selection_is_refused_as_the_launch_is(
+    tmp_path, monkeypatch, capsys, bench_data
+) -> None:
+    """The dry run checks the root's run identity as the launch does, so it previews
+    nothing the launch would refuse."""
+    from maps.llm.endpoint_spec import EndpointSpec
+
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda bench, eps: [])
+    root = tmp_path / "r"
+    root.mkdir()
+    spec = EndpointSpec("http://127.0.0.1:1/v1", "inkling-small", 65536, "tok", 4096)
+    bench = rm.with_endpoint(citynav_bench(os.environ), spec)
+    flown = rm.build_manifest(
+        bench=bench, out_root=root, config_path=bf._config_path(bench.environ),
+        split="val_seen", sample_seed=bf._build_parser(bench).parse_args([]).sample_seed,
+        limit=0, allowlist_path=None, episodes=["a", "b"],
+    )  # fmt: skip
+    rm.emit_or_verify(root, flown, log=lambda line: None)
+    before = (root / "run_manifest.json").read_text()
+    assert bf.main(["--out-root", str(root), "--dry-run"]) == 0
+    assert bf.main(["--out-root", str(root), "--dry-run", "--limit", "1"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("FATAL: ") and "identity drift" in err and "selection_sha" in err, err
+    assert (root / "run_manifest.json").read_text() == before
+
+
 def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(
     tmp_path, monkeypatch, capsys
 ) -> None:
