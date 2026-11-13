@@ -38,6 +38,7 @@ import math
 import mimetypes
 import os
 import re
+import sys
 import threading
 import time
 from pathlib import Path
@@ -63,7 +64,7 @@ from benchmarks.flight.mission import (
     resolve_episode,
 )
 from benchmarks.flight.tile_georef import map_bounds
-from benchmarks.flight.twin import Twin, effort_refusal
+from benchmarks.flight.twin import Twin, effort_refusal, raster_refusal
 from benchmarks.run_record import rows
 from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (
@@ -245,12 +246,9 @@ class Station:
         if (
             ortho_dir is not None
             and self.map_name
-            and map_render.load_raster(ortho_dir, self.map_name) is None
+            and (why := raster_refusal(ortho_dir, self.map_name)) is not None
         ):
-            raise SystemExit(
-                f"no {self.map_name} raster under {ortho_dir}: a raster directory holds "
-                f"{map_render.raster_pair(self.map_name)}"
-            )
+            raise ValueError(why)
         #: Each map's basemap, loaded when first asked for; the least recently used is let go.
         self.basemap = functools.lru_cache(maxsize=BASEMAPS_HELD)(self._basemap)
         self.tile = functools.lru_cache(maxsize=TILES_HELD)(self._tile)
@@ -1216,22 +1214,26 @@ def main(argv: list[str] | None = None) -> int:
 
     import uvicorn
 
-    args.out.mkdir(parents=True, exist_ok=True)
     bench = bench_named(args.bench, os.environ)
+    try:
+        station = Station(
+            bench=bench,
+            config=args.config or f"configs/{args.bench}.yaml",
+            out=args.out,
+            ortho_dir=args.ortho,
+            register=args.register,
+            basemap=args.basemap,
+            osm_cache_dir=args.osm_cache,
+        )
+    except ValueError as exc:  # a bad --ortho, refused before --out is made
+        print(exc, file=sys.stderr)
+        return 2
+    args.out.mkdir(parents=True, exist_ok=True)
     if argv is None:
         # A command-line station runs model code in its own threads, so it confines
         # itself; a caller handing argv owns its process.
         flies = why_not_flying(bench, args.ortho) is None
         sandbox.confine_cli(args, bench, log.info, flies=flies)
-    station = Station(
-        bench=bench,
-        config=args.config or f"configs/{args.bench}.yaml",
-        out=args.out,
-        ortho_dir=args.ortho,
-        register=args.register,
-        basemap=args.basemap,
-        osm_cache_dir=args.osm_cache,
-    )
     if (why := station.why_not_flying()) is not None:
         log.info("%s", why)
     if not (WEB_DIST / "index.html").is_file():

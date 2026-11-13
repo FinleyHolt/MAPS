@@ -804,6 +804,9 @@ def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeyp
     monkeypatch.setattr(sandbox, "confine", confine)
     monkeypatch.setattr(twin, "resolve_episode", lambda *a: SimpleNamespace(map_name="m"))
     monkeypatch.setattr(twin, "check_map", lambda *a: None)
+    (tmp_path / "o").mkdir()
+    for name in ("m.tif", "m.png"):
+        (tmp_path / "o" / name).write_bytes(b"")
     monkeypatch.setattr(
         "sys.argv",
         ["twin", "--episode", "e", "--ortho", str(tmp_path / "o"), "--out", str(tmp_path / "out")],
@@ -831,6 +834,13 @@ def test_a_refused_twin_leaves_no_run_folder(tmp_path, monkeypatch, capsys):
         ["twin", "--episode", "e", "--ortho", str(tmp_path), "--out", str(tmp_path / "out")],
     )
     assert twin.main() == 2
+    assert not (tmp_path / "out").exists()
+    # A raster directory without the map's pair is refused before the twin confines itself too.
+    monkeypatch.setattr(twin, "resolve_episode", lambda *a: SimpleNamespace(map_name="m"))
+    monkeypatch.setattr(twin, "check_map", lambda *a: None)
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: pytest.fail("confined"))
+    assert twin.main() == 2
+    assert "no m raster under" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
 
 

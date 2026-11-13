@@ -359,3 +359,19 @@ def test_a_sandboxed_station_without_its_tokenizer_refuses_a_mission_naming_the_
     assert not (tmp_path / "out").exists() or not any((tmp_path / "out").iterdir())
     monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings, **kw: None)
     assert station.tokenizer_refusal() is None and sandbox.TOKENIZER_ENV not in os.environ
+
+
+def test_a_station_whose_ortho_lacks_the_raster_exits_2_with_no_out(calcity, tmp_path, monkeypatch):  # noqa: F811
+    """A bad --ortho is refused before the station confines itself, so --out is not made,
+    with the twin's exit code."""
+    from benchmarks import sandbox
+
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: pytest.fail("confined"))
+    (tmp_path / "empty").mkdir()
+    monkeypatch.setattr(
+        "sys.argv",
+        ["serve", "--bench", "calcity", "--out", str(tmp_path / "out"),
+         "--ortho", str(tmp_path / "empty")],
+    )  # fmt: skip
+    assert serve.main() == 2
+    assert not (tmp_path / "out").exists()
