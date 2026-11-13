@@ -802,6 +802,8 @@ def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeyp
         raise SystemExit((*a, kw))
 
     monkeypatch.setattr(sandbox, "confine", confine)
+    monkeypatch.setattr(twin, "resolve_episode", lambda *a: SimpleNamespace(map_name="m"))
+    monkeypatch.setattr(twin, "check_map", lambda *a: None)
     monkeypatch.setattr(
         "sys.argv",
         ["twin", "--episode", "e", "--ortho", str(tmp_path / "o"), "--out", str(tmp_path / "out")],
@@ -814,6 +816,22 @@ def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeyp
     assert gib == sandbox.STATION_MEMORY_GIB and kw == {"flies": True}
     assert writable == [tmp_path / "out", rgbd / "ortho", tmp_path / "o" / "ortho"]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)
+
+
+def test_a_refused_twin_leaves_no_run_folder(tmp_path, monkeypatch, capsys):
+    """An episode the split does not hold is refused before the twin confines itself,
+    so ``--out`` is not made."""
+    from benchmarks import sandbox
+    from benchmarks.flight import twin
+
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: None)
+    monkeypatch.setattr(twin, "resolve_episode", lambda *a: (_ for _ in ()).throw(ValueError("no")))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["twin", "--episode", "e", "--ortho", str(tmp_path), "--out", str(tmp_path / "out")],
+    )
+    assert twin.main() == 2
+    assert not (tmp_path / "out").exists()
 
 
 def test_ctrl_c_mid_mission_ends_it_and_waits_for_its_row(monkeypatch):
