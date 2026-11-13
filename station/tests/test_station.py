@@ -420,6 +420,33 @@ def test_a_sandboxed_station_whose_reasoner_answers_names_the_uncached_tokenizer
     assert why.endswith(f"{sandbox.TOKENIZER_REMEDY}, then send the mission again")
 
 
+def test_a_sandboxed_station_whose_cached_tokenizer_fails_names_the_loaders_cause(
+    calcity,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+):
+    """A tokenizer the hub cache holds that still fails to load (a broken snapshot, a
+    gated repo) is refused with the loader's cause, never as absent from the cache."""
+    from benchmarks import sandbox
+    from benchmarks.flight.tests.test_twin_mission import uncached_tokenizer
+
+    monkeypatch.setenv(sandbox.TOKENIZER_ENV, "EndpointDiscoveryError")
+    station = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        ortho_dir=calcity.rgbd,
+    )
+    uncached_tokenizer(monkeypatch)
+    (tmp_path / "models--org--tok").mkdir()
+    monkeypatch.setattr(sandbox, "hf_hub_cache", lambda: str(tmp_path))
+    why = station.tokenizer_refusal()
+    assert len(why.splitlines()) == 1, why
+    assert "not in the hub cache" not in why, why
+    assert "failed to load" in why, why
+    assert why.endswith(f"{sandbox.TOKENIZER_REMEDY}, then send the mission again")
+
+
 def test_a_station_whose_ortho_lacks_the_raster_exits_2_with_no_out(calcity, tmp_path, monkeypatch):  # noqa: F811
     """A bad --ortho is refused before the station confines itself, so --out is not made,
     with the twin's exit code."""

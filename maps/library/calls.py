@@ -333,6 +333,8 @@ class Library:
                 # a row or set argument keeps its spelling
                 ran = {
                     "query": query,
+                    "name": name,
+                    "color": color,
                     "north_of": north_of,
                     "south_of": south_of,
                     "east_of": east_of,
