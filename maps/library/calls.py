@@ -329,11 +329,28 @@ class Library:
             # what the find matched before the cut
             node = self.names.running_node()
             if isinstance(node, ast.Call):
-                if node.args and not isinstance(node.args[0], ast.Constant):
-                    # a query the block computed (a loop variable) is
-                    # labelled with the value it ran, so each set keeps its own
-                    node = ast.Call(node.func, [ast.Constant(query), *node.args[1:]], node.keywords)
-                label = ast.unparse(node)
+                # a query or a named side the block computed (a loop variable)
+                # is labelled with the value it ran, so each set keeps its own;
+                # a row or set argument keeps its spelling
+                ran = {
+                    "query": query,
+                    "north_of": north_of,
+                    "south_of": south_of,
+                    "east_of": east_of,
+                    "west_of": west_of,
+                }
+                args = list(node.args)
+                if args and not isinstance(args[0], ast.Constant):
+                    args[0] = ast.Constant(query)
+                keywords = [
+                    ast.keyword(k.arg, ast.Constant(ran[k.arg]))
+                    if k.arg in ran
+                    and not isinstance(k.value, ast.Constant)
+                    and isinstance(ran[k.arg], str)
+                    else k
+                    for k in node.keywords
+                ]
+                label = ast.unparse(ast.Call(node.func, args, keywords))
         if q:
             self.names.labels[ref] = label
         return Rows(ref, self, label=label)
