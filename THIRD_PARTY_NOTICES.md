@@ -7,7 +7,7 @@ repository come from third parties, or are derived from third-party data:
 |---|---|---|---|
 | `benchmarks/citynav/data_prep/_vendor_citynav_rasterize.py` | Upstream CityNav's PDAL/GDAL rasterizer, verbatim. | [water-cookie/citynav](https://github.com/water-cookie/citynav) `rasterize.py` | MIT, Copyright (c) 2024; [`benchmarks/citynav/data_prep/LICENSE.citynav_upstream`](benchmarks/citynav/data_prep/LICENSE.citynav_upstream). |
 | `maps/perception/ortho/ground_level.py` | CityNav blocks' ground levels. | [water-cookie/citynav](https://github.com/water-cookie/citynav), `mapdata.py` in its `gsamllavanav` package | MIT, Copyright (c) 2024; same license file. |
-| `maps/perception/data/w2c.txt` | Colour-name lookup table the colour extractor reads. | van de Weijer, Schmid, Verbeek and Larlus, "Learning Color Names for Real-World Applications", IEEE Transactions on Image Processing, 2009, and the table distributed with the authors' code. | Not stated by the source. |
+| `maps/perception/data/w2c.txt` | Colour-name lookup table the colour extractor reads, byte-identical to `ColorNaming/w2c.txt` in the authors' `ColorNaming.tar` (dated 9 April 2009). | J. van de Weijer, C. Schmid, J. Verbeek and D. Larlus, "Learning Color Names for Real-World Applications", IEEE Transactions on Image Processing 18(7), 2009. The archive is the "color naming" download on the authors' [Color Naming page](https://lear.inrialpes.fr/people/vandeweijer/color_names.html). | Not stated by the source: the page and the archive's `readme.txt` name the paper and carry no license. |
 | `benchmarks/calcity/data/calcity.json`, `benchmarks/calcity/data_prep/authoring/ground_truth.json` | Cal City corpus and the positions of its reviewed targets. Rows name and place OpenStreetMap features. | Authored for MAPS; feature names and positions from OpenStreetMap. | OpenStreetMap data © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). |
 | `tiles/osm_cache/{birmingham,cambridge}_osm_local.geojson` | OpenStreetMap features over each CityNav city, tags verbatim, registered into the CityNav frame; the CityNav bake's source. Each file's `citynav_osm_cache` block holds the registration fitted for MAPS. | [openstreetmap.org](https://www.openstreetmap.org), via the Overpass API. | OpenStreetMap data © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). |
 | `station/web/dist/assets/` | Built station console, bundling the packages in [Station console bundle](#station-console-bundle). | Their npm packages. | Per package, in that table. |
@@ -16,10 +16,12 @@ repository come from third parties, or are derived from third-party data:
 
 ## Station console bundle
 
-`station/web/dist/assets/` bundles these packages. Versions are the ones
-`station/web/package-lock.json` pins, and licenses are as each package's
-`package.json` states them. `maplibre-gl` ships prebuilt, and its build
-bundles the packages listed under it.
+`station/web/dist/assets/` bundles these packages, and licenses are as each
+package's license file states them. A package the station's build bundles
+carries the version `station/web/package-lock.json` pins. `maplibre-gl`
+ships prebuilt: the packages marked "in `maplibre-gl`" are bundled by its own
+build, at the versions that build resolved, and their Version column gives
+the version the lockfile installs beside it.
 
 | Package | Version | License | Copyright |
 |---|---|---|---|
@@ -27,11 +29,11 @@ bundles the packages listed under it.
 | `react-dom` | 19.2.6 | MIT | Copyright (c) Meta Platforms, Inc. and affiliates. |
 | `scheduler` | 0.27.0 | MIT | Copyright (c) Meta Platforms, Inc. and affiliates. |
 | `tailwindcss` (the stylesheet's base layer and utilities) | 4.3.3 | MIT | Copyright (c) Tailwind Labs, Inc. |
-| `maplibre-gl` (script and stylesheet) | 5.24.0 | BSD-3-Clause; its glfx.js code MIT | Copyright (c) 2023, MapLibre contributors. Copyright (c) 2020, Mapbox. Copyright (C) 2011 by Evan Wallace. |
-| `@maplibre/maplibre-gl-style-spec`, in `maplibre-gl` | 24.10.0 | ISC | Copyright (c) 2020, MapLibre contributors. Copyright (c) 2020, Mapbox. Copyright (C) 2011 by Evan Wallace. |
-| `@maplibre/geojson-vt`, in `maplibre-gl` | 6.1.1 | ISC | Copyright (c) 2025 MapLibre contributors. |
+| `maplibre-gl` (script and stylesheet) | 5.24.0 | BSD-3-Clause; its glfx.js code MIT; its d3-color portion BSD-3-Clause | Copyright (c) 2023, MapLibre contributors. Copyright (c) 2020, Mapbox. Copyright (C) 2011 by Evan Wallace. Copyright 2010-2016 Mike Bostock. |
+| `@maplibre/maplibre-gl-style-spec`, in `maplibre-gl` | 24.10.0 | BSD-3-Clause; its glfx.js code MIT; its d3-color portion BSD-3-Clause (its `package.json` says ISC) | Copyright (c) 2020, MapLibre contributors. Copyright (c) 2020, Mapbox. Copyright (C) 2011 by Evan Wallace. Copyright 2010-2016 Mike Bostock. |
+| `@maplibre/geojson-vt`, in `maplibre-gl` | 6.1.1 | MIT; its Mapbox code ISC (its `package.json` says ISC) | Copyright (c) 2025 MapLibre contributors. Copyright (c) 2024, Mapbox. |
 | `@maplibre/mlt`, in `maplibre-gl` | 1.2.0 | MIT OR Apache-2.0 | Copyright (c) 2024 MapLibre contributors. |
-| `@maplibre/vt-pbf`, in `maplibre-gl` | 4.3.2 | MIT | Copyright (c) 2025 MapLibre contributors. Copyright (c) 2015 Anand Thakker. |
+| `@maplibre/vt-pbf`, in `maplibre-gl` | 4.3.2 | MIT; its geojson_wrapper.js BSD-3-Clause | Copyright (c) 2025 MapLibre contributors. Copyright (c) 2015 Anand Thakker. Copyright (c) 2014, Mapbox. |
 | `@mapbox/point-geometry`, in `maplibre-gl` | 1.1.0 | ISC | Copyright (c) 2024, Mapbox. |
 | `@mapbox/tiny-sdf`, in `maplibre-gl` | 2.2.0 | BSD-2-Clause | Copyright (c) 2016-2024 Mapbox, Inc. |
 | `@mapbox/unitbezier`, in `maplibre-gl` and its style spec | 0.0.1, 1.0.0 | BSD-2-Clause | Copyright (C) 2008 Apple Inc. All Rights Reserved. |
@@ -41,16 +43,20 @@ bundles the packages listed under it.
 | `gl-matrix`, in `maplibre-gl` | 3.4.4 | MIT | Copyright (c) 2015-2025, Brandon Jones, Colin MacKenzie IV. |
 | `json-stringify-pretty-compact`, in the style spec | 4.0.0 | MIT | Copyright (c) 2014, 2016, 2017, 2019, 2021, 2022 Simon Lydell. |
 | `kdbush`, in `maplibre-gl` | 4.1.0 | ISC | Copyright (c) 2026, Vladimir Agafonkin. |
-| `murmurhash-js`, in `maplibre-gl` | 1.0.0 | MIT | Copyright (c) 2011 Gary Court. |
-| `pbf`, in `maplibre-gl` | 4.0.2 | BSD-3-Clause | Copyright (c) 2024, Mapbox. |
+| `murmurhash-js`, in `maplibre-gl` | 1.0.0 | MIT, stated in its `package.json` and README | Copyright (c) 2011 Gary Court. Implements Austin Appleby's MurmurHash. |
+| `pbf`, in `maplibre-gl` and `@maplibre/vt-pbf` | 4.0.2, 5.1.2 | BSD-3-Clause | Copyright (c) 2024, Mapbox (4.0.2). Copyright (c) 2026, Mapbox (5.1.2). |
 | `potpack`, in `maplibre-gl` | 2.1.0 | ISC | Copyright (c) 2025, Mapbox. |
 | `quickselect`, in the style spec | 3.0.0 | ISC | Copyright (c) 2024, Vladimir Agafonkin. |
 | `tinyqueue`, in `maplibre-gl` and its style spec | 3.0.0 | ISC | Copyright (c) 2017, Vladimir Agafonkin. |
 | `tslib`, in `maplibre-gl` | Version of `maplibre-gl`'s build | 0BSD | Copyright (c) Microsoft Corporation. |
+| `vite` (module-preload polyfill and preload helper) | 8.2.2 | MIT | Copyright (c) 2019-present, VoidZero Inc. and Vite contributors. |
+| `rolldown` (module interop helpers) | 1.2.5 | MIT | Copyright (c) 2024-present VoidZero Inc. & Contributors. Its THIRD-PARTY-LICENSE adds Rollup's (Copyright (c) 2017 [these people](https://github.com/rollup/rollup/graphs/contributors)) and esbuild's (Copyright (c) 2020 Evan Wallace), both MIT. |
 
 `@maplibre/mlt` is offered under MIT or Apache-2.0; the MIT text below
-applies to it. Each text below applies with the copyright lines of its
-packages in the table above in place of `<copyright>`.
+applies to it. The MIT, ISC, and 0BSD texts below apply with the copyright
+lines of their packages in the table above in place of `<copyright>`. The
+BSD-2-Clause and BSD-3-Clause texts follow verbatim from each package's
+license file, since each names its own project and holder.
 
 MIT:
 
@@ -94,37 +100,6 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-BSD-2-Clause is clauses 1 and 2; BSD-3-Clause adds clause 3:
-
-```text
-<copyright>
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
 0BSD:
 
 ```text
@@ -140,6 +115,272 @@ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
 LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
+```
+
+`maplibre-gl`, its `LICENSE.txt`. The style spec's `LICENSE.txt` is the same text with `Copyright (c) 2020, MapLibre contributors` as its first line:
+
+```text
+Copyright (c) 2023, MapLibre contributors
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+    * Neither the name of MapLibre GL JS nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+-------------------------------------------------------------------------------
+
+Contains code from mapbox-gl-js v1.13 and earlier
+
+Version v1.13 of mapbox-gl-js and earlier are licensed under a BSD-3-Clause license
+
+Copyright (c) 2020, Mapbox
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+* Neither the name of Mapbox GL JS nor the names of its contributors
+  may be used to endorse or promote products derived from this software
+  without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+-------------------------------------------------------------------------------
+
+Contains code from glfx.js
+
+Copyright (C) 2011 by Evan Wallace
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Contains a portion of d3-color https://github.com/d3/d3-color
+
+Copyright 2010-2016 Mike Bostock
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the author nor the names of contributors may be used to
+  endorse or promote products derived from this software without specific prior
+  written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`@maplibre/vt-pbf`, the BSD-3-Clause part of its `LICENSE`:
+
+```text
+Contains geojson_wrapper.js from https://github.com/mapbox/mapbox-gl-js
+
+Copyright (c) 2014, Mapbox
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+    * Neither the name of Mapbox GL JS nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`@mapbox/tiny-sdf`, its `LICENSE.txt`:
+
+```text
+BSD-2-Clause
+Copyright (c) 2016-2024 Mapbox, Inc.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`@mapbox/unitbezier` 0.0.1 and 1.0.0, the same `LICENSE` text:
+
+```text
+BSD-2-Clause
+
+Copyright (C) 2008 Apple Inc. All Rights Reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY APPLE INC. ``AS IS'' AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL APPLE INC. OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Ported from Webkit
+http://svn.webkit.org/repository/webkit/trunk/Source/WebCore/platform/graphics/UnitBezier.h
+```
+
+`@mapbox/vector-tile`, its `LICENSE.txt`:
+
+```text
+Copyright (c) 2024, Mapbox
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+    * Neither the name of Mapbox nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`pbf` 4.0.2, its `LICENSE`. The 5.1.2 `LICENSE` is the same text with `Copyright (c) 2026, Mapbox` as its first line:
+
+```text
+Copyright (c) 2024, Mapbox
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of pbf nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 ## Used and not redistributed

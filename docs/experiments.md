@@ -83,7 +83,5 @@ python -m benchmarks.flight.measures --root <sorties>/* --truth <truth>...
 ```
 
 `--truth` takes directories of analysts' adjudications, the tasking set's
-split JSON, or both. For the closed-loop flight's own records (E6), see
-[Flight recordings](data.md#flight-recordings). For each measure's
-definition, see
+split JSON, or both. For each measure's definition, see
 [Closed-loop measures](../benchmarks/flight/README.md#closed-loop-measures).

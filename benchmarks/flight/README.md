@@ -1,7 +1,7 @@
 # benchmarks/flight
 
 This package is the flight harness: the method half of the station that flew
-MAPS on a C-12 over California City from 11 to 18 September 2026. It hydrates
+MAPS on a C-12 over California City on six days from 11 to 18 September 2026. It hydrates
 a mission as the bench does, flies each flight as a leg on an aircraft, and
 fuses each observation from the frames the aircraft recorded. It reaches the
 aircraft through one protocol, `Vehicle`. The package also holds a kinematic
@@ -108,6 +108,7 @@ mission's height, and renders frames from the raster pair on request.
 
 | Flag | Description |
 |---|---|
+| `--config <yaml>` | Run config. Default `configs/calcity.yaml`. |
 | `--episode <id>` | Episode to fly. Required. With `--start-xy`, the ID of a mission with no row. |
 | `--ortho <raster dir>` | Raster pair the frames are rendered from. Required. |
 | `--split <split>` | Split the episode is read from. Default: the Cal City bench's. |
@@ -117,6 +118,7 @@ mission's height, and renders frames from the raster pair on request.
 | `--reasoning-effort <effort>` | Run's reasoning effort. |
 | `--register <raster dir>` | Registers each frame. |
 | `--out <dir>` | Where the sortie lands, as `<dir>/<UTC stamp>/`. Default `output/flight`. |
+| `--memory-gib <GiB>` | Process's memory cap, GiB. Default 16. A block that allocates past it raises `MemoryError`, served as the block's error. |
 
 The run lands under `<out>/<UTC stamp>/` with the run records a flown
 run carries, the ownship track (`flight_track.jsonl`,

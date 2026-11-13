@@ -144,17 +144,16 @@ variables that locate each bench's data, see
 | `PYTORCH_CUDA_ALLOC_CONF` | Serve | PyTorch's allocator settings. The serve sets `expandable_segments:True` when unset. |
 | `MAPS_IMAGE_STORE_URL` | Client | Image store one fast hop from the reasoner: each inline image is PUT once to `<store>/looks/<sha>` and rides as `sha256:<sha>`; a 409 naming missing shas re-sends them. For the protocol, see the docstring of `maps/llm/http.py`. |
 | `SEARCH_SEED_BASE` | Runner | Base of the per-turn request seed. Unset, each mission takes one from the wall clock. The run manifest records it when set; `run_benchmark --seed-base` overrides it. |
-| `SEARCH_LLM_CACHE_KEY` | Client | Prompt-cache key an OpenAI-wire request carries in place of the episode's routing key. `bench_fullset` sets one per worker. |
+| `SEARCH_LLM_CACHE_KEY` | Client | Prompt-cache key an OpenAI-wire request carries in place of the episode's routing key. The bench driver sets `<out-root name>/w<worker id>` in each attempt child's environment. |
+| `CITYNAV_BENCH_CONFIG` | Driver | Run config, relative to the repository root, that the bench driver passes each attempt child as `--config`. Default `configs/citynav.yaml`; the Cal City driver's default is `configs/calcity.yaml`. |
 
 The bench driver sets these in each attempt child's environment:
 
 | Variable | Description |
 |---|---|
-| `SEARCH_BENCHMARK_NAME` | Bench the child flies (`citynav` when unset). |
-| `CITYNAV_BENCH_CONFIG` | Run config, relative to the repository root. Default `configs/citynav.yaml`; the Cal City driver sets `configs/calcity.yaml`. |
+| `SEARCH_BENCHMARK_NAME` | Bench the child flies, from the bench's own environment: Cal City's carries `calcity`, and the child flies CityNav when it is unset. |
 | `CITYNAV_EPISODE_DEADLINE_EPOCH` | Epoch at which the mission stops flying: the episode's wall cap less a 10% reserve for the model's reply. |
 | `CITYNAV_BENCH_PARENT_PID` | Driver's process ID, or `1` under bubblewrap (the sandbox's init, killed with the driver); the child exits when that parent is gone. |
-| `SEARCH_LLM_CACHE_KEY` | `<out-root name>/w<worker id>`. |
 
 ## GPT-5.6 Sol on Azure
 
