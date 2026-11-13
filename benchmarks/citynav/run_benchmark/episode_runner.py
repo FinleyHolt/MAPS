@@ -333,7 +333,7 @@ def run_episode(
     reply = (converse or run_mission_episode)(session)
     flights = session.flights
     if flights:
-        visited = synthesize_compliant_trajectory(
+        visited, stops_dropped = synthesize_compliant_trajectory(
             cfg=cfg,
             flights=flights,
             start_pose_xyh=start_pose_xyh,
@@ -343,7 +343,7 @@ def run_episode(
         final_xy = visited[-1] if visited else start_pose_xyh[:2]
     else:
         # ZERO flights: the drone never took off and nothing was committed.
-        steps_taken = 0
+        steps_taken = stops_dropped = 0
         final_xy = (float(episode.start_xy[0]), float(episode.start_xy[1]))
         visited = [final_xy, final_xy]
 
@@ -365,6 +365,7 @@ def run_episode(
     scores["referent_bucket"] = classify_referent(episode.description)
     scores["intel_quality"] = episode.intel_quality
     scores["steps_taken"] = steps_taken
+    scores["stops_dropped"] = stops_dropped
     # What the episode spent on the LLM, at row size, read after the mission
     # from its transcript; a mission that never flew spent turns too.
     scores["llm"] = (

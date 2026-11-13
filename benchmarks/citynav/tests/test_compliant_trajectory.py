@@ -18,7 +18,7 @@ def _replay(commit_xy, max_steps=60):
         flights=flights,
         start_pose_xyh=(0.0, 0.0, 0.0),
         start_alt=50.0,
-    )
+    )[0]
 
 
 def test_a_commit_the_tour_starves_is_reached_by_dropping_the_tour() -> None:
@@ -35,3 +35,28 @@ def test_a_commit_the_tour_starves_is_reached_by_dropping_the_tour() -> None:
 def test_a_commit_beyond_the_whole_budget_ends_short_at_the_budget() -> None:
     visited = _replay((0.0, -1000.0))
     assert len(visited) == 60 and visited[-1][1] > -1000.0
+
+
+def test_the_replay_counts_the_flown_stops_it_drops() -> None:
+    """A stop the budget cannot hold before the commit leg is counted as dropped;
+    a replay that holds every stop drops none."""
+    from types import SimpleNamespace
+
+    from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
+
+    def replay(stops, commit, max_steps):
+        flights = [
+            {"target": f"s{i}", "resolved_xy": list(xy), "altitude_m": 50.0}
+            for i, xy in enumerate([*stops, commit])
+        ]
+        return synthesize_compliant_trajectory(
+            cfg=SimpleNamespace(max_steps=max_steps),
+            flights=flights,
+            start_pose_xyh=(0.0, 0.0, 0.0),
+            start_alt=50.0,
+        )
+
+    _, dropped = replay([(0.0, 200.0), (0.0, 400.0)], (0.0, -150.0), 60)
+    assert dropped == 2
+    _, dropped = replay([(0.0, 20.0)], (0.0, 40.0), 200)
+    assert dropped == 0

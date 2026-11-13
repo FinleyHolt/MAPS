@@ -86,7 +86,7 @@ def test_a_leg_never_orbits_its_target(monkeypatch, tmp_path):
     target = (154.77264176418146, -47.65705150149299)
     cfg = load_config("configs/citynav.yaml")
     cfg.max_steps = 100_000
-    visited = synthesize_compliant_trajectory(
+    visited, _ = synthesize_compliant_trajectory(
         cfg=cfg,
         flights=[{"target": "s0", "resolved_xy": list(target), "altitude_m": 100.0}],
         start_pose_xyh=(0.0, 0.0, 180.0),
