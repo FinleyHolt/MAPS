@@ -212,7 +212,9 @@ page.
 | `GET mission/ownship[?path=&t=]` | Seat's aircraft, or a reviewed run's at mission second `t` (null on a run with no recorded track). |
 | `GET location?map=`, `GET tiles/{map}/{z}/{x}/{y}.png`, `GET area?map=` | Map's basemap manifest, its web-mercator tiles, and the bake's extent. 404 for a map that isn't placed. |
 | `GET mission/prior.json?map=` | Map's bake features in local metres, grouped for drawing. |
-| `GET run/file?path=` | One file of a run, by `<root>/<workdir>/<name>`. |
+| `GET run/file?path=` | One file of a run, by `<root>/<workdir>/<name>`, served with `Content-Security-Policy: sandbox` so a page in a run folder runs no script. |
+
+A `POST` whose `Origin` header names another site gets 403, so a page on another site cannot clear or task the seat.
 
 A run's `path` is `<root>/<workdir>`: the root's folder name under `--out`
 (`.` when `--out` is itself a root) and the ledger row's `workdir`.

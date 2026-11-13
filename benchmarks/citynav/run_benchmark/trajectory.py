@@ -27,15 +27,16 @@ def synthesize_compliant_trajectory(
     flights: list[dict],
     start_pose_xyh: tuple[float, float, float],
     start_alt: float,
-) -> list[tuple[float, float]]:
+) -> tuple[list[tuple[float, float]], int]:
     """Replay the mission's flights (``MissionSession.flights``, at least one)
     through the six-action snap under the ``cfg.max_steps`` budget; the commit
     is the last flight's point, flown at cruise altitude with a reserve of
     ``min(6, max_steps // 2)`` actions. When the commit leg still falls short,
     the replay runs again with a larger reserve, dropping more of the stop tail,
     until the commit is reached or the whole budget is reserved. Returns the
-    submittable trajectory: the xy after each action, the last the final pose
-    (none when no action was needed).
+    submittable trajectory (the xy after each action, the last the final pose;
+    none when no action was needed) and how many flown stops before the commit
+    it dropped.
     """
     tour_wps = [(float(f["resolved_xy"][0]), float(f["resolved_xy"][1])) for f in flights]
     tour_alts = [float(f["altitude_m"]) for f in flights]
@@ -45,6 +46,7 @@ def synthesize_compliant_trajectory(
     max_frames = int(cfg.max_steps)
     pose = Pose(0.0, 0.0, 0.0, 0.0)  # set from the start pose per attempt
     visited: list[tuple[float, float]] = []
+    reached = 0  # stops before the commit the current attempt flew to
 
     def _drive_to(target_xy: tuple[float, float], *, altitude_m: float, budget: int) -> bool:
         """Fly one leg, re-aiming from the current pose until within
@@ -71,6 +73,8 @@ def synthesize_compliant_trajectory(
     def _walk_tour(tour_budget: int, descent_reserve: int) -> bool:
         """Fly each stop in turn, every leg capped at ``tour_budget``. True
         when the reserve dropped the stop tail."""
+        nonlocal reached
+        reached = 0
         for i, wp in enumerate(tour_wps):
             if len(visited) >= tour_budget:
                 log.warning(
@@ -97,6 +101,7 @@ def synthesize_compliant_trajectory(
                     descent_reserve,
                 )
                 return True
+            reached = i + 1
         return False
 
     def _fly_descent() -> bool:
@@ -179,4 +184,5 @@ def synthesize_compliant_trajectory(
         tail_dropped,
         descent_truncated,
     )
-    return visited
+    # The commit is the tour's last stop and the descent flies it: only the stops before it drop.
+    return visited, len(tour_wps) - 1 - min(reached, len(tour_wps) - 1)

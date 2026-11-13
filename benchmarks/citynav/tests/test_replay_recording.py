@@ -50,7 +50,7 @@ def _replay(case, tmp_path, monkeypatch):
         flights=case["stops"],
         start_pose_xyh=(0.0, 0.0, 0.0),
         start_alt=50.0,
-    )
+    )[0]
 
 
 @pytest.mark.parametrize("name", sorted(CASES))

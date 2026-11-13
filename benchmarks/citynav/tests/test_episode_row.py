@@ -47,7 +47,7 @@ def _run(
     def fly(*, flights, **kw):
         # Seven actions, the last ending ``snap`` m east of the commit.
         x, y = flights[-1]["resolved_xy"]
-        return [(0.0, 0.0)] * 6 + [(x + snap, y)]
+        return [(0.0, 0.0)] * 6 + [(x + snap, y)], 0
 
     monkeypatch.setattr(er, "load_episode_assets", lambda bench, m: SimpleNamespace())
     monkeypatch.setattr(er, "build_episode", build)
@@ -78,7 +78,7 @@ def test_a_flying_episode_records_its_commit_and_final_pose(monkeypatch, tmp_pat
     m = row["metrics"]
     assert row["visited_xy"][-1] == [5.0, 6.0]
     assert row["commit_xy"] == [5.0, 6.0] and row["target_xy"] == [5.0, 5.0]
-    assert m["steps_taken"] == 7
+    assert m["steps_taken"] == 7 and m["stops_dropped"] == 0
     assert m["committed_provenance"] == "prior"
     assert m["mission"] == {"ended_by": "reply"}
 
@@ -89,7 +89,7 @@ def test_a_zero_flight_episode_records_its_llm_spend(monkeypatch, tmp_path) -> N
     assert row["commit_xy"] is None
     assert m["llm"] == {"calls": 2}
     assert m["mission"] == {"ended_by": "reply"}
-    assert m["steps_taken"] == 0 and m["SR"] == 0
+    assert m["steps_taken"] == 0 and m["stops_dropped"] == 0 and m["SR"] == 0
 
 
 def test_a_shape_row_scores_the_commit_not_the_snapped_final_pose(monkeypatch, tmp_path) -> None:

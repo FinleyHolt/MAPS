@@ -49,7 +49,7 @@ def _stub_engine(monkeypatch, tmp_path):
     monkeypatch.setattr(
         er,
         "synthesize_compliant_trajectory",
-        lambda *, flights, **kw: [(0.0, 0.0), tuple(flights[-1]["resolved_xy"])],
+        lambda *, flights, **kw: ([(0.0, 0.0), tuple(flights[-1]["resolved_xy"])], 0),
     )
     monkeypatch.setattr(er.flight_summary, "summarize", lambda d, tokenizer_name="": {})
     return SimpleNamespace(

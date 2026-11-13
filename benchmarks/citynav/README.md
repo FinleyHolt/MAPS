@@ -102,6 +102,16 @@ The driver refuses or records faults as follows:
 Read a root with [`analysis/`](analysis/README.md). Don't parse
 `episodes.jsonl` by hand.
 
+### Scored trajectory
+
+The model receives imagery at every stop it requests. The scored path replays
+those stops in CityNav's six-action alphabet under the config's `max_steps`
+budget (200 actions in `configs/citynav.yaml`). When the budget cannot hold
+every stop and the commit, the replay drops the latest stops before the
+commit so that the commit is reached. `stops_dropped` in each row's `metrics`
+counts them. A comparison against a planner whose observations are charged to
+the action budget should report it.
+
 ## Configs
 
 `configs/citynav.yaml` is the control config and declares every key. Another
