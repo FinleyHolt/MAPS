@@ -381,6 +381,21 @@ def test_persistent_infra_is_left_out_and_reported(
         assert "persistent infra: 1 episode(s)" in text and "A (2), B (1)" in text, text
 
 
+def test_persistent_memory_infra_names_the_attempt_cap(
+    driver, tmp_path, monkeypatch, no_flight
+) -> None:
+    """An episode the harness runs out of memory on needs a larger attempt cap: the
+    line names that flag beside the attempt count."""
+    for _ in range(3):
+        episodes.append_row(tmp_path, _infra(0, cause="MemoryError: "))
+    d = driver(selection=["ep0"])
+    monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("a capped episode flew"))
+    d._deadline = time.monotonic() + 5
+    assert d.run() == 0
+    line = d._persistent_infra()
+    assert f"--attempt-memory-gib above {d.memory_gib:g}" in line, line
+
+
 def test_a_spent_wall_budget_stops_the_run(driver, monkeypatch, no_flight) -> None:
     d = driver(selection=["ep0"])
     monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("flew past the budget"))

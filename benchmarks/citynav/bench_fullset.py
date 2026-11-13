@@ -318,10 +318,17 @@ class Driver:
                 errors.update(self._infra_errors[e])
         if not stuck:
             return ""
+        # A harness out of memory under the cap fails again until the cap grows.
+        memory = any(c.startswith("MemoryError") for c in errors)
+        flag = f"--max-infra-attempts above {self.max_infra_attempts}"
+        again = (
+            f"--attempt-memory-gib above {self.memory_gib:g} and {flag} fly"
+            if memory
+            else f"{flag} flies"
+        )
         return (
             f"persistent infra: {len(stuck)} episode(s) after "
-            f"{self.max_infra_attempts} infra attempts each ({_causes(errors)}); "
-            f"--max-infra-attempts above {self.max_infra_attempts} flies them again"
+            f"{self.max_infra_attempts} infra attempts each ({_causes(errors)}); {again} them again"
         )
 
     def _reasoner_answers(self) -> bool:
