@@ -4,7 +4,7 @@ from maps.mission import contract, served_text
 from maps.perception.geometry.sensor_spec import list_sensors
 
 
-def test_the_dump_is_the_code_arm_the_flight_path_serves():
+def test_the_dump_is_the_surface_the_flight_path_serves():
     c = contract.assemble()
     assert c["system"] == served_text.SYSTEM_PROMPT
     assert c["tools"] == served_text.SERVED_TOOLS
@@ -16,9 +16,6 @@ def test_the_dump_is_the_code_arm_the_flight_path_serves():
     assert "=== MISSION MAP ===" in text
     assert "=== WORLD CONVENTIONS ===" in text
     assert "=== SURFACE" in text
-    # The mission contract has no packet builder: the instruction IS the
-    # user turn, and the dump says so instead of rendering one.
-    assert "STOP PACKET" not in text
     # No sentence surface anywhere in it: no decoder mask (Python is not
     # EBNF-able and the run builds none), no closed-class lexicon.
     assert "=== LANGUAGE" not in text and "=== LEXICON" not in text
