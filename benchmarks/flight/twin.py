@@ -251,13 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         help="the raster directory each frame is registered against; unset registers nothing",
     )
     ap.add_argument("--out", type=Path, default=Path("output/flight"))
-    ap.add_argument(
-        "--memory-gib",
-        type=float,
-        default=sandbox.STATION_MEMORY_GIB,
-        help="the process's memory cap in GiB (default %(default)s): a block that allocates "
-        "past it raises MemoryError, served as the block's error",
-    )
+    sandbox.add_memory_flag(ap)
     args = ap.parse_args(argv)
     if args.start_xy is not None and not args.instruction:
         ap.error("--start-xy flies an operator-authored mission: give its words with --instruction")
@@ -269,12 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         # A command-line twin runs model code in this process, so it confines itself;
         # a caller handing argv owns its process.
-        args.out.mkdir(parents=True, exist_ok=True)
-        sandbox.confine(
-            [args.out, *sandbox.ortho_caches([bench.rgbd_dir, args.ortho, args.register])],
-            args.memory_gib,
-            logging.getLogger("twin").info,
-        )
+        sandbox.confine_cli(args, bench, logging.getLogger("twin").info)
     split = args.split or bench.default_split
     cfg = load_config(args.config)
     sensor = resolve_sensor(cfg.sensor)

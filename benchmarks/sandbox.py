@@ -7,7 +7,8 @@ mission, and the interpreter's checks are no security boundary (README
 | Layer | Mechanism | Effect |
 | --- | --- | --- |
 | Memory | ``RLIMIT_DATA``, soft and hard alike | an allocation past the cap raises ``MemoryError`` in the block, served as the block's error |
-| File system | bubblewrap: ``/`` bound read-only, each output and cache directory bound writable | writes land only in the run's own directories |
+| Memory, processes | a bench attempt's transient systemd user scope, ``MemoryMax`` the cap | shared memory and child processes count; the scope is killed with the attempt |
+| File system | bubblewrap: ``/`` read-only; home, ``/tmp``, ``/dev/shm`` and ``/run`` empty; the run's inputs bound read-only, its output and cache directories writable | a block reads only the run's inputs and writes only its own directories |
 | Processes | bubblewrap's PID namespace | the code sees and signals its own process tree alone |
 
 ``RLIMIT_DATA`` counts a process's private writable memory (heap, anonymous
@@ -17,7 +18,19 @@ maps, thread stacks), so the read-only ortho cache a mission maps
 
 ponytail: the network stays shared, since the mission reaches the reasoner and
 the segmenter over HTTP; holding egress to those endpoints takes a network
-namespace with firewall rules (root) or a filtering proxy.
+namespace with firewall rules (root) or a filtering proxy. A shared network
+namespace also keeps the host's abstract Unix sockets (an X server's among
+them) reachable, and the reasoner's key rides the process environment.
+
+ponytail: an allocation failure in native code (a Rust tokenizer's abort, the
+scope's OOM kill) ends the attempt with a signal, which the driver books as a
+crash and re-queues as infrastructure, though a block pinned the memory;
+telling the two apart takes a marker the attempt writes before each block.
+
+ponytail: the attempt scores itself (its frames hold the target, the driver
+trusts its ``episode.json`` and stdout), so a block that escapes the library can
+rewrite its own score; benchmark numbers from an untrusted model need a
+container or a virtual machine that scores outside it.
 """
 
 from __future__ import annotations
@@ -28,7 +41,6 @@ import resource
 import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -44,12 +56,8 @@ ATTEMPT_MEMORY_GIB = 4.0
 STATION_MEMORY_GIB = 16.0
 #: Set in a process this module re-executed under bubblewrap.
 SANDBOXED_ENV = "MAPS_SANDBOXED"
-
-
-def cap_argv(gib: float) -> list[str]:
-    """The argv prefix that starts a command under the memory cap (util-linux ``prlimit``)."""
-    n = int(gib * 2**30)
-    return ["prlimit", f"--data={n}:{n}", "--"]
+#: The repository root: code and configs an attempt reads.
+REPO = Path(__file__).resolve().parents[1]
 
 
 def cap_memory(gib: float) -> None:
@@ -60,13 +68,38 @@ def cap_memory(gib: float) -> None:
 
 
 def bwrap_works() -> bool:
-    """True when ``bwrap`` is installed and can make its namespaces here (a host
-    may block unprivileged user namespaces, e.g. Ubuntu's AppArmor default)."""
-    exe = shutil.which("bwrap")
-    if exe is None:
+    """True when ``bwrap`` is installed and can build the sandbox :func:`bwrap_argv`
+    describes here (a host may block unprivileged user namespaces, e.g. Ubuntu's
+    AppArmor default, or refuse a ``/proc`` mount)."""
+    if shutil.which("bwrap") is None:
         return False
-    probe = [exe, "--ro-bind", "/", "/", "--unshare-pid", "--die-with-parent", "true"]
+    probe = bwrap_argv([]) + ["true"]
     return subprocess.run(probe, capture_output=True).returncode == 0
+
+
+def scope_works() -> bool:
+    """True when a systemd user manager starts transient scopes here (a compute node
+    without a user session has none)."""
+    if shutil.which("systemd-run") is None:
+        return False
+    probe = ["systemd-run", "--user", "--scope", "-q", "--", "true"]
+    return subprocess.run(probe, capture_output=True).returncode == 0
+
+
+def scope_argv(unit: str, gib: float) -> list[str]:
+    """``systemd-run`` up to the command: a transient user scope named ``unit`` whose
+    every process (shared memory and tmpfs pages included) counts against ``gib``."""
+    n = int(gib * 2**30)
+    return ["systemd-run", "--user", "--scope", "-q", f"--unit={unit}",
+            "-p", f"MemoryMax={n}", "-p", "MemorySwapMax=0", "--"]  # fmt: skip
+
+
+def kill_scope(unit: str) -> None:
+    """SIGKILL every process left in the scope ``unit``, a daemon that left the
+    attempt's session among them; a scope already gone is a no-op."""
+    subprocess.run(
+        ["systemctl", "--user", "kill", "--signal=SIGKILL", f"{unit}.scope"], capture_output=True
+    )
 
 
 def ortho_caches(raster_dirs: Iterable[str | Path | None]) -> list[Path]:
@@ -75,51 +108,95 @@ def ortho_caches(raster_dirs: Iterable[str | Path | None]) -> list[Path]:
     return [Path(d) / "ortho" for d in raster_dirs if d is not None]
 
 
-def _hf_caches() -> list[str]:
+def hf_hub_cache() -> str:
+    """The Hugging Face hub cache, where the served model's tokenizer lives (its
+    ``HF_HOME`` holds the token too, so only this directory is bound)."""
     from huggingface_hub import constants
 
-    return [constants.HF_HOME, constants.HF_HUB_CACHE]
+    return constants.HF_HUB_CACHE
 
 
-def bwrap_argv(writable: Iterable[str | Path], *, new_session: bool = True) -> list[str]:
-    """``bwrap`` up to the command: ``/`` read-only, ``writable`` plus TMPDIR and the
-    Hugging Face cache writable, its own PID namespace, killed with its parent, the
-    network shared. ``new_session`` takes the command off the terminal, which a
-    terminal's keystroke injection (TIOCSTI) needs; the terminal's Ctrl-C then
-    stops reaching it."""
-    dirs: list[str] = []
-    for d in [*writable, tempfile.gettempdir(), *_hf_caches()]:
-        d = os.path.realpath(d)
-        # A directory that cannot be made is left read-only: what writes there
-        # fails as it would on any read-only path.
-        with contextlib.suppress(OSError):
-            os.makedirs(d, exist_ok=True)
-        if os.path.isdir(d) and d not in dirs:
-            dirs.append(d)
+def bench_inputs(bench) -> list[Path]:
+    """What a mission on ``bench`` reads: the data root, splits, catalog, rasters and
+    tile bake, and a tokenizer named by local directory."""
+    tok = bench.environ.get("SEARCH_COMPACT_TOKENIZER_NAME", "")
+    return [
+        bench.root,
+        bench.splits_dir,
+        Path(bench.objects_json).parent,
+        bench.rgbd_dir,
+        bench.tiles_dir,
+        *([Path(tok)] if tok and os.path.isdir(tok) else []),
+    ]
+
+
+def _existing(paths: Iterable[str | Path], *, make: bool = False) -> list[str]:
+    """``paths`` resolved, deduplicated, and kept where they exist; with ``make``,
+    directories created first (one that cannot be made is left out, so what writes
+    there fails as on any read-only path)."""
+    out: list[str] = []
+    for p in paths:
+        p = os.path.realpath(p)
+        if make:
+            with contextlib.suppress(OSError):
+                os.makedirs(p, exist_ok=True)
+        if os.path.exists(p) and p not in out:
+            out.append(p)
+    return out
+
+
+def bwrap_argv(
+    writable: Iterable[str | Path],
+    readable: Iterable[str | Path] = (),
+    *,
+    new_session: bool = True,
+) -> list[str]:
+    """``bwrap`` up to the command. ``/`` is read-only; home, ``/tmp``, ``/dev/shm`` and
+    ``/run`` are empty (the user's secrets, other sessions' scratch, D-Bus and
+    every desktop socket gone), the name resolver's directory excepted; the repo,
+    the interpreter and ``readable`` come back read-only, the repo's ``.env``
+    masked, and ``writable`` comes back writable. The command gets its own PID
+    namespace, dies with its parent, and shares the network. ``new_session`` takes
+    it off the terminal, which a terminal's keystroke injection (TIOCSTI) needs;
+    the terminal's Ctrl-C then stops reaching it."""
+    home = os.path.realpath(os.path.expanduser("~"))
+    empty = [d for d in ("/tmp", "/dev/shm", "/run", home) if d != "/" and os.path.isdir(d)]
+    resolver = os.path.realpath("/etc/resolv.conf")
+    if resolver.startswith("/run/"):
+        readable = [os.path.dirname(resolver), *readable]
+    ro = _existing([REPO, sys.prefix, sys.base_prefix, *readable])
+    rw = _existing(writable, make=True)
+    masked = [p for p in (REPO / ".env",) if os.path.exists(p)]
     return [
         "bwrap",
-        "--ro-bind",
-        "/",
-        "/",
-        "--dev",
-        "/dev",
-        "--proc",
-        "/proc",
-        *(a for d in dirs for a in ("--bind", d, d)),
+        "--ro-bind", "/", "/",
+        "--dev", "/dev",
+        "--proc", "/proc",
+        *(a for d in empty for a in ("--tmpfs", d)),
+        *(a for d in ro for a in ("--ro-bind", d, d)),
+        *(a for p in masked for a in ("--ro-bind", "/dev/null", str(p))),
+        *(a for d in rw for a in ("--bind", d, d)),
+        "--setenv", "TMPDIR", "/tmp",
         "--unshare-pid",
         "--die-with-parent",
         *(["--new-session"] if new_session else []),
         "--",
-    ]
+    ]  # fmt: skip
 
 
-def mode_line(bwrap: bool, gib: float) -> str:
-    """The line a launcher logs for the isolation it runs code under."""
-    cap = f"memory cap {gib:g} GiB"
+def mode_line(bwrap: bool, gib: float, *, scope: bool | None = None) -> str:
+    """The line a launcher logs for the isolation it runs code under; ``scope`` is
+    whether each bench attempt runs in a systemd scope (None: a mission process,
+    which runs in none)."""
+    cap = f"memory cap {gib:g} GiB of data segment"
+    if scope:
+        cap += " and of the attempt's scope (shared memory and children included)"
+    elif scope is False:
+        cap += "; no systemd user manager: shared memory and child processes escape the cap"
     if bwrap:
         return (
-            "sandbox: bubblewrap, / read-only, writable only the run's output, the ortho "
-            f"cache, TMPDIR and the HF cache; network shared; {cap}"
+            "sandbox: bubblewrap, / read-only, home /tmp /run empty, readable the run's "
+            f"inputs, writable only the run's output and the ortho cache; network shared; {cap}"
         )
     return (
         "sandbox: bwrap absent or user namespaces blocked; model code runs without "
@@ -127,22 +204,66 @@ def mode_line(bwrap: bool, gib: float) -> str:
     )
 
 
-def confine(writable: list[Path], gib: float, log: Callable[[str], None]) -> None:
+def _confined() -> bool:
+    """True inside a bubblewrap sandbox this module built: ``/`` read-only and PID 1
+    bubblewrap's init."""
+    try:
+        init = Path("/proc/1/comm").read_text().strip()
+    except OSError:
+        return False
+    return bool(os.statvfs("/").f_flag & os.ST_RDONLY) and init == "bwrap"
+
+
+def confine(
+    writable: list[Path],
+    gib: float,
+    log: Callable[[str], None],
+    readable: Iterable[str | Path] = (),
+) -> None:
     """Confine this process before it serves or flies anything: cap its memory and,
     where bubblewrap runs, re-execute it under bubblewrap with ``writable`` its
-    writable directories; log which mode it runs in. The re-executed process keeps
-    the terminal, so the operator's Ctrl-C still shuts it down cleanly.
+    writable directories, ``readable`` and the Hugging Face hub cache besides; log
+    which mode it runs in. The re-executed process keeps the terminal, so the
+    operator's Ctrl-C still shuts it down cleanly. An inherited marker without the
+    sandbox around it is ignored.
 
     ponytail: on a host with ``dev.tty.legacy_tiocsti=1`` code in the process can
     inject keystrokes into its terminal; run it under a supervisor with no terminal
-    there."""
+    there. Relative paths resolve inside the sandbox only from a bound working
+    directory (the repo root)."""
     cap_memory(gib)
-    if os.environ.get(SANDBOXED_ENV) == "1":
+    if os.environ.pop(SANDBOXED_ENV, None) == "1" and _confined():
         log(mode_line(True, gib))
         return
     if not bwrap_works():
         log(mode_line(False, gib))
         return
     os.environ[SANDBOXED_ENV] = "1"
-    argv = bwrap_argv(writable, new_session=False) + [sys.executable, *sys.orig_argv[1:]]
+    argv = bwrap_argv([*writable, hf_hub_cache()], readable, new_session=False)
+    argv += [sys.executable, *sys.orig_argv[1:]]
     os.execvp(argv[0], argv)
+
+
+def add_memory_flag(ap, default: float = STATION_MEMORY_GIB) -> None:
+    """``--memory-gib`` on a mission CLI's parser."""
+    ap.add_argument(
+        "--memory-gib",
+        type=float,
+        default=default,
+        help="the process's memory cap in GiB (default %(default)s): a block that allocates "
+        "past it raises MemoryError, served as the block's error",
+    )
+
+
+def confine_cli(args, bench, log: Callable[[str], None]) -> None:
+    """:func:`confine` for a mission CLI: writable its ``--out`` and the ortho caches
+    beside the bench's and the ``--ortho``/``--register`` rasters, readable the
+    bench's inputs and every path argument the operator named."""
+    args.out.mkdir(parents=True, exist_ok=True)
+    named = [v for v in vars(args).values() if isinstance(v, (str, Path)) and os.path.exists(v)]
+    confine(
+        [args.out, *ortho_caches([bench.rgbd_dir, args.ortho, args.register])],
+        args.memory_gib,
+        log,
+        [*bench_inputs(bench), *named],
+    )

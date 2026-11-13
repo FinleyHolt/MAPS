@@ -16,6 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from benchmarks import sandbox
 from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import (
     episode_ids,
@@ -106,6 +107,13 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
             "the ledger and the manifest."
         ),
     )
+    parser.add_argument(
+        "--memory-gib",
+        type=float,
+        default=None,
+        help="cap this process's data segment at this many GiB before anything loads "
+        "(bench_fullset passes its --attempt-memory-gib)",
+    )
     return parser
 
 
@@ -126,6 +134,8 @@ def main(bench: Bench | None = None) -> int:
 
     parser = _build_parser(bench)
     args = parser.parse_args()
+    if args.memory_gib is not None:
+        sandbox.cap_memory(args.memory_gib)
     if args.attempt_root:
         if not args.episode_id:
             parser.error("--attempt-root flies one episode: name it with --episode-id")

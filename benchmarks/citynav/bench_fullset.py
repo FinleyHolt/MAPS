@@ -161,6 +161,9 @@ def _missing_block_assets(bench: Bench, episode_ids: list[str]) -> list[str]:
 
 
 class Driver:
+    #: Whether each attempt flies in a systemd user scope; settled once by _run().
+    _scope = False
+
     def __init__(self, args: argparse.Namespace, bench: Bench, config: Path) -> None:
         self.bench = bench
         self.config = Path(config)
@@ -413,12 +416,19 @@ class Driver:
             episode_id,
             "--attempt-root",
             str(worker_root),
+            "--memory-gib",
+            repr(self.memory_gib),
         ]
         if self._bwrap:
             # The child's parent is bubblewrap's init, PID 1 in the attempt's namespace.
             env[episodes.PARENT_PID_ENV] = "1"
-            cmd = sandbox.bwrap_argv(self._attempt_binds(worker_root)) + cmd
-        cmd = sandbox.cap_argv(self.memory_gib) + cmd
+            # The driver's discovery cached the tokenizer; the hub cache is read-only inside.
+            env["HF_HUB_OFFLINE"] = "1"
+            cmd = sandbox.bwrap_argv(*self._attempt_binds(worker_root)) + cmd
+        # A unit name unique on the host, so the scope is killed by name with the attempt.
+        unit = f"maps-attempt-{os.getpid()}-w{worker_id}-{time.time_ns()}"
+        if self._scope:
+            cmd = sandbox.scope_argv(unit, self.memory_gib) + cmd
         # The child prints its workdir as its first stdout line; an unlinked
         # file holds it, so no pipe can fill and stall the child.
         with tempfile.TemporaryFile("w+") as out, (worker_root / "server.log").open("a") as err:
@@ -446,6 +456,8 @@ class Driver:
                 with contextlib.suppress(ProcessLookupError):
                     os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
+            if self._scope:
+                sandbox.kill_scope(unit)
             out.seek(0)
             first = out.readline().strip()
         elapsed = time.monotonic() - t0
@@ -502,10 +514,12 @@ class Driver:
             )
         return row
 
-    def _attempt_binds(self, worker_root: Path) -> list[Path]:
-        """What an attempt writes besides TMPDIR and the HF cache: its worker's
-        attempt root and the ortho cache beside the bench's rasters."""
-        return [worker_root, *sandbox.ortho_caches([self.bench.rgbd_dir])]
+    def _attempt_binds(self, worker_root: Path) -> tuple[list, list]:
+        """What an attempt writes (its worker's attempt root, the ortho cache beside
+        the bench's rasters) and reads besides the repo (the bench's inputs, the
+        config, the hub cache)."""
+        writable = [worker_root, *sandbox.ortho_caches([self.bench.rgbd_dir])]
+        return writable, [*sandbox.bench_inputs(self.bench), self.config, sandbox.hf_hub_cache()]
 
     def run_one(self, worker_id: int, episode_id: str) -> None:
         """Fly one attempt and land its row."""
@@ -690,8 +704,8 @@ class Driver:
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
             f"workers={self.workers}"
         )
-        self._bwrap = sandbox.bwrap_works()
-        self.log(sandbox.mode_line(self._bwrap, self.memory_gib))
+        self._bwrap, self._scope = sandbox.bwrap_works(), sandbox.scope_works()
+        self.log(sandbox.mode_line(self._bwrap, self.memory_gib, scope=self._scope))
         # Workers claim until nothing is left, the wall budget is spent, or the
         # run aborts; an infra attempt is re-claimed by whichever worker is free.
         # Daemon workers end with the driver (their children die with it), so

@@ -90,8 +90,10 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
 
 def test_a_block_past_the_attempt_cap_is_the_model_s_error_not_a_crash(driver, monkeypatch):
     """Under the cap the block's allocation raises MemoryError inside the block: the attempt
-    lands its row and is scored, where an uncapped child is OOM-killed and re-queued as infra."""
+    lands its row and is scored, where an uncapped child is OOM-killed and re-queued as infra.
+    The child caps itself, so a host without util-linux's ``prlimit`` flies it too."""
     monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    monkeypatch.setenv("PATH", "/nonexistent")
     d = driver(selection=["hog::1#0"])
     d.memory_gib = 1.0  # under the block's 1.5 GiB list, over the fake attempt's own footprint
     d.max_infra_attempts = 1
@@ -116,8 +118,54 @@ def test_an_attempt_under_bubblewrap_lands_its_row_and_a_timeout_kills_it(driver
     assert rows["ok"]["status"] == "ok" and rows["ok"]["metrics"]["SR"] == 1, rows
     assert rows["sleep"]["status"] == "timed_out", rows
     # The killed attempt's sandbox died with it.
-    ps = subprocess.run(["pgrep", "-f", "fake_runner"], capture_output=True, text=True)
+    ps = subprocess.run(["pgrep", "-f", str(d.out_root)], capture_output=True, text=True)
     assert ps.stdout == "", ps.stdout
+
+
+def _gone(pid: int) -> bool:
+    """True once ``pid`` has exited and been reaped, within five seconds."""
+    for _ in range(100):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+_no_scope = pytest.mark.skipif(
+    not sandbox.scope_works(), reason="no systemd user manager starts scopes here"
+)
+
+
+@_no_scope
+def test_shared_memory_past_the_cap_kills_the_attempt_in_its_scope(driver, monkeypatch):
+    """Shared anonymous memory escapes RLIMIT_DATA; the scope's MemoryMax counts it, so the
+    hold ends the attempt (a signal, re-queued as infra) and the host keeps its memory."""
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    d = driver(selection=["shm::1#0"])
+    d._scope, d.memory_gib, d.max_infra_attempts = True, 1.0, 1
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    (row,) = iter_json_rows(d.episodes_file)
+    assert (row["status"], row["error"]) == ("infra", "killed_midrun"), row
+
+
+@_no_scope
+def test_a_daemon_an_attempt_leaves_behind_dies_with_its_scope(driver, monkeypatch):
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    d = driver(selection=["orphan::1#0"])
+    d._scope, d.max_infra_attempts = True, 1
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    (row,) = iter_json_rows(d.episodes_file)
+    pid = int((d.out_root / row["workdir"] / "daemon.pid").read_text())
+    alive = not _gone(pid)
+    if alive:
+        os.kill(pid, signal.SIGKILL)
+    assert row["status"] == "ok" and not alive, row
 
 
 def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypatch) -> None:

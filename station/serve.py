@@ -1147,13 +1147,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8788)
-    ap.add_argument(
-        "--memory-gib",
-        type=float,
-        default=sandbox.STATION_MEMORY_GIB,
-        help="the station's memory cap in GiB (default %(default)s): a mission block that "
-        "allocates past it raises MemoryError, served as the block's error",
-    )
+    sandbox.add_memory_flag(ap)
     args = ap.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s"
@@ -1166,11 +1160,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         # A command-line station runs model code in its own threads, so it confines
         # itself; a caller handing argv owns its process.
-        sandbox.confine(
-            [args.out, *sandbox.ortho_caches([bench.rgbd_dir, args.ortho, args.register])],
-            args.memory_gib,
-            log.info,
-        )
+        sandbox.confine_cli(args, bench, log.info)
     station = Station(
         bench=bench,
         config=args.config or f"configs/{args.bench}.yaml",

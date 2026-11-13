@@ -185,7 +185,8 @@ def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, mon
         "sys.argv", ["serve", "--out", str(tmp_path / "out"), "--ortho", str(tmp_path / "o")]
     )
     assert serve.main() == 0
-    (writable, gib, _log), served = confined
+    (writable, gib, _log, readable), served = confined
     bench = serve.bench_named("citynav", os.environ)
     assert served == "served" and gib == sandbox.STATION_MEMORY_GIB
     assert writable == [tmp_path / "out", Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho"]
+    assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)
