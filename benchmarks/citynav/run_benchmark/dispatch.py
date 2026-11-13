@@ -19,9 +19,9 @@ from benchmarks.run_record.config import RunConfig, repo_provenance
 from benchmarks.run_record.episode_workdir import LiveRecorder
 from benchmarks.run_record.episodes import STATUS_INFRA, STATUS_OK, write_episode_json
 from benchmarks.run_record.run_manifest import run_env_stamp
+from maps.harness_faults import HarnessFault
 from maps.llm.endpoint_spec import TRANSIENT_CLIENT_STATUS, EndpointSpec, EndpointUnreachable
 from maps.llm.http import ImageStoreError
-from maps.perception.sam.detect_client import SamServerOutage
 from maps.settings import Settings
 
 log = logging.getLogger("run_benchmark")
@@ -66,19 +66,14 @@ def _chain(exc: BaseException):
         cur = cur.__cause__ or cur.__context__
 
 
-def _exc_is_sam_infra(exc: BaseException) -> bool:
-    """True if any link in the chain is a ``SamServerOutage`` (an empty
-    frame never raises)."""
-    return any(isinstance(cur, SamServerOutage) for cur in _chain(exc))
-
-
-# HTTP-client modules that ONLY talk to the shared inference services (the
-# reasoner and SAM). An exception whose type lives in one of these is a transport fault to
-# a shared server. Constrained to these modules on purpose: a bare builtin
+# The HTTP client (httpx, httpcore beneath it) an attempt reaches the shared
+# inference serves through: the reasoner, its image store and SAM. An
+# exception whose type lives in one of these is a transport fault to a shared
+# serve. Constrained to these modules on purpose: a bare builtin
 # ``TimeoutError`` / ``ConnectionError`` / ``OSError`` can be raised by
 # algorithm or file code, and misclassifying one as infra would drop a real
 # CityNav failure from SR.
-_HTTP_CLIENT_MODULES = ("httpx", "httpcore", "requests", "urllib3")
+_HTTP_CLIENT_MODULES = ("httpx", "httpcore")
 
 
 def _exc_is_transient_infra(exc: BaseException) -> bool:
@@ -96,13 +91,12 @@ def _exc_is_transient_infra(exc: BaseException) -> bool:
 
 
 def is_infra_fault(exc: BaseException) -> bool:
-    """The infra rule for a raised attempt: a SAM outage, a transient
-    shared-server fault, an image-store refusal or a reasoner that did not
-    answer discovery. Any other exception is the method's own, a scored miss."""
-    return (
-        _exc_is_sam_infra(exc)
-        or _exc_is_transient_infra(exc)
-        or any(isinstance(cur, (ImageStoreError, EndpointUnreachable)) for cur in _chain(exc))
+    """The infra rule for a raised attempt: a harness fault (a SAM outage),
+    a transient shared-server fault, an image-store refusal or a reasoner that
+    did not answer discovery. Any other exception is the method's own, a
+    scored miss."""
+    return _exc_is_transient_infra(exc) or any(
+        isinstance(cur, (HarnessFault, ImageStoreError, EndpointUnreachable)) for cur in _chain(exc)
     )
 
 

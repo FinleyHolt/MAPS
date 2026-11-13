@@ -125,18 +125,13 @@ def test_an_image_store_refusal_is_infra(code):
         assert dispatch.is_infra_fault(exc) is True
 
 
-@pytest.mark.parametrize("fault", ["outage", "transport"])
-def test_a_segmenter_fault_inside_a_block_is_infra(tmp_path, light, monkeypatch, fault):
+def test_a_segmenter_fault_inside_a_block_is_infra(tmp_path, light, monkeypatch):
     """A fault a flight raises leaves the model's block and the mission:
     the attempt is infra, re-queued and out of SR."""
-    import httpx
-
-    from maps.harness_faults import HARNESS_FAULTS
     from maps.mission.tests.fakes import drive, run
     from maps.perception.sam.detect_client import SamServerOutage
 
-    exc = SamServerOutage("no tile answered") if fault == "outage" else httpx.ConnectError("down")
-    assert isinstance(exc, HARNESS_FAULTS)
+    exc = SamServerOutage("no tile answered")
 
     def fly(item):
         raise exc

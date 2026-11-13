@@ -6,13 +6,12 @@ library reads them without importing each other."""
 
 from __future__ import annotations
 
-import httpx
-
 
 class HarnessFault(RuntimeError):
     """A serve the mission depends on failed out from under the call."""
 
 
-#: A harness fault, or a transport fault (timeouts included) of the HTTP
-#: client every inference serve is reached through.
-HARNESS_FAULTS = (HarnessFault, httpx.TransportError)
+#: What a run block re-raises. The segmenter client is a block's one network
+#: path and keeps its transport faults: a frame no tile answered raises
+#: ``SamServerOutage``.
+HARNESS_FAULTS = (HarnessFault,)
