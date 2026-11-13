@@ -11,7 +11,7 @@ time), and `run_table.run_row` averages.
 | Reader | Input | Output |
 |---|---|---|
 | `benchmarks/run_record/rows.py` | One root's ledger | Nothing. It's the library every reader picks attempts with. |
-| `run_report.py <root>...` | Each root in turn | SR, NE, SPL, OSR and the OSR x SR joint, SR by target shape, SR by referent bucket and by intel quality (Cal City; a recorded row's own class; a pick without one is bucketed by its recorded description and graded from the run's split), commit provenance, the bake check. |
+| `run_report.py <root>...` | Each root in turn | SR, NE, OSR and the OSR x SR joint, SR by target shape, SR by referent bucket and by intel quality (Cal City; a recorded row's own class; a pick without one is bucketed by its recorded description and graded from the run's split), commit provenance, the bake check. |
 | `run_table.py <root>...` | Many roots, one per run | One row per run: effort, n, SR, OSR, shape and radius SR, NE. Refuses roots that mix success criteria, discs of two radii included. `--json` prints the rows. |
 | `ab_report.py <a> <b>` | Two roots | Paired SR with a bootstrap interval on the difference, McNemar, and the flip counts. |
 | `spend.py <root>` | Every attempt's transcript, flying or re-queued included | A hosted endpoint's tokens and USD, USD per scored episode, the projection for the selection's remainder, and every `served_model` that answered. Cache reads, cache writes, and the rest are priced apart, from each transcript's `cached_tokens` and `cache_write_tokens` (`maps.llm.flight_summary`), null where the serve reports none. |

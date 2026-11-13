@@ -38,10 +38,9 @@ directions.
    (`maps/mission/surface_state.py`).
 4. **Block of Python.** `MissionPython` (`maps/library/interpreter.py`) scans
    the model's block (`block_scan.py`, `block_ceilings.py`) and runs it in
-   the mission's one namespace, inside the process that runs the mission and
-   with that process's privileges. To fly a model you don't trust, run MAPS
-   inside an isolated environment, such as a container or a virtual machine. For the memory cap and file-system
-   isolation the bench driver and the station apply, see [README.md](../README.md#security). The calls of `Library` (`calls.py`) are that
+   the mission's one namespace, inside the process that runs the mission; for
+   the isolation around that process, see [README.md](../README.md#security).
+   The calls of `Library` (`calls.py`) are that
    namespace's builtins, and each runs on one of the loop's verbs
    (`MissionEnv`, `call_arguments.py`).
 5. **Reading call.** `find`, a `.filter`, an `.order`, `intersection`,

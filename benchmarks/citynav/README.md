@@ -53,7 +53,8 @@ python -m benchmarks.citynav.run_benchmark --config configs/citynav.yaml --split
 
 `bench_fullset` runs a split at a fixed worker count, one fresh
 `run_benchmark --attempt-root` child per attempt. Rerun a command to resume
-its root.
+its root. Each attempt, and a runner run directly, runs sandboxed; see
+[Security](../../README.md#security).
 
 | Flag | Description |
 |---|---|
@@ -65,6 +66,7 @@ its root.
 | `--episode-allowlist <file>` | Keeps only the listed IDs, before the shuffle. A list that names an ID outside the split is refused. |
 | `--max-infra-attempts <n>` | Attempts an episode gets under infrastructure faults. Default 3. |
 | `--episode-timeout-s <s>` | Per-episode wall cap, seconds. Default 14400 (4 h). |
+| `--attempt-memory-gib <n>` | Each attempt's memory cap, GiB, at least 1. Default 4. |
 | `--dry-run` | Prints the selection and launches nothing. |
 
 For the remaining flags, run
@@ -81,9 +83,9 @@ The driver refuses or records faults as follows:
 | Second run into a root | Refused. A run holds its root for its lifetime (`.bench.lock`). |
 | Exception raised by the method | A scored miss: status `ok` with its `error` and `traceback` and no metrics. |
 | Infrastructure fault (a serve or segmenter outage, an image-store refusal, a runner that died) | Status `infra`. The episode flies again, up to `--max-infra-attempts` attempts, and past that is reported as persistent infra with its errors. |
-| Segmenter outage or transport fault inside a flight | Leaves the model's block and ends the mission, unserved. Status `infra`, re-queued as any infrastructure fault. |
+| Segmenter outage inside a flight (no tile answered) | Leaves the model's block and ends the mission, unserved. Status `infra`, re-queued as any infrastructure fault. |
 | Episode past its wall cap (`--episode-timeout-s`) | The mission stops flying at 90% of the cap so the model can still reply, and the driver ends the attempt at the cap. Status `timed_out`: scored as recorded, a miss without metrics, and counted apart in the readers. |
-| Ctrl-C (SIGINT) | `driver.log` records the interrupt and the driver exits 130. The ledger keeps every landed row, so a relaunch into the root resumes. |
+| Ctrl-C (SIGINT), or SIGTERM from `kill`, systemd, or SLURM | `driver.log` records the signal, the attempts are killed, and the driver exits 130 (SIGINT) or 143 (SIGTERM). The ledger keeps every landed row, so a relaunch into the root resumes. |
 
 ### Run root
 
