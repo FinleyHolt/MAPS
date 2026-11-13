@@ -157,6 +157,18 @@ def _missing_block_assets(bench: Bench, episode_ids: list[str]) -> list[str]:
     return missing
 
 
+class _Signalled(KeyboardInterrupt):
+    """A stop signal other than SIGINT, raised in the main thread as Ctrl-C is."""
+
+    def __init__(self, sig: signal.Signals) -> None:
+        super().__init__(sig.name)
+        self.signal = sig
+
+
+def _interrupt(signum: int, _frame) -> None:
+    raise _Signalled(signal.Signals(signum))
+
+
 class Driver:
     #: Whether each attempt flies in a systemd user scope; settled once by _run().
     _scope = False
@@ -659,13 +671,20 @@ class Driver:
         except episodes.RootHeld as exc:
             self.log(f"FATAL: {exc}")
             return 2
+        # kill, systemd and SLURM stop a run with SIGTERM: it ends as Ctrl-C does.
+        before = signal.signal(signal.SIGTERM, _interrupt)
         try:
             return self._run()
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as exc:
+            sig = getattr(exc, "signal", signal.SIGINT)
             # The ledger keeps every landed row, so a relaunch into this root resumes.
-            self.log("interrupted (SIGINT): stopping; relaunch into this root to resume")
-            return 130
+            self.log(f"interrupted ({sig.name}): stopping; relaunch into this root to resume")
+            if self._scope:
+                # The attempt children die with the driver; a daemon one left dies with its scope.
+                sandbox.kill_scope(f"maps-attempt-{os.getpid()}-*")
+            return 128 + sig
         finally:
+            signal.signal(signal.SIGTERM, before)
             lock.close()
 
     def _run(self) -> int:
