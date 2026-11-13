@@ -224,8 +224,16 @@ class Station:
         )
         #: The twin's raster directory (Cal City); None on a station that flies no twin.
         self.ortho_dir = ortho_dir
-        #: Where each map's raster pair lies: the twin's directory, else the bench's own.
-        self.raster_dir = Path(ortho_dir) if ortho_dir is not None else Path(bench.rgbd_dir)
+        #: Where each map's raster pair lies: the twin's directory, else CityNav's own. A Cal
+        #: City station without the twin reads none, since its first map request would build
+        #: the whole ortho cache (tens of GB) outside --out.
+        self.raster_dir = (
+            Path(ortho_dir)
+            if ortho_dir is not None
+            else None
+            if bench.name == "calcity"
+            else Path(bench.rgbd_dir)
+        )
         #: ``--basemap``: the default map's north-up picture, or a directory of ``<map>.jpg|.jpeg|.png``.
         self._basemap_pictures = basemap
         self._catalogs: dict[str, tuple[list, dict]] = {}
@@ -380,17 +388,29 @@ class Station:
         bounds = map_bounds(self.tiles_dir, map_name)
         return rgb, bounds, rgb.shape[1] / (bounds.x_max - bounds.x_min)
 
+    def _raster(self, map_name: str):
+        """The map's raster pair under :attr:`raster_dir` as ``(rgb, bounds, px_per_m)``, or None."""
+        return (
+            None if self.raster_dir is None else map_render.load_raster(self.raster_dir, map_name)
+        )
+
     def _basemap(self, map_name: str):
         """What a map's tiles are cut from, ``(rgb, bounds, px_per_m)``: its raster pair, else
-        ``--basemap``'s north-up picture of the bake's whole extent; None for a map that is not
-        placed or has neither."""
+        ``--basemap``'s north-up picture of the bake's whole extent, the picture first on a
+        station that flies nothing (its ortho caches are read-only); None for a map that is
+        not placed or has neither."""
         if self.place(map_name) is None:
             return None
-        try:
-            return map_render.load_raster(self.raster_dir, map_name) or self._picture(map_name)
-        except Exception:
-            log.exception("no basemap for %s", map_name)
-            return None
+        sources = [self._raster, self._picture]
+        if self.why_not_flying() is not None:
+            sources.reverse()
+        for source in sources:
+            try:
+                if (got := source(map_name)) is not None:
+                    return got
+            except Exception:
+                log.exception("no basemap from %s for %s", source.__name__.strip("_"), map_name)
+        return None
 
     def _tile(self, map_name: str, z: int, x: int, y: int) -> bytes | None:
         ortho, at = self.basemap(map_name), self.place(map_name)

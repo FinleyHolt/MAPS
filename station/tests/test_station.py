@@ -275,3 +275,41 @@ def test_a_station_opens_on_a_split_its_list_carries(tmp_path):
     (tmp_path / bench.split_files["test_unseen"]).write_text("[]")
     seat = SimpleNamespace(bench=bench, split=bench.default_split, runs=lambda: [])
     assert serve.Station.shown_split(seat) == "test_unseen"
+
+
+def test_a_cal_city_reviewing_station_draws_its_basemap_from_the_picture(calcity, tmp_path):  # noqa: F811
+    """A Cal City station without --ortho flies nothing, so the bench raster at its default
+    path stays unread and no ortho cache is built: the map comes from --basemap."""
+    from PIL import Image
+
+    Image.new("RGB", (640, 480), (200, 160, 90)).save(tmp_path / "basemap.jpg")
+    reviewer = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        basemap=tmp_path / "basemap.jpg",
+    )
+    assert reviewer.basemap("calcity")[0].shape == (480, 640, 3)
+    assert not (calcity.rgbd / "ortho").exists()
+
+
+def test_a_raster_that_fails_to_load_falls_back_to_the_picture(calcity, tmp_path, monkeypatch):  # noqa: F811
+    """A raster whose ortho cache cannot be built (a read-only directory under bubblewrap)
+    leaves the map to --basemap's picture."""
+    from PIL import Image
+
+    from benchmarks.flight import map_render
+
+    def read_only(rgbd_dir, map_name):
+        raise OSError(30, "Read-only file system")
+
+    Image.new("RGB", (640, 480), (200, 160, 90)).save(tmp_path / "basemap.jpg")
+    station = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        ortho_dir=calcity.rgbd,
+        basemap=tmp_path / "basemap.jpg",
+    )
+    monkeypatch.setattr(map_render, "load_raster", read_only)
+    assert station.basemap("calcity")[0].shape == (480, 640, 3)

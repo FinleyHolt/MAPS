@@ -187,7 +187,7 @@ prior again.
 | Per map | Source |
 |---|---|
 | Georeference (local metres to WGS84 and back) | Cal City: the bake's own `georef` (`benchmarks/flight/tile_georef.py`). CityNav: the city's shipped OSM cache, `tiles/osm_cache/<city>_osm_local.geojson`, whose `citynav_osm_cache.georef` states `osm_crs` and `citynav_from_osm_affine`; `placement.py` inverts that transform at run time. The station reads the CityNav bake and its files and never changes them. |
-| Basemap | Web-mercator tiles cut from the map's raster pair under the bench's raster directory, loaded on first use (three maps held at a time); else the `--basemap` picture. The first view of a CityNav block builds the bench's ortho cache beside the rasters, which takes a few seconds. |
+| Basemap | Web-mercator tiles cut from the map's raster pair, loaded on first use (three maps held at a time), else from the `--basemap` picture; a reviewing station tries the picture first. The raster pair lies under `--ortho` on Cal City and under the bench's raster directory on CityNav. The first view of a CityNav block builds the bench's ortho cache beside the rasters, which takes a few seconds. |
 | Prior | The map's `<map>_features.json` under the bake. |
 
 A map with no georeference reviews with its transcript, pictures, report, and
