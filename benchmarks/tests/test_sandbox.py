@@ -352,3 +352,17 @@ def test_a_tokenizer_left_uncached_names_the_remedy(monkeypatch):
     assert sandbox._cache_tokenizer(lines.append) == "ConnectionError"
     (line,) = lines
     assert line.endswith(sandbox.TOKENIZER_REMEDY), line
+
+
+def test_a_host_that_refuses_rlimit_data_runs_uncapped_and_says_so(monkeypatch):
+    """macOS refuses (or does not enforce) RLIMIT_DATA: the process keeps running with
+    no memory cap, and the sandbox line says so."""
+
+    def refuse(*_a):
+        raise ValueError("current limit exceeds maximum limit")
+
+    monkeypatch.setattr(sandbox.sys, "platform", "darwin")
+    monkeypatch.setattr(sandbox.resource, "setrlimit", refuse)
+    sandbox.cap_memory(4.0)
+    line = sandbox.mode_line("bwrap is not installed", 4.0)
+    assert "no memory cap" in line and "memory cap 4" not in line, line

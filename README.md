@@ -171,7 +171,7 @@ started from the command line.
 
 | Layer | Bench attempt | Station, twin CLI, runner |
 |---|---|---|
-| Memory cap (`RLIMIT_DATA`) | 4 GiB, `--attempt-memory-gib` | 16 GiB (runner 4 GiB), `--memory-gib` |
+| Memory cap (`RLIMIT_DATA`, Linux) | 4 GiB, `--attempt-memory-gib` | 16 GiB (runner 4 GiB), `--memory-gib` |
 | Memory and processes (systemd user scope) | `MemoryMax` at the cap, shared memory and child processes included. Every process is killed with the attempt. | None |
 | Environment | An allowlist: MAPS's own variables, the reasoner key, Hugging Face settings without the token, locale, paths, proxies, and one thread per native pool | The same allowlist, after a restart |
 | File system: hidden (bubblewrap) | Home, `/tmp`, `/dev/shm`, and `/run` empty; the repo's `.env` and the Hugging Face token masked | Same |
@@ -196,6 +196,7 @@ The layers that apply depend on the host:
 | `bwrap` runs, no user manager | All but the scope: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap |
 | User namespaces blocked, systemd user manager present (Ubuntu 24.04's AppArmor default) | Memory cap and scope. The scope binds a cooperative block only: a block reaches the user manager and can lift its own `MemoryMax` or start units outside the scope. The environment allowlist binds a cooperative block only: with no PID namespace, a block reads the launching shell's environment from its ancestors in `/proc`. |
 | No `bwrap`, no user manager (a typical HPC compute node) | Memory cap: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap. The environment allowlist binds a cooperative block only, as above. |
+| macOS | The environment allowlist alone, binding a cooperative block only: no memory cap (macOS does not enforce `RLIMIT_DATA`), no scope, no bubblewrap. |
 
 A block that allocates past the cap gets `MemoryError` as its block error, and
 the mission continues. A `MemoryError` raised outside a block, in the

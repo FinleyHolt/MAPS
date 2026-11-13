@@ -154,7 +154,10 @@ def child_env(environ) -> dict[str, str]:
 
 def cap_memory(gib: float) -> None:
     """Cap this process (and every child it starts) at ``gib`` of data segment; the hard
-    limit too, so code running here cannot raise it."""
+    limit too, so code running here cannot raise it. A no-op off Linux: macOS refuses
+    or ignores ``RLIMIT_DATA``."""
+    if not sys.platform.startswith("linux"):
+        return
     n = int(gib * 2**30)
     resource.setrlimit(resource.RLIMIT_DATA, (n, n))
 
@@ -330,7 +333,9 @@ def mode_line(refusal: str | None, gib: float, *, scope: bool | None = None) -> 
     whether each bench attempt runs in a systemd scope (None: a mission process,
     which runs in none)."""
     cap = f"memory cap {gib:g} GiB of data segment"
-    if scope:
+    if not sys.platform.startswith("linux"):
+        cap = "no memory cap: RLIMIT_DATA binds on Linux only"
+    elif scope:
         cap += " and of the attempt's scope (shared memory and children included)"
     elif scope is False:
         cap += "; no systemd user manager: shared memory and child processes escape the cap"
