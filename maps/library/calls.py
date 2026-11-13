@@ -204,11 +204,12 @@ class Library:
     def _analyze(self, p: Program, ref: str, *, shown=None, page=None) -> str:
         """Ground the program's named anchors and run it, ``ref``'s envelope
         the answer (served under ``shown`` when given)."""
-        if shown is not None:
-            self._show_as(ref, shown)
         ties = self._ground((PlaceName(n), "anchor") for n in p.anchor_names())
         p.ground(ties)
         ack = self.env.analyze(p.ops, p.rn, ref, page)
+        if shown is not None and "error" not in ack:
+            # a refused call's ref is minted again by the next program
+            self._show_as(ref, shown)
         if "results" not in ack.get("result", {"results": None}):
             # deduped: its note says so, while the surface stands
             self.unrendered[ref] = self.env.version()
@@ -404,7 +405,7 @@ class Library:
     def more_of(self, x):
         if not isinstance(x, Rows) or x._spec:
             raise CodeError("more_of pages a RESULT a find or an ordering left")
-        name = self.names.said_name(x, "more_of")
+        name = self.names.own_name(x) or self.names.said_name(x, "more_of")
         if x._tied():
             x._refuse_tied(name, "has no next block")
         lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x._ref) or 0)

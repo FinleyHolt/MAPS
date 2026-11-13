@@ -233,7 +233,17 @@ class Programs:
         if page:
             # Paging a handle with nothing left to page is refused here.
             ref, lo, h = page
-            held = len(self.carry.read(ref) or [])
+            rows = self.carry.read(ref) or []
+            held = len(rows)
+            if held and held <= BROAD_DUMP_SOFT_ROWS and not getattr(rows, "ordered", False):
+                return self.rejections.error(
+                    {},
+                    (
+                        f"{h} holds {held} row(s), one block, and no order: a bare `{h}` "
+                        "line displays its census and len, and an ordering serves its "
+                        f'rows ({h}.order(nearest="<fid>")). There is no further block.'
+                    ),
+                )
             if held and held <= BROAD_DUMP_SOFT_ROWS:
                 return self.rejections.error(
                     {},

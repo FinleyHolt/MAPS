@@ -195,6 +195,12 @@ class Names:
                 return k
         return getattr(obj, "_label", "") or None
 
+    def own_name(self, x: Rows) -> str | None:
+        """The name the model bound ``x`` to, over the rN a flight minted for
+        the same set (``e = explore(...)`` binds both); None when unbound."""
+        keys = [k for k, v in self.ns.items() if v is x and not k.startswith("__")]
+        return next((k for k in keys if k != x._ref), keys[0] if keys else None)
+
     def spelling(self, x: Rows) -> str | None:
         """The model's spelling of a set, the one name every served label
         uses: its bound name, else its whole result's name with the window;
