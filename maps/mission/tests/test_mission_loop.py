@@ -270,6 +270,10 @@ def test_prose_the_output_cap_cut_off_is_nudged_and_never_the_reply():
     reply, fr, flights, _ = drive([[run("go_to(prior_7)\n")], cut, "It is prior_7."])
     assert reply.ended_by == "reply" and reply.turns_used == 3, reply
     assert fr.messages[-2]["content"] == f"[Repair] {TRUNCATED_TURN_NUDGE}", fr.messages[-2]
+    # The cut prose is on the model's history, so the nudge never says
+    # nothing arrived.
+    assert "nothing arrived" not in TRUNCATED_TURN_NUDGE
+    assert "cut off" in TRUNCATED_TURN_NUDGE and "nothing in it executed" in TRUNCATED_TURN_NUDGE
 
 
 def test_repeated_cut_off_turns_still_end_the_mission():
