@@ -6,6 +6,7 @@ import math
 import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -173,6 +174,13 @@ def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, mon
     confined: list = []
     monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
     monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: confined.append("served"))
+    # The station itself is the other tests' subject; this one asks only what it is started under.
+    monkeypatch.setattr(
+        serve,
+        "Station",
+        lambda **kw: SimpleNamespace(why_not_flying=lambda: None, clear=lambda: None),
+    )
+    monkeypatch.setattr(serve, "build_app", lambda station: None)
     monkeypatch.setattr(
         "sys.argv", ["serve", "--out", str(tmp_path / "out"), "--ortho", str(tmp_path / "o")]
     )
