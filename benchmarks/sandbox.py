@@ -141,11 +141,6 @@ def bwrap_refusal() -> str | None:
     return "bwrap cannot build the sandbox here" + (f" ({said[0]})" if said else "")
 
 
-def bwrap_works() -> bool:
-    """True when bubblewrap builds the sandbox here (:func:`bwrap_refusal`)."""
-    return bwrap_refusal() is None
-
-
 def scope_works() -> bool:
     """True when a systemd user manager starts transient scopes here (a compute node
     without a user session has none)."""

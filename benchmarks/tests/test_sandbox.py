@@ -71,7 +71,8 @@ print(urllib.request.urlopen(url, timeout=10).status)
 
 
 @pytest.mark.skipif(
-    not sandbox.bwrap_works(), reason="bwrap is absent or this host blocks user namespaces"
+    sandbox.bwrap_refusal() is not None,
+    reason="bwrap is absent or this host blocks user namespaces",
 )
 def test_under_bubblewrap_writes_land_only_in_the_binds_and_localhost_answers(tmp_path):
     """The explicit bind is the only writable route to the host: ``/tmp``, ``/dev/shm`` and

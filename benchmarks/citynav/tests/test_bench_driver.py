@@ -121,7 +121,8 @@ def test_an_attempt_gets_the_reasoner_key_and_none_of_the_launcher_s_other_secre
 
 
 @pytest.mark.skipif(
-    not sandbox.bwrap_works(), reason="bwrap is absent or this host blocks user namespaces"
+    sandbox.bwrap_refusal() is not None,
+    reason="bwrap is absent or this host blocks user namespaces",
 )
 def test_an_attempt_under_bubblewrap_lands_its_row_and_a_timeout_kills_it(driver, monkeypatch):
     monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
