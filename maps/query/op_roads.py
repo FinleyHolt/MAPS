@@ -244,11 +244,17 @@ def run_ends(cx, a):
                 fid = cx.ends.setdefault((str(nd.get("fid")), which), f"end_{len(cx.ends)}")
                 rows.append({"fid": fid, "xy": xy, "name": f"{lab} {which}"})
     if not rows and footprints:
-        named = _first_four(footprints)
-        raise ProgramError(
-            f"{named} {'is a footprint' if len(footprints) == 1 else 'are footprints'}, "
-            f"and a footprint has no ends -- ends_of reads a road."
+        said = (
+            f"{_first_four(footprints)} "
+            f"{'is a footprint' if len(footprints) == 1 else 'are footprints'}"
         )
+        if points:
+            raise ProgramError(
+                f"{said} and {_first_four(points)} "
+                f"{'is a point' if len(points) == 1 else 'are points'}, and neither a "
+                "footprint nor a point has ends -- ends_of reads a road."
+            )
+        raise ProgramError(f"{said}, and a footprint has no ends -- ends_of reads a road.")
     if not rows:
         named = _first_four(no_line)
         raise ProgramError(

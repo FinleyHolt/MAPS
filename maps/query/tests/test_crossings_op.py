@@ -701,3 +701,25 @@ def test_a_written_list_with_a_point_skips_the_point():
 def test_a_written_list_of_points_is_refused_as_written():
     err = _ends_block("ends_of([[100, 100], [80, 100]])\n")["error"]
     assert err.startswith("'[[100, 100], [80, 100]]' holds points " + _POINT), err
+
+
+def test_a_set_of_footprints_and_points_names_both():
+    from maps.mission.tests.fakes import ROADS, drive, priors, run, tool_results
+    from maps.query.surface import build_surface_from_graph
+
+    cands, anchors = build_surface_from_graph({**priors(), **ROADS}.items(), (0.0, 0.0), 1.0)
+    shed = {
+        "fid": "prior_9",
+        "xy": [40.0, 40.0],
+        "name": "A Shed",
+        "mask": [[[30, 30], [50, 30], [50, 50], [30, 50], [30, 30]]],
+        "centerline": None,
+        "cells": [],
+        "tags": {"building": "shed"},
+        "search_text": "a shed",
+    }
+    anchors.append(shed)
+    code = 'ends_of(find("A Shed") + intersection("Long Road", "Cross Street"))\n'
+    _r, fr, _f, _d = drive([[run(code)], "done"], cands=cands + anchors)
+    err = tool_results(fr)[0]["error"]
+    assert err.startswith("prior_9 (A Shed) is a footprint and [100, 100] is a point, "), err
