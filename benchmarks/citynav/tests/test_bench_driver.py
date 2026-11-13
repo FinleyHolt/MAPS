@@ -973,3 +973,11 @@ def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
     assert cli.main(bench, confine=False) == 1
     err = capsys.readouterr().err
     assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err
+
+
+def test_the_runner_s_config_defaults_to_the_bench_s_own() -> None:
+    """``python -m benchmarks.calcity.run_benchmark`` with no --config flies Cal City's."""
+    from benchmarks.citynav.run_benchmark import cli
+
+    assert cli._build_parser(calcity_bench({})).parse_args([]).config == "configs/calcity.yaml"
+    assert cli._build_parser(citynav_bench({})).parse_args([]).config == "configs/citynav.yaml"

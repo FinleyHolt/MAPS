@@ -74,7 +74,11 @@ def _emit_run_manifest(args, *, bench: Bench, out_root: Path, indexed_rows: list
 def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Run the {bench.name} navigation benchmark.")
     parser.add_argument("--split", default=bench.default_split)
-    parser.add_argument("--config", default=None, help="Path to YAML under configs/")
+    parser.add_argument(
+        "--config",
+        default=f"configs/{bench.name}.yaml",
+        help="the run config YAML (default %(default)s)",
+    )
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
         "--out",
@@ -149,7 +153,7 @@ def main(bench: Bench | None = None, *, confine: bool = True) -> int:
             [Path(args.out or f"output/{bench.name}"), *sandbox.ortho_caches([bench.rgbd_dir])],
             args.memory_gib,
             log.info,
-            [*sandbox.bench_inputs(bench), *([args.config] if args.config else [])],
+            [*sandbox.bench_inputs(bench), args.config],
             flies=True,
         )
     if args.seed_base is not None:
