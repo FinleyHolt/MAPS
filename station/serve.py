@@ -38,6 +38,7 @@ import math
 import mimetypes
 import os
 import re
+import sys
 import threading
 import time
 from pathlib import Path
@@ -63,7 +64,7 @@ from benchmarks.flight.mission import (
     resolve_episode,
 )
 from benchmarks.flight.tile_georef import map_bounds
-from benchmarks.flight.twin import Twin, effort_refusal
+from benchmarks.flight.twin import Twin, effort_refusal, raster_refusal
 from benchmarks.run_record import rows
 from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (
@@ -224,8 +225,16 @@ class Station:
         )
         #: The twin's raster directory (Cal City); None on a station that flies no twin.
         self.ortho_dir = ortho_dir
-        #: Where each map's raster pair lies: the twin's directory, else the bench's own.
-        self.raster_dir = Path(ortho_dir) if ortho_dir is not None else Path(bench.rgbd_dir)
+        #: Where each map's raster pair lies: the twin's directory, else CityNav's own. A Cal
+        #: City station without the twin reads none, since its first map request would build
+        #: the whole ortho cache (tens of GB) outside --out.
+        self.raster_dir = (
+            Path(ortho_dir)
+            if ortho_dir is not None
+            else None
+            if bench.name == "calcity"
+            else Path(bench.rgbd_dir)
+        )
         #: ``--basemap``: the default map's north-up picture, or a directory of ``<map>.jpg|.jpeg|.png``.
         self._basemap_pictures = basemap
         self._catalogs: dict[str, tuple[list, dict]] = {}
@@ -237,12 +246,9 @@ class Station:
         if (
             ortho_dir is not None
             and self.map_name
-            and map_render.load_raster(ortho_dir, self.map_name) is None
+            and (why := raster_refusal(ortho_dir, self.map_name)) is not None
         ):
-            raise SystemExit(
-                f"no {self.map_name} raster under {ortho_dir}: a raster directory holds "
-                f"{map_render.raster_pair(self.map_name)}"
-            )
+            raise ValueError(why)
         #: Each map's basemap, loaded when first asked for; the least recently used is let go.
         self.basemap = functools.lru_cache(maxsize=BASEMAPS_HELD)(self._basemap)
         self.tile = functools.lru_cache(maxsize=TILES_HELD)(self._tile)
@@ -283,6 +289,22 @@ class Station:
                 check_map(self.tiles_dir, self.map_name)
             except ValueError as exc:
                 return f"this station reviews runs only: {exc}"
+        return None
+
+    def tokenizer_refusal(self) -> str | None:
+        """Why a mission cannot load the reasoner's tokenizer, or None: asked only in a
+        process confined offline after its launcher could not cache it
+        (:data:`sandbox.TOKENIZER_ENV`); a discovery that loads it clears the mark."""
+        if sandbox.TOKENIZER_ENV not in os.environ:
+            return None
+        try:
+            endpoint_spec.discover_from_settings(from_environ(self.bench.environ), probe_sam=False)
+        except Exception as exc:
+            return (
+                "the reasoner's tokenizer is not in the hub cache this sandboxed station reads "
+                f"offline ({type(exc).__name__}): {sandbox.TOKENIZER_REMEDY} the station"
+            )
+        os.environ.pop(sandbox.TOKENIZER_ENV, None)
         return None
 
     def shown_split(self) -> str:
@@ -380,17 +402,29 @@ class Station:
         bounds = map_bounds(self.tiles_dir, map_name)
         return rgb, bounds, rgb.shape[1] / (bounds.x_max - bounds.x_min)
 
+    def _raster(self, map_name: str):
+        """The map's raster pair under :attr:`raster_dir` as ``(rgb, bounds, px_per_m)``, or None."""
+        return (
+            None if self.raster_dir is None else map_render.load_raster(self.raster_dir, map_name)
+        )
+
     def _basemap(self, map_name: str):
         """What a map's tiles are cut from, ``(rgb, bounds, px_per_m)``: its raster pair, else
-        ``--basemap``'s north-up picture of the bake's whole extent; None for a map that is not
-        placed or has neither."""
+        ``--basemap``'s north-up picture of the bake's whole extent, the picture first on a
+        station that flies nothing (its ortho caches are read-only); None for a map that is
+        not placed or has neither."""
         if self.place(map_name) is None:
             return None
-        try:
-            return map_render.load_raster(self.raster_dir, map_name) or self._picture(map_name)
-        except Exception:
-            log.exception("no basemap for %s", map_name)
-            return None
+        sources = [self._raster, self._picture]
+        if self.why_not_flying() is not None:
+            sources.reverse()
+        for source in sources:
+            try:
+                if (got := source(map_name)) is not None:
+                    return got
+            except Exception:
+                log.exception("no basemap from %s for %s", source.__name__.strip("_"), map_name)
+        return None
 
     def _tile(self, map_name: str, z: int, x: int, y: int) -> bytes | None:
         ortho, at = self.basemap(map_name), self.place(map_name)
@@ -771,7 +805,7 @@ class Station:
     ) -> dict[str, Any]:
         """Fly a mission from the seat: on Cal City a catalog row, or the operator's own words from
         the map's centre, on a twin of its own; on CityNav a row of ``split`` through the bench's runner."""
-        if (why := self.why_not_flying()) is not None:
+        if (why := self.why_not_flying() or self.tokenizer_refusal()) is not None:
             raise HTTPException(409, why)
         if (why := effort_refusal(self.bench, effort)) is not None:
             raise HTTPException(400, why)
@@ -785,7 +819,7 @@ class Station:
                 mission = self._twin_mission(episode_id, instruction, effort, stamp)
             else:
                 mission = self._bench_mission(
-                    episode_id, instruction, effort, split or self.split, stamp
+                    episode_id, instruction, effort, split or self.shown_split(), stamp
                 )
             self.mission, self._trail = mission, []
             mission.start()
@@ -1180,22 +1214,26 @@ def main(argv: list[str] | None = None) -> int:
 
     import uvicorn
 
-    args.out.mkdir(parents=True, exist_ok=True)
     bench = bench_named(args.bench, os.environ)
+    try:
+        station = Station(
+            bench=bench,
+            config=args.config or f"configs/{args.bench}.yaml",
+            out=args.out,
+            ortho_dir=args.ortho,
+            register=args.register,
+            basemap=args.basemap,
+            osm_cache_dir=args.osm_cache,
+        )
+    except ValueError as exc:  # a bad --ortho, refused before --out is made
+        print(exc, file=sys.stderr)
+        return 2
+    args.out.mkdir(parents=True, exist_ok=True)
     if argv is None:
         # A command-line station runs model code in its own threads, so it confines
         # itself; a caller handing argv owns its process.
         flies = why_not_flying(bench, args.ortho) is None
         sandbox.confine_cli(args, bench, log.info, flies=flies)
-    station = Station(
-        bench=bench,
-        config=args.config or f"configs/{args.bench}.yaml",
-        out=args.out,
-        ortho_dir=args.ortho,
-        register=args.register,
-        basemap=args.basemap,
-        osm_cache_dir=args.osm_cache,
-    )
     if (why := station.why_not_flying()) is not None:
         log.info("%s", why)
     if not (WEB_DIST / "index.html").is_file():

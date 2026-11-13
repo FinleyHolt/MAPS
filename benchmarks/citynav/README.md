@@ -66,7 +66,7 @@ its host allows; see [Security](../../README.md#security).
 | `--episode-allowlist <file>` | Keeps only the listed IDs, before the shuffle. A list that names an ID outside the split is refused. |
 | `--max-infra-attempts <n>` | Attempts an episode gets under infrastructure faults. Default 3. |
 | `--episode-timeout-s <s>` | Per-episode wall cap, seconds. Default 14400 (4 h). |
-| `--attempt-memory-gib <GiB>` | Each attempt's memory cap, GiB: a finite number of at least 1. Default 4. A block that allocates past it raises `MemoryError`, served as the block's error. |
+| `--attempt-memory-gib <GiB>` | Each attempt's memory cap, GiB: a finite number between 1 and 2^33. Default 4. A block that allocates past it raises `MemoryError`, served as the block's error. |
 | `--dry-run` | Prints the selection and launches nothing. |
 
 For the remaining flags, run
@@ -83,6 +83,7 @@ The driver refuses or records faults as follows:
 | Second run into a root | Refused. A run holds its root for its lifetime (`.bench.lock`). |
 | Exception raised by the method | A scored miss: status `ok` with its `error` and `traceback` and no metrics. |
 | Infrastructure fault (a serve or segmenter outage, an image-store refusal, a runner that died) | Status `infra`. The episode flies again, up to `--max-infra-attempts` attempts, and past that is reported as persistent infra with its errors. |
+| `MemoryError` outside a block (in the harness, past `--attempt-memory-gib`) | Status `infra`, re-queued as any infrastructure fault. A block's own `MemoryError` is its served block error. |
 | Segmenter outage inside a flight (no tile answered) | Leaves the model's block and ends the mission, unserved. Status `infra`, re-queued as any infrastructure fault. |
 | Episode past its wall cap (`--episode-timeout-s`) | The mission stops flying at 90% of the cap so the model can still reply, and the driver ends the attempt at the cap. Status `timed_out`: scored as recorded, a miss without metrics, and counted apart in the readers. |
 | Ctrl-C (SIGINT), or SIGTERM from `kill`, systemd, or SLURM | `driver.log` records the signal, the attempts are killed, and the driver exits 130 (SIGINT) or 143 (SIGTERM). The ledger keeps every landed row, so a relaunch into the root resumes. |

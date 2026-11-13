@@ -275,3 +275,103 @@ def test_a_station_opens_on_a_split_its_list_carries(tmp_path):
     (tmp_path / bench.split_files["test_unseen"]).write_text("[]")
     seat = SimpleNamespace(bench=bench, split=bench.default_split, runs=lambda: [])
     assert serve.Station.shown_split(seat) == "test_unseen"
+    # A row sent with no split flies from the split the list showed it in.
+    import threading
+
+    flown: list = []
+    seat.__dict__.update(
+        why_not_flying=lambda: None,
+        tokenizer_refusal=lambda: None,
+        _lock=threading.Lock(),
+        mission=None,
+        shown_split=lambda: serve.Station.shown_split(seat),
+        _bench_mission=lambda *a: flown.append(a[-2]) or SimpleNamespace(start=lambda: None),
+        seat_state=lambda: None,
+    )
+    serve.Station.start(seat, "row", "", None)
+    assert flown == ["test_unseen"]
+
+
+def test_a_cal_city_reviewing_station_draws_its_basemap_from_the_picture(calcity, tmp_path):  # noqa: F811
+    """A Cal City station without --ortho flies nothing, so the bench raster at its default
+    path stays unread and no ortho cache is built: the map comes from --basemap."""
+    from PIL import Image
+
+    Image.new("RGB", (640, 480), (200, 160, 90)).save(tmp_path / "basemap.jpg")
+    reviewer = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        basemap=tmp_path / "basemap.jpg",
+    )
+    assert reviewer.basemap("calcity")[0].shape == (480, 640, 3)
+    assert not (calcity.rgbd / "ortho").exists()
+
+
+def test_a_raster_that_fails_to_load_falls_back_to_the_picture(calcity, tmp_path, monkeypatch):  # noqa: F811
+    """A raster whose ortho cache cannot be built (a read-only directory under bubblewrap)
+    leaves the map to --basemap's picture."""
+    from PIL import Image
+
+    from benchmarks.flight import map_render
+
+    def read_only(rgbd_dir, map_name):
+        raise OSError(30, "Read-only file system")
+
+    Image.new("RGB", (640, 480), (200, 160, 90)).save(tmp_path / "basemap.jpg")
+    station = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        ortho_dir=calcity.rgbd,
+        basemap=tmp_path / "basemap.jpg",
+    )
+    monkeypatch.setattr(map_render, "load_raster", read_only)
+    assert station.basemap("calcity")[0].shape == (480, 640, 3)
+
+
+def test_a_sandboxed_station_without_its_tokenizer_refuses_a_mission_naming_the_remedy(
+    calcity,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+):
+    """The station's launcher could not cache the reasoner's tokenizer and the hub is
+    read offline: a mission is refused before its run folder opens, naming what caches
+    the tokenizer; once discovery loads it, missions fly."""
+    from benchmarks import sandbox
+
+    monkeypatch.setenv(sandbox.TOKENIZER_ENV, "ConnectError")
+    station = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        ortho_dir=calcity.rgbd,
+    )
+
+    def offline(settings, **kw):
+        raise RuntimeError("tokenizer 'x' failed to load: check your internet connection")
+
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", offline)
+    client = TestClient(serve.build_app(station, web=None))
+    refused = client.post("/mission/next", json={"instruction": "fly"})
+    assert refused.status_code == 409, refused.json()
+    assert "python -m maps.mission.endpoint_preflight" in refused.json()["detail"]
+    assert not (tmp_path / "out").exists() or not any((tmp_path / "out").iterdir())
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", lambda settings, **kw: None)
+    assert station.tokenizer_refusal() is None and sandbox.TOKENIZER_ENV not in os.environ
+
+
+def test_a_station_whose_ortho_lacks_the_raster_exits_2_with_no_out(calcity, tmp_path, monkeypatch):  # noqa: F811
+    """A bad --ortho is refused before the station confines itself, so --out is not made,
+    with the twin's exit code."""
+    from benchmarks import sandbox
+
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: pytest.fail("confined"))
+    (tmp_path / "empty").mkdir()
+    monkeypatch.setattr(
+        "sys.argv",
+        ["serve", "--bench", "calcity", "--out", str(tmp_path / "out"),
+         "--ortho", str(tmp_path / "empty")],
+    )  # fmt: skip
+    assert serve.main() == 2
+    assert not (tmp_path / "out").exists()

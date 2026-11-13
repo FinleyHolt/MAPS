@@ -23,6 +23,11 @@ can set it itself) and can lift its own ``MemoryMax`` with ``systemctl --user
 set-property`` or start units outside the scope with ``systemd-run``; closing
 that takes bubblewrap's empty ``/run``.
 
+ponytail: without bubblewrap the environment allowlist binds a cooperative block
+only: with no PID namespace the launcher's process stays visible, and a block reads
+its environment from ``/proc/<pid>/environ``; hiding it takes bubblewrap's own
+PID namespace.
+
 ponytail: an allocation failure in native code (a Rust tokenizer's abort, the
 scope's OOM kill) ends the attempt with a signal, which the driver books as a
 crash and re-queues as infrastructure, though a block pinned the memory;
@@ -63,14 +68,21 @@ ATTEMPT_MEMORY_GIB = 4.0
 STATION_MEMORY_GIB = 16.0
 #: Set in a process this module re-executed under bubblewrap.
 SANDBOXED_ENV = "MAPS_SANDBOXED"
+#: Set, to the discovery's exception name, in a process confined offline after its
+#: launcher could not cache the reasoner's tokenizer.
+TOKENIZER_ENV = "MAPS_TOKENIZER_UNCACHED"
+#: What caches the tokenizer a confined process reads offline.
+TOKENIZER_REMEDY = (
+    "run python -m maps.mission.endpoint_preflight once the reasoner answers, then restart"
+)
 #: The repository root: code and configs an attempt reads.
 REPO = Path(__file__).resolve().parents[1]
 
 
 #: The environment model code runs under keeps these names and prefixes alone, so a
 #: token in the launching shell stays out of a block's reach: MAPS's own variables
-#: (the run flags the manifest records, the endpoints, the reasoner's key), the
-#: Hugging Face settings, the locale, and what the interpreter, the proxies and the
+#: (the run flags the manifest records, the endpoints, the reasoner's key, Cal City's
+#: data root), the Hugging Face settings under both prefixes, the locale, and what the interpreter, the proxies and the
 #: native thread pools read.
 _ENV_NAMES = frozenset(
     [
@@ -105,9 +117,9 @@ _ENV_NAMES = frozenset(
         "ALL_PROXY",
     ]
 )
-_ENV_PREFIXES = ("SEARCH_", "CITYNAV_", "SAM_", "MAPS_", "HF_", "LC_")
+_ENV_PREFIXES = ("SEARCH_", "CITYNAV_", "CALCITY_", "SAM_", "MAPS_", "HF_", "HUGGINGFACE_", "LC_")
 #: Hugging Face's token variables, dropped though they match ``HF_``.
-_ENV_SECRETS = frozenset({"HF_TOKEN", "HF_TOKEN_PATH", "HUGGING_FACE_HUB_TOKEN"})
+_ENV_SECRETS = frozenset({"HF_TOKEN", "HF_TOKEN_PATH"})
 
 
 #: What ``systemd-run --user`` and ``systemctl --user`` find the user manager by.
@@ -341,17 +353,23 @@ def _confined() -> bool:
     return bool(os.statvfs("/").f_flag & os.ST_RDONLY) and init == "bwrap"
 
 
-def _cache_tokenizer(log: Callable[[str], None]) -> None:
+def _cache_tokenizer(log: Callable[[str], None]) -> str | None:
     """Discover the reasoner once before confining, so the tokenizer the confined
     process loads is already in the hub cache it reads offline; a reasoner that does
-    not answer yet leaves the confined process to report it."""
+    not answer yet is logged with the remedy, and its exception's name returned."""
     from maps.llm import endpoint_spec
     from maps.settings import from_environ
 
     try:
         endpoint_spec.discover_from_settings(from_environ(os.environ), probe_sam=False)
     except Exception as exc:  # the confined process discovers again and refuses by name
-        log(f"sandbox: reasoner tokenizer not cached before confining ({type(exc).__name__})")
+        why = type(exc).__name__
+        log(
+            f"sandbox: reasoner tokenizer not cached before confining ({why}); a mission "
+            f"finds it only if an earlier run cached it: {TOKENIZER_REMEDY}"
+        )
+        return why
+    return None
 
 
 def confine(
@@ -362,10 +380,12 @@ def confine(
     *,
     flies: bool = False,
 ) -> None:
-    """Confine this process before it serves or flies anything: cap its memory,
-    restart it under :func:`child_env`'s environment and, where bubblewrap runs,
-    under bubblewrap with ``writable`` its writable directories and ``readable``
-    besides the repo and interpreter; log which mode it runs in. A process that
+    """Confine this process before it serves or flies anything: restart it under
+    :func:`child_env`'s environment and, where bubblewrap runs, under bubblewrap with
+    ``writable`` its writable directories and ``readable`` besides the repo and
+    interpreter; cap the memory of the process that keeps running, and log which mode
+    it runs in. The launcher stays uncapped, since its native pools hold a thread per
+    core until the restart applies :data:`THREAD_ENV`. A process that
     ``flies`` caches the reasoner's tokenizer first and reads the hub cache read-only
     and offline. The restarted process keeps the terminal, so the operator's Ctrl-C
     still shuts it down cleanly. An inherited marker without the sandbox around it is
@@ -375,18 +395,21 @@ def confine(
     inject keystrokes into its terminal; run it under a supervisor with no terminal
     there. Relative paths resolve inside the sandbox only from a bound working
     directory (the repo root)."""
-    cap_memory(gib)
     if os.environ.pop(SANDBOXED_ENV, None) == "1" and _confined():
+        cap_memory(gib)
         log(mode_line(None, gib))
         return
     env, argv = child_env(os.environ), [sys.executable, *sys.orig_argv[1:]]
+    env.pop(TOKENIZER_ENV, None)
     if (why := bwrap_refusal()) is not None:
         if env != dict(os.environ):
             os.execve(sys.executable, argv, env)
+        cap_memory(gib)
         log(mode_line(why, gib))
         return
     if flies:
-        _cache_tokenizer(log)
+        if (why := _cache_tokenizer(log)) is not None:
+            env[TOKENIZER_ENV] = why
         readable = [*readable, hf_hub_cache()]
         env["HF_HUB_OFFLINE"] = "1"
     env[SANDBOXED_ENV] = "1"
@@ -406,7 +429,7 @@ def gib(raw: str) -> float:
     value = float(raw)
     if not (math.isfinite(value) and value >= MIN_MEMORY_GIB and value * 2**30 < 2**63):
         raise argparse.ArgumentTypeError(
-            f"must be a finite number of at least {MIN_MEMORY_GIB:g} GiB, got {raw}"
+            f"must be a finite number between {MIN_MEMORY_GIB:g} and {2**33} GiB, got {raw}"
         )
     return value
 

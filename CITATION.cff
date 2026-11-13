@@ -69,7 +69,7 @@ references:
         given-names: Andrew
     journal: "International Journal of Computer Vision"
     volume: 130
-    issue: 2
+    issue: "2"
     start: 316
     end: 343
     year: 2022

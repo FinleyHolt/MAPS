@@ -51,8 +51,9 @@ elif kind == "orphan":
     while not (d / "daemon.pid").exists():
         time.sleep(0.05)
 elif kind == "env":
+    _ENV_PROBE = ("FAKE_SECRET", "SEARCH_REASONER_API_KEY", "CALCITY_ROOT", "HUGGINGFACE_HUB_CACHE")
     # What of the launcher's environment reached the attempt.
-    row["env"] = {k: os.environ.get(k) for k in ("FAKE_SECRET", "SEARCH_REASONER_API_KEY")}
+    row["env"] = {k: os.environ.get(k) for k in _ENV_PROBE}
 elif kind == "infra":
     row.update(status="infra", error="SamServerOutage: down")
 elif kind in ("sleep", "reasoner", "sam"):

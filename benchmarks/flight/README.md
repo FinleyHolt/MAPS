@@ -118,7 +118,7 @@ mission's height, and renders frames from the raster pair on request.
 | `--reasoning-effort <effort>` | Run's reasoning effort. |
 | `--register <raster dir>` | Registers each frame. |
 | `--out <dir>` | Where the sortie lands, as `<dir>/<UTC stamp>/`. Default `output/flight`. |
-| `--memory-gib <GiB>` | Process's memory cap, GiB: a finite number of at least 1. Default 16. A block that allocates past it raises `MemoryError`, served as the block's error. |
+| `--memory-gib <GiB>` | Process's memory cap, GiB: a finite number between 1 and 2^33. Default 16. A block that allocates past it raises `MemoryError`, served as the block's error. |
 
 The run lands under `<out>/<UTC stamp>/` with the run records a flown
 run carries, the ownship track (`flight_track.jsonl`,
@@ -181,3 +181,4 @@ records.
 |---|---|
 | Serve failed before the run's first report (the bench's infra rule) | Out of every rate, and named. |
 | Ends after a report without another (the crew's Stop, a harness ending, a failure) | Scored at that report: its end, time, and flights. |
+| Stopped before its first report (the crew's Stop) | Kept in every rate, `end` `stopped`: a miss for SR, SPL 0, OSR off the track it flew; NE and time to identification read null. |

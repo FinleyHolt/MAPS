@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import logging
 import os
 import random
@@ -36,7 +37,7 @@ from benchmarks.run_record import episodes
 from benchmarks.run_record import rows as _rows
 from benchmarks.run_record import run_manifest as _rm
 from benchmarks.run_record.config import resolve_config
-from maps.llm.endpoint_spec import models_url
+from maps.llm.endpoint_spec import EndpointSpec, models_url
 from maps.settings import from_environ
 
 REPO = Path(__file__).resolve().parents[2]
@@ -318,10 +319,17 @@ class Driver:
                 errors.update(self._infra_errors[e])
         if not stuck:
             return ""
+        # A harness out of memory under the cap fails again until the cap grows.
+        memory = any(c.startswith("MemoryError") for c in errors)
+        flag = f"--max-infra-attempts above {self.max_infra_attempts}"
+        again = (
+            f"--attempt-memory-gib above {self.memory_gib:g} and {flag} fly"
+            if memory
+            else f"{flag} flies"
+        )
         return (
             f"persistent infra: {len(stuck)} episode(s) after "
-            f"{self.max_infra_attempts} infra attempts each ({_causes(errors)}); "
-            f"--max-infra-attempts above {self.max_infra_attempts} flies them again"
+            f"{self.max_infra_attempts} infra attempts each ({_causes(errors)}); {again} them again"
         )
 
     def _reasoner_answers(self) -> bool:
@@ -636,8 +644,44 @@ class Driver:
             episodes = episodes[: self.limit]
         return episodes
 
+    def _manifest(self, bench: Bench) -> dict:
+        """This run's manifest, flying ``bench``'s serve."""
+        return _rm.build_manifest(
+            bench=bench,
+            out_root=self.out_root,
+            config_path=self.config,
+            split=self.split,
+            sample_seed=self.sample_seed,
+            limit=self.limit,
+            allowlist_path=self.allowlist_path,
+            episodes=self._selection,
+        )
+
+    def _identity_refusal(self) -> str | None:
+        """Why the launch would refuse the out-root's manifest, asked with no discovery:
+        the served facts the manifest stores stand in for the serve's."""
+        path = self.out_root / episodes.MANIFEST_NAME
+        if not path.exists():
+            return None
+        try:
+            prior = json.loads(path.read_text(encoding="utf-8"))
+            e = prior["endpoints"]
+            spec = EndpointSpec(
+                e["base_url"], e["model_id"], int(e["max_model_len"]), e["tokenizer"],
+                int(e["max_output_tokens"]), tuple(u for u in e["sam_url"].split(",") if u),
+            )  # fmt: skip
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            return f"{path} unreadable: {exc!r}"
+        drift = _rm.identity_drift(prior, self._manifest(_rm.with_endpoint(self.bench, spec)))
+        if not drift:
+            return None
+        return "run_manifest identity drift: the launch refuses this root:\n  " + "\n  ".join(drift)
+
     def dry_run(self) -> int:
-        """Selection preview. Launches nothing and writes nothing."""
+        """Selection preview. Launches nothing and writes nothing; a root whose manifest
+        the launch would refuse raises ``ValueError``."""
+        if (why := self._identity_refusal()) is not None:
+            raise ValueError(why)
         episodes = self._selection
         if self._selection_note:
             print(self._selection_note)
@@ -687,17 +731,7 @@ class Driver:
         # Written before anything flies; a resume under another identity is
         # refused (run_manifest.emit_or_verify).
         try:
-            fresh_manifest = _rm.build_manifest(
-                bench=self.bench,
-                out_root=self.out_root,
-                config_path=self.config,
-                split=self.split,
-                sample_seed=self.sample_seed,
-                limit=self.limit,
-                allowlist_path=self.allowlist_path,
-                episodes=episodes,
-            )
-            _rm.emit_or_verify(self.out_root, fresh_manifest, log=self.log)
+            _rm.emit_or_verify(self.out_root, self._manifest(self.bench), log=self.log)
         except _rm.ManifestIdentityError as exc:
             self.log(f"FATAL: {exc}")
             return 2

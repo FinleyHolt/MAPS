@@ -108,16 +108,24 @@ def test_an_attempt_gets_the_reasoner_key_and_none_of_the_launcher_s_other_secre
     driver, monkeypatch
 ):
     """The attempt's environment is the allowlist: a token in the launching shell never
-    reaches model code, the key the attempt calls the reasoner with does."""
+    reaches model code, the key the attempt calls the reasoner with does, and so do Cal
+    City's data-root fallback and the hub cache's second name."""
     monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
     monkeypatch.setenv("FAKE_SECRET", "s")
     monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
+    monkeypatch.setenv("CALCITY_ROOT", "/data/calcity")
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/data/hub")
     d = driver(selection=["env::1#0"])
     monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
     monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
     d.worker_loop(0)
     (row,) = iter_json_rows(d.episodes_file)
-    assert row["env"] == {"FAKE_SECRET": None, "SEARCH_REASONER_API_KEY": "k"}, row
+    assert row["env"] == {
+        "FAKE_SECRET": None,
+        "SEARCH_REASONER_API_KEY": "k",
+        "CALCITY_ROOT": "/data/calcity",
+        "HUGGINGFACE_HUB_CACHE": "/data/hub",
+    }, row
 
 
 @pytest.mark.skipif(
@@ -371,6 +379,21 @@ def test_persistent_infra_is_left_out_and_reported(
     assert d.run() == 0
     for text in (d.summary_file.read_text(), d.driver_log.read_text()):
         assert "persistent infra: 1 episode(s)" in text and "A (2), B (1)" in text, text
+
+
+def test_persistent_memory_infra_names_the_attempt_cap(
+    driver, tmp_path, monkeypatch, no_flight
+) -> None:
+    """An episode the harness runs out of memory on needs a larger attempt cap: the
+    line names that flag beside the attempt count."""
+    for _ in range(3):
+        episodes.append_row(tmp_path, _infra(0, cause="MemoryError: "))
+    d = driver(selection=["ep0"])
+    monkeypatch.setattr(d, "worker_loop", lambda w: pytest.fail("a capped episode flew"))
+    d._deadline = time.monotonic() + 5
+    assert d.run() == 0
+    line = d._persistent_infra()
+    assert f"--attempt-memory-gib above {d.memory_gib:g}" in line, line
 
 
 def test_a_spent_wall_budget_stops_the_run(driver, monkeypatch, no_flight) -> None:
@@ -736,7 +759,7 @@ def test_the_parser_refuses_a_count_below_one(flag, capsys) -> None:
 def test_the_parser_refuses_an_attempt_memory_cap_that_is_no_cap(capsys) -> None:
     with pytest.raises(SystemExit) as done:
         bf._build_parser(citynav_bench({})).parse_args(["--attempt-memory-gib", "nan"])
-    assert done.value.code == 2 and "at least 1 GiB" in capsys.readouterr().err
+    assert done.value.code == 2 and "between 1 and 8589934592 GiB" in capsys.readouterr().err
 
 
 def test_an_allowlist_that_cannot_be_read_is_refused_fatal(driver, tmp_path, monkeypatch) -> None:
@@ -855,6 +878,33 @@ def test_a_dry_run_prints_the_allowlist_count_and_writes_nothing(
     assert "1 ids requested -> 1 match" in capsys.readouterr().out
 
 
+def test_a_dry_run_into_a_root_of_another_selection_is_refused_as_the_launch_is(
+    tmp_path, monkeypatch, capsys, bench_data
+) -> None:
+    """The dry run checks the root's run identity as the launch does, so it previews
+    nothing the launch would refuse."""
+    from maps.llm.endpoint_spec import EndpointSpec
+
+    monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
+    monkeypatch.setattr(bf, "_missing_block_assets", lambda bench, eps: [])
+    root = tmp_path / "r"
+    root.mkdir()
+    spec = EndpointSpec("http://127.0.0.1:1/v1", "inkling-small", 65536, "tok", 4096)
+    bench = rm.with_endpoint(citynav_bench(os.environ), spec)
+    flown = rm.build_manifest(
+        bench=bench, out_root=root, config_path=bf._config_path(bench.environ),
+        split="val_seen", sample_seed=bf._build_parser(bench).parse_args([]).sample_seed,
+        limit=0, allowlist_path=None, episodes=["a", "b"],
+    )  # fmt: skip
+    rm.emit_or_verify(root, flown, log=lambda line: None)
+    before = (root / "run_manifest.json").read_text()
+    assert bf.main(["--out-root", str(root), "--dry-run"]) == 0
+    assert bf.main(["--out-root", str(root), "--dry-run", "--limit", "1"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("FATAL: ") and "identity drift" in err and "selection_sha" in err, err
+    assert (root / "run_manifest.json").read_text() == before
+
+
 def test_a_base_config_that_is_not_yaml_is_refused_naming_that_file(
     tmp_path, monkeypatch, capsys
 ) -> None:
@@ -961,7 +1011,16 @@ def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
     from benchmarks.citynav.run_benchmark import cli
 
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: None)
     bench = citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})
-    assert cli.main(bench, confine=False) == 1
+    assert cli.main(bench) == 1
     err = capsys.readouterr().err
     assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err
+
+
+def test_the_runner_s_config_defaults_to_the_bench_s_own() -> None:
+    """``python -m benchmarks.calcity.run_benchmark`` with no --config flies Cal City's."""
+    from benchmarks.citynav.run_benchmark import cli
+
+    assert cli._build_parser(calcity_bench({})).parse_args([]).config == "configs/calcity.yaml"
+    assert cli._build_parser(citynav_bench({})).parse_args([]).config == "configs/citynav.yaml"

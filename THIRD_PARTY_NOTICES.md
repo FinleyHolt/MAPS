@@ -1,7 +1,8 @@
 # Third-party notices
 
 MAPS is MIT-licensed ([`LICENSE`](LICENSE)). These files and data in the
-repository come from third parties, or are derived from third-party data:
+repository, and the README's quickstart video, come from third parties, or are
+derived from third-party data:
 
 | Path | Contents | Source | License |
 |---|---|---|---|
@@ -12,6 +13,8 @@ repository come from third parties, or are derived from third-party data:
 | `tiles/osm_cache/{birmingham,cambridge}_osm_local.geojson` | OpenStreetMap features over each CityNav city, tags verbatim, registered into the CityNav frame; the CityNav bake's source. Each file's `citynav_osm_cache` block holds the registration fitted for MAPS. | [openstreetmap.org](https://www.openstreetmap.org), via the Overpass API. | OpenStreetMap data © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). |
 | `station/web/dist/assets/` | Built station console, bundling the packages in [Station console bundle](#station-console-bundle). | Their npm packages. | Per package, in that table. |
 | `docs/figures/overview.webp`, panels A and B | Photographs from the C-12 flight campaign. | U.S. Air Force Test Pilot School, test plan USAFTPS-TP-26-08. | Distribution Statement A: approved for public release. |
+| `docs/figures/overview.webp`, panel C inset crops | Crops of the C-12's map imagery. | U.S. Air Force Test Pilot School, test plan USAFTPS-TP-26-08. | Distribution Statement A: approved for public release. |
+| README quickstart video (a GitHub upload and a release asset) | Console scenes over the C-12's map imagery. | U.S. Air Force Test Pilot School, test plan USAFTPS-TP-26-08. | Distribution Statement A: approved for public release. |
 | `docs/figures/overview.webp`, panel C basemap | Aerial imagery of California City under the track. | USDA National Agriculture Imagery Program (NAIP), USDA Farm Service Agency. | Public domain. |
 
 ## Station console bundle
@@ -394,9 +397,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 | OpenStreetMap | Read from the Cal City world bundle; baked into local tile directories. | [openstreetmap.org](https://www.openstreetmap.org) | © OpenStreetMap contributors, ODbL 1.0. |
 | USGS 3DEP elevation (1/3 arc-second DEM) | The flight harness reads a DEM you resample from it ([`docs/data.md`](docs/data.md)). | The National Map, USGS. | Public USGS data. |
 
-The SAM License bars use "for any activities subject to the International
-Traffic in Arms Regulations (ITAR)" and end uses prohibited by trade
-controls, including military or warfare purposes.
+Section 1.b.v of the SAM License ("SAM License, Last Updated: November 19,
+2025"), verbatim:
+
+> v. You are not the target of Trade Controls and your use of SAM Materials must comply with Trade Controls. You agree not to use, or permit others to use, SAM Materials for any activities subject to the International Traffic in Arms Regulations (ITAR) or end uses prohibited by Trade Controls, including those related to military or warfare purposes, nuclear industries or applications, espionage, or the development or use of guns or illegal weapons.
 
 The compactor counts tokens with the served model's tokenizer, which it
 fetches from the Hugging Face Hub at first use. Each model card in

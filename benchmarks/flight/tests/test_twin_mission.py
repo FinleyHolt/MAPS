@@ -804,6 +804,9 @@ def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeyp
     monkeypatch.setattr(sandbox, "confine", confine)
     monkeypatch.setattr(twin, "resolve_episode", lambda *a: SimpleNamespace(map_name="m"))
     monkeypatch.setattr(twin, "check_map", lambda *a: None)
+    (tmp_path / "o").mkdir()
+    for name in ("m.tif", "m.png"):
+        (tmp_path / "o" / name).write_bytes(b"")
     monkeypatch.setattr(
         "sys.argv",
         ["twin", "--episode", "e", "--ortho", str(tmp_path / "o"), "--out", str(tmp_path / "out")],
@@ -832,6 +835,13 @@ def test_a_refused_twin_leaves_no_run_folder(tmp_path, monkeypatch, capsys):
     )
     assert twin.main() == 2
     assert not (tmp_path / "out").exists()
+    # A raster directory without the map's pair is refused before the twin confines itself too.
+    monkeypatch.setattr(twin, "resolve_episode", lambda *a: SimpleNamespace(map_name="m"))
+    monkeypatch.setattr(twin, "check_map", lambda *a: None)
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: pytest.fail("confined"))
+    assert twin.main() == 2
+    assert "no m raster under" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
 
 
 def test_ctrl_c_mid_mission_ends_it_and_waits_for_its_row(monkeypatch):
@@ -858,3 +868,18 @@ def test_ctrl_c_mid_mission_ends_it_and_waits_for_its_row(monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         m.converse(mission, [])
     assert calls == ["stop", ("wait", m.END_WAIT_S), "close"], calls
+
+
+def test_ctrl_c_ends_the_twin_with_its_summary_line_and_exit_130(
+    calcity, serves, tmp_path, capsys, monkeypatch
+):
+    """The twin's Ctrl-C prints the mission's summary line and exits 130, with no traceback."""
+    from benchmarks.flight import twin
+
+    def interrupted(mission, taskings):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(twin, "converse", interrupted)
+    argv = ["--episode", "calcity::0#0", "--ortho", str(calcity.rgbd), "--out", str(tmp_path)]
+    assert twin.main(argv) == 130
+    assert "ended by" in capsys.readouterr().out

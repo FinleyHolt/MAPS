@@ -215,6 +215,16 @@ def _xy(text: str) -> tuple[float, float]:
     return x, y
 
 
+def raster_refusal(ortho_dir: Path, map_name: str) -> str | None:
+    """Why ``ortho_dir`` holds no raster pair for ``map_name``, or None."""
+    if map_render.holds_raster(ortho_dir, map_name):
+        return None
+    return (
+        f"no {map_name} raster under {ortho_dir}: a raster directory holds "
+        f"{map_render.raster_pair(map_name)}"
+    )
+
+
 def effort_refusal(bench, effort: str | None) -> str | None:
     """Why the served model refuses ``effort``, or None, so a mission is refused before
     its run folder opens; a reasoner that does not answer is the mission's own
@@ -296,7 +306,9 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 2
-    if (why := effort_refusal(bench, args.reasoning_effort)) is not None:
+    if (
+        why := raster_refusal(args.ortho, map_name) or effort_refusal(bench, args.reasoning_effort)
+    ) is not None:
         print(why, file=sys.stderr)
         return 2
     if argv is None:
@@ -305,10 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         sandbox.confine_cli(args, bench, logging.getLogger("twin").info)
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
-        print(
-            f"no {map_name} raster under {args.ortho}: a raster directory holds {map_render.raster_pair(map_name)}",
-            file=sys.stderr,
-        )
+        print(raster_refusal(args.ortho, map_name) or f"{map_name}: no raster", file=sys.stderr)
         return 2
     start_alt, ground_z = bench.engine.start_altitude_m(cfg, map_name, episode.start_z)
     twin = Twin(
@@ -346,7 +355,11 @@ def main(argv: list[str] | None = None) -> int:
         reasoning_effort=args.reasoning_effort,
         agl_m=start_alt - ground_z,
     )
-    converse(mission, args.then)
+    try:
+        converse(mission, args.then)
+    except KeyboardInterrupt:  # converse stopped the mission and waited for its row
+        print(summary_line(mission))
+        return 130
     print(summary_line(mission))
     return 0 if mission.status == STATE_ENDED else 1
 

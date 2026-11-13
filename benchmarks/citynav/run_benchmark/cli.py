@@ -74,7 +74,11 @@ def _emit_run_manifest(args, *, bench: Bench, out_root: Path, indexed_rows: list
 def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Run the {bench.name} navigation benchmark.")
     parser.add_argument("--split", default=bench.default_split)
-    parser.add_argument("--config", default=None, help="Path to YAML under configs/")
+    parser.add_argument(
+        "--config",
+        default=f"configs/{bench.name}.yaml",
+        help="the run config YAML (default %(default)s)",
+    )
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
         "--out",
@@ -118,13 +122,12 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     return parser
 
 
-def main(bench: Bench | None = None, *, confine: bool = True) -> int:
+def main(bench: Bench | None = None) -> int:
     """The runner's CLI, for ``bench``; unset, for the bench the environment
     selects (``paths.selected_bench``), which is how an attempt child of
     either driver learns its bench. A run flies model code in this process, so
     it confines itself unless a driver spawned it (``--attempt-root``: the
-    driver sandboxes it) or an in-process caller that owns its process passes
-    ``confine=False``."""
+    driver sandboxes it)."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
@@ -144,12 +147,12 @@ def main(bench: Bench | None = None, *, confine: bool = True) -> int:
         # The driver sandboxes its attempts; the child takes the memory cap itself.
         sandbox.cap_memory(args.memory_gib)
         _die_with_parent(bench.environ)
-    elif confine:
+    else:
         sandbox.confine(
             [Path(args.out or f"output/{bench.name}"), *sandbox.ortho_caches([bench.rgbd_dir])],
             args.memory_gib,
             log.info,
-            [*sandbox.bench_inputs(bench), *([args.config] if args.config else [])],
+            [*sandbox.bench_inputs(bench), args.config],
             flies=True,
         )
     if args.seed_base is not None:
