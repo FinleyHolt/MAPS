@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks import sandbox
 from benchmarks.calcity.paths import calcity_bench
 from benchmarks.citynav import bench_fullset as bf
 from benchmarks.citynav.paths import citynav_bench
@@ -85,6 +86,38 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     # The mission's backstop leaves the reserve of the cap for the reply.
     assert t0 < rows["ok"]["deadline"] < t0 + 3 * (1 - bf._DEADLINE_RESERVE_FRAC) + 5
     assert not (d.out_root / "w0" / "maps_20260101_000000_citynav_sleep" / "episode.json").exists()
+
+
+def test_a_block_past_the_attempt_cap_is_the_model_s_error_not_a_crash(driver, monkeypatch):
+    """Under the cap the block's allocation raises MemoryError inside the block: the attempt
+    lands its row and is scored, where an uncapped child is OOM-killed and re-queued as infra."""
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    d = driver(selection=["hog::1#0"])
+    d.memory_gib = 1.0  # under the block's 1.5 GiB list, over the fake attempt's own footprint
+    d.max_infra_attempts = 1
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    (row,) = iter_json_rows(d.episodes_file)
+    assert row["status"] == "ok" and row["error"].startswith("line 1: MemoryError"), row
+
+
+@pytest.mark.skipif(
+    not sandbox.bwrap_works(), reason="bwrap is absent or this host blocks user namespaces"
+)
+def test_an_attempt_under_bubblewrap_lands_its_row_and_a_timeout_kills_it(driver, monkeypatch):
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    d = driver(selection=["ok::1#0", "sleep::1#1"])
+    d._bwrap, d.episode_timeout_s, d.max_infra_attempts = True, 3, 1
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    rows = {r["episode_id"].split("::")[0]: r for r in iter_json_rows(d.episodes_file)}
+    assert rows["ok"]["status"] == "ok" and rows["ok"]["metrics"]["SR"] == 1, rows
+    assert rows["sleep"]["status"] == "timed_out", rows
+    # The killed attempt's sandbox died with it.
+    ps = subprocess.run(["pgrep", "-f", "fake_runner"], capture_output=True, text=True)
+    assert ps.stdout == "", ps.stdout
 
 
 def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypatch) -> None:
@@ -413,7 +446,7 @@ _INTERRUPTED = (
     "d.out_root, d.episodes_file, d.driver_log = root, root / 'episodes.jsonl', root / 'driver.log'\n"
     "d.summary_file, d.split, d.workers, d.max_wall_s, d._deadline = root / 'summary.txt', 's', 2, 0, None\n"
     "d._done_cache, d._infra_errors, d.max_infra_attempts, d._abort = set(), {}, 3, None\n"
-    "d.sample_seed, d.limit, d.allowlist_path = 1, 0, None\n"
+    "d.sample_seed, d.limit, d.allowlist_path, d.memory_gib = 1, 0, None, 4.0\n"
     "d._selection, d._selection_note = ['ep0'], None\n"
     "bf.WORKER_STAGGER_S = 0\n"
     "rm.build_manifest = lambda **kw: None\n"
