@@ -56,6 +56,7 @@ def run_ops(
             staged=ns.get("staged"),
             standing=ns.get("standing"),
             watched=ns.get("watched") or (),
+            ends=ns.setdefault("ends", {}),
         )
     except ProgramError as exc:
         err = str(exc)
@@ -177,6 +178,7 @@ class Carry:
                 staged=ns.get("staged"),
                 standing=ns.get("standing"),
                 watched=ns.get("watched") or (),
+                ends=ns.setdefault("ends", {}),
             )
         except Exception as exc:
             bad = getattr(exc, "ref", None)

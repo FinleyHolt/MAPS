@@ -594,3 +594,42 @@ def test_a_tier_of_a_find_a_side_cut_emptied_names_the_cut():
     _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7").exact\n')], "done"])
     err = tool_results(fr)[0]["error"]
     assert "A pass's minted rows" not in err and "before the cut" in err, err
+
+
+def test_a_tier_of_a_side_cut_over_a_find_that_matched_nothing_keeps_the_finds_wording():
+    _r, fr, _f, _d = drive([[run('find("zzz", south_of="prior_7").exact\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err.startswith("these rows carry no match tiers"), err
+
+
+@pytest.mark.parametrize(
+    "block, key",
+    [
+        ('find("car", north_of="prior_7").exact\n', "find('car', north_of='prior_7').exact"),
+        ('find("car", west_of="prior_7").tagged\n', "find('car', west_of='prior_7').tagged"),
+    ],
+)
+def test_a_side_cut_find_that_keeps_rows_serves_under_the_call_as_written(block, key):
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    keys = list(tool_results(fr)[0]["result"]["results"])
+    assert keys == [key], keys
+
+
+def test_a_printed_window_of_an_emptied_dwithin_chain_serves_the_cuts_stats():
+    # calcity::3260#3259 request 7: a lambda-kept set, a dwithin cut that
+    # empties it (42->0 there), side cuts over nothing and an order, then a
+    # printed window of the result. The empty answer is served by the
+    # window's call, whose own ops hold no cut: only the stats carried on
+    # the emptied input say why it is empty.
+    block = (
+        'kept = find("car").filter(lambda r: r.fid.startswith("car_"))\n'
+        "print(len(kept))\n"
+        'ps = kept.filter(near="prior_7", dwithin=1).filter(east_of="prior_1", west_of="prior_7")'
+        '.order(nearest="prior_7")\n'
+        "print(ps[0:30])\n"
+    )
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    env = tool_results(fr)[0]["result"]["results"]["ps"]
+    assert env["len"] == 0, env
+    assert env.get("cut_stats", {}).get("cut") == "2->0", env
+    assert env["cut_stats"]["nearest_excluded"] == {"fid": "car_1", "distance to prior_7": 23.35}

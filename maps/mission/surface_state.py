@@ -158,13 +158,17 @@ class Surface:
             self._map_feats = map_features(self.ctx)
         return self._map_feats
 
+    def row_of_fid(self, fid) -> dict | None:
+        """The live surface row ``fid`` names, else the road end it names."""
+        row = self.rows.get(fid)
+        return row if row is not None or not isinstance(fid, str) else self.terminus(fid)
+
     def terminus(self, tok: str) -> dict | None:
-        """The carried row a typed terminus fid (``end_N``) names, or None."""
+        """The carried row a typed terminus fid (``end_N``) names, or None. A
+        road end keeps one fid for the mission, so any carried row holding it
+        is that end."""
         if not END_RE.fullmatch(tok.strip()):
             return None
-        # ponytail: end_N restarts per ends_of call, so the newest carried
-        # row holding it wins; unique terminus fids if two ends_of sets must
-        # be named by fid.
         return next(
             (
                 r

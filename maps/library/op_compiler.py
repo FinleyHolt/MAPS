@@ -176,9 +176,11 @@ class Program:
         self.ops.append({"ref": ref, "op": op, "args": args})
         return ref
 
-    def ref_of(self, v):
+    def ref_of(self, v, points=False):
         """An argument -> an executor ref, LABELLED (``as``) with the code's
-        own name, so the compare's column and the key that names it agree."""
+        own name, so the compare's column and the key that names it agree.
+        With ``points`` a set may hold bare [x, y] points (ends_of skips
+        them by name)."""
         if isinstance(v, Ref):
             # A WHOLE RESULT IN A PLACE SLOT IS ITS UNION: one column, the
             # gap to its NEAREST member ("the house with a pool" is about
@@ -210,7 +212,8 @@ class Program:
                 inner = r["ref"] if isinstance(r, dict) and "ref" in r else r
                 if isinstance(inner, list) and len(inner) == 1 and isinstance(inner[0], str):
                     inner = inner[0]  # a whole result: its rN
-                if not isinstance(inner, str) and not (isinstance(m, Bind) and is_xy(inner)):
+                bare_ok = points or isinstance(m, Bind)
+                if not isinstance(inner, str) and not (bare_ok and is_xy(inner)):
                     # A union member rides its MASK, or a row with no fid
                     # its own point; a bare [x, y] names no thing.
                     raise CodeError(

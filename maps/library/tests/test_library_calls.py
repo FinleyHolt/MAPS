@@ -1695,3 +1695,11 @@ def test_a_block_that_calls_one_kind_twice_serves_both_parts():
     out = tool_results(fr)[0]
     assert [p["staged"][0]["handle"] for p in out["stance"]] == ["v1", "v2"], out
     assert out["printed"] == "v1 v2", out
+
+
+@pytest.mark.parametrize("word", ["NE", "up", "northnortheast"])
+def test_stand_facing_a_word_that_is_no_compass_word_and_no_row_lists_the_compass_words(word):
+    _r, fr, _f, _d = drive([[run(f'stand(at="prior_7", facing="{word}")\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert "north|northeast|east|southeast|south|southwest|west|northwest" in err, err
+    assert "nothing named" not in err, err

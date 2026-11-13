@@ -13,7 +13,7 @@ from maps.query.result_tables import (
     STANDING_SIDE_PREFIXES,
     column_ref,
 )
-from maps.xy_token import is_xy
+from maps.xy_token import format_xy_token, is_xy
 
 
 def quote_value(v) -> str:
@@ -56,6 +56,12 @@ class Result(list):
         self.kind, self.ordered, self.name_set = kind, ordered, name_set
         self.op_cols, self.notes, self.set_notes = op_cols, notes, set_notes
         self.cut_stats, self.empty_condition = cut_stats, empty_condition
+
+
+def cut_had_input(stats) -> bool:
+    """Whether the cut ``stats`` describe started from rows: a cut of no rows
+    says nothing the input's own miss does not."""
+    return bool(stats) and not str(stats.get("cut", "")).startswith("0->")
 
 
 def keeps_order(rows) -> bool:
@@ -156,7 +162,9 @@ class ProgramRun:
     """One ``run_program`` call: the surface, the seed, the results so far
     and the op running."""
 
-    def __init__(self, cands, anchors, seed=None, staged=None, standing=None, watched=()):
+    def __init__(
+        self, cands, anchors, seed=None, staged=None, standing=None, watched=(), ends=None
+    ):
         self.cands, self.anchors = cands, anchors
         self.watched = {str(c).lower() for c in watched}
         self.by_fid = {c["fid"]: c for c in cands}
@@ -165,6 +173,7 @@ class ProgramRun:
         self.staged = staged or {}
         self.standing = self.staged.get(standing) if standing else None
         self.results: dict = {}
+        self.ends = {} if ends is None else ends
         self.op = None
 
     def is_ref(self, tok) -> bool:
@@ -284,8 +293,14 @@ def named_rows(cx, el, need):
 
 
 def as_said(el):
-    """A crossings/ends ref as the model said it: its label, else itself."""
-    return el["as"] if isinstance(el, dict) and el.get("as") else el
+    """A crossings/ends ref as the model said it: its label, else itself. An
+    inline point's label is its column token ("960 960"), so it is quoted
+    as the ``[x, y]`` it was written as."""
+    ref = el.get("ref") if isinstance(el, dict) else el
+    said = el["as"] if isinstance(el, dict) and el.get("as") else el
+    if is_xy(ref) and (said is ref or said == f"{ref[0]:g} {ref[1]:g}"):
+        return format_xy_token(*ref)
+    return said
 
 
 def refuse_if_empty(cx, el, what: str) -> None:

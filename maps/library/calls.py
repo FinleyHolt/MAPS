@@ -43,7 +43,7 @@ from maps.query.color_words import COLOR_ENUM, normalize_color
 from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.row_geometry import SurfaceGeometry
 from maps.query.spatial_math import COMPASS_UNIT
-from maps.xy_token import format_xy_token, is_xy
+from maps.xy_token import is_xy
 
 # One block's measuring budget: a nested loop of distance() calls is one per
 # PAIR, millions of mask-to-mask scans at real set sizes.
@@ -311,9 +311,9 @@ class Library:
         self._analyze(p, ref)
         self._near_miss_note(ref, query)
         label = f"find({query!r})" if q else ""
-        if q and cards and not self.env.rows_of_ref(ref):
-            # a side cut emptied what the find matched: the bare
-            # find('<q>') label would say the find matched nothing
+        if q and cards:
+            # a side cut changes the set: the bare find('<q>') label names
+            # what the find matched before the cut
             node = self.names.running_node()
             if isinstance(node, ast.Call):
                 label = ast.unparse(node)
@@ -412,9 +412,10 @@ class Library:
     def ends_of(self, x):
         x = self._slot(x)
         p = self._program(x)
-        el = p.ref_of(x)
-        if is_xy(x):
-            el["as"] = format_xy_token(*x)  # a refusal quotes the point as written
+        el = p.ref_of(x, points=True)
+        if isinstance(el, dict) and any(is_xy(m) for m in el["ref"]) and not is_xy(el["ref"]):
+            # a written list holding a point is quoted as written
+            el["as"] = self.names.call_arg("ends_of") or el["as"]
         return Rows(self._analyze(p, p.add("ends", {"refs": [el]})), self)
 
     def more_of(self, x):

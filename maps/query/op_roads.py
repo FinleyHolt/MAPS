@@ -190,10 +190,16 @@ def _points_held(cx, el) -> list:
     return said
 
 
+def _names_a_crossing(cx, said: str) -> bool:
+    """Whether ``said`` reads as a crossing's served name: each side of its
+    " x " a row's name or fid."""
+    known = {str(r.get(k)).casefold() for r in cx.by_fid.values() for k in ("name", "fid")}
+    return all(side.strip().casefold() in known for side in said.split(" x "))
+
+
 def run_ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
     rows = []
-    n_end = 0
     no_line: list = []
     footprints: list = []
     points: list = []
@@ -213,7 +219,9 @@ def run_ends(cx, a):
         points += held
         # A crossing's served name grounds on the roads it names.
         if isinstance(said, str) and " x " in said and all(n.get("name") != said for n in nodes):
-            raise ProgramError(f"{quote_value(said)} is a point {_NO_ENDS}")
+            if _names_a_crossing(cx, said):
+                raise ProgramError(f"{quote_value(said)} is a point {_NO_ENDS}")
+            nodes = []
         if not nodes:
             refuse_if_empty(cx, el, "take the ends of")
             raise ProgramError(
@@ -233,14 +241,20 @@ def run_ends(cx, a):
             lab = str(nd.get("name") or nd.get("fid"))
             for which, pt in (("end0", cl[0]), ("end1", cl[-1])):
                 xy = [float(round(pt[0])), float(round(pt[1]))]
-                rows.append({"fid": f"end_{n_end}", "xy": xy, "name": f"{lab} {which}"})
-                n_end += 1
+                fid = cx.ends.setdefault((str(nd.get("fid")), which), f"end_{len(cx.ends)}")
+                rows.append({"fid": fid, "xy": xy, "name": f"{lab} {which}"})
     if not rows and footprints:
-        named = _first_four(footprints)
-        raise ProgramError(
-            f"{named} {'is a footprint' if len(footprints) == 1 else 'are footprints'}, "
-            f"and a footprint has no ends -- ends_of reads a road."
+        said = (
+            f"{_first_four(footprints)} "
+            f"{'is a footprint' if len(footprints) == 1 else 'are footprints'}"
         )
+        if points:
+            raise ProgramError(
+                f"{said} and {_first_four(points)} "
+                f"{'is a point' if len(points) == 1 else 'are points'}, and neither a "
+                "footprint nor a point has ends -- ends_of reads a road."
+            )
+        raise ProgramError(f"{said}, and a footprint has no ends -- ends_of reads a road.")
     if not rows:
         named = _first_four(no_line)
         raise ProgramError(

@@ -10,6 +10,7 @@ from maps.library.result_handles import program_dedup_key, program_reads, run_op
 from maps.mission.acks import Rejections, add_note, live_counts
 from maps.mission.surface_state import Progress, Surface
 from maps.query.result_tables import BROAD_DUMP_SOFT_ROWS
+from maps.query.spatial_math import COMPASS_UNIT
 from maps.query.text_match import FUZZY_THRESHOLD, unmatched_query_tokens
 
 # The dedup hit serves a one-line REFERENCE, never a fresh payload (a full
@@ -186,6 +187,14 @@ class Programs:
                 if r.get("name_match") is None or float(r["name_match"]) >= FUZZY_THRESHOLD
             ]
             what = q.lower()
+            if not rows and why == "facing" and len(q.split()) == 1:
+                # one word that is no compass word and names nothing was
+                # meant as a heading
+                return self.rejections.error(
+                    {},
+                    f"the stance did not bind: facing {q!r} is not a live surface "
+                    f"fid, an [x, y] point, or one of {'|'.join(COMPASS_UNIT)}",
+                )
             if not rows:
                 return self.rejections.error(
                     {},

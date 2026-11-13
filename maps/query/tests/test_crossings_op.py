@@ -627,3 +627,99 @@ def test_a_crossing_in_a_mixed_set_is_skipped_with_a_note():
     (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
     assert env["len"] == 2, env
     assert "1 point skipped ([100, 100]): a point has no ends." in (env["hint"]), env
+
+
+def _env_of(out, key):
+    return out["result"]["results"][key]
+
+
+def test_two_roads_ends_carry_fids_unique_to_the_mission():
+    out = _ends_block('c = ends_of("Cross Street")\ne\nc\n')
+    assert _env_of(out, "e")["fids"] == ["end_0", "end_1"], out
+    assert _env_of(out, "c")["fids"] == ["end_2", "end_3"], out
+
+
+@pytest.mark.parametrize(
+    "code, fids",
+    [
+        # a later call over the same road names the same rows
+        ('c = ends_of("Cross Street")\nd = ends_of(find("Long Road"))\nd\n', ["end_0", "end_1"]),
+        # a stance moves the surface, so c re-derives, and its rows keep their fids
+        ('c = ends_of("Cross Street")\nstand(at=[0, 0])\nc\n', ["end_2", "end_3"]),
+    ],
+)
+def test_a_road_ends_keep_their_fids_across_calls_and_replays(code, fids):
+    out = _ends_block(code)
+    assert list(out["result"]["results"].values())[-1]["fids"] == fids, out
+
+
+def test_a_typed_terminus_resolves_to_its_own_road_in_every_call():
+    from maps.mission.tests.fakes import ROADS, drive, priors, run, tool_results
+    from maps.query.surface import build_surface_from_graph
+
+    cands, anchors = build_surface_from_graph({**priors(), **ROADS}.items(), (0.0, 0.0), 1.0)
+    code = (
+        'e = ends_of("Long Road")\nc = ends_of("Cross Street")\n'
+        'print(distance("end_0", [80, 100]), distance("end_2", [100, 80]))\ngo_to("end_2")\n'
+    )
+    _r, fr, flown, _d = drive([[run(code)], "done"], cands=cands + anchors)
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert out["printed"] == "0.0 0.0", out
+    assert out["flown"]["flown"][0]["target"] == "[100, 80]", out
+
+
+@pytest.mark.parametrize(
+    "code, said",
+    [
+        ('ends_of("[100, 100]")\n', "'[100, 100]' is a point "),
+        ("ends_of([100, 100])\n", "'[100, 100]' is a point "),
+    ],
+)
+def test_a_point_is_quoted_as_its_xy_token(code, said):
+    err = _ends_block(code)["error"]
+    assert said + _POINT in err, err
+
+
+def test_a_crossing_refusal_quotes_a_point_as_its_xy_token():
+    err = _ends_block('intersection([100, 100], "Cross Street")\n')["error"]
+    assert err.startswith("'[100, 100]' names no geometry"), err
+
+
+def test_a_crossing_name_with_a_side_naming_no_row_names_no_row():
+    err = _ends_block('ends_of("Long Road x Nowhere")\n')["error"]
+    assert err.startswith("'Long Road x Nowhere' names no row on this surface."), err
+
+
+def test_a_written_list_with_a_point_skips_the_point():
+    out = _ends_block('ends_of([find("Long Road")[0], [100, 100]])\n')
+    assert "error" not in out, out
+    (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
+    assert env["len"] == 2 and "1 point skipped ([100, 100]): a point has no ends." in env["hint"]
+
+
+def test_a_written_list_of_points_is_refused_as_written():
+    err = _ends_block("ends_of([[100, 100], [80, 100]])\n")["error"]
+    assert err.startswith("'[[100, 100], [80, 100]]' holds points " + _POINT), err
+
+
+def test_a_set_of_footprints_and_points_names_both():
+    from maps.mission.tests.fakes import ROADS, drive, priors, run, tool_results
+    from maps.query.surface import build_surface_from_graph
+
+    cands, anchors = build_surface_from_graph({**priors(), **ROADS}.items(), (0.0, 0.0), 1.0)
+    shed = {
+        "fid": "prior_9",
+        "xy": [40.0, 40.0],
+        "name": "A Shed",
+        "mask": [[[30, 30], [50, 30], [50, 50], [30, 50], [30, 30]]],
+        "centerline": None,
+        "cells": [],
+        "tags": {"building": "shed"},
+        "search_text": "a shed",
+    }
+    anchors.append(shed)
+    code = 'ends_of(find("A Shed") + intersection("Long Road", "Cross Street"))\n'
+    _r, fr, _f, _d = drive([[run(code)], "done"], cands=cands + anchors)
+    err = tool_results(fr)[0]["error"]
+    assert err.startswith("prior_9 (A Shed) is a footprint and [100, 100] is a point, "), err
