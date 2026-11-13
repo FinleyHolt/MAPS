@@ -246,3 +246,12 @@ def test_a_capitalised_first_word_is_a_class():
     _, fr, _, declared = drive([[run('look_for("Car")\n')], "done"])
     assert "error" not in tool_results(fr)[0]
     assert declared == [["car"]], declared
+
+
+@pytest.mark.parametrize("said", ["green street", "grey house"])
+def test_a_lowercase_world_name_with_a_colour_word_is_watched_as_said(said):
+    _, fr, _, declared = drive(
+        [[run(f'look_for("{said}")\n')], "done"], graph=_named("Green Street", "Grey House")
+    )
+    assert "error" not in tool_results(fr)[0], tool_results(fr)[0]
+    assert declared == [[said]], declared

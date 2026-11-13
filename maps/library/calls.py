@@ -53,16 +53,20 @@ MEASURE_CALL_CEILING = 20_000
 def _refuse_unplain_class(cls: str, names: set[str]) -> None:
     """Refuse a look_for class the served text rules out: a proper noun (a
     world-state name written with a capital, ``names`` lowered), or one
-    carrying a colour word. The name check runs first: "Green Street" is a
-    street, never a colour."""
+    carrying a colour word. A world-state name in any case is never a
+    colour: "Green Street" and "green street" are a street."""
     words = cls.replace("_", " ").split()
-    # ponytail: a lowercase class a feature happens to be named ("car",
-    # "pitch") is watched as said, with the receipt's NAMED feature note.
-    if cls != cls.lower() and " ".join(words).lower() in names:
+    named = " ".join(words).lower() in names
+    if cls != cls.lower() and named:
         raise CodeError(
             f'look_for takes plain visual classes, no proper nouns: "{cls}" is a proper noun. '
             f'A named place is already a world-state row: find("{cls}").'
         )
+    # ponytail: a lowercase class a feature happens to be named ("car",
+    # "pitch", "green street") is watched as said, with the receipt's NAMED
+    # feature note.
+    if named:
+        return
     # ponytail: any palette word refuses, so "orange tree" does too; a
     # head-noun parse if a real class ever needs a colour word.
     colour = next((w for w in words if normalize_color(w) in COLOR_ENUM), None)
