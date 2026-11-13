@@ -24,7 +24,7 @@ _DEDUP_NOTE = (
     "ask something different."
 )
 _DEDUP_REPEAT_NOTE = (
-    "still nothing new, a {n} time: the world had not moved between that turn "
+    "still nothing new, {n} time: the world had not moved between that turn "
     "and this call, so no program could answer differently -- only something "
     "entering it can, and a flight folds new detections. Live at this call: "
     "{counts}{cols}."
@@ -32,11 +32,15 @@ _DEDUP_REPEAT_NOTE = (
 
 
 def _ordinal(n: int) -> str:
-    """1 -> 1st, 2 -> 2nd, 3 -> 3rd, 11..13 -> th."""
+    """The ordinal with its article: a 1st, a 2nd, a 3rd, an 8th, an 11th,
+    an 18th, an 80th."""
     n = int(n)
     if 10 <= n % 100 <= 13:
-        return f"{n}th"
-    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+        nth = f"{n}th"
+    else:
+        nth = f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+    # ponytail: 1100th and 1800th take "a" here; no repeat count nears them.
+    return ("an " if nth.startswith("8") or n in (11, 18) else "a ") + nth
 
 
 # How a grounding note says what the call does at a name's best match, by
