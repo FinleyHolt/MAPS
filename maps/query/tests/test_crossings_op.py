@@ -627,3 +627,43 @@ def test_a_crossing_in_a_mixed_set_is_skipped_with_a_note():
     (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
     assert env["len"] == 2, env
     assert "1 point skipped ([100, 100]): a point has no ends." in (env["hint"]), env
+
+
+def _env_of(out, key):
+    return out["result"]["results"][key]
+
+
+def test_two_roads_ends_carry_fids_unique_to_the_mission():
+    out = _ends_block('c = ends_of("Cross Street")\ne\nc\n')
+    assert _env_of(out, "e")["fids"] == ["end_0", "end_1"], out
+    assert _env_of(out, "c")["fids"] == ["end_2", "end_3"], out
+
+
+@pytest.mark.parametrize(
+    "code, fids",
+    [
+        # a later call over the same road names the same rows
+        ('c = ends_of("Cross Street")\nd = ends_of(find("Long Road"))\nd\n', ["end_0", "end_1"]),
+        # a stance moves the surface, so c re-derives, and its rows keep their fids
+        ('c = ends_of("Cross Street")\nstand(at=[0, 0])\nc\n', ["end_2", "end_3"]),
+    ],
+)
+def test_a_road_ends_keep_their_fids_across_calls_and_replays(code, fids):
+    out = _ends_block(code)
+    assert list(out["result"]["results"].values())[-1]["fids"] == fids, out
+
+
+def test_a_typed_terminus_resolves_to_its_own_road_in_every_call():
+    from maps.mission.tests.fakes import ROADS, drive, priors, run, tool_results
+    from maps.query.surface import build_surface_from_graph
+
+    cands, anchors = build_surface_from_graph({**priors(), **ROADS}.items(), (0.0, 0.0), 1.0)
+    code = (
+        'e = ends_of("Long Road")\nc = ends_of("Cross Street")\n'
+        'print(distance("end_0", [80, 100]), distance("end_2", [100, 80]))\ngo_to("end_2")\n'
+    )
+    _r, fr, flown, _d = drive([[run(code)], "done"], cands=cands + anchors)
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    assert out["printed"] == "0.0 0.0", out
+    assert out["flown"]["flown"][0]["target"] == "[100, 80]", out

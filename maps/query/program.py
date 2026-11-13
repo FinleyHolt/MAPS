@@ -27,13 +27,17 @@ OPS = {
 }
 
 
-def run_program(cands, anchors, program, seed_results=None, staged=None, standing=None, watched=()):
+def run_program(
+    cands, anchors, program, seed_results=None, staged=None, standing=None, watched=(), ends=None
+):
     """Run ``{"ops": [{ref, op, args}, ...]}`` (dependency order) over the
     surface rows; returns ``{"results": {ref: rows}}``. A handle defined here
     shadows its ``seed_results`` entry; ``staged`` maps stand() handles to
     ``{"handle", "from_xy", "up_unit"}`` and ``standing`` names the one whose
-    side columns ride every find; ``watched`` is the armed watchlist."""
-    cx = ProgramRun(cands, anchors, seed_results, staged, standing, watched)
+    side columns ride every find; ``watched`` is the armed watchlist; ``ends``
+    maps each road end ``(fid, "end0"|"end1")`` to its terminus fid, shared by
+    every program of a mission so a road's ends keep one fid each."""
+    cx = ProgramRun(cands, anchors, seed_results, staged, standing, watched, ends)
     ops = program["ops"]
     for op in ops:
         cx.op = op["op"]

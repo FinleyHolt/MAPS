@@ -68,7 +68,8 @@ class MissionEnv:
     refusing ack part carries ``"error"``. ``plan_rn`` is the shared ref
     counter, ``widened`` the paging ledger, ``take_minted()`` the handles
     the call's flights minted, ``say_err(ack, msg)`` the refusal format,
-    ``row_of_fid(fid)`` a live-row reader (None when absent),
+    ``row_of_fid(fid)`` a live-row reader, a road end's fid included (None
+    when absent),
     ``tied_of_ref(ref)`` whether a ref holds a tied view, ``version()``
     the surface version, ``world_names()`` the world state's names
     (lowered) and ``past_cap(classes)`` the watchlist's cap refusal (None

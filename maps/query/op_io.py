@@ -162,7 +162,9 @@ class ProgramRun:
     """One ``run_program`` call: the surface, the seed, the results so far
     and the op running."""
 
-    def __init__(self, cands, anchors, seed=None, staged=None, standing=None, watched=()):
+    def __init__(
+        self, cands, anchors, seed=None, staged=None, standing=None, watched=(), ends=None
+    ):
         self.cands, self.anchors = cands, anchors
         self.watched = {str(c).lower() for c in watched}
         self.by_fid = {c["fid"]: c for c in cands}
@@ -171,6 +173,7 @@ class ProgramRun:
         self.staged = staged or {}
         self.standing = self.staged.get(standing) if standing else None
         self.results: dict = {}
+        self.ends = {} if ends is None else ends
         self.op = None
 
     def is_ref(self, tok) -> bool:

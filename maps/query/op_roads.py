@@ -193,7 +193,6 @@ def _points_held(cx, el) -> list:
 def run_ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
     rows = []
-    n_end = 0
     no_line: list = []
     footprints: list = []
     points: list = []
@@ -233,8 +232,8 @@ def run_ends(cx, a):
             lab = str(nd.get("name") or nd.get("fid"))
             for which, pt in (("end0", cl[0]), ("end1", cl[-1])):
                 xy = [float(round(pt[0])), float(round(pt[1]))]
-                rows.append({"fid": f"end_{n_end}", "xy": xy, "name": f"{lab} {which}"})
-                n_end += 1
+                fid = cx.ends.setdefault((str(nd.get("fid")), which), f"end_{len(cx.ends)}")
+                rows.append({"fid": fid, "xy": xy, "name": f"{lab} {which}"})
     if not rows and footprints:
         named = _first_four(footprints)
         raise ProgramError(

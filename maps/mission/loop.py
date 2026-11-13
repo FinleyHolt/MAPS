@@ -200,7 +200,7 @@ class _Mission:
                 plan_rn=carry.next_rn,
                 widened=carry.paged,
                 take_minted=carry.take_minted,
-                row_of_fid=self.surface.rows.get,
+                row_of_fid=self.surface.row_of_fid,
                 say_err=self.rejections.error,
                 ground=self.programs.ground,
                 analyze=self.programs.analyze,
