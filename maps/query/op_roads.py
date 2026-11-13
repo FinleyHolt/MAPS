@@ -165,21 +165,55 @@ def _first_four(said: list) -> str:
     return ", ".join(said[:4]) + (f" (+{len(said) - 4} more)" if len(said) > 4 else "")
 
 
+_NO_ENDS = (
+    "(a crossing, a road's end or an [x, y]), and a point has no ends -- ends_of reads a road."
+)
+
+
+def _points_held(cx, el) -> list:
+    """The points a ref names, as said: an [x, y] in a list, and the rows its
+    handles hold that are points (a crossing or a road's end, a row off the
+    surface with no line)."""
+    ref = el.get("ref") if isinstance(el, dict) else el
+    said: list = []
+    for t in ref if isinstance(ref, list) else [ref]:
+        if is_xy(t):
+            said.append(format_xy_token(*t))
+        elif isinstance(t, str) and parse_xy_token(t):
+            said.append(t)
+        elif isinstance(t, str) and t not in cx.by_fid and cx.is_ref(t):
+            said += [
+                f"{x.get('fid')}" + (f" ({x.get('name')})" if x.get("name") else "")
+                for x in cx.resolve(t)
+                if isinstance(x, dict) and x.get("fid") not in cx.by_fid and not x.get("centerline")
+            ]
+    return said
+
+
 def run_ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
     rows = []
     n_end = 0
     no_line: list = []
     footprints: list = []
+    points: list = []
     for el in a["refs"]:
         nodes = named_rows(cx, el, "centerline")
         ref = el.get("ref") if isinstance(el, dict) else el
+        said = as_said(el)
         if not nodes and (is_xy(ref) or isinstance(ref, str) and parse_xy_token(ref)):
             # a crossing's fid is its [x, y] token
+            raise ProgramError(f"{quote_value(said)} is a point {_NO_ENDS}")
+        held = _points_held(cx, el)
+        if not nodes and held:
             raise ProgramError(
-                f"{quote_value(as_said(el))} is a point (a crossing or an [x, y]), and a point "
-                "has no ends -- ends_of reads a road."
+                f"{quote_value(said)} {'is a point' if len(held) == 1 else 'holds points'} "
+                + _NO_ENDS
             )
+        points += held
+        # A crossing's served name grounds on the roads it names.
+        if isinstance(said, str) and " x " in said and all(n.get("name") != said for n in nodes):
+            raise ProgramError(f"{quote_value(said)} is a point {_NO_ENDS}")
         if not nodes:
             refuse_if_empty(cx, el, "take the ends of")
             raise ProgramError(
@@ -225,5 +259,10 @@ def run_ends(cx, a):
         notes.append(
             f"{len(footprints)} footprint{'s' if len(footprints) > 1 else ''} skipped "
             f"({named}): a footprint has no ends."
+        )
+    if points:
+        notes.append(
+            f"{len(points)} point{'s' if len(points) > 1 else ''} skipped "
+            f"({_first_four(points)}): a point has no ends."
         )
     return Result(rows, ordered=True, notes=notes, set_notes=notes)

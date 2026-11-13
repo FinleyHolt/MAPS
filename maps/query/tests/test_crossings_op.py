@@ -443,7 +443,9 @@ def test_a_footprint_with_a_mask_axis_is_still_refused():
 )
 def test_a_crossing_is_a_point_with_no_ends(ref):
     prog = {"ops": [{"ref": "r0", "op": "ends", "args": {"refs": [ref]}}]}
-    with pytest.raises(ProgramError, match=r"is a point \(a crossing or an \[x, y\]\)"):
+    with pytest.raises(
+        ProgramError, match=r"is a point \(a crossing, a road.s end or an \[x, y\]\)"
+    ):
         run_program([], [], prog)
 
 
@@ -600,3 +602,28 @@ def test_a_crossing_is_named_by_its_row_whichever_side_holds_it():
     ]
     rows = _run(anchors, "prior_1", ["prior_2", "prior_3", "prior_4"])
     assert all(" / " not in r["name"] for r in rows), rows
+
+
+_POINT = "(a crossing, a road's end or an [x, y]), and a point has no ends -- ends_of reads a road."
+
+
+@pytest.mark.parametrize(
+    "code, said",
+    [
+        ('x = intersection("Long Road", "Cross Street")\nends_of(x)\n', "'x' is a point "),
+        ("ends_of(e)\n", "'e' holds points "),
+        ("ends_of(e[0])\n", "'end_0' is a point "),
+        ("ends_of([960, 960])\n", "'[960, 960]' is a point "),
+        ('ends_of("Long Road x Cross Street")\n', "'Long Road x Cross Street' is a point "),
+    ],
+)
+def test_a_point_or_a_set_of_points_is_refused_as_having_no_ends(code, said):
+    err = _ends_block(code)["error"]
+    assert said + _POINT in err, err
+
+
+def test_a_crossing_in_a_mixed_set_is_skipped_with_a_note():
+    out = _ends_block('ends_of(find("Long Road") + intersection("Long Road", "Cross Street"))\n')
+    (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
+    assert env["len"] == 2, env
+    assert "1 point skipped ([100, 100]): a point has no ends." in (env["hint"]), env
