@@ -755,3 +755,28 @@ def test_an_unknown_episode_is_one_line_on_stderr(calcity, tmp_path, capsys):
 
     code = twin.main(["--episode", "nope", "--ortho", str(calcity.rgbd), "--out", str(tmp_path)])
     assert code != 0 and capsys.readouterr().err.strip() == "calcity holds no episode nope"
+
+
+def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeypatch):
+    """The twin flies its mission in its own process: it takes the memory cap and, where
+    bubblewrap runs, writes only its run and the ortho caches."""
+    from pathlib import Path
+
+    from benchmarks import sandbox
+    from benchmarks.calcity.paths import calcity_bench
+    from benchmarks.flight import twin
+
+    def confine(*a):
+        raise SystemExit(a)
+
+    monkeypatch.setattr(sandbox, "confine", confine)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["twin", "--episode", "e", "--ortho", str(tmp_path / "o"), "--out", str(tmp_path / "out")],
+    )
+    with pytest.raises(SystemExit) as stop:
+        twin.main()
+    writable, gib, _log = stop.value.code
+    rgbd = Path(calcity_bench(os.environ).rgbd_dir)
+    assert gib == sandbox.STATION_MEMORY_GIB
+    assert writable == [tmp_path / "out", rgbd / "ortho", tmp_path / "o" / "ortho"]
