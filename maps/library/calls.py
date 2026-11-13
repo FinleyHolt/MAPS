@@ -306,14 +306,16 @@ class Library:
         )
         self._analyze(p, ref)
         self._near_miss_note(ref, query)
-        if q:
-            self.names.labels[ref] = f"find({query!r})"
+        label = f"find({query!r})" if q else ""
+        if q and cards and not self.env.rows_of_ref(ref):
+            # a side cut emptied what the find matched: the bare
+            # find('<q>') label would say the find matched nothing
             node = self.names.running_node()
-            if cards and not self.env.rows_of_ref(ref) and isinstance(node, ast.Call):
-                # a side cut emptied what the find matched: the bare
-                # find('<q>') label would say the find matched nothing
-                self.names.labels[ref] = ast.unparse(node)
-        return Rows(ref, self, label=f"find({query!r})" if q else "")
+            if isinstance(node, ast.Call):
+                label = ast.unparse(node)
+        if q:
+            self.names.labels[ref] = label
+        return Rows(ref, self, label=label)
 
     _NEAR_MISS_M = 500.0
 
