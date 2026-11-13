@@ -152,7 +152,7 @@ For the twin and the run's records, see [`docs/flight.md`](../docs/flight.md).
 | `--bench citynav\|calcity` | Bench whose catalog, maps, and runs the station serves. Default `citynav`. |
 | `--out <dir>` | Where runs land and are reviewed from: one run root, or a directory of them. Default `output/station`. |
 | `--config <yaml>` | Run config. Default `configs/<bench>.yaml`. |
-| `--basemap <picture or dir>` | North-up picture of a map's whole bake extent, or a directory of them named `<map>.jpg` or `<map>.png`: the basemap of a map with no raster pair, and the first choice of a reviewing station. |
+| `--basemap <picture or dir>` | North-up picture of a map's whole bake extent: a single picture serves the station's default map, and a directory of pictures named `<map>.jpg`, `<map>.jpeg`, or `<map>.png` serves each map it names. The basemap of a map with no raster pair, and the first choice of a reviewing station. |
 | `--osm-cache <dir>` | OSM caches that place a CityNav block. Default `tiles/osm_cache`. |
 | `--ortho <dir>` | Cal City: raster directory that the twin's frames and the basemap are cut from. Unset, the station reviews runs only. |
 | `--register <dir>` | Cal City: raster directory that each frame is registered against. Unset, nothing is registered. |
@@ -205,7 +205,7 @@ page.
 | `GET missions/runs` | Finished runs under `--out`, from the ledgers alone: path, status, score, and counts, with no transcript. |
 | `GET replay?path=` | Run's state document with the transcript, `flights`, `target_lonlat`, `target_point`, `commit_lonlat`, and `score`, plus `track` and `duration_s` (null on a run with no recorded track, whose `track` is its `visited_xy`). |
 | `GET mission/events` | Server-sent events: seat's whole state document each time it changes, `null` with the seat empty. |
-| `POST mission/next` `{episode_id?, instruction, reasoning_effort?, split?}` | Flies a catalog row; on the twin, your own words too. 409 while a mission is live or on a station that flies nothing. |
+| `POST mission/next` `{episode_id?, instruction, reasoning_effort?, split?}` | Flies a catalog row; on the twin, your own words too. 409 while a mission is live, or when the station refuses to fly it; the response says why. |
 | `POST mission/tasking` `{text}` | Speaks to the live mission. |
 | `POST mission/clear` | Ends the mission and empties the seat. A bench episode is scored before the response. |
 | `GET reasoner` | Served model and the reasoning efforts its card takes. |

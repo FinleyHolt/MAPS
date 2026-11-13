@@ -2,7 +2,7 @@
 
 This page covers the data each bench reads and how to prepare it. This
 repository ships the OpenStreetMap caches the CityNav bake reads and the Cal
-City corpus. It ships no imagery.
+City corpus. It ships no bench imagery.
 
 | Bench | Shipped | You supply |
 |---|---|---|
