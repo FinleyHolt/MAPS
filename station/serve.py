@@ -287,8 +287,11 @@ class Station:
 
     def shown_split(self) -> str:
         """The split the mission list opens on: the newest run's under the output root, so its
-        runs are in view, else the bench's default."""
-        return next((r["split"] for r in self.runs() if r.get("split")), self.split)
+        runs are in view, else the bench's default when its file is there, else the first
+        split held."""
+        held = [s for s in self.bench.split_files if self.bench.split_path(s).is_file()]
+        fallback = self.split if self.split in held or not held else held[0]
+        return next((r["split"] for r in self.runs() if r.get("split")), fallback)
 
     def about(self) -> dict[str, Any]:
         """What the console asks once: the bench, its splits, and what the seat can do."""

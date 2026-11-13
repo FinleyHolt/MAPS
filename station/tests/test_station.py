@@ -262,3 +262,16 @@ def test_a_citynav_station_without_rasters_reviews_runs_only(tmp_path):
     (root / "data" / "rgbd_upstream").mkdir()
     (root / "data" / "rgbd_upstream" / "birmingham_block_1.tif").write_bytes(b"")
     assert serve.why_not_flying(bench, None) is None
+
+
+def test_a_station_opens_on_a_split_its_list_carries(tmp_path):
+    """A splits directory without the bench's default split opens the console on a
+    split it holds, so the shown split is one the list offers."""
+    from types import SimpleNamespace
+
+    from benchmarks.citynav.paths import citynav_bench
+
+    bench = citynav_bench({"SEARCH_CITYNAV_SPLITS": str(tmp_path)})
+    (tmp_path / bench.split_files["test_unseen"]).write_text("[]")
+    seat = SimpleNamespace(bench=bench, split=bench.default_split, runs=lambda: [])
+    assert serve.Station.shown_split(seat) == "test_unseen"
