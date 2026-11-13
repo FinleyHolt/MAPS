@@ -275,6 +275,20 @@ def test_a_station_opens_on_a_split_its_list_carries(tmp_path):
     (tmp_path / bench.split_files["test_unseen"]).write_text("[]")
     seat = SimpleNamespace(bench=bench, split=bench.default_split, runs=lambda: [])
     assert serve.Station.shown_split(seat) == "test_unseen"
+    # A row sent with no split flies from the split the list showed it in.
+    import threading
+
+    flown: list = []
+    seat.__dict__.update(
+        why_not_flying=lambda: None,
+        _lock=threading.Lock(),
+        mission=None,
+        shown_split=lambda: serve.Station.shown_split(seat),
+        _bench_mission=lambda *a: flown.append(a[-2]) or SimpleNamespace(start=lambda: None),
+        seat_state=lambda: None,
+    )
+    serve.Station.start(seat, "row", "", None)
+    assert flown == ["test_unseen"]
 
 
 def test_a_cal_city_reviewing_station_draws_its_basemap_from_the_picture(calcity, tmp_path):  # noqa: F811

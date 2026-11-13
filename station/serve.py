@@ -805,7 +805,7 @@ class Station:
                 mission = self._twin_mission(episode_id, instruction, effort, stamp)
             else:
                 mission = self._bench_mission(
-                    episode_id, instruction, effort, split or self.split, stamp
+                    episode_id, instruction, effort, split or self.shown_split(), stamp
                 )
             self.mission, self._trail = mission, []
             mission.start()
