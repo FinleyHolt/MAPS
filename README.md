@@ -20,8 +20,8 @@ searches, and the readers that derive every reported number from run records.
 
 https://github.com/user-attachments/assets/9f7bfc45-4f68-4f71-a20f-6c9af015d0c1
 
-*The quickstart in one minute, without sound. Every command it shows is below.
-The same video is in [`docs/figures/welcome.mp4`](docs/figures/welcome.mp4).*
+*The quickstart in one minute. Every command it shows is below. The same video
+is in [`docs/figures/welcome.mp4`](docs/figures/welcome.mp4).*
 
 Requires Python 3.12 or later. No model, GPU, or dataset.
 
