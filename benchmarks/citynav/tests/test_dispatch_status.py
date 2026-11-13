@@ -125,6 +125,18 @@ def test_an_image_store_refusal_is_infra(code):
         assert dispatch.is_infra_fault(exc) is True
 
 
+def test_a_memory_error_reaching_dispatch_is_infra():
+    """A block's own MemoryError is served inside run_block, so one that reaches
+    dispatch came from harness code (the assets load, a picture): re-queued, out of SR."""
+    try:
+        try:
+            raise MemoryError
+        except MemoryError as exc:
+            raise RuntimeError("episode assets failed to load") from exc
+    except RuntimeError as exc:
+        assert dispatch.is_infra_fault(exc) is True
+
+
 def test_a_segmenter_fault_inside_a_block_is_infra(tmp_path, light, monkeypatch):
     """A fault a flight raises leaves the model's block and the mission:
     the attempt is infra, re-queued and out of SR."""
