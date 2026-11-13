@@ -297,13 +297,12 @@ class Library:
         if name is not None and query == "":
             raise CodeError(f"the name IS the query: find({name!r})")
         q = str(query)
-        # A fid is no name to search for: one no row carries is refused.
-        if (
-            q.startswith(("prior_", "detected_", "end_"))
-            and fid_like(q)
-            and self.env.row_of_fid(q) is None
-        ):
-            raise no_such_fid(q)
+        # A fid is no name to search for: it reads in either case, as a stop
+        # id does, and one no row carries is refused.
+        if fid_like(q) and q.strip().lower().startswith(("prior_", "detected_", "end_")):
+            if self.env.row_of_fid(q.strip().lower()) is None:
+                raise no_such_fid(q)
+            q = q.strip().lower()
         refuse_metres_in_within(within)
         nearest = self._slot(nearest)
         near = self._slot(near)

@@ -803,3 +803,19 @@ def test_an_act_hands_a_quoted_terminus_fid_on_as_said():
     calls, _out = record_block(code, row_of_fid=lambda f: end if f == "end_1" else None)
     assert [c[0] for c in calls] == ["crops", "move", "cover", "map", "stand"], calls
     assert "[120, 100]" not in repr(calls), calls
+
+
+@pytest.mark.parametrize("code", ['find("END_7")\n', 'find(" end_7 ")\n'])
+def test_find_refuses_an_unborne_end_fid_in_either_case(code):
+    err = _ends_block(code)["error"]
+    assert err.startswith("line 2: there is no ") and "end_7" in err.lower(), err
+
+
+@pytest.mark.parametrize(
+    "code, fid",
+    [('find("end_0")', "end_0"), ('find("END_1")', "end_1"), ('find("PRIOR_1")', "prior_1")],
+)
+def test_find_returns_a_borne_fid_s_row_directly_in_either_case(code, fid):
+    out = _ends_block(f"print({code})\n")
+    assert "error" not in out, out
+    assert f"): 1 row(s): {fid} [" in out["printed"], out
