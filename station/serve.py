@@ -51,7 +51,7 @@ from pydantic import BaseModel
 from benchmarks import sandbox
 from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
-from benchmarks.flight.live_source import open_live
+from benchmarks.flight.live_source import check_map, open_live
 from benchmarks.flight.mission import (
     STATE_AWAITING,
     STATE_ENDED,
@@ -62,7 +62,7 @@ from benchmarks.flight.mission import (
     resolve_episode,
 )
 from benchmarks.flight.tile_georef import map_bounds
-from benchmarks.flight.twin import Twin
+from benchmarks.flight.twin import Twin, effort_refusal
 from benchmarks.run_record import rows
 from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (
@@ -273,8 +273,16 @@ class Station:
         return self.bench.engine.load_objects(path) if path.is_file() else {}
 
     def why_not_flying(self) -> str | None:
-        """Why this station flies nothing, or None when it can."""
-        return why_not_flying(self.bench, self.ortho_dir)
+        """Why this station flies nothing, or None when it can: a twin's map must carry
+        its georef, bake and floors too."""
+        if (why := why_not_flying(self.bench, self.ortho_dir)) is not None:
+            return why
+        if self.bench.name == "calcity" and self.map_name:
+            try:
+                check_map(self.tiles_dir, self.map_name)
+            except ValueError as exc:
+                return f"this station reviews runs only: {exc}"
+        return None
 
     def shown_split(self) -> str:
         """The split the mission list opens on: the newest run's under the output root, so its
@@ -761,6 +769,8 @@ class Station:
         the map's centre, on a twin of its own; on CityNav a row of ``split`` through the bench's runner."""
         if (why := self.why_not_flying()) is not None:
             raise HTTPException(409, why)
+        if (why := effort_refusal(self.bench, effort)) is not None:
+            raise HTTPException(400, why)
         with self._lock:
             if self.mission is not None and self.mission.status in LIVE:
                 raise HTTPException(

@@ -60,6 +60,14 @@ def test_clearing_the_seat_waits_for_a_twin_mission_to_bank_its_row():
     assert calls == ["stop", serve.END_WAIT_S] and seat.mission is None
 
 
+def test_a_twin_station_whose_map_lacks_its_bake_flies_nothing(tmp_path):
+    seat = SimpleNamespace(
+        bench=SimpleNamespace(name="calcity"), ortho_dir=tmp_path, tiles_dir=tmp_path, map_name="m"
+    )
+    why = serve.Station.why_not_flying(seat)
+    assert why is not None and why.startswith("this station reviews runs only: m carries no georef")
+
+
 def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monkeypatch):  # noqa: F811
     station = serve.Station(
         bench=calcity.bench,
@@ -89,6 +97,13 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
         and asked == [{"probe_sam": False}] * 2
     )
 
+    # An effort the served card refuses is refused before a run folder opens.
+    bogus = client.post(
+        "/mission/next",
+        json={"episode_id": row["episode_id"], "instruction": "", "reasoning_effort": "bogus"},
+    )
+    assert bogus.status_code == 400 and "bogus" in bogus.json()["detail"]
+    assert not (tmp_path / "out").exists() or not any((tmp_path / "out").iterdir())
     state = client.post(
         "/mission/next", json={"episode_id": row["episode_id"], "instruction": row["instruction"]}
     ).json()

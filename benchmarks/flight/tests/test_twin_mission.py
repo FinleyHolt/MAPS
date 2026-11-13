@@ -775,6 +775,20 @@ def test_an_unknown_episode_is_one_line_on_stderr(calcity, tmp_path, capsys):
     assert code != 0 and capsys.readouterr().err.strip() == "calcity holds no episode nope"
 
 
+def test_a_bad_effort_or_a_map_without_its_bake_exits_2_before_a_run_folder_opens(
+    calcity, serves, tmp_path, capsys, monkeypatch
+):
+    from benchmarks.flight import twin
+
+    out = tmp_path / "out"
+    argv = ["--episode", "calcity::0#0", "--ortho", str(calcity.rgbd), "--out", str(out)]
+    assert twin.main([*argv, "--reasoning-effort", "bogus"]) == 2
+    assert "bogus" in capsys.readouterr().err and not out.exists()
+    monkeypatch.setenv("SEARCH_CALCITY_TILES", str(tmp_path / "nobake"))
+    assert twin.main(argv) == 2
+    assert "georef" in capsys.readouterr().err and not out.exists()
+
+
 def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeypatch):
     """The twin flies its mission in its own process: it takes the memory cap and, where
     bubblewrap runs, writes only its run and the ortho caches."""
