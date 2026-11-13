@@ -616,7 +616,7 @@ row,episode_id,shape,prompt,verdict,note
 617,calcity::618#617,target_mask,The store named Metro by T-Mobile.,,
 618,calcity::619#618,target_mask,The store called Oasis Laundromat.,,
 619,calcity::620#619,target_mask,The building named Rite Aid.,ok,sentence and outline answered right (needs-review queue)
-620,calcity::621#620,target_mask,The building named Subway.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+620,calcity::621#620,object 1376,The building named Subway.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 621,calcity::622#621,target_mask,The building named West Best Pizza Co.,mask,"mask redrawn by the reviewer on 2026-11-04 for the masks-to-check sheet and copied into calcity.json (visual-ordinals review, dashboard ground_truth.json sidecar of 2026-11-04)"
 622,calcity::623#622,target_mask,The parking lot just northeast of Tierra del Sol Golf Course.,,
 623,calcity::624#623,target_mask,The swimming pool just northeast of Tierra del Sol Golf Course.,,
@@ -628,7 +628,7 @@ row,episode_id,shape,prompt,verdict,note
 705,calcity::706#705,target_mask,The house on the northwest corner of 79th Street and Quezon Avenue.,,
 744,calcity::745#744,target_mask,The house on the southwest corner of 83rd Street and Poppy Boulevard.,,
 745,calcity::746#745,target_mask,The house on the southeast corner of 83rd Street and Poppy Boulevard.,,
-769,calcity::770#769,target_mask,The house on the southeast corner of 86th Street and Manzanita Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
+769,calcity::770#769,object 3224,The house on the southeast corner of 86th Street and Manzanita Avenue.,,omitted from the capacity study (needs-review queue): flagged: the generator pinned the wrong house: the linked footprint is one house off the one the sentence names; the reviewer's mask sits on the right house but the build keeps the link
 777,calcity::778#777,target_mask,The house on the southwest corner of 87th Street and Nipa Avenue.,,
 791,calcity::792#791,target_mask,The house on the southwest corner of 88th Street and Lime Avenue.,,
 792,calcity::793#792,target_mask,The house on the southeast corner of 88th Street and Lime Avenue.,,
