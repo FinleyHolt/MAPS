@@ -747,3 +747,23 @@ def test_a_quoted_terminus_fid_in_a_place_slot_is_the_row_it_names(call):
 def test_a_quoted_terminus_fid_is_refused_by_ends_of_as_the_point_it_is():
     err = _ends_block('ends_of("end_0")\n')["error"]
     assert "'end_0' is a point " + _POINT in err, err
+
+
+@pytest.mark.parametrize(
+    "code, fids, skipped",
+    [
+        ('ends_of(["Long Road", [5, 5]])\n', ["end_0", "end_1"], "1 point skipped ([5, 5])"),
+        (
+            'ends_of([find("Long Road")[0], "Cross Street"])\n',
+            ["end_0", "end_1", "end_2", "end_3"],
+            None,
+        ),
+        ('ends_of(["Long Road", "Cross Street"])\n', ["end_0", "end_1", "end_2", "end_3"], None),
+    ],
+)
+def test_a_name_in_a_written_list_grounds_as_a_lone_name_does(code, fids, skipped):
+    out = _ends_block(code)
+    assert "error" not in out, out
+    (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
+    assert env["fids"] == fids, env
+    assert skipped is None or skipped in env["hint"], env

@@ -419,6 +419,12 @@ class Library:
 
     def ends_of(self, x):
         x = self._slot(x)
+        if isinstance(x, (list, tuple)) and not is_xy(x):
+            # A name in a written list grounds as a lone name does: the
+            # program grounds only a name that is a whole argument.
+            sites = [place_token(m, "anchor") if isinstance(m, str) else m for m in x]
+            ties = self._ground((s, "anchor") for s in sites)
+            x = [f for s in sites for f in (ties[s] if isinstance(s, PlaceName) else [s])]
         p = self._program(x)
         el = p.ref_of(x, points=True)
         if isinstance(el, dict) and any(is_xy(m) for m in el["ref"]) and not is_xy(el["ref"]):
