@@ -1,8 +1,8 @@
 # Third-party notices
 
 MAPS is MIT-licensed ([`LICENSE`](LICENSE)). These files and data in the
-repository, and the README's quickstart video, come from third parties, or are
-derived from third-party data:
+repository, the README's quickstart video, and the example-runs release asset
+come from third parties, or are derived from third-party data:
 
 | Path | Contents | Source | License |
 |---|---|---|---|
@@ -15,6 +15,7 @@ derived from third-party data:
 | `docs/figures/overview.webp`, panels A and B | Photographs from the C-12 flight campaign. | U.S. Air Force Test Pilot School, test plan USAFTPS-TP-26-08. | Distribution Statement A: approved for public release. |
 | `docs/figures/overview.webp`, panel C inset crops | Crops of the C-12's map imagery. | U.S. Air Force Test Pilot School, test plan USAFTPS-TP-26-08. | Distribution Statement A: approved for public release. |
 | README quickstart video (a GitHub upload and a release asset) | Console scenes over the C-12's map imagery. | U.S. Air Force Test Pilot School, test plan USAFTPS-TP-26-08. | Distribution Statement A: approved for public release. |
+| `MAPS-example-runs.zip` (a release asset): `basemap.jpg` and each search's `frames/` | The C-12's map imagery and crops of it. | U.S. Air Force Test Pilot School, test plan USAFTPS-TP-26-08. | Distribution Statement A: approved for public release. |
 | `docs/figures/overview.webp`, panel C basemap | Aerial imagery of California City under the track. | USDA National Agriculture Imagery Program (NAIP), USDA Farm Service Agency. | Public domain. |
 
 ## Station console bundle
