@@ -185,8 +185,9 @@ class Bench:
     #: (:attr:`engine`). Named, not held: describing a bench, checking its data
     #: and reading its bake need the standard library alone.
     engine_module: str
-    #: Raises with the bench's preparation recipe when its runtime data is absent.
-    availability: Callable[[Bench], None]
+    #: Raises with the bench's preparation recipe when its runtime data is absent, the
+    #: named split's file (when one is named) included.
+    availability: Callable[[Bench, str | None], None]
     #: The environment of the bench's runs: the mapping it was built from, plus
     #: the variables the bench itself exports and what an entry point settles
     #: (:meth:`with_environ`). A run's manifest and rows record it, the engine's
@@ -211,8 +212,8 @@ class Bench:
         """Stem path of a block's bake files (no suffix)."""
         return str(self.tiles_dir / map_name)
 
-    def assert_available(self) -> None:
-        self.availability(self)
+    def assert_available(self, split: str | None = None) -> None:
+        self.availability(self, split)
 
     def bake_sha256(self) -> str | None:
         """The content identity of this bench's tile bake (:func:`bake_sha256`)."""

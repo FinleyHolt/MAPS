@@ -52,9 +52,11 @@ SPLIT_FILES: dict[str, str] = {
 }
 
 
-def _assert_available(bench: Bench) -> None:
-    """Raise with the fetch recipe when the splits or ``objects.json`` are missing."""
-    missing = [p for p in (bench.splits_dir, bench.objects_json) if not p.exists()]
+def _assert_available(bench: Bench, split: str | None = None) -> None:
+    """Raise with the fetch recipe when the splits, ``split``'s file or ``objects.json``
+    are missing."""
+    required = [bench.splits_dir, *([bench.split_path(split)] if split else []), bench.objects_json]
+    missing = [p for p in required if not p.exists()]
     if missing:
         recipe = (
             f"CityNav data not found under {bench.root}.\n"

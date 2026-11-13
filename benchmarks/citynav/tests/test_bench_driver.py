@@ -48,9 +48,10 @@ OUTCOMES = {
 @pytest.fixture
 def bench_data(tmp_path, monkeypatch) -> Path:
     """A CityNav data root holding what ``assert_available`` checks: the splits
-    directory and the object catalog."""
+    directory, the default split's file (no rows) and the object catalog."""
     root = tmp_path / "citynav"
     (root / "data" / "citynav").mkdir(parents=True)
+    (root / "data" / "citynav" / "citynav_val_seen.json").write_text("[]")
     (root / "data" / "cityrefer").mkdir(parents=True)
     (root / "data" / "cityrefer" / "objects.json").write_text("{}")
     monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(root))
@@ -1054,7 +1055,9 @@ def test_the_cal_city_runner_run_directly_confines_itself(tmp_path, monkeypatch)
     monkeypatch.setattr(
         run_benchmark,
         "calcity_bench",
-        lambda environ: dataclasses.replace(calcity_bench(environ), availability=lambda b: None),
+        lambda environ: dataclasses.replace(
+            calcity_bench(environ), availability=lambda b, split=None: None
+        ),
     )
     monkeypatch.setattr(cli, "block_asset_refusal", lambda bench, maps: None)
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
@@ -1102,3 +1105,23 @@ def test_the_runner_refuses_a_block_without_its_raster_pair_before_its_out(
         "benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
         in capsys.readouterr().err.splitlines()
     )
+
+
+def test_a_missing_split_file_is_refused_with_the_fetch_recipe(
+    tmp_path, monkeypatch, capsys, bench_data
+) -> None:
+    """``data/citynav`` is there but the split flown is not: the driver and the runner name
+    the file in the fetch recipe, before any out-root."""
+    from benchmarks.citynav.run_benchmark import cli
+
+    split = bench_data / "data" / "citynav" / "citynav_val_seen.json"
+    split.unlink()
+    monkeypatch.setattr(bf.Driver, "run", lambda self: pytest.fail("flew"))
+    assert bf.main(["--out-root", str(tmp_path / "r")]) == 2
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: pytest.fail("confined"))
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
+    assert cli.main() == 1
+    assert not (tmp_path / "r").exists()
+    driver_err, runner_err = capsys.readouterr().err.split("FATAL: ")[1:]
+    for err in (driver_err, runner_err):
+        assert err.startswith("CityNav data not found under ") and f"Missing: {split}" in err, err

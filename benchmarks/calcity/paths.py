@@ -49,7 +49,7 @@ def bake_meta(tiles_dir: Path) -> dict:
     return json.loads(path.read_text())
 
 
-def _assert_available(bench: Bench) -> None:
+def _assert_available(bench: Bench, split: str | None = None) -> None:
     """Fail with the Cal City preparation recipe when runtime data is absent."""
     # The tile bake is checked by its meta file, not the directory: the
     # directory is gitignored, so a tree can carry it empty (an interrupted

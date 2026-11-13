@@ -860,7 +860,7 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     # unreachable or wrong one fails before any worker spawns.
     try:
         resolve_config(config)
-        bench.assert_available()
+        bench.assert_available(args.split)
         driver = Driver(args, bench, config)
         driver._selection = driver._select_episodes()
         if why := block_asset_refusal(bench, (e.split("::", 1)[0] for e in driver._selection)):

@@ -149,8 +149,8 @@ def main(bench: Bench | None = None) -> int:
         _die_with_parent(bench.environ)
 
     try:
-        bench.assert_available()
-    except (OSError, RuntimeError) as exc:
+        bench.assert_available(args.split)
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 1
     raw_rows = load_split(bench.split_path(args.split))
