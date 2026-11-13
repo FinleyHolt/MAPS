@@ -104,6 +104,22 @@ def test_a_block_past_the_attempt_cap_is_the_model_s_error_not_a_crash(driver, m
     assert row["status"] == "ok" and row["error"].startswith("line 1: MemoryError"), row
 
 
+def test_an_attempt_gets_the_reasoner_key_and_none_of_the_launcher_s_other_secrets(
+    driver, monkeypatch
+):
+    """The attempt's environment is the allowlist: a token in the launching shell never
+    reaches model code, the key the attempt calls the reasoner with does."""
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    monkeypatch.setenv("FAKE_SECRET", "s")
+    monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
+    d = driver(selection=["env::1#0"])
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    (row,) = iter_json_rows(d.episodes_file)
+    assert row["env"] == {"FAKE_SECRET": None, "SEARCH_REASONER_API_KEY": "k"}, row
+
+
 @pytest.mark.skipif(
     not sandbox.bwrap_works(), reason="bwrap is absent or this host blocks user namespaces"
 )

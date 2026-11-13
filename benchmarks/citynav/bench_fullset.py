@@ -99,8 +99,9 @@ RUNNER_THREAD_ENV = {
 
 def _runner_env(bench: Bench) -> dict[str, str]:
     """The environment an attempt child of ``bench`` is spawned under: this
-    process's, under the run's own (the bench's selection, the settled effort)."""
-    env = {**RUNNER_THREAD_ENV, **os.environ, **bench.environ}
+    process's, under the run's own (the bench's selection, the settled effort), cut
+    to :func:`sandbox.child_env`'s allowlist."""
+    env = sandbox.child_env({**RUNNER_THREAD_ENV, **os.environ, **bench.environ})
     # Unbuffered, so a child that dies fast still leaves its lines in server.log.
     env["PYTHONUNBUFFERED"] = "1"
     env[episodes.PARENT_PID_ENV] = str(os.getpid())
@@ -438,6 +439,9 @@ class Driver:
         unit = f"maps-attempt-{os.getpid()}-w{worker_id}-{time.time_ns()}"
         if self._scope:
             cmd = sandbox.scope_argv(unit, self.memory_gib) + cmd
+            # systemd-run reaches the user manager through these, and the attempt it
+            # starts inherits them (README "Security": the scope binds a cooperative block).
+            env |= {k: os.environ[k] for k in sandbox.USER_BUS_ENV if k in os.environ}
         # The child prints its workdir as its first stdout line; an unlinked
         # file holds it, so no pipe can fill and stall the child.
         with tempfile.TemporaryFile("w+") as out, (worker_root / "server.log").open("a") as err:

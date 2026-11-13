@@ -62,6 +62,64 @@ SANDBOXED_ENV = "MAPS_SANDBOXED"
 REPO = Path(__file__).resolve().parents[1]
 
 
+#: The environment model code runs under keeps these names and prefixes alone, so a
+#: token in the launching shell stays out of a block's reach: MAPS's own variables
+#: (the run flags the manifest records, the endpoints, the reasoner's key), the
+#: Hugging Face settings, the locale, and what the interpreter, the proxies and the
+#: native thread pools read.
+_ENV_NAMES = frozenset(
+    [
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "LANG",
+        "TERM",
+        "TZ",
+        "TMPDIR",
+        "XDG_CACHE_HOME",
+        "LD_LIBRARY_PATH",
+        "PYTHONPATH",
+        "PYTHONUNBUFFERED",
+        "PYTHONHASHSEED",
+        "MALLOC_ARENA_MAX",
+        "OPENCV_FOR_THREADS_NUM",
+        "TOKENIZERS_PARALLELISM",
+        "TRANSFORMERS_OFFLINE",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy",
+        "all_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "ALL_PROXY",
+    ]
+)
+_ENV_PREFIXES = ("SEARCH_", "CITYNAV_", "SAM_", "MAPS_", "HF_", "LC_")
+#: Hugging Face's token variables, dropped though they match ``HF_``.
+_ENV_SECRETS = frozenset({"HF_TOKEN", "HF_TOKEN_PATH", "HUGGING_FACE_HUB_TOKEN"})
+
+
+#: What ``systemd-run --user`` and ``systemctl --user`` find the user manager by.
+USER_BUS_ENV = ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
+
+
+def child_env(environ) -> dict[str, str]:
+    """``environ`` cut to what a process running model code may see (:data:`_ENV_NAMES`,
+    :data:`_ENV_PREFIXES`, any ``*_NUM_THREADS``), Hugging Face's token excepted."""
+    return {
+        k: v
+        for k, v in environ.items()
+        if (k in _ENV_NAMES or k.startswith(_ENV_PREFIXES) or k.endswith("_NUM_THREADS"))
+        and k not in _ENV_SECRETS
+    }
+
+
 def cap_memory(gib: float) -> None:
     """Cap this process (and every child it starts) at ``gib`` of data segment; the hard
     limit too, so code running here cannot raise it."""
