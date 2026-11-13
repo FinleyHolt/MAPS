@@ -667,3 +667,20 @@ def test_a_typed_terminus_resolves_to_its_own_road_in_every_call():
     assert "error" not in out, out
     assert out["printed"] == "0.0 0.0", out
     assert out["flown"]["flown"][0]["target"] == "[100, 80]", out
+
+
+@pytest.mark.parametrize(
+    "code, said",
+    [
+        ('ends_of("[100, 100]")\n', "'[100, 100]' is a point "),
+        ("ends_of([100, 100])\n", "'[100, 100]' is a point "),
+    ],
+)
+def test_a_point_is_quoted_as_its_xy_token(code, said):
+    err = _ends_block(code)["error"]
+    assert said + _POINT in err, err
+
+
+def test_a_crossing_refusal_quotes_a_point_as_its_xy_token():
+    err = _ends_block('intersection([100, 100], "Cross Street")\n')["error"]
+    assert err.startswith("'[100, 100]' names no geometry"), err

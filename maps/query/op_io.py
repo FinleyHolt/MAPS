@@ -13,7 +13,7 @@ from maps.query.result_tables import (
     STANDING_SIDE_PREFIXES,
     column_ref,
 )
-from maps.xy_token import is_xy
+from maps.xy_token import format_xy_token, is_xy
 
 
 def quote_value(v) -> str:
@@ -293,8 +293,14 @@ def named_rows(cx, el, need):
 
 
 def as_said(el):
-    """A crossings/ends ref as the model said it: its label, else itself."""
-    return el["as"] if isinstance(el, dict) and el.get("as") else el
+    """A crossings/ends ref as the model said it: its label, else itself. An
+    inline point's label is its column token ("960 960"), so it is quoted
+    as the ``[x, y]`` it was written as."""
+    ref = el.get("ref") if isinstance(el, dict) else el
+    said = el["as"] if isinstance(el, dict) and el.get("as") else el
+    if is_xy(ref) and (said is ref or said == f"{ref[0]:g} {ref[1]:g}"):
+        return format_xy_token(*ref)
+    return said
 
 
 def refuse_if_empty(cx, el, what: str) -> None:

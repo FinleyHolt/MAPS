@@ -43,7 +43,7 @@ from maps.query.color_words import COLOR_ENUM, normalize_color
 from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.row_geometry import SurfaceGeometry
 from maps.query.spatial_math import COMPASS_UNIT
-from maps.xy_token import format_xy_token, is_xy
+from maps.xy_token import is_xy
 
 # One block's measuring budget: a nested loop of distance() calls is one per
 # PAIR, millions of mask-to-mask scans at real set sizes.
@@ -412,10 +412,7 @@ class Library:
     def ends_of(self, x):
         x = self._slot(x)
         p = self._program(x)
-        el = p.ref_of(x)
-        if is_xy(x):
-            el["as"] = format_xy_token(*x)  # a refusal quotes the point as written
-        return Rows(self._analyze(p, p.add("ends", {"refs": [el]})), self)
+        return Rows(self._analyze(p, p.add("ends", {"refs": [p.ref_of(x)]})), self)
 
     def more_of(self, x):
         if not isinstance(x, Rows) or x._spec:
