@@ -54,7 +54,7 @@ the version the lockfile installs beside it.
 | `quickselect`, in the style spec | 3.0.0 | ISC | Copyright (c) 2024, Vladimir Agafonkin. |
 | `tinyqueue`, in `maplibre-gl` and its style spec | 3.0.0 | ISC | Copyright (c) 2017, Vladimir Agafonkin. |
 | `tslib`, in `maplibre-gl` | Version of `maplibre-gl`'s build | 0BSD | Copyright (c) Microsoft Corporation. |
-| `vite` (module-preload polyfill and preload helper) | 8.2.2 | MIT | Copyright (c) 2019-present, VoidZero Inc. and Vite contributors. |
+| `vite` (module-preload polyfill and preload helper) | 8.2.4 | MIT | Copyright (c) 2019-present, VoidZero Inc. and Vite contributors. |
 | `rolldown` (module interop helpers) | 1.2.5 | MIT | Copyright (c) 2024-present VoidZero Inc. & Contributors. Its THIRD-PARTY-LICENSE adds Rollup's (Copyright (c) 2017 [these people](https://github.com/rollup/rollup/graphs/contributors)) and esbuild's (Copyright (c) 2020 Evan Wallace), both MIT. |
 
 `@maplibre/mlt` is offered under MIT or Apache-2.0; the MIT text below
