@@ -220,6 +220,18 @@ def test_a_capped_process_imports_its_native_libraries_on_any_core_count(monkeyp
     subprocess.run([sys.executable, "-c", probe], env=env, cwd=sandbox.REPO, check=True)
 
 
+def test_model_code_sees_no_hugging_face_credential_under_either_prefix() -> None:
+    """Any ``HF_``/``HUGGINGFACE_`` name carrying ``TOKEN`` is a credential (the hub's
+    own, an OIDC id token, a third party's), so the allowlist drops it and keeps the
+    hub's cache and offline settings."""
+    kept = {"HF_HOME": "/h", "HF_HUB_CACHE": "/c", "HF_HUB_OFFLINE": "1"}
+    dropped = ["HF_TOKEN", "HF_TOKEN_PATH", "HF_FAKE_OIDC_ID_TOKEN", "HUGGINGFACE_HUB_TOKEN",
+               "HF_THIRDPARTY_API_TOKEN", "HUGGINGFACE_FAKE_TOKEN_FILE"]  # fmt: skip
+    env = sandbox.child_env({**kept, **dict.fromkeys(dropped, "x")})
+    assert {k: env[k] for k in kept} == kept
+    assert not set(dropped) & set(env), sorted(set(dropped) & set(env))
+
+
 class _Execed(Exception):
     pass
 

@@ -116,8 +116,9 @@ _ENV_NAMES = frozenset(
     ]
 )
 _ENV_PREFIXES = ("SEARCH_", "CITYNAV_", "CALCITY_", "SAM_", "MAPS_", "HF_", "HUGGINGFACE_", "LC_")
-#: Hugging Face's token variables, dropped though they match ``HF_``.
-_ENV_SECRETS = frozenset({"HF_TOKEN", "HF_TOKEN_PATH"})
+#: Under these prefixes a name carrying ``TOKEN`` is a credential (the hub's token and its
+#: path, an OIDC id token, a third party's), dropped though the prefix matches.
+_HF_PREFIXES = ("HF_", "HUGGINGFACE_")
 
 
 #: What ``systemd-run --user`` and ``systemctl --user`` find the user manager by.
@@ -141,13 +142,13 @@ THREAD_ENV = {
 
 def child_env(environ) -> dict[str, str]:
     """``environ`` cut to what a process running model code may see (:data:`_ENV_NAMES`,
-    :data:`_ENV_PREFIXES`, any ``*_NUM_THREADS``), Hugging Face's token excepted, over
-    :data:`THREAD_ENV`."""
+    :data:`_ENV_PREFIXES`, any ``*_NUM_THREADS``), Hugging Face's credentials excepted
+    (:data:`_HF_PREFIXES`), over :data:`THREAD_ENV`."""
     return THREAD_ENV | {
         k: v
         for k, v in environ.items()
         if (k in _ENV_NAMES or k.startswith(_ENV_PREFIXES) or k.endswith("_NUM_THREADS"))
-        and k not in _ENV_SECRETS
+        and not (k.startswith(_HF_PREFIXES) and "TOKEN" in k)
     }
 
 
