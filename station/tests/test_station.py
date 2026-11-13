@@ -245,3 +245,20 @@ def test_the_command_line_station_confines_itself_before_it_serves(flies, tmp_pa
     caches = [Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho"]
     assert writable == [tmp_path / "out", *(caches if flies else [])]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)
+
+
+def test_a_citynav_station_without_rasters_reviews_runs_only(tmp_path):
+    """Annotations alone fly nothing: a mission crops its pictures from the block's
+    raster, so a station with no raster under its raster directory reports why."""
+    from benchmarks.citynav.paths import citynav_bench
+
+    root = tmp_path / "citynav"
+    (root / "data" / "citynav").mkdir(parents=True)
+    (root / "data" / "cityrefer").mkdir(parents=True)
+    (root / "data" / "cityrefer" / "objects.json").write_text("{}")
+    bench = citynav_bench({"SEARCH_CITYNAV_DATA": str(root)})
+    why = serve.why_not_flying(bench, None)
+    assert why is not None and str(bench.rgbd_dir) in why, why
+    (root / "data" / "rgbd_upstream").mkdir()
+    (root / "data" / "rgbd_upstream" / "birmingham_block_1.tif").write_bytes(b"")
+    assert serve.why_not_flying(bench, None) is None

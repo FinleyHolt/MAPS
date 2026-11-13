@@ -899,6 +899,9 @@ def why_not_flying(bench: Bench, ortho_dir: Path | None) -> str | None:
         bench.assert_available()
     except (FileNotFoundError, RuntimeError) as exc:
         return f"this station reviews runs only: {str(exc).splitlines()[0]}"
+    # A mission crops its pictures from its block's raster.
+    if not any(Path(bench.rgbd_dir).glob("*.tif")):
+        return f"this station reviews runs only: no block raster under {bench.rgbd_dir}"
     return None
 
 
