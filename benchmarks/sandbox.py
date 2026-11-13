@@ -1,26 +1,27 @@
-"""OS isolation for the processes that run model-written Python: a bench attempt and the station.
+"""OS isolation for the processes that run model-written Python: a bench attempt, the
+station, the twin CLI and the runner.
 
 The run tool executes a model's block inside the process that flies the
-mission, and the interpreter's checks are no security boundary (README
-"Security"). The OS adds:
+mission, and the interpreter's checks are no security boundary. The layers
+this module adds (memory cap, systemd scope, environment allowlist,
+bubblewrap) and the hosts each applies on are in README.md#security.
 
-| Layer | Mechanism | Effect |
-| --- | --- | --- |
-| Memory | ``RLIMIT_DATA``, soft and hard alike | an allocation past the cap raises ``MemoryError`` in the block, served as the block's error |
-| Memory, processes | a bench attempt's transient systemd user scope, ``MemoryMax`` the cap | shared memory and child processes count; the scope is killed with the attempt |
-| File system | bubblewrap: ``/`` read-only; home, ``/tmp``, ``/dev/shm`` and ``/run`` empty; the run's inputs bound read-only, its output and cache directories writable | a block reads only the run's inputs and writes only its own directories |
-| Processes | bubblewrap's PID namespace | the code sees and signals its own process tree alone |
-
-``RLIMIT_DATA`` counts a process's private writable memory (heap, anonymous
-maps, thread stacks), so the read-only ortho cache a mission maps
-(gigapixels on Cal City) and the shared libraries stay outside the cap, which
-``RLIMIT_AS`` would count.
+``RLIMIT_DATA`` counts a process's private writable mappings (heap, anonymous
+maps, every thread's reserved stack, a shared library's writable segments), so
+the read-only ortho cache a mission maps (gigapixels on Cal City) and the
+libraries' code stay outside the cap, which ``RLIMIT_AS`` would count.
 
 ponytail: the network stays shared, since the mission reaches the reasoner and
 the segmenter over HTTP; holding egress to those endpoints takes a network
 namespace with firewall rules (root) or a filtering proxy. A shared network
 namespace also keeps the host's abstract Unix sockets (an X server's among
 them) reachable, and the reasoner's key rides the process environment.
+
+ponytail: without bubblewrap the scope binds a cooperative block only: the
+block reaches the user manager (``XDG_RUNTIME_DIR`` names its bus, and a block
+can set it itself) and can lift its own ``MemoryMax`` with ``systemctl --user
+set-property`` or start units outside the scope with ``systemd-run``; closing
+that takes bubblewrap's empty ``/run``.
 
 ponytail: an allocation failure in native code (a Rust tokenizer's abort, the
 scope's OOM kill) ends the attempt with a signal, which the driver books as a
@@ -29,8 +30,10 @@ telling the two apart takes a marker the attempt writes before each block.
 
 ponytail: the attempt scores itself (its frames hold the target, the driver
 trusts its ``episode.json`` and stdout), so a block that escapes the library can
-rewrite its own score; benchmark numbers from an untrusted model need a
-container or a virtual machine that scores outside it.
+rewrite its own score and the caches later attempts read (the ortho cache is
+shared and its stamp is a file); benchmark numbers from an untrusted model need
+a container or a virtual machine that scores outside it, or ortho caches the
+driver builds before any attempt and binds read-only.
 """
 
 from __future__ import annotations
@@ -49,7 +52,9 @@ from pathlib import Path
 #: A bench attempt's memory cap, GiB: measured CityNav attempts of 23 turns and
 #: 20 flights (the Stanford block with the served model's tokenizer;
 #: birmingham_block_1 building its ortho cache) peak at 1.1 GiB of data
-#: segment; hardware and blocks vary, so the driver takes ``--attempt-memory-gib``.
+#: segment, Cal City attempts at 3.2 to 3.3 GiB in an environment whose tokenizer
+#: import loads torch (0.67 GiB of it); hardware and blocks vary, so the driver
+#: takes ``--attempt-memory-gib``.
 ATTEMPT_MEMORY_GIB = 4.0
 #: A mission process's cap (the station, the twin CLI), GiB: the station
 #: flying the Stanford episode from the seat peaks at 2.6 GiB of data segment,
@@ -320,8 +325,8 @@ def mode_line(refusal: str | None, gib: float, *, scope: bool | None = None) -> 
         cap += "; no systemd user manager: shared memory and child processes escape the cap"
     if refusal is None:
         return (
-            "sandbox: bubblewrap, / read-only, home /tmp /run empty, readable the run's "
-            f"inputs, writable only the run's output and caches; network shared; {cap}"
+            "sandbox: bubblewrap, / read-only, home /tmp /dev/shm /run empty, readable the "
+            f"run's inputs, writable only the run's output and caches; network shared; {cap}"
         )
     return f"sandbox: {refusal}; model code runs without file-system isolation; {cap}"
 
