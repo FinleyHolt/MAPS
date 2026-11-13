@@ -12,7 +12,6 @@ file lock. World frame: x = east, y = north, z = up (meters).
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import functools
 import json
 import logging
@@ -244,8 +243,10 @@ def _build_lock(d: Path):
     try:
         d.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(d.with_name(f"{d.name}.lock"), os.O_RDWR | os.O_CREAT, 0o644)
+        import fcntl  # POSIX only: Windows builds unlocked
+
         fcntl.flock(fd, fcntl.LOCK_EX)
-    except OSError as exc:
+    except (OSError, ImportError) as exc:
         log.warning("ortho build lock unavailable beside %s: %s", d, exc)
     try:
         yield

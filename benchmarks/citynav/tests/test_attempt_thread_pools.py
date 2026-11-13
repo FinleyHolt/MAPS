@@ -11,6 +11,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 from benchmarks.citynav import bench_fullset as bf
 from benchmarks.citynav.paths import citynav_bench
 
@@ -30,6 +32,7 @@ _POOLS = (
 )
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="counts threads in /proc")
 def test_a_runner_starts_with_its_native_thread_pools_capped(monkeypatch):
     for name in _POOLS:
         monkeypatch.delenv(name, raising=False)

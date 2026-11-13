@@ -844,6 +844,9 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     """The driver's CLI, for ``bench``; unset, for the bench the environment selects."""
+    if sys.platform == "win32":
+        print(f"FATAL: {sandbox.WINDOWS_REFUSAL}", file=sys.stderr)
+        return 2
     # Discovery logs at INFO (the spec the run flies); without a config it reaches no console.
     logging.basicConfig(
         level=logging.INFO,

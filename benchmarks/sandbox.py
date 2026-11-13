@@ -47,7 +47,6 @@ import argparse
 import contextlib
 import math
 import os
-import resource
 import shutil
 import subprocess
 import sys
@@ -68,6 +67,9 @@ ATTEMPT_MEMORY_GIB = 4.0
 STATION_MEMORY_GIB = 16.0
 #: Set in a process this module re-executed under bubblewrap.
 SANDBOXED_ENV = "MAPS_SANDBOXED"
+#: Set on the restart under :func:`child_env`'s environment, so the restarted process
+#: serves even where the host adds variables at every start (macOS).
+RESTARTED_ENV = "MAPS_RESTARTED"
 #: Set, to the discovery's exception name, in a process confined offline after its
 #: launcher could not cache the reasoner's tokenizer.
 TOKENIZER_ENV = "MAPS_TOKENIZER_UNCACHED"
@@ -154,7 +156,12 @@ def child_env(environ) -> dict[str, str]:
 
 def cap_memory(gib: float) -> None:
     """Cap this process (and every child it starts) at ``gib`` of data segment; the hard
-    limit too, so code running here cannot raise it."""
+    limit too, so code running here cannot raise it. A no-op off Linux: macOS refuses
+    or ignores ``RLIMIT_DATA``."""
+    if not sys.platform.startswith("linux"):
+        return
+    import resource  # POSIX only, and the review station runs on Windows
+
     n = int(gib * 2**30)
     resource.setrlimit(resource.RLIMIT_DATA, (n, n))
 
@@ -330,7 +337,9 @@ def mode_line(refusal: str | None, gib: float, *, scope: bool | None = None) -> 
     whether each bench attempt runs in a systemd scope (None: a mission process,
     which runs in none)."""
     cap = f"memory cap {gib:g} GiB of data segment"
-    if scope:
+    if not sys.platform.startswith("linux"):
+        cap = "no memory cap: RLIMIT_DATA binds on Linux only"
+    elif scope:
         cap += " and of the attempt's scope (shared memory and children included)"
     elif scope is False:
         cap += "; no systemd user manager: shared memory and child processes escape the cap"
@@ -408,6 +417,12 @@ def tokenizer_refusal(environ, process: str, again: str) -> str | None:
     return None
 
 
+#: Why a process that flies model code refuses on Windows: the sandbox's layers are POSIX.
+WINDOWS_REFUSAL = (
+    "MAPS flies model code on Linux and macOS; on Windows the station reviews recorded runs only"
+)
+
+
 def confine(
     writable: list[Path],
     gib: float,
@@ -431,6 +446,11 @@ def confine(
     inject keystrokes into its terminal; run it under a supervisor with no terminal
     there. Relative paths resolve inside the sandbox only from a bound working
     directory (the repo root)."""
+    if sys.platform == "win32":
+        if flies:
+            raise SystemExit(f"FATAL: {WINDOWS_REFUSAL}")
+        log("sandbox: Windows: review only, no model code runs")
+        return
     if os.environ.pop(SANDBOXED_ENV, None) == "1" and _confined():
         cap_memory(gib)
         log(mode_line(None, gib))
@@ -438,8 +458,8 @@ def confine(
     env, argv = child_env(os.environ), [sys.executable, *sys.orig_argv[1:]]
     env.pop(TOKENIZER_ENV, None)
     if (why := bwrap_refusal()) is not None:
-        if env != dict(os.environ):
-            os.execve(sys.executable, argv, env)
+        if os.environ.pop(RESTARTED_ENV, None) != "1" and env != dict(os.environ):
+            os.execve(sys.executable, argv, env | {RESTARTED_ENV: "1"})
         cap_memory(gib)
         log(mode_line(why, gib))
         return

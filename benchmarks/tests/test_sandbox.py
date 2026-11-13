@@ -201,6 +201,7 @@ _POOL_VARS = (
 )
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RLIMIT_DATA binds on Linux only")
 def test_a_capped_process_imports_its_native_libraries_on_any_core_count(monkeypatch):
     """``RLIMIT_DATA`` counts each thread's reserved stack and OpenBLAS's per-thread
     buffers: on a 32-core node numpy, OpenCV and SciPy reserve 6.7 GiB at import with
@@ -288,6 +289,7 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
         assert argv[0] == sys.executable
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="bubblewrap is Linux only")
 def test_the_hugging_face_token_is_masked_where_slash_exposes_it(tmp_path, monkeypatch):
     """``/`` comes back read-only, so a token file under an ``HF_HOME`` outside the emptied
     directories is masked; one under ``/tmp`` or home is gone already and needs no mask."""
@@ -326,6 +328,7 @@ print("cap", resource.getrlimit(resource.RLIMIT_DATA)[0])
 """
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RLIMIT_DATA binds on Linux only")
 def test_a_launcher_past_the_cap_restarts_and_caps_the_process_that_keeps_running():
     """The cap lands in the process that keeps running, after the allowlist's one
     thread per pool applies: a launcher past it still probes and restarts."""
@@ -352,3 +355,66 @@ def test_a_tokenizer_left_uncached_names_the_remedy(monkeypatch):
     assert sandbox._cache_tokenizer(lines.append) == "ConnectionError"
     (line,) = lines
     assert line.endswith(sandbox.TOKENIZER_REMEDY), line
+
+
+def test_a_host_that_refuses_rlimit_data_runs_uncapped_and_says_so(monkeypatch):
+    """macOS refuses (or does not enforce) RLIMIT_DATA: the process keeps running with
+    no memory cap, and the sandbox line says so."""
+
+    def refuse(*_a):
+        raise ValueError("current limit exceeds maximum limit")
+
+    monkeypatch.setattr(sandbox.sys, "platform", "darwin")
+    import resource
+
+    monkeypatch.setattr(resource, "setrlimit", refuse)
+    sandbox.cap_memory(4.0)
+    line = sandbox.mode_line("bwrap is not installed", 4.0)
+    assert "no memory cap" in line and "memory cap 4" not in line, line
+
+
+def test_windows_reviews_recorded_runs_and_refuses_to_fly(monkeypatch, tmp_path):
+    """On Windows a process that runs no model code serves as it is, with one sandbox
+    line; one that would fly model code refuses in one line."""
+
+    def no_exec(*_a):
+        raise AssertionError("confine restarted the process")
+
+    monkeypatch.setattr(sandbox.sys, "platform", "win32")
+    monkeypatch.setattr(sandbox.os, "execve", no_exec)
+    monkeypatch.setattr(sandbox.os, "execvpe", no_exec)
+    lines = []
+    sandbox.confine([tmp_path], 16.0, lines.append, flies=False)
+    assert lines == ["sandbox: Windows: review only, no model code runs"]
+    with pytest.raises(SystemExit) as stop:
+        sandbox.confine([tmp_path], 16.0, lines.append, flies=True)
+    assert str(stop.value) == f"FATAL: {sandbox.WINDOWS_REFUSAL}"
+
+
+# A launcher on a host that adds a variable to every process it starts (macOS sets
+# __CF_USER_TEXT_ENCODING), which the allowlist drops; each start is counted.
+_INJECTING_LAUNCHER = r"""
+import os, sys
+from benchmarks import sandbox
+os.environ["__CF_USER_TEXT_ENCODING"] = "0x1F5:0x0:0x0"
+with open(sys.argv[1], "a") as f:
+    f.write("start\n")
+sandbox.bwrap_refusal = lambda: "bwrap is not installed"
+sandbox.cap_memory = lambda gib: None
+sandbox.confine([], 1.0, print)
+print("served")
+"""
+
+
+def test_a_host_that_adds_variables_at_each_start_restarts_the_process_once(tmp_path):
+    starts = tmp_path / "starts"
+    out = subprocess.run(
+        [sys.executable, "-c", _INJECTING_LAUNCHER, str(starts)],
+        cwd=sandbox.REPO,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines()[-1] == "served", out.stdout
+    assert starts.read_text().count("start") == 2
