@@ -888,6 +888,30 @@ def test_calcity_without_its_catalog_exits_2_with_its_recipe_before_any_out_root
     assert "build_objects_json" in err and "objects.json" in err
 
 
+def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monkeypatch) -> None:
+    """``python -m benchmarks.citynav.run_benchmark`` runs model code in its own process: it
+    takes the attempt's memory cap and, where bubblewrap runs, writes only its runs and the
+    caches. A runner the driver spawns caps itself alone (the driver sandboxes it)."""
+    from benchmarks.citynav.run_benchmark import cli
+
+    confined: list = []
+    monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
+    monkeypatch.setattr(sandbox, "cap_memory", lambda gib: confined.append(gib))
+    monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(tmp_path / "absent"))
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
+    assert cli.main() == 1
+    ((writable, gib, _log, readable),) = confined
+    assert writable[0] == tmp_path / "out" and gib == sandbox.ATTEMPT_MEMORY_GIB
+    assert sandbox.hf_hub_cache() in writable and str(tmp_path / "absent") in map(str, readable)
+    confined.clear()
+    monkeypatch.setattr(
+        sys, "argv", ["run_benchmark", "--attempt-root", str(tmp_path), "--episode-id", "e"]
+    )
+    monkeypatch.setattr(cli, "_die_with_parent", lambda environ: None)
+    assert cli.main() == 1
+    assert confined == [sandbox.ATTEMPT_MEMORY_GIB]
+
+
 def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
     tmp_path, monkeypatch, capsys
 ) -> None:
