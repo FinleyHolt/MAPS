@@ -364,16 +364,14 @@ class Station:
 
     def target(self, split: str | None, episode_id: str | None) -> tuple[list | None, list | None]:
         """``(footprint ring, centre point)`` of an episode's target in WGS84, each None where it draws none.
-        The footprint is the row's own mask, else its linked catalog object's contour."""
+        The footprint is the shape the scorer tests (``success_shape``): the linked catalog
+        object's contour, else the row's own mask."""
         e = self.catalog(split)[1].get(episode_id) if split in self.bench.split_files else None
         if e is None:
             return None, None
         key = (split, episode_id)
         if key not in self._targets:
-            ids = set(e.target_object_ids)
-            shape = e.target_mask or next(
-                (o.contour for o in self.objects.get(e.map_name) or [] if o.id in ids), None
-            )
+            shape = self.bench.engine.success_shape(e, self.objects)
             ring = [self.lonlat(e.map_name, p) for p in shape or ()]
             self._targets[key] = ring if ring and all(ring) else None
         return self._targets[key], self.lonlat(e.map_name, e.target_xy)

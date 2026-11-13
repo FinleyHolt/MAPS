@@ -87,6 +87,9 @@ class Engine:
     def load_objects(self, objects_json: Path) -> dict:
         return adapter.load_objects(objects_json)
 
+    def success_shape(self, episode: adapter.CityNavEpisode, objects_by_map: dict) -> Any:
+        return _episode_runner().success_shape(episode, objects_by_map)
+
     def fly_attempt(self, **attempt: Any) -> dict:
         from benchmarks.citynav.run_benchmark import dispatch
 

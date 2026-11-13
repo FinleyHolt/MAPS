@@ -446,3 +446,14 @@ def test_a_row_on_a_block_without_its_raster_pair_is_refused_before_its_sortie(c
         in refused.json()["detail"].splitlines()
     )
     assert not out.exists()
+
+
+def test_a_row_with_a_mask_and_a_linked_object_draws_the_object_it_scores_on(citynav, tmp_path):
+    """The scorer takes the linked object's contour over a drawn mask
+    (``episode_runner.success_shape``), so the console draws the same footprint."""
+    split = citynav.split_path("val_seen")
+    rows = json.loads(split.read_text())
+    rows[0]["target_mask"] = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
+    split.write_text(json.dumps(rows))
+    ring, _ = _station(citynav, tmp_path / "out").target("val_seen", EPISODE)
+    assert ring[0] == pytest.approx(_cache_lonlat(*CHURCH[0]), abs=1e-7)

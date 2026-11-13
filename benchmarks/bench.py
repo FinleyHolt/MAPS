@@ -145,6 +145,9 @@ class EpisodeEngine(Protocol):
     def load_objects(self, objects_json: Path) -> dict:
         """The scorer's answer key: map name -> its catalog objects (``id``, ``contour``)."""
 
+    def success_shape(self, episode: Any, objects_by_map: dict) -> Any:
+        """The shape the scorer tests for ``episode``: its linked object's contour, else its mask."""
+
     def fly_attempt(self, **attempt: Any) -> dict:
         """One attempt flown, scored and written as the bench's runner
         dispatches it (its ``dispatch_one``, whose keywords these are), and
