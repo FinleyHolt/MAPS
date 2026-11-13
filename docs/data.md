@@ -112,8 +112,8 @@ the file, the flight places every frame over flat ground at the block's floor
 ## Example runs
 
 `MAPS-example-runs.zip`, attached to the Releases page of this repository,
-holds recorded Cal City missions (each with its conversation, the pictures
-the model saw, and its score), the bake they were flown on, and a basemap
-picture. It needs none of the data above: the station opens it as it is. For
+holds ten simulated searches from the Cal City benchmark (each with its
+conversation, the pictures the model saw, and its score), a display copy of
+the Cal City bake with its own checksum, and a basemap picture. It needs none of the data above: the station opens it as it is. For
 the steps, see the
 [Quickstart](../README.md#quickstart-review-recorded-searches).

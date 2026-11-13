@@ -22,6 +22,7 @@ https://github.com/user-attachments/assets/9f7bfc45-4f68-4f71-a20f-6c9af015d0c1
 
 *Quickstart guide to installing MAPS and reviewing a recorded search. All
 commands shown below.*
+[Download the video](https://github.com/FinleyHolt/MAPS/releases/download/v0.1.0/MAPS-welcome.mp4).
 
 Requires Python 3.12 or later. No model, GPU, or dataset.
 
@@ -35,8 +36,8 @@ Requires Python 3.12 or later. No model, GPU, or dataset.
 
 2. Download `MAPS-example-runs.zip` from the
    [Releases page](https://github.com/FinleyHolt/MAPS/releases) and unzip it.
-   It holds ten Cal City searches: each one's conversation, every picture the
-   model was sent, and its score.
+   It holds ten simulated searches from the Cal City benchmark: each one's
+   conversation, every picture the model was sent, and its score.
 
 3. Open the console on the unzipped folder:
 
@@ -227,6 +228,8 @@ through an SSH tunnel.
 - The main branch reproduces the CityNav and Cal City runs of the full
   method. For the commands and readers, see
   [`docs/experiments.md`](docs/experiments.md).
+- The flight campaign's counts, exclusions and compute locations are in
+  [`docs/flight.md`](docs/flight.md#flight-campaign).
 - The ablation arms, the comparison against the baselines, and the as-flown
   replay reproduce from the tag
   [`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1)
