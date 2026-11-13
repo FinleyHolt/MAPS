@@ -48,6 +48,18 @@ def test_a_seat_read_as_the_mission_parks_pairs_its_status_with_its_report(tmp_p
     assert serve.Station.seat_state(seat)["reply_text"] == "Here."
 
 
+def test_clearing_the_seat_waits_for_a_twin_mission_to_bank_its_row():
+    """Ctrl-C clears the seat as the station exits: a twin mission stopped mid-turn banks
+    its row before the process ends, as a bench episode does."""
+    import threading
+
+    calls: list = []
+    twin = SimpleNamespace(stop=lambda: calls.append("stop"), wait=lambda t: calls.append(t))
+    seat = SimpleNamespace(_lock=threading.Lock(), mission=twin, _trail=[1])
+    serve.Station.clear(seat)
+    assert calls == ["stop", serve.END_WAIT_S] and seat.mission is None
+
+
 def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monkeypatch):  # noqa: F811
     station = serve.Station(
         bench=calcity.bench,

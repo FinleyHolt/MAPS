@@ -866,14 +866,13 @@ class Station:
         return mission
 
     def clear(self) -> None:
-        """Stop the mission in the seat and empty it; its run stays under the output root. A bench
-        episode is scored as it ends, so its row is waited for."""
+        """Stop the mission in the seat and empty it; its run stays under the output root. A
+        mission banks its row as it ends, so its end is waited for."""
         with self._lock:
             mission, self.mission, self._trail = self.mission, None, []
         if mission is not None:
             mission.stop()
-            if isinstance(mission, BenchMission):
-                mission.wait(END_WAIT_S)
+            mission.wait(END_WAIT_S)
 
 
 def why_not_flying(bench: Bench, ortho_dir: Path | None) -> str | None:
