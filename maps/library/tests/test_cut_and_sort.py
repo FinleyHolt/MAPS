@@ -553,3 +553,44 @@ def test_a_find_a_side_cut_emptied_is_never_said_to_have_matched_nothing():
     _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7")\n')], "done"])
     (env,) = tool_results(fr)[0]["result"]["results"].values()
     assert "find('car'): this call returned no rows" not in env["hint"], env
+
+
+@pytest.mark.parametrize(
+    "block, said",
+    [
+        ('go_to(find("car", south_of="prior_7"))\n', "find('car', south_of='prior_7') holds 0"),
+        ('f = find("car", south_of="prior_7")\nf[0]\n', "f served 0"),
+        ('go_to(find("car", south_of="prior_7")[0])\n', "find('car', south_of='prior_7') served 0"),
+    ],
+)
+def test_a_refusal_over_a_find_a_side_cut_emptied_names_the_call_as_written(block, said):
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert said in err and "find('car') " not in err, err
+
+
+def test_more_of_a_find_a_side_cut_emptied_serves_one_envelope():
+    _r, fr, _f, _d = drive([[run('more_of(find("car", south_of="prior_7"))\n')], "done"])
+    keys = list(tool_results(fr)[0]["result"]["results"])
+    assert keys == ["more_of(find('car', south_of='prior_7'))"], keys
+
+
+def test_a_find_near_a_side_cut_emptied_set_names_the_cut():
+    _r, fr, _f, _d = drive(
+        [[run('find("car", near=find("car", south_of="prior_7"), dwithin=30)\n')], "done"]
+    )
+    err = tool_results(fr)[0]["error"]
+    assert "find_car is empty" not in err, err
+
+
+def test_a_side_cut_over_a_find_that_matched_nothing_says_nothing_of_a_side():
+    _r, fr, _f, _d = drive([[run('find("zzz", south_of="prior_7")\n')], "done"])
+    (env,) = tool_results(fr)[0]["result"]["results"].values()
+    assert env["cut_stats"]["cut"] == "0->0", env
+    assert "nothing_on_that_side" not in env["cut_stats"], env
+
+
+def test_a_tier_of_a_find_a_side_cut_emptied_names_the_cut():
+    _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7").exact\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert "A pass's minted rows" not in err and "before the cut" in err, err

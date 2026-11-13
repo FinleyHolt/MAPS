@@ -317,6 +317,11 @@ def run_stratum(cx, a):
     order."""
     items = as_rows(cx, a["items"])
     tier = a["tier"]
+    if not items and getattr(items, "cut_stats", None):
+        raise ProgramError(
+            "a cut left these rows empty, so there is no match tier to take: take "
+            ".exact/.tagged/.fuzzy on the find before the cut."
+        )
     if not any(isinstance(it.get("name_match"), (int, float)) for it in items):
         raise ProgramError(
             "these rows carry no match tiers: .exact/.tagged/.fuzzy come "

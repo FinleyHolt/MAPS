@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from maps.mission.tests.fakes import drive, run, tool_results
 
 # Colour never cuts, so this block is refused every time it is served.
@@ -138,3 +140,13 @@ def test_a_repeated_question_is_not_punctuated_twice():
     served = drive_blocks(['cars = find("car")\n'] + ["carz[0]\n"] * 3)
     err = served[3]["error"]
     assert "did you mean cars? The full rejection text" in err, err
+
+
+@pytest.mark.parametrize(
+    "n, says", [(2, "a 2nd"), (8, "an 8th"), (11, "an 11th"), (18, "an 18th"), (21, "a 21st")]
+)
+def test_the_repeat_note_counts_with_the_article_its_ordinal_takes(n, says):
+    from maps.mission.program_verbs import _DEDUP_REPEAT_NOTE, _ordinal
+
+    note = _DEDUP_REPEAT_NOTE.format(n=_ordinal(n), counts="", cols="")
+    assert note.startswith(f"still nothing new, {says} time:"), note

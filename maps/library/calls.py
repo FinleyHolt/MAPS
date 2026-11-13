@@ -43,7 +43,7 @@ from maps.query.color_words import COLOR_ENUM, normalize_color
 from maps.query.result_tables import BROAD_HEAD_ROWS
 from maps.query.row_geometry import SurfaceGeometry
 from maps.query.spatial_math import COMPASS_UNIT
-from maps.xy_token import is_xy
+from maps.xy_token import format_xy_token, is_xy
 
 # One block's measuring budget: a nested loop of distance() calls is one per
 # PAIR, millions of mask-to-mask scans at real set sizes.
@@ -53,16 +53,20 @@ MEASURE_CALL_CEILING = 20_000
 def _refuse_unplain_class(cls: str, names: set[str]) -> None:
     """Refuse a look_for class the served text rules out: a proper noun (a
     world-state name written with a capital, ``names`` lowered), or one
-    carrying a colour word. The name check runs first: "Green Street" is a
-    street, never a colour."""
+    carrying a colour word. A world-state name in any case is never a
+    colour: "Green Street" and "green street" are a street."""
     words = cls.replace("_", " ").split()
-    # ponytail: a lowercase class a feature happens to be named ("car",
-    # "pitch") is watched as said, with the receipt's NAMED feature note.
-    if cls != cls.lower() and " ".join(words).lower() in names:
+    named = " ".join(words).lower() in names
+    if cls != cls.lower() and named:
         raise CodeError(
             f'look_for takes plain visual classes, no proper nouns: "{cls}" is a proper noun. '
             f'A named place is already a world-state row: find("{cls}").'
         )
+    # ponytail: a lowercase class a feature happens to be named ("car",
+    # "pitch", "green street") is watched as said, with the receipt's NAMED
+    # feature note.
+    if named:
+        return
     # ponytail: any palette word refuses, so "orange tree" does too; a
     # head-noun parse if a real class ever needs a colour word.
     colour = next((w for w in words if normalize_color(w) in COLOR_ENUM), None)
@@ -306,14 +310,16 @@ class Library:
         )
         self._analyze(p, ref)
         self._near_miss_note(ref, query)
-        if q:
-            self.names.labels[ref] = f"find({query!r})"
+        label = f"find({query!r})" if q else ""
+        if q and cards and not self.env.rows_of_ref(ref):
+            # a side cut emptied what the find matched: the bare
+            # find('<q>') label would say the find matched nothing
             node = self.names.running_node()
-            if cards and not self.env.rows_of_ref(ref) and isinstance(node, ast.Call):
-                # a side cut emptied what the find matched: the bare
-                # find('<q>') label would say the find matched nothing
-                self.names.labels[ref] = ast.unparse(node)
-        return Rows(ref, self, label=f"find({query!r})" if q else "")
+            if isinstance(node, ast.Call):
+                label = ast.unparse(node)
+        if q:
+            self.names.labels[ref] = label
+        return Rows(ref, self, label=label)
 
     _NEAR_MISS_M = 500.0
 
@@ -406,7 +412,10 @@ class Library:
     def ends_of(self, x):
         x = self._slot(x)
         p = self._program(x)
-        return Rows(self._analyze(p, p.add("ends", {"refs": [p.ref_of(x)]})), self)
+        el = p.ref_of(x)
+        if is_xy(x):
+            el["as"] = format_xy_token(*x)  # a refusal quotes the point as written
+        return Rows(self._analyze(p, p.add("ends", {"refs": [el]})), self)
 
     def more_of(self, x):
         if not isinstance(x, Rows) or x._spec:

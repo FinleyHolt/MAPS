@@ -439,7 +439,7 @@ def _envelope(v, legend, cut=None) -> dict:
     """One op result's model-facing envelope (see :func:`compact_results`):
     ``hint`` says what the rows are, ``shown`` how the grid renders them;
     ``cut`` is the stats of the cut that emptied an empty answer."""
-    cut = (v.cut_stats if v.kind == "cut" or not v else None) or cut
+    cut = (v.cut_stats if v.kind == "cut" else None) or cut
     if v.kind == "compare":
         head = {"len": len(v)}
     elif not v:

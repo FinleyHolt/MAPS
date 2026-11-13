@@ -191,7 +191,8 @@ def run_filter_items(cx, a):
             "other_side_dropped": len(items) - len(on),
             "no_side_kept": blank,
         }
-        if not (len(on) - blank):
+        # A cut of no rows has no side to report: the input's own miss says why.
+        if items and not (len(on) - blank):
             dropped = [it for it in items if it not in on]
             seen = any(str(it.get("fid") or "").startswith("detected_") for it in dropped)
             watched = any(str(it.get("class") or "").lower() in cx.watched for it in dropped)
