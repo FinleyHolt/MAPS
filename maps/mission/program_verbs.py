@@ -162,7 +162,6 @@ class Programs:
         refusal."""
         self._call.clear()
         self._call["notes"] = notes = []
-        self.carry.take_minted()  # a mint no call bound is stale
         ties: dict = {}
         if not names:
             return {"ties": ties}
