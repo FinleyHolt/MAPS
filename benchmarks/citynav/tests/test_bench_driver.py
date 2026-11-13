@@ -970,6 +970,7 @@ def test_calcity_without_its_catalog_exits_2_with_its_recipe_before_any_out_root
     err = capsys.readouterr().err
     assert err.startswith("FATAL: Cal City data is incomplete under ")
     assert "build_objects_json" in err and "objects.json" in err
+    assert err.index("build_objects_json") < err.index("build_rgbd_ortho") < err.index("bake_tiles")
 
 
 def _runner_tree(tmp_path: Path, bench_data: Path, monkeypatch, *, rgb: bool = False) -> Path:

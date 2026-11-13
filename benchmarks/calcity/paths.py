@@ -64,6 +64,7 @@ def _assert_available(bench: Bench) -> None:
             f"Cal City data is incomplete under {bench.root}.\n"
             "Build it with:\n"
             "  python -m benchmarks.calcity.data_prep.build_objects_json\n"
+            "  python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>\n"
             "  python -m benchmarks.calcity.data_prep.bake_tiles\n"
             "Override locations with SEARCH_CALCITY_DATA, "
             "SEARCH_CALCITY_SPLITS, and SEARCH_CALCITY_TILES.\n\n"
