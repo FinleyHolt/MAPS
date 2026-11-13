@@ -80,11 +80,8 @@ def _config_path(environ) -> Path:
 
 
 def _enumerate_split(bench: Bench, split: str) -> list[str]:
-    try:
-        split_file = bench.split_path(split)
-    except ValueError as exc:
-        raise SystemExit(f"FATAL: {exc}") from None
-    return episode_ids(enumerate(load_split(split_file)))
+    """The split's episode ids; an unknown split raises ``ValueError``."""
+    return episode_ids(enumerate(load_split(bench.split_path(split))))
 
 
 # One thread per native pool (BLAS, OpenCV, Rayon) and two malloc arenas per
@@ -605,28 +602,25 @@ class Driver:
                     self._in_flight.discard(eid)
 
     def _select_episodes(self) -> list[str]:
-        """The selection, in flying order; a refusal raises ``SystemExit``
-        with its FATAL line. An allowlist's count line is kept in
-        ``_selection_note``."""
+        """The selection, in flying order; a refusal raises ``ValueError``
+        naming it. An allowlist's count line is kept in ``_selection_note``."""
         episodes = _enumerate_split(self.bench, self.split)
         if self.allowlist_path is not None:
             try:
                 lines = self.allowlist_path.read_text().splitlines()
             except OSError as exc:
-                raise SystemExit(
-                    f"FATAL: --episode-allowlist read failed: {self.allowlist_path}: {exc}"
+                raise ValueError(
+                    f"--episode-allowlist read failed: {self.allowlist_path}: {exc}"
                 ) from exc
             allowed = {ln.strip() for ln in lines if ln.strip()}
             if not allowed:
-                raise SystemExit(
-                    f"FATAL: --episode-allowlist names no episode: {self.allowlist_path}"
-                )
+                raise ValueError(f"--episode-allowlist names no episode: {self.allowlist_path}")
             before = len(episodes)
             episodes = [e for e in episodes if e in allowed]
             unknown = sorted(allowed - set(episodes))
             if unknown:
-                raise SystemExit(
-                    f"FATAL: --episode-allowlist names {len(unknown)} ids not in the "
+                raise ValueError(
+                    f"--episode-allowlist names {len(unknown)} ids not in the "
                     f"{self.split} split, e.g. {unknown[0]}"
                 )
             self._selection_note = (
@@ -832,37 +826,24 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     config = _config_path(bench.environ)
     parser = _build_parser(bench)
     args = parser.parse_args(argv)
-    # The config is refused here, before an out-root exists or a serve is asked.
+    # Each refusal comes before an out-root exists or a serve is asked: the config, the
+    # bench's data, the selection and its block assets, then the serve, once, so an
+    # unreachable or wrong one fails before any worker spawns.
     try:
         resolve_config(config)
-    except (OSError, ValueError) as exc:
-        print(f"FATAL: {exc}", file=sys.stderr)
-        return 2
-    try:
         bench.assert_available()
-    except (OSError, RuntimeError) as exc:
-        print(f"FATAL: {exc}", file=sys.stderr)
-        return 2
-    driver = Driver(args, bench, config)
-    # The selection and its block assets too, so a refusal makes no out-root and asks no serve.
-    try:
+        driver = Driver(args, bench, config)
         driver._selection = driver._select_episodes()
-    except SystemExit as exc:
-        print(exc, file=sys.stderr)
-        return 2
-    if missing := _missing_block_assets(bench, driver._selection):
-        print(
-            "FATAL: block assets missing for the selection (every episode on these blocks would land "
-            "infra):\n" + "\n".join(f"  {p}" for p in missing),
-            file=sys.stderr,
-        )
-        return 2
-    if args.dry_run:
-        return driver.dry_run()
-    # Once, so an unreachable or wrong serve fails here, before any worker spawns.
-    try:
+        if missing := _missing_block_assets(bench, driver._selection):
+            raise ValueError(
+                "block assets missing for the selection (every episode on these blocks would "
+                "land infra):\n" + "\n".join(f"  {p}" for p in missing)
+            )
+        if args.dry_run:
+            return driver.dry_run()
         driver.bench = _rm.install_endpoint(bench, from_environ(bench.environ))
-    except _rm.EndpointRefused as exc:
+    # EndpointRefused is a RuntimeError.
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     return driver.run()

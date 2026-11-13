@@ -705,7 +705,7 @@ def test_an_allowlist_that_cannot_be_read_is_refused_fatal(driver, tmp_path, mon
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     d = driver()
     d.allowlist_path = tmp_path / "absent.txt"
-    with pytest.raises(SystemExit, match="^FATAL: --episode-allowlist read failed"):
+    with pytest.raises(ValueError, match="^--episode-allowlist read failed"):
         d._select_episodes()
 
 
@@ -769,8 +769,8 @@ def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(
     d.allowlist_path = tmp_path / "ids.txt"
     d.allowlist_path.write_text("\n".join(ids) + "\n")
     with pytest.raises(
-        SystemExit,
-        match="^FATAL: --episode-allowlist names 1 ids not in the train_seen split, e.g. z",
+        ValueError,
+        match="^--episode-allowlist names 1 ids not in the train_seen split, e.g. z",
     ):
         d._select_episodes()
 
