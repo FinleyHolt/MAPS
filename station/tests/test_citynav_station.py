@@ -432,6 +432,28 @@ def test_no_request_reads_outside_the_output_root(citynav, bench_root, tmp_path)
     assert client.get("/run/file", params={"path": "val_seen_a/leak.txt"}).status_code == 404
 
 
+def test_a_request_from_another_origin_cannot_change_the_seat(citynav, bench_root):
+    """A page on another site the operator has open cannot clear or task the seat;
+    the console's own requests, and a client that sends no Origin, can."""
+    root, _ = bench_root
+    client = TestClient(serve.build_app(_station(citynav, root.parent), web=None))
+    for path in ("/mission/clear", "/mission/next", "/mission/tasking"):
+        refused = client.post(path, headers={"Origin": "http://evil.example"})
+        assert refused.status_code == 403, (path, refused.status_code)
+    assert client.post("/mission/clear", headers={"Origin": "http://testserver"}).status_code == 200
+    assert client.post("/mission/clear").status_code == 200
+
+
+def test_a_run_file_is_served_sandboxed_so_its_markup_runs_no_script(citynav, bench_root):
+    root, row = bench_root
+    (root / row["workdir"] / "page.html").write_text("<script>fetch('/mission/clear')</script>")
+    client = TestClient(serve.build_app(_station(citynav, root.parent), web=None))
+    got = client.get("/run/file", params={"path": f"val_seen_a/{row['workdir']}/page.html"})
+    assert got.status_code == 200
+    assert got.headers["content-security-policy"] == "sandbox"
+    assert got.headers["x-content-type-options"] == "nosniff"
+
+
 def test_a_row_on_a_block_without_its_raster_pair_is_refused_before_its_sortie(citynav, tmp_path):
     """The seat checks a row's block as the runners do: without ``<map>.png`` or
     ``<map>_rgb.tif`` every flight would serve a block error and book a miss."""

@@ -46,7 +46,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from benchmarks import sandbox
@@ -947,6 +947,18 @@ class _Tasking(BaseModel):
 def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
     app = FastAPI(title="MAPS station")
 
+    @app.middleware("http")
+    async def same_origin_writes(request, call_next):
+        """A browser names the page behind every cross-site write in ``Origin``: a write
+        from a page that is not this console is refused, so another site the operator
+        has open cannot clear or task the seat. A client that sends no ``Origin`` (curl,
+        a script) is the operator's own."""
+        origin = request.headers.get("origin")
+        own = f"{request.url.scheme}://{request.headers.get('host', '')}"
+        if request.method not in ("GET", "HEAD", "OPTIONS") and origin and origin != own:
+            return JSONResponse({"detail": f"refused: a write from {origin}"}, status_code=403)
+        return await call_next(request)
+
     def the_map(name: str | None) -> str:
         """The map a request names (the station's default when it names none); 404 for a name that is no map's."""
         name = name or station.map_name
@@ -1136,8 +1148,12 @@ def build_app(station: Station, web: Path | None = WEB_DIST) -> FastAPI:
         target = (root / path).resolve()
         if not target.is_relative_to(root) or not target.is_file():
             raise HTTPException(404)
+        # Run folders hold what a model's block wrote: a page among them runs no script
+        # on the console's origin.
         return FileResponse(
-            target, media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+            target,
+            media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+            headers={"Content-Security-Policy": "sandbox", "X-Content-Type-Options": "nosniff"},
         )
 
     if web is not None and (web / "index.html").is_file():
