@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import math
+import os
 import time
+from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -159,3 +162,30 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
     }
     groups = {g for g, _ in client.get("/mission/prior.json").json()}
     assert "building" in groups and len(client.get("/area").json()["bbox"]) == 4
+
+
+def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, monkeypatch):
+    """Missions fly in the station's own threads: the process takes the memory cap and,
+    where bubblewrap runs, writes only its runs and the ortho caches."""
+    import uvicorn
+
+    from benchmarks import sandbox
+
+    confined: list = []
+    monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
+    monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: confined.append("served"))
+    # The station itself is the other tests' subject; this one asks only what it is started under.
+    monkeypatch.setattr(
+        serve,
+        "Station",
+        lambda **kw: SimpleNamespace(why_not_flying=lambda: None, clear=lambda: None),
+    )
+    monkeypatch.setattr(serve, "build_app", lambda station: None)
+    monkeypatch.setattr(
+        "sys.argv", ["serve", "--out", str(tmp_path / "out"), "--ortho", str(tmp_path / "o")]
+    )
+    assert serve.main() == 0
+    (writable, gib, _log), served = confined
+    bench = serve.bench_named("citynav", os.environ)
+    assert served == "served" and gib == sandbox.STATION_MEMORY_GIB
+    assert writable == [tmp_path / "out", Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho"]

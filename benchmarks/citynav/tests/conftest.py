@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks import sandbox
 from benchmarks.citynav import bench_fullset as bf
 from benchmarks.citynav.paths import citynav_bench
 from maps.settings import Settings, from_environ
@@ -46,6 +47,8 @@ def driver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         d.allowlist_path = None
         d.max_infra_attempts = 3
         d._infra_errors = {}
+        d.memory_gib = sandbox.ATTEMPT_MEMORY_GIB
+        d._bwrap = False
         return d
 
     return make

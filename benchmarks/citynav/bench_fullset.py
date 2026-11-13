@@ -27,6 +27,7 @@ import urllib.request
 from collections import Counter, deque
 from pathlib import Path
 
+from benchmarks import sandbox
 from benchmarks.bench import Bench, missing_bake
 from benchmarks.citynav.adapter import episode_ids, load_split
 from benchmarks.citynav.analysis import run_report
@@ -169,6 +170,9 @@ class Driver:
         self.split = args.split
         self.episode_timeout_s = args.episode_timeout_s
         self.max_infra_attempts = args.max_infra_attempts
+        self.memory_gib = args.attempt_memory_gib
+        # Whether attempts fly under bubblewrap; settled once by _run().
+        self._bwrap = False
         self._infra_errors: dict[str, Counter] = {}
         self.out_root = Path(args.out_root).resolve()
         self.episodes_file = self.out_root / episodes.EPISODES_JSONL
@@ -410,6 +414,11 @@ class Driver:
             "--attempt-root",
             str(worker_root),
         ]
+        if self._bwrap:
+            # The child's parent is bubblewrap's init, PID 1 in the attempt's namespace.
+            env[episodes.PARENT_PID_ENV] = "1"
+            cmd = sandbox.bwrap_argv(self._attempt_binds(worker_root)) + cmd
+        cmd = sandbox.cap_argv(self.memory_gib) + cmd
         # The child prints its workdir as its first stdout line; an unlinked
         # file holds it, so no pipe can fill and stall the child.
         with tempfile.TemporaryFile("w+") as out, (worker_root / "server.log").open("a") as err:
@@ -492,6 +501,11 @@ class Driver:
                 episodes.STATUS_TIMED_OUT if verdict == "timeout" else episodes.STATUS_OK
             )
         return row
+
+    def _attempt_binds(self, worker_root: Path) -> list[Path]:
+        """What an attempt writes besides TMPDIR and the HF cache: its worker's
+        attempt root and the ortho cache beside the bench's rasters."""
+        return [worker_root, *sandbox.ortho_caches([self.bench.rgbd_dir])]
 
     def run_one(self, worker_id: int, episode_id: str) -> None:
         """Fly one attempt and land its row."""
@@ -676,6 +690,8 @@ class Driver:
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
             f"workers={self.workers}"
         )
+        self._bwrap = sandbox.bwrap_works()
+        self.log(sandbox.mode_line(self._bwrap, self.memory_gib))
         # Workers claim until nothing is left, the wall budget is spent, or the
         # run aborts; an infra attempt is re-claimed by whichever worker is free.
         # Daemon workers end with the driver (their children die with it), so
@@ -751,6 +767,13 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
         default=3,
         help="infra attempts an episode gets before the run leaves it out and "
         "reports it as persistent infra (default %(default)s)",
+    )
+    p.add_argument(
+        "--attempt-memory-gib",
+        type=float,
+        default=sandbox.ATTEMPT_MEMORY_GIB,
+        help="each attempt's memory cap in GiB (default %(default)s): a block that allocates "
+        "past it raises MemoryError, served as the block's error",
     )
     p.add_argument(
         "--limit",

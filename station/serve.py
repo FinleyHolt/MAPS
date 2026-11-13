@@ -48,6 +48,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
+from benchmarks import sandbox
 from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import open_live
@@ -1146,6 +1147,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8788)
+    ap.add_argument(
+        "--memory-gib",
+        type=float,
+        default=sandbox.STATION_MEMORY_GIB,
+        help="the station's memory cap in GiB (default %(default)s): a mission block that "
+        "allocates past it raises MemoryError, served as the block's error",
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s"
@@ -1154,8 +1162,17 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     args.out.mkdir(parents=True, exist_ok=True)
+    bench = bench_named(args.bench, os.environ)
+    if argv is None:
+        # A command-line station runs model code in its own threads, so it confines
+        # itself; a caller handing argv owns its process.
+        sandbox.confine(
+            [args.out, *sandbox.ortho_caches([bench.rgbd_dir, args.ortho, args.register])],
+            args.memory_gib,
+            log.info,
+        )
     station = Station(
-        bench=bench_named(args.bench, os.environ),
+        bench=bench,
         config=args.config or f"configs/{args.bench}.yaml",
         out=args.out,
         ortho_dir=args.ortho,

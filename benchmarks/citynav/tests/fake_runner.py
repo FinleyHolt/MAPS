@@ -21,6 +21,13 @@ if kind == "ok":
     row["deadline"] = float(os.environ["CITYNAV_EPISODE_DEADLINE_EPOCH"])
 elif kind == "miss":
     row["error"] = "RuntimeError: boom"
+elif kind == "hog":
+    # One block past the driver's memory cap, flown by the mission's interpreter.
+    from maps.library.interpreter import MissionPython
+    from maps.mission.tests.fakes import quiet_env
+
+    out = MissionPython(quiet_env()).run_block("x = [0] * (2 * 10**8)\nprint(len(x))")
+    row["error"] = out.get("error")
 elif kind == "infra":
     row.update(status="infra", error="SamServerOutage: down")
 elif kind in ("sleep", "reasoner", "sam"):

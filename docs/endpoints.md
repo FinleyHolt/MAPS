@@ -153,7 +153,7 @@ The bench driver sets these in each attempt child's environment:
 | `SEARCH_BENCHMARK_NAME` | Bench the child flies (`citynav` when unset). |
 | `CITYNAV_BENCH_CONFIG` | Run config, relative to the repository root. Default `configs/citynav.yaml`; the Cal City driver sets `configs/calcity.yaml`. |
 | `CITYNAV_EPISODE_DEADLINE_EPOCH` | Epoch at which the mission stops flying: the episode's wall cap less a 10% reserve for the model's reply. |
-| `CITYNAV_BENCH_PARENT_PID` | Driver's process ID; the child exits when the driver is gone. |
+| `CITYNAV_BENCH_PARENT_PID` | Driver's process ID, or `1` under bubblewrap (the sandbox's init, killed with the driver); the child exits when that parent is gone. |
 | `SEARCH_LLM_CACHE_KEY` | `<out-root name>/w<worker id>`. |
 
 ## GPT-5.6 Sol on Azure
