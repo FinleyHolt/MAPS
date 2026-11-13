@@ -16,6 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from benchmarks import sandbox
 from benchmarks.bench import Bench
 from benchmarks.citynav.adapter import (
     episode_ids,
@@ -106,6 +107,14 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
             "the ledger and the manifest."
         ),
     )
+    parser.add_argument(
+        "--memory-gib",
+        type=sandbox.gib,
+        default=sandbox.ATTEMPT_MEMORY_GIB,
+        help="this process's memory cap in GiB (default %(default)s; bench_fullset passes its "
+        "--attempt-memory-gib): a block that allocates past it raises MemoryError, served as "
+        "the block's error",
+    )
     return parser
 
 
@@ -118,6 +127,9 @@ def main(bench: Bench | None = None) -> int:
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
+    # A command-line run flies model code in this process and confines it; a caller
+    # handing the bench owns its process.
+    command_line = bench is None
     if bench is None:
         bench = selected_bench(os.environ)
     # A direct run records the bench it flew by name.
@@ -129,7 +141,20 @@ def main(bench: Bench | None = None) -> int:
     if args.attempt_root:
         if not args.episode_id:
             parser.error("--attempt-root flies one episode: name it with --episode-id")
+        # The driver sandboxes its attempts; the child takes the memory cap itself.
+        sandbox.cap_memory(args.memory_gib)
         _die_with_parent(bench.environ)
+    elif command_line:
+        sandbox.confine(
+            [
+                Path(args.out or f"output/{bench.name}"),
+                *sandbox.ortho_caches([bench.rgbd_dir]),
+                sandbox.hf_hub_cache(),
+            ],
+            args.memory_gib,
+            log.info,
+            [*sandbox.bench_inputs(bench), *([args.config] if args.config else [])],
+        )
     if args.seed_base is not None:
         bench = bench.with_environ({"SEARCH_SEED_BASE": str(args.seed_base)})
         log.info("Deterministic seed base: SEARCH_SEED_BASE=%d", args.seed_base)

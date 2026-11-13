@@ -90,8 +90,10 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
 
 def test_a_block_past_the_attempt_cap_is_the_model_s_error_not_a_crash(driver, monkeypatch):
     """Under the cap the block's allocation raises MemoryError inside the block: the attempt
-    lands its row and is scored, where an uncapped child is OOM-killed and re-queued as infra."""
+    lands its row and is scored, where an uncapped child is OOM-killed and re-queued as infra.
+    The child caps itself, so a host without util-linux's ``prlimit`` flies it too."""
     monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    monkeypatch.setenv("PATH", "/nonexistent")
     d = driver(selection=["hog::1#0"])
     d.memory_gib = 1.0  # under the block's 1.5 GiB list, over the fake attempt's own footprint
     d.max_infra_attempts = 1
@@ -116,8 +118,54 @@ def test_an_attempt_under_bubblewrap_lands_its_row_and_a_timeout_kills_it(driver
     assert rows["ok"]["status"] == "ok" and rows["ok"]["metrics"]["SR"] == 1, rows
     assert rows["sleep"]["status"] == "timed_out", rows
     # The killed attempt's sandbox died with it.
-    ps = subprocess.run(["pgrep", "-f", "fake_runner"], capture_output=True, text=True)
+    ps = subprocess.run(["pgrep", "-f", str(d.out_root)], capture_output=True, text=True)
     assert ps.stdout == "", ps.stdout
+
+
+def _gone(pid: int) -> bool:
+    """True once ``pid`` has exited and been reaped, within five seconds."""
+    for _ in range(100):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+_no_scope = pytest.mark.skipif(
+    not sandbox.scope_works(), reason="no systemd user manager starts scopes here"
+)
+
+
+@_no_scope
+def test_shared_memory_past_the_cap_kills_the_attempt_in_its_scope(driver, monkeypatch):
+    """Shared anonymous memory escapes RLIMIT_DATA; the scope's MemoryMax counts it, so the
+    hold ends the attempt (a signal, re-queued as infra) and the host keeps its memory."""
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    d = driver(selection=["shm::1#0"])
+    d._scope, d.memory_gib, d.max_infra_attempts = True, 1.0, 1
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    (row,) = iter_json_rows(d.episodes_file)
+    assert (row["status"], row["error"]) == ("infra", "killed_midrun"), row
+
+
+@_no_scope
+def test_a_daemon_an_attempt_leaves_behind_dies_with_its_scope(driver, monkeypatch):
+    monkeypatch.setattr(bf, "RUNNER_MODULE", "benchmarks.citynav.tests.fake_runner")
+    d = driver(selection=["orphan::1#0"])
+    d._scope, d.max_infra_attempts = True, 1
+    monkeypatch.setattr(d, "_wait_for_reasoner", lambda: True)
+    monkeypatch.setattr(d, "_wait_for_sam", lambda: True)
+    d.worker_loop(0)
+    (row,) = iter_json_rows(d.episodes_file)
+    pid = int((d.out_root / row["workdir"] / "daemon.pid").read_text())
+    alive = not _gone(pid)
+    if alive:
+        os.kill(pid, signal.SIGKILL)
+    assert row["status"] == "ok" and not alive, row
 
 
 def test_the_health_gate_asks_where_discovery_listed_the_models(driver, monkeypatch) -> None:
@@ -459,8 +507,10 @@ _INTERRUPTED = (
 )
 
 
-def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
-    """Ctrl-C releases the root, so a worker left flying would fly beside the next launch."""
+@pytest.mark.parametrize(("sig", "code"), [(signal.SIGINT, 130), (signal.SIGTERM, 143)])
+def test_an_interrupted_driver_exits_with_its_workers(sig, code, tmp_path) -> None:
+    """Ctrl-C, or a SIGTERM from kill, systemd or SLURM, releases the root, so a worker left
+    flying would fly beside the next launch."""
     # A shell that ignores SIGINT hands that to its children; the driver is
     # launched with the default handler, as from a terminal.
     proc = subprocess.Popen(
@@ -475,10 +525,10 @@ def test_an_interrupted_driver_exits_with_its_workers(tmp_path) -> None:
         flying = (line for line in iter(proc.stdout.readline, "") if line == "flying\n")
         assert next(flying) and next(flying)
         time.sleep(0.5)  # the main thread is joining its first worker
-        proc.send_signal(signal.SIGINT)
-        assert proc.wait(timeout=10) == 130
+        proc.send_signal(sig)
+        assert proc.wait(timeout=10) == code
         assert "Traceback" not in proc.stderr.read()
-        assert "interrupted" in (tmp_path / "driver.log").read_text()
+        assert f"interrupted ({sig.name})" in (tmp_path / "driver.log").read_text()
     finally:
         proc.kill()
         proc.wait()
@@ -653,11 +703,17 @@ def test_the_parser_refuses_a_count_below_one(flag, capsys) -> None:
     assert done.value.code == 2 and flag in capsys.readouterr().err
 
 
+def test_the_parser_refuses_an_attempt_memory_cap_that_is_no_cap(capsys) -> None:
+    with pytest.raises(SystemExit) as done:
+        bf._build_parser(citynav_bench({})).parse_args(["--attempt-memory-gib", "nan"])
+    assert done.value.code == 2 and "at least 1 GiB" in capsys.readouterr().err
+
+
 def test_an_allowlist_that_cannot_be_read_is_refused_fatal(driver, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     d = driver()
     d.allowlist_path = tmp_path / "absent.txt"
-    with pytest.raises(SystemExit, match="^FATAL: --episode-allowlist read failed"):
+    with pytest.raises(ValueError, match="^--episode-allowlist read failed"):
         d._select_episodes()
 
 
@@ -721,8 +777,8 @@ def test_an_allowlist_naming_ids_off_the_split_is_refused_fatal(
     d.allowlist_path = tmp_path / "ids.txt"
     d.allowlist_path.write_text("\n".join(ids) + "\n")
     with pytest.raises(
-        SystemExit,
-        match="^FATAL: --episode-allowlist names 1 ids not in the train_seen split, e.g. z",
+        ValueError,
+        match="^--episode-allowlist names 1 ids not in the train_seen split, e.g. z",
     ):
         d._select_episodes()
 
@@ -830,6 +886,30 @@ def test_calcity_without_its_catalog_exits_2_with_its_recipe_before_any_out_root
     err = capsys.readouterr().err
     assert err.startswith("FATAL: Cal City data is incomplete under ")
     assert "build_objects_json" in err and "objects.json" in err
+
+
+def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monkeypatch) -> None:
+    """``python -m benchmarks.citynav.run_benchmark`` runs model code in its own process: it
+    takes the attempt's memory cap and, where bubblewrap runs, writes only its runs and the
+    caches. A runner the driver spawns caps itself alone (the driver sandboxes it)."""
+    from benchmarks.citynav.run_benchmark import cli
+
+    confined: list = []
+    monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
+    monkeypatch.setattr(sandbox, "cap_memory", lambda gib: confined.append(gib))
+    monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(tmp_path / "absent"))
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
+    assert cli.main() == 1
+    ((writable, gib, _log, readable),) = confined
+    assert writable[0] == tmp_path / "out" and gib == sandbox.ATTEMPT_MEMORY_GIB
+    assert sandbox.hf_hub_cache() in writable and str(tmp_path / "absent") in map(str, readable)
+    confined.clear()
+    monkeypatch.setattr(
+        sys, "argv", ["run_benchmark", "--attempt-root", str(tmp_path), "--episode-id", "e"]
+    )
+    monkeypatch.setattr(cli, "_die_with_parent", lambda environ: None)
+    assert cli.main() == 1
+    assert confined == [sandbox.ATTEMPT_MEMORY_GIB]
 
 
 def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(

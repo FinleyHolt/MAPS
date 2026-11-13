@@ -80,11 +80,8 @@ def _config_path(environ) -> Path:
 
 
 def _enumerate_split(bench: Bench, split: str) -> list[str]:
-    try:
-        split_file = bench.split_path(split)
-    except ValueError as exc:
-        raise SystemExit(f"FATAL: {exc}") from None
-    return episode_ids(enumerate(load_split(split_file)))
+    """The split's episode ids; an unknown split raises ``ValueError``."""
+    return episode_ids(enumerate(load_split(bench.split_path(split))))
 
 
 # One thread per native pool (BLAS, OpenCV, Rayon) and two malloc arenas per
@@ -160,7 +157,22 @@ def _missing_block_assets(bench: Bench, episode_ids: list[str]) -> list[str]:
     return missing
 
 
+class _Signalled(KeyboardInterrupt):
+    """A stop signal other than SIGINT, raised in the main thread as Ctrl-C is."""
+
+    def __init__(self, sig: signal.Signals) -> None:
+        super().__init__(sig.name)
+        self.signal = sig
+
+
+def _interrupt(signum: int, _frame) -> None:
+    raise _Signalled(signal.Signals(signum))
+
+
 class Driver:
+    #: Whether each attempt flies in a systemd user scope; settled once by _run().
+    _scope = False
+
     def __init__(self, args: argparse.Namespace, bench: Bench, config: Path) -> None:
         self.bench = bench
         self.config = Path(config)
@@ -413,12 +425,19 @@ class Driver:
             episode_id,
             "--attempt-root",
             str(worker_root),
+            "--memory-gib",
+            repr(self.memory_gib),
         ]
         if self._bwrap:
             # The child's parent is bubblewrap's init, PID 1 in the attempt's namespace.
             env[episodes.PARENT_PID_ENV] = "1"
-            cmd = sandbox.bwrap_argv(self._attempt_binds(worker_root)) + cmd
-        cmd = sandbox.cap_argv(self.memory_gib) + cmd
+            # The driver's discovery cached the tokenizer; the hub cache is read-only inside.
+            env["HF_HUB_OFFLINE"] = "1"
+            cmd = sandbox.bwrap_argv(*self._attempt_binds(worker_root)) + cmd
+        # A unit name unique on the host, so the scope is killed by name with the attempt.
+        unit = f"maps-attempt-{os.getpid()}-w{worker_id}-{time.time_ns()}"
+        if self._scope:
+            cmd = sandbox.scope_argv(unit, self.memory_gib) + cmd
         # The child prints its workdir as its first stdout line; an unlinked
         # file holds it, so no pipe can fill and stall the child.
         with tempfile.TemporaryFile("w+") as out, (worker_root / "server.log").open("a") as err:
@@ -446,6 +465,8 @@ class Driver:
                 with contextlib.suppress(ProcessLookupError):
                     os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
+            if self._scope:
+                sandbox.kill_scope(unit)
             out.seek(0)
             first = out.readline().strip()
         elapsed = time.monotonic() - t0
@@ -502,10 +523,12 @@ class Driver:
             )
         return row
 
-    def _attempt_binds(self, worker_root: Path) -> list[Path]:
-        """What an attempt writes besides TMPDIR and the HF cache: its worker's
-        attempt root and the ortho cache beside the bench's rasters."""
-        return [worker_root, *sandbox.ortho_caches([self.bench.rgbd_dir])]
+    def _attempt_binds(self, worker_root: Path) -> tuple[list, list]:
+        """What an attempt writes (its worker's attempt root, the ortho cache beside
+        the bench's rasters) and reads besides the repo (the bench's inputs, the
+        config, the hub cache)."""
+        writable = [worker_root, *sandbox.ortho_caches([self.bench.rgbd_dir])]
+        return writable, [*sandbox.bench_inputs(self.bench), self.config, sandbox.hf_hub_cache()]
 
     def run_one(self, worker_id: int, episode_id: str) -> None:
         """Fly one attempt and land its row."""
@@ -591,28 +614,25 @@ class Driver:
                     self._in_flight.discard(eid)
 
     def _select_episodes(self) -> list[str]:
-        """The selection, in flying order; a refusal raises ``SystemExit``
-        with its FATAL line. An allowlist's count line is kept in
-        ``_selection_note``."""
+        """The selection, in flying order; a refusal raises ``ValueError``
+        naming it. An allowlist's count line is kept in ``_selection_note``."""
         episodes = _enumerate_split(self.bench, self.split)
         if self.allowlist_path is not None:
             try:
                 lines = self.allowlist_path.read_text().splitlines()
             except OSError as exc:
-                raise SystemExit(
-                    f"FATAL: --episode-allowlist read failed: {self.allowlist_path}: {exc}"
+                raise ValueError(
+                    f"--episode-allowlist read failed: {self.allowlist_path}: {exc}"
                 ) from exc
             allowed = {ln.strip() for ln in lines if ln.strip()}
             if not allowed:
-                raise SystemExit(
-                    f"FATAL: --episode-allowlist names no episode: {self.allowlist_path}"
-                )
+                raise ValueError(f"--episode-allowlist names no episode: {self.allowlist_path}")
             before = len(episodes)
             episodes = [e for e in episodes if e in allowed]
             unknown = sorted(allowed - set(episodes))
             if unknown:
-                raise SystemExit(
-                    f"FATAL: --episode-allowlist names {len(unknown)} ids not in the "
+                raise ValueError(
+                    f"--episode-allowlist names {len(unknown)} ids not in the "
                     f"{self.split} split, e.g. {unknown[0]}"
                 )
             self._selection_note = (
@@ -651,13 +671,20 @@ class Driver:
         except episodes.RootHeld as exc:
             self.log(f"FATAL: {exc}")
             return 2
+        # kill, systemd and SLURM stop a run with SIGTERM: it ends as Ctrl-C does.
+        before = signal.signal(signal.SIGTERM, _interrupt)
         try:
             return self._run()
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as exc:
+            sig = getattr(exc, "signal", signal.SIGINT)
             # The ledger keeps every landed row, so a relaunch into this root resumes.
-            self.log("interrupted (SIGINT): stopping; relaunch into this root to resume")
-            return 130
+            self.log(f"interrupted ({sig.name}): stopping; relaunch into this root to resume")
+            if self._scope:
+                # The attempt children die with the driver; a daemon one left dies with its scope.
+                sandbox.kill_scope(f"maps-attempt-{os.getpid()}-*")
+            return 128 + sig
         finally:
+            signal.signal(signal.SIGTERM, before)
             lock.close()
 
     def _run(self) -> int:
@@ -690,8 +717,9 @@ class Driver:
             f"done={len(self._done_cache & set(episodes))} pending={len(pending)} "
             f"workers={self.workers}"
         )
-        self._bwrap = sandbox.bwrap_works()
-        self.log(sandbox.mode_line(self._bwrap, self.memory_gib))
+        why, self._scope = sandbox.bwrap_refusal(), sandbox.scope_works()
+        self._bwrap = why is None
+        self.log(sandbox.mode_line(why, self.memory_gib, scope=self._scope))
         # Workers claim until nothing is left, the wall budget is spent, or the
         # run aborts; an infra attempt is re-claimed by whichever worker is free.
         # Daemon workers end with the driver (their children die with it), so
@@ -770,7 +798,7 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--attempt-memory-gib",
-        type=float,
+        type=sandbox.gib,
         default=sandbox.ATTEMPT_MEMORY_GIB,
         help="each attempt's memory cap in GiB (default %(default)s): a block that allocates "
         "past it raises MemoryError, served as the block's error",
@@ -818,37 +846,24 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     config = _config_path(bench.environ)
     parser = _build_parser(bench)
     args = parser.parse_args(argv)
-    # The config is refused here, before an out-root exists or a serve is asked.
+    # Each refusal comes before an out-root exists or a serve is asked: the config, the
+    # bench's data, the selection and its block assets, then the serve, once, so an
+    # unreachable or wrong one fails before any worker spawns.
     try:
         resolve_config(config)
-    except (OSError, ValueError) as exc:
-        print(f"FATAL: {exc}", file=sys.stderr)
-        return 2
-    try:
         bench.assert_available()
-    except (OSError, RuntimeError) as exc:
-        print(f"FATAL: {exc}", file=sys.stderr)
-        return 2
-    driver = Driver(args, bench, config)
-    # The selection and its block assets too, so a refusal makes no out-root and asks no serve.
-    try:
+        driver = Driver(args, bench, config)
         driver._selection = driver._select_episodes()
-    except SystemExit as exc:
-        print(exc, file=sys.stderr)
-        return 2
-    if missing := _missing_block_assets(bench, driver._selection):
-        print(
-            "FATAL: block assets missing for the selection (every episode on these blocks would land "
-            "infra):\n" + "\n".join(f"  {p}" for p in missing),
-            file=sys.stderr,
-        )
-        return 2
-    if args.dry_run:
-        return driver.dry_run()
-    # Once, so an unreachable or wrong serve fails here, before any worker spawns.
-    try:
+        if missing := _missing_block_assets(bench, driver._selection):
+            raise ValueError(
+                "block assets missing for the selection (every episode on these blocks would "
+                "land infra):\n" + "\n".join(f"  {p}" for p in missing)
+            )
+        if args.dry_run:
+            return driver.dry_run()
         driver.bench = _rm.install_endpoint(bench, from_environ(bench.environ))
-    except _rm.EndpointRefused as exc:
+    # EndpointRefused is a RuntimeError.
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     return driver.run()

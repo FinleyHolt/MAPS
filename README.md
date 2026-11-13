@@ -92,7 +92,7 @@ benchmark.
    python -m benchmarks.citynav.analysis.run_report output/citynav
    ```
 
-   `run_report` prints SR, NE, SPL, and OSR. Rerun the first command to resume
+   `run_report` prints SR, NE, and OSR. Rerun the first command to resume
    an interrupted run.
 
 5. Review the searches, or fly one from the console:
@@ -129,7 +129,7 @@ The model's Python calls this library:
 | Call | Description |
 |---|---|
 | `find` | Reads rows of the world state by name or class, ordered or cut by place, side, and colour. |
-| `look_for` | Names up to four classes for the segmenter to detect on later flights. With `at=<place>`, also segments that place for them: a stop already flown there at once (on the bench), else on the next flight. |
+| `look_for` | Names up to four classes for the segmenter to detect on later flights. With `at=<place>`, also segments that place for them: a place not yet flown on the next flight there; on the bench, a stop already flown at once. |
 | `go_to` | Flies to one row. |
 | `explore` | Flies a covering pass over a row or a set, and returns the rows it detected. |
 | `look` | Returns a close crop of the sensor's pixels at a row. |
@@ -138,11 +138,8 @@ The model's Python calls this library:
 | `intersection`, `ends_of`, `distance` | Road crossings, road ends, and metres between footprints. |
 | `more_of` | Returns the next block of a long result. |
 
-Only `go_to` and `explore` move the aircraft.
-
-The `run` tool executes the model's Python in the process that runs the
-mission, with that process's privileges. To fly a model you don't trust, run
-MAPS inside an isolated environment, such as a container or a virtual machine.
+Only `go_to` and `explore` move the aircraft. The model's Python runs in the
+mission's own process; see [Security](#security).
 
 To print the exact system turn and tool schema that the model receives:
 
@@ -160,25 +157,39 @@ mission. The interpreter's block scan and line ceilings keep a cooperative
 model on the library; a hostile block reaches `os`, `subprocess`, and the file
 system through Python's reflection.
 
-The bench driver starts each attempt, and the station and the twin CLI start
-themselves, under OS isolation (`benchmarks/sandbox.py`):
+The bench driver starts each attempt, and the station, the twin CLI, and the
+runner run from the command line start themselves, under OS isolation
+(`benchmarks/sandbox.py`). Each launcher logs one `sandbox:` line naming the
+mode it runs in.
 
-| Layer | Bench attempt | Station, twin CLI |
+| Layer | Bench attempt | Station, twin CLI, runner |
 |---|---|---|
-| Memory cap (`RLIMIT_DATA`) | 4 GiB, `--attempt-memory-gib` | 16 GiB, `--memory-gib` |
-| File system (bubblewrap) | `/` read-only; writable: the worker's attempt root, the ortho cache, TMPDIR, the Hugging Face cache | `/` read-only; writable: `--out`, the ortho caches, TMPDIR, the Hugging Face cache |
+| Memory cap (`RLIMIT_DATA`) | 4 GiB, `--attempt-memory-gib` | 16 GiB (runner 4 GiB), `--memory-gib` |
+| Memory and processes (systemd user scope) | `MemoryMax` at the cap, shared memory and child processes included; every process killed with the attempt | None |
+| File system (bubblewrap) | `/` read-only. Home, `/tmp`, `/dev/shm`, and `/run` empty. Read-only: the repo with its `.env` masked, the interpreter, the bench's data, the config, the Hugging Face hub cache (offline). Writable: the worker's attempt root, the ortho cache | `/` read-only. Home, `/tmp`, `/dev/shm`, and `/run` empty. Read-only: the repo with its `.env` masked, the interpreter, the bench's data, every path argument. Writable: `--out`; when the process flies, the ortho caches and the hub cache |
 | Processes (bubblewrap) | Own PID namespace and session | Own PID namespace |
 | Network | Shared with the host | Shared with the host |
 
-A block that allocates past the cap gets `MemoryError` as its block error, and
-the mission continues. Bubblewrap needs `bwrap` and unprivileged user
-namespaces; on a host without them (Ubuntu 24.04's AppArmor default blocks the
-namespaces), the launcher logs one line saying so and runs under the memory
-cap alone. The network stays shared because the mission calls the reasoner and
-the segmenter over HTTP.
+The layers that apply depend on the host:
 
-To fly a model you don't trust, run MAPS in a container or a virtual machine
-whose egress reaches only the reasoner and the segmenter.
+| Host | Layers |
+|---|---|
+| `bwrap` runs and a systemd user manager starts scopes (a desktop Linux) | All |
+| User namespaces blocked, systemd user manager present (Ubuntu 24.04's AppArmor default) | Memory cap and scope |
+| No `bwrap`, no user manager (a typical HPC compute node) | Memory cap alone: shared memory, a child process, and a daemon that leaves the attempt's session escape it |
+
+A block that allocates past the cap gets `MemoryError` as its block error, and
+the mission continues. An allocation that fails in native code (a Rust
+tokenizer's abort, the scope's out-of-memory kill) ends the attempt with a
+signal, which the driver books as infrastructure and flies again.
+
+The network stays shared because the mission calls the reasoner and the
+segmenter over HTTP, so a block reaches any host the machine reaches, the
+host's abstract Unix sockets, and the reasoner's key in the process
+environment. The attempt also scores itself, so a block that escapes the
+library can rewrite its own score. To fly a model you don't trust, or to
+report benchmark numbers from one, run MAPS in a container or a virtual
+machine whose egress reaches only the reasoner and the segmenter.
 
 ## Reproduce the paper
 
@@ -189,8 +200,6 @@ whose egress reaches only the reasoner and the segmenter.
   replay reproduce from the tag
   [`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1)
   (`git checkout paper-v1`).
-- For the closed-loop flight's recordings, see
-  [Flight recordings](docs/data.md#flight-recordings).
 
 ## Use your own aircraft
 

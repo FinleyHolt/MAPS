@@ -51,7 +51,7 @@ from pydantic import BaseModel
 from benchmarks import sandbox
 from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
-from benchmarks.flight.live_source import open_live
+from benchmarks.flight.live_source import check_map, open_live
 from benchmarks.flight.mission import (
     STATE_AWAITING,
     STATE_ENDED,
@@ -62,7 +62,7 @@ from benchmarks.flight.mission import (
     resolve_episode,
 )
 from benchmarks.flight.tile_georef import map_bounds
-from benchmarks.flight.twin import Twin
+from benchmarks.flight.twin import Twin, effort_refusal
 from benchmarks.run_record import rows
 from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import (
@@ -273,17 +273,15 @@ class Station:
         return self.bench.engine.load_objects(path) if path.is_file() else {}
 
     def why_not_flying(self) -> str | None:
-        """Why this station flies nothing, or None when it can."""
-        if self.bench.name == "calcity":
-            return (
-                None
-                if self.ortho_dir is not None
-                else "this station reviews runs only: start it with --ortho <raster dir> to fly the twin"
-            )
-        try:
-            self.bench.assert_available()
-        except (FileNotFoundError, RuntimeError) as exc:
-            return f"this station reviews runs only: {str(exc).splitlines()[0]}"
+        """Why this station flies nothing, or None when it can: a twin's map must carry
+        its georef, bake and floors too."""
+        if (why := why_not_flying(self.bench, self.ortho_dir)) is not None:
+            return why
+        if self.bench.name == "calcity" and self.map_name:
+            try:
+                check_map(self.tiles_dir, self.map_name)
+            except ValueError as exc:
+                return f"this station reviews runs only: {exc}"
         return None
 
     def shown_split(self) -> str:
@@ -534,6 +532,9 @@ class Station:
         m = self.mission
         if m is None:
             return None
+        # Read once, before what it gates: the mission thread parks the mission while
+        # this runs, and a status read again later could claim a report not read here.
+        status = m.status
         kind = getattr(m, "kind", "twin")
         row = m.row if kind == "bench" else None  # the scored row of a bench episode that has ended
         where = m.map_name or self.map_name
@@ -543,14 +544,14 @@ class Station:
         observations = self._observations(m.workdir, targets)
         report = (
             self._reported(m.workdir, transcript)
-            if m.status in (STATE_AWAITING, STATE_ENDED)
+            if status in (STATE_AWAITING, STATE_ENDED)
             else None
         )
         ring, point = self.target(m.split, m.episode_id)
         return {
             "version": hash(
                 (
-                    m.status,
+                    status,
                     len(transcript),
                     len(flights),
                     len(observations),
@@ -564,7 +565,7 @@ class Station:
             "split": m.split,
             "kind": kind,
             "run_no": m.run_no,
-            "status": "ready" if m.status == STATE_IDLE else m.status,
+            "status": "ready" if status == STATE_IDLE else status,
             "instruction": m.instruction,
             "ended_by": m.ended_by,
             "error": m.error,
@@ -768,6 +769,8 @@ class Station:
         the map's centre, on a twin of its own; on CityNav a row of ``split`` through the bench's runner."""
         if (why := self.why_not_flying()) is not None:
             raise HTTPException(409, why)
+        if (why := effort_refusal(self.bench, effort)) is not None:
+            raise HTTPException(400, why)
         with self._lock:
             if self.mission is not None and self.mission.status in LIVE:
                 raise HTTPException(
@@ -873,14 +876,29 @@ class Station:
         return mission
 
     def clear(self) -> None:
-        """Stop the mission in the seat and empty it; its run stays under the output root. A bench
-        episode is scored as it ends, so its row is waited for."""
+        """Stop the mission in the seat and empty it; its run stays under the output root. A
+        mission banks its row as it ends, so its end is waited for."""
         with self._lock:
             mission, self.mission, self._trail = self.mission, None, []
         if mission is not None:
             mission.stop()
-            if isinstance(mission, BenchMission):
-                mission.wait(END_WAIT_S)
+            mission.wait(END_WAIT_S)
+
+
+def why_not_flying(bench: Bench, ortho_dir: Path | None) -> str | None:
+    """Why a station of ``bench`` with twin rasters ``ortho_dir`` flies nothing, or None
+    when it can."""
+    if bench.name == "calcity":
+        return (
+            None
+            if ortho_dir is not None
+            else "this station reviews runs only: start it with --ortho <raster dir> to fly the twin"
+        )
+    try:
+        bench.assert_available()
+    except (FileNotFoundError, RuntimeError) as exc:
+        return f"this station reviews runs only: {str(exc).splitlines()[0]}"
+    return None
 
 
 class _Next(BaseModel):
@@ -1147,13 +1165,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8788)
-    ap.add_argument(
-        "--memory-gib",
-        type=float,
-        default=sandbox.STATION_MEMORY_GIB,
-        help="the station's memory cap in GiB (default %(default)s): a mission block that "
-        "allocates past it raises MemoryError, served as the block's error",
-    )
+    sandbox.add_memory_flag(ap)
     args = ap.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s %(message)s"
@@ -1166,11 +1178,8 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         # A command-line station runs model code in its own threads, so it confines
         # itself; a caller handing argv owns its process.
-        sandbox.confine(
-            [args.out, *sandbox.ortho_caches([bench.rgbd_dir, args.ortho, args.register])],
-            args.memory_gib,
-            log.info,
-        )
+        flies = why_not_flying(bench, args.ortho) is None
+        sandbox.confine_cli(args, bench, log.info, flies=flies)
     station = Station(
         bench=bench,
         config=args.config or f"configs/{args.bench}.yaml",

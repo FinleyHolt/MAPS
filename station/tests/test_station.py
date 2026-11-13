@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from benchmarks.flight.tests.test_twin_mission import calcity, serves  # noqa: F401  (fixtures)
@@ -22,6 +23,49 @@ def _until(what, timeout_s: float = 120.0):
             return got
         time.sleep(0.1)
     raise AssertionError("the station never got there")
+
+
+def test_a_seat_read_as_the_mission_parks_pairs_its_status_with_its_report(tmp_path):
+    """The mission thread parks the mission while the console reads the seat: the state
+    returned reads the status once, so a parked status always carries its report."""
+    m = SimpleNamespace(
+        kind="twin", status=serve.STATE_FLYING, map_name="m", flights=[], transcript=[],
+        workdir=tmp_path / "r" / "w", split="s", episode_id="e", waiting=None, error=None,
+        run_no=1, instruction="i", ended_by=None, turns=lambda: 1, started_at=None,
+        git_commit=None, git_dirty=None, score=None,
+    )  # fmt: skip
+
+    def parks_now(split, eid):
+        m.status = serve.STATE_AWAITING
+        return None, None
+
+    seat = SimpleNamespace(
+        mission=m, map_name="m", _observations=lambda w, t: [], _reported=lambda w, t: "Here.",
+        target=parks_now, lonlat=lambda *a: None, _flights=lambda *a: [],
+    )  # fmt: skip
+    state = serve.Station.seat_state(seat)
+    assert state["status"] == serve.STATE_FLYING and state["reply_text"] is None, state
+    assert serve.Station.seat_state(seat)["reply_text"] == "Here."
+
+
+def test_clearing_the_seat_waits_for_a_twin_mission_to_bank_its_row():
+    """Ctrl-C clears the seat as the station exits: a twin mission stopped mid-turn banks
+    its row before the process ends, as a bench episode does."""
+    import threading
+
+    calls: list = []
+    twin = SimpleNamespace(stop=lambda: calls.append("stop"), wait=lambda t: calls.append(t))
+    seat = SimpleNamespace(_lock=threading.Lock(), mission=twin, _trail=[1])
+    serve.Station.clear(seat)
+    assert calls == ["stop", serve.END_WAIT_S] and seat.mission is None
+
+
+def test_a_twin_station_whose_map_lacks_its_bake_flies_nothing(tmp_path):
+    seat = SimpleNamespace(
+        bench=SimpleNamespace(name="calcity"), ortho_dir=tmp_path, tiles_dir=tmp_path, map_name="m"
+    )
+    why = serve.Station.why_not_flying(seat)
+    assert why is not None and why.startswith("this station reviews runs only: m carries no georef")
 
 
 def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monkeypatch):  # noqa: F811
@@ -53,6 +97,13 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
         and asked == [{"probe_sam": False}] * 2
     )
 
+    # An effort the served card refuses is refused before a run folder opens.
+    bogus = client.post(
+        "/mission/next",
+        json={"episode_id": row["episode_id"], "instruction": "", "reasoning_effort": "bogus"},
+    )
+    assert bogus.status_code == 400 and "bogus" in bogus.json()["detail"]
+    assert not (tmp_path / "out").exists() or not any((tmp_path / "out").iterdir())
     state = client.post(
         "/mission/next", json={"episode_id": row["episode_id"], "instruction": row["instruction"]}
     ).json()
@@ -164,9 +215,11 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
     assert "building" in groups and len(client.get("/area").json()["bbox"]) == 4
 
 
-def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, monkeypatch):
+@pytest.mark.parametrize("flies", [True, False])
+def test_the_command_line_station_confines_itself_before_it_serves(flies, tmp_path, monkeypatch):
     """Missions fly in the station's own threads: the process takes the memory cap and,
-    where bubblewrap runs, writes only its runs and the ortho caches."""
+    where bubblewrap runs, writes only its runs and, when it flies, the ortho caches and
+    the hub cache. A station that reviews runs only writes ``--out`` alone."""
     import uvicorn
 
     from benchmarks import sandbox
@@ -181,11 +234,14 @@ def test_the_command_line_station_confines_itself_before_it_serves(tmp_path, mon
         lambda **kw: SimpleNamespace(why_not_flying=lambda: None, clear=lambda: None),
     )
     monkeypatch.setattr(serve, "build_app", lambda station: None)
+    monkeypatch.setattr(serve, "why_not_flying", lambda bench, ortho: None if flies else "no")
     monkeypatch.setattr(
         "sys.argv", ["serve", "--out", str(tmp_path / "out"), "--ortho", str(tmp_path / "o")]
     )
     assert serve.main() == 0
-    (writable, gib, _log), served = confined
+    (writable, gib, _log, readable), served = confined
     bench = serve.bench_named("citynav", os.environ)
     assert served == "served" and gib == sandbox.STATION_MEMORY_GIB
-    assert writable == [tmp_path / "out", Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho"]
+    caches = [Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho", sandbox.hf_hub_cache()]
+    assert writable == [tmp_path / "out", *(caches if flies else [])]
+    assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)

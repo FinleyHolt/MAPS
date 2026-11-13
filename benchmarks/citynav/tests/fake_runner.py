@@ -7,7 +7,11 @@ import sys
 import time
 from pathlib import Path
 
+from benchmarks import sandbox
+
 argv = sys.argv
+# The cap the real runner takes at startup.
+sandbox.cap_memory(float(argv[argv.index("--memory-gib") + 1]))
 eid = argv[argv.index("--episode-id") + 1]
 kind = eid.split("::")[0]
 if kind == "nodir":
@@ -28,6 +32,24 @@ elif kind == "hog":
 
     out = MissionPython(quiet_env()).run_block("x = [0] * (2 * 10**8)\nprint(len(x))")
     row["error"] = out.get("error")
+elif kind == "shm":
+    # Shared anonymous memory, outside the data segment, 1.5 times the cap, held.
+    import mmap
+
+    n = int(1.5 * float(argv[argv.index("--memory-gib") + 1]) * 2**30)
+    m = mmap.mmap(-1, n)
+    for i in range(0, n, 4096):
+        m[i] = 1
+elif kind == "orphan":
+    # A daemon in a session of its own, named in the attempt directory, outliving the attempt.
+    if os.fork() == 0:
+        os.setsid()
+        if os.fork() == 0:
+            (d / "daemon.pid").write_text(str(os.getpid()))
+            time.sleep(60)
+        os._exit(0)
+    while not (d / "daemon.pid").exists():
+        time.sleep(0.05)
 elif kind == "infra":
     row.update(status="infra", error="SamServerOutage: down")
 elif kind in ("sleep", "reasoner", "sam"):

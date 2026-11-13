@@ -35,14 +35,17 @@ from benchmarks import sandbox
 from benchmarks.calcity.paths import calcity_bench
 from benchmarks.flight import map_render
 from benchmarks.flight.airframe import C12_LEVER_M, C12_SPEED_MPS
-from benchmarks.flight.live_source import open_live
+from benchmarks.flight.live_source import check_map, open_live
 from benchmarks.flight.mission import STATE_ENDED, Mission, converse, resolve_episode, summary_line
 from benchmarks.flight.nav_track import Pose, camera_pose_local, pose_tag, tag_pose
 from benchmarks.flight.tile_georef import FLOOR_MSL_M, local_to_lonlat
 from benchmarks.flight.vehicle import Leg
 from benchmarks.run_record.config import load_config
 from benchmarks.run_record.episode_workdir import open_episode_dir
+from maps.llm import endpoint_spec
+from maps.llm.model_cards import check_effort
 from maps.perception.geometry.sensor_spec import resolve_sensor
+from maps.settings import from_environ
 
 #: The rate the recorder kept its ring at, frames a second.
 RING_HZ = 2.0
@@ -212,6 +215,25 @@ def _xy(text: str) -> tuple[float, float]:
     return x, y
 
 
+def effort_refusal(bench, effort: str | None) -> str | None:
+    """Why the served model refuses ``effort``, or None, so a mission is refused before
+    its run folder opens; a reasoner that does not answer is the mission's own
+    discovery's to report."""
+    effort = (effort or "").strip()  # blank is no effort of the mission's own, as Mission reads it
+    if not effort:
+        return None
+    try:
+        settings = from_environ(bench.environ)
+        model = endpoint_spec.discover_from_settings(settings, probe_sam=False).model_id
+    except (endpoint_spec.EndpointDiscoveryError, ValueError):
+        return None
+    try:
+        check_effort(model, effort)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default="configs/calcity.yaml")
@@ -251,13 +273,7 @@ def main(argv: list[str] | None = None) -> int:
         help="the raster directory each frame is registered against; unset registers nothing",
     )
     ap.add_argument("--out", type=Path, default=Path("output/flight"))
-    ap.add_argument(
-        "--memory-gib",
-        type=float,
-        default=sandbox.STATION_MEMORY_GIB,
-        help="the process's memory cap in GiB (default %(default)s): a block that allocates "
-        "past it raises MemoryError, served as the block's error",
-    )
+    sandbox.add_memory_flag(ap)
     args = ap.parse_args(argv)
     if args.start_xy is not None and not args.instruction:
         ap.error("--start-xy flies an operator-authored mission: give its words with --instruction")
@@ -269,12 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         # A command-line twin runs model code in this process, so it confines itself;
         # a caller handing argv owns its process.
-        args.out.mkdir(parents=True, exist_ok=True)
-        sandbox.confine(
-            [args.out, *sandbox.ortho_caches([bench.rgbd_dir, args.ortho, args.register])],
-            args.memory_gib,
-            logging.getLogger("twin").info,
-        )
+        sandbox.confine_cli(args, bench, logging.getLogger("twin").info)
     split = args.split or bench.default_split
     cfg = load_config(args.config)
     sensor = resolve_sensor(cfg.sensor)
@@ -284,6 +295,14 @@ def main(argv: list[str] | None = None) -> int:
         print(exc, file=sys.stderr)
         return 2
     map_name = episode.map_name
+    try:
+        check_map(bench.tiles_dir, map_name)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    if (why := effort_refusal(bench, args.reasoning_effort)) is not None:
+        print(why, file=sys.stderr)
+        return 2
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
         print(
