@@ -48,6 +48,14 @@ Requires Python 3.12 or later. No model, GPU, or dataset.
 4. Go to `http://127.0.0.1:8788`. On a mission, click the run count, then the
    run.
 
+On Windows, in PowerShell, activate with `.venv\Scripts\Activate.ps1` and open
+the console with:
+
+```powershell
+$env:SEARCH_CALCITY_TILES = "<folder>\bake"
+python -m station.serve --bench calcity --out <folder>\runs --basemap <folder>\basemap.jpg
+```
+
 The review shows the model's reasoning and code turn by turn, the pictures it
 was sent, its path on the map, and its score. For the console's other modes,
 see [`station/README.md`](station/README.md).
@@ -197,6 +205,7 @@ The layers that apply depend on the host:
 | User namespaces blocked, systemd user manager present (Ubuntu 24.04's AppArmor default) | Memory cap and scope. The scope binds a cooperative block only: a block reaches the user manager and can lift its own `MemoryMax` or start units outside the scope. The environment allowlist binds a cooperative block only: with no PID namespace, a block reads the launching shell's environment from its ancestors in `/proc`. |
 | No `bwrap`, no user manager (a typical HPC compute node) | Memory cap: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap. The environment allowlist binds a cooperative block only, as above. |
 | macOS | The environment allowlist alone, binding a cooperative block only: no memory cap (macOS does not enforce `RLIMIT_DATA`), no scope, no bubblewrap. |
+| Windows | Review only: the station serves recorded runs, and every entry point that flies model code refuses. |
 
 A block that allocates past the cap gets `MemoryError` as its block error, and
 the mission continues. A `MemoryError` raised outside a block, in the

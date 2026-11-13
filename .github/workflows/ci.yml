@@ -45,6 +45,24 @@ jobs:
       - name: Quickstart
         run: .github/quickstart.sh
 
+  windows:
+    name: Quickstart (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e '.[station]'
+      - name: Quickstart
+        run: .github/quickstart.sh
+
   quickstart:
     name: Quickstart (Linux)
     runs-on: ubuntu-latest

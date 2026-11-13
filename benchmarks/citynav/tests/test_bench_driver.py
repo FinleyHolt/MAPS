@@ -1125,3 +1125,10 @@ def test_a_missing_split_file_is_refused_with_the_fetch_recipe(
     driver_err, runner_err = capsys.readouterr().err.split("FATAL: ")[1:]
     for err in (driver_err, runner_err):
         assert err.startswith("CityNav data not found under ") and f"Missing: {split}" in err, err
+
+
+def test_the_driver_refuses_on_windows_in_one_line(monkeypatch, capsys):
+    """Attempts fly model code, which runs on Linux and macOS alone."""
+    monkeypatch.setattr(bf.sys, "platform", "win32")
+    assert bf.main([]) == 2
+    assert capsys.readouterr().err == f"FATAL: {sandbox.WINDOWS_REFUSAL}\n"
