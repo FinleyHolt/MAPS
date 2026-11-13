@@ -20,9 +20,10 @@ def test_a_tokenizer_that_cannot_load_raises(tmp_path):
         load_tokenizer("inkling-small", absent)
 
 
-def test_importing_flight_summary_leaves_transformers_unloaded():
-    """Importing the flight summary leaves transformers unloaded: a CLI that reads run records starts
-    without its import cost or banner."""
-    probe = "import sys, maps.llm.flight_summary; print('transformers' in sys.modules)"
+@pytest.mark.parametrize("module", ["maps.llm.flight_summary", "maps.mission.endpoint_preflight"])
+def test_importing_a_cli_module_leaves_transformers_unloaded(module):
+    """A CLI that reads run records or preflights an endpoint starts without transformers' import
+    cost or banner."""
+    probe = f"import sys, {module}; print('transformers' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"
