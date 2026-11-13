@@ -42,8 +42,9 @@ def _die_with_parent(environ) -> None:
     """Have the kernel SIGKILL this attempt when the driver that spawned it
     dies: the attempt sits in its own session, so nothing else reaps it. A
     driver already gone before the request is armed is caught by the
-    parent-pid check."""
-    ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
+    parent-pid check, which is all a host without ``prctl`` (macOS) gets."""
+    if sys.platform.startswith("linux"):
+        ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
     parent = environ.get(episodes.PARENT_PID_ENV)
     if parent and os.getppid() != int(parent):
         os._exit(1)
