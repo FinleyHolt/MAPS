@@ -723,3 +723,27 @@ def test_a_set_of_footprints_and_points_names_both():
     _r, fr, _f, _d = drive([[run(code)], "done"], cands=cands + anchors)
     err = tool_results(fr)[0]["error"]
     assert err.startswith("prior_9 (A Shed) is a footprint and [100, 100] is a point, "), err
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        'find("Cross Street", nearest="end_0")',
+        'find("Cross Street", near="end_0", dwithin=500)',
+        'find("Cross Street", north_of="end_0")',
+        'find("Cross Street").order(nearest="end_0")',
+        'find("Cross Street").filter(near="end_0", dwithin=500)',
+    ],
+)
+def test_a_quoted_terminus_fid_in_a_place_slot_is_the_row_it_names(call):
+    def printed(c):
+        return _ends_block(f'x = {c}\nprint([[r["fid"], r.get("distance to end_0")] for r in x])\n')
+
+    quoted, bare = printed(call), printed(call.replace('"end_0"', "end_0"))
+    assert "error" not in quoted, quoted
+    assert quoted["printed"] == bare["printed"] == "[['road_2', 20.51]]", (quoted, bare)
+
+
+def test_a_quoted_terminus_fid_is_refused_by_ends_of_as_the_point_it_is():
+    err = _ends_block('ends_of("end_0")\n')["error"]
+    assert "'end_0' is a point " + _POINT in err, err

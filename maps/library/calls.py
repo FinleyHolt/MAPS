@@ -24,6 +24,7 @@ from maps.library.call_arguments import (
 )
 from maps.library.op_compiler import (
     CARDINAL_ORDER,
+    END_RE,
     HANDLE_RE,
     VIEWPOINT_RE,
     Bind,
@@ -31,6 +32,7 @@ from maps.library.op_compiler import (
     Program,
     Ref,
     act_needs_a_thing,
+    bind_row,
     compile_filter,
     compile_find,
     compile_order,
@@ -162,7 +164,13 @@ class Library:
         if isinstance(v, Row):
             return Bind(v._bind, self.names.name_of(v) or (v.fid or "row"))
         if isinstance(v, str):
-            return self._held(v) or v
+            held = self._held(v)
+            if held is not None:
+                return held
+            # A quoted terminus is the row it names, as the bare name is: the
+            # compiler's fid lookup covers only the surface's own rows.
+            end = self.env.row_of_fid(v) if END_RE.fullmatch(v.strip().lower()) else None
+            return Bind(bind_row(end), v.strip()) if end is not None else v
         if isinstance(v, dict):
             raise CodeError(f"a place is a row, a set, a fid or an [x, y]; got a dict ({v!r:.60}).")
         if isinstance(v, (set, frozenset)):
