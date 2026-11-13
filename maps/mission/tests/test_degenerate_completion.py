@@ -71,3 +71,16 @@ def test_empty_turn_still_reads_as_a_text_turn(monkeypatch):
     assert out["kind"] == "text"
     assert out["content"] == ""
     assert len(r.messages) == before + 1
+
+
+def test_a_tool_call_the_output_cap_cut_off_is_no_call(monkeypatch):
+    """A cut call never runs: the turn reads as a truncated text turn, and
+    the history carries no call id waiting on a result."""
+    call = {"id": "c1", "type": "function"}
+    call["function"] = {"name": "run", "arguments": '{"code": "go_to(prior_0'}
+    _serve(monkeypatch, reasoning="settled", finish_reason="length", tool_calls=[call])
+    r = _reasoner()
+    out = r.step_tool_call([])
+    assert out["kind"] == "text" and "tool_calls" not in out, out
+    assert out["finish_reason"] == "length"
+    assert "tool_calls" not in r.messages[-1], r.messages[-1]

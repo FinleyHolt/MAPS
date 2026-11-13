@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from maps.mission.tests.fakes import drive, episode_world, run, tool_results
 from maps.mission.watch_verbs import _named_feature_note
 
@@ -144,3 +146,66 @@ def test_an_empty_watchlist_is_told_once_per_run_not_per_flight():
     assert len(flights) == 2, flights
     served = json.dumps(tool_results(fr)[0])
     assert served.count('look_for(\\"<class>\\")') == 1, served
+
+
+# --------------------------------------------------------------------------- #
+# look_for's served limits: up to four classes, each a THING, never a colour
+# --------------------------------------------------------------------------- #
+
+
+def test_a_fifth_class_is_refused_and_the_four_stay_armed():
+    _, fr, _, declared = drive(
+        [
+            [run('look_for("car", "house", "pool", "tree", "shed")\n')],
+            [run('look_for("car", "house", "pool", "tree")\n')],
+            [run('look_for("car", "car")\n')],
+            [run('look_for("shed")\n')],
+            "done",
+        ]
+    )
+    out = tool_results(fr)
+    assert "up to four classes" in out[0]["error"], out[0]
+    assert "error" not in out[1] and "error" not in out[2], out[1:3]
+    assert "up to four classes" in out[3]["error"], out[3]
+    assert declared == [["car", "house", "pool", "tree"], ["house", "pool", "tree", "car"]]
+
+
+def test_a_placed_fifth_class_queues_no_boost():
+    boosts = []
+    _, fr, _, declared = drive(
+        [
+            [run('look_for("car", "house", "pool", "tree")\n')],
+            [run('look_for("shed", at="the depot")\n')],
+            "done",
+        ],
+        boost_queue=lambda concepts, where: boosts.append(concepts) or {"queued": True},
+    )
+    assert "up to four classes" in tool_results(fr)[1]["error"]
+    assert boosts == [] and declared == [["car", "house", "pool", "tree"]], (boosts, declared)
+
+
+@pytest.mark.parametrize(
+    "said, rule",
+    [
+        ('look_for("red car")', 'never a colour: "red car" carries the colour "red"'),
+        ('look_for("car", "Grey van")', 'never a colour: "Grey van" carries the colour "Grey"'),
+        ('look_for("First Church")', 'no proper nouns: "First Church" is a proper noun'),
+        ('look_for("pool", at="the depot")', None),
+    ],
+)
+def test_a_colour_or_a_proper_noun_is_refused_and_arms_nothing(said, rule):
+    _, fr, _, declared = drive(
+        [[run(said + "\n")], "done"], boost_queue=lambda concepts, where: {"queued": True}
+    )
+    out = tool_results(fr)[0]
+    if rule is None:
+        assert "error" not in out, out
+        return
+    assert rule in out["error"], out
+    assert declared == [], declared
+
+
+def test_a_capitalised_first_word_is_a_class():
+    _, fr, _, declared = drive([[run('look_for("Car")\n')], "done"])
+    assert "error" not in tool_results(fr)[0]
+    assert declared == [["car"]], declared

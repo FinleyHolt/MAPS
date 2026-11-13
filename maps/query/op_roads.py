@@ -165,6 +165,7 @@ def run_ends(cx, a):
     rows = []
     n_end = 0
     no_line: list = []
+    footprints: list = []
     for el in a["refs"]:
         nodes = named_rows(cx, el, "centerline")
         if not nodes:
@@ -173,17 +174,29 @@ def run_ends(cx, a):
                 f"{quote_value(as_said(el))} names no row on this surface. " + SAY_A_FID
             )
         for nd in nodes:
+            said = f"{nd.get('fid')}" + (f" ({nd.get('name')})" if nd.get("name") else "")
+            # A mask that encloses area is a footprint: its centerline is the
+            # mask's axis, which no road ends on.
+            if G.loops_area(nd.get("mask") or []) > 0:
+                footprints.append(said)
+                continue
             cl = nd.get("centerline")
             if not (isinstance(cl, list) and len(cl) >= 2):
-                no_line.append(
-                    f"{nd.get('fid')}" + (f" ({nd.get('name')})" if nd.get("name") else "")
-                )
+                no_line.append(said)
                 continue
             lab = str(nd.get("name") or nd.get("fid"))
             for which, pt in (("end0", cl[0]), ("end1", cl[-1])):
                 xy = [float(round(pt[0])), float(round(pt[1]))]
                 rows.append({"fid": f"end_{n_end}", "xy": xy, "name": f"{lab} {which}"})
                 n_end += 1
+    if not rows and footprints:
+        named = ", ".join(footprints[:4]) + (
+            f" (+{len(footprints) - 4} more)" if len(footprints) > 4 else ""
+        )
+        raise ProgramError(
+            f"{named} {'is a footprint' if len(footprints) == 1 else 'are footprints'}, "
+            f"and a footprint has no ends -- ends_of reads a road."
+        )
     if not rows:
         named = ", ".join(no_line[:4]) + (
             f" (+{len(no_line) - 4} more)" if len(no_line) > 4 else ""

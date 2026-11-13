@@ -21,6 +21,7 @@ import yaml
 from maps.library.block_scan import LIBRARY_CALLS
 from maps.library.calls import Library
 from maps.library.rows import Rows
+from maps.llm.tokenizer import load_tokenizer
 from maps.mission import served_text
 from maps.perception.geometry.sensor_spec import list_sensors, resolve_sensor
 from maps.perception.ortho.sensor_frame import served_description
@@ -132,9 +133,6 @@ def main(argv: list[str] | None = None) -> int:
     if not args.rendered:
         sys.stdout.write(dump_text(sensor=args.sensor, agl_m=args.agl_m))
         return 0
-
-    # Lazy: maps.llm.tokenizer eagerly imports transformers.
-    from maps.llm.tokenizer import load_tokenizer
 
     c = assemble(sensor=args.sensor, agl_m=args.agl_m)
     # The one read of the environment: the tokenizer it names.
