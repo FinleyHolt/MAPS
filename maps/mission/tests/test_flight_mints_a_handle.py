@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from maps.mission.tests.fakes import ROADS, grow_drive, run
+from maps.mission.tests.fakes import ROADS, GraphNode, grow_drive, run
 
 
 def _flown(result: dict) -> dict:
@@ -183,3 +183,51 @@ def test_the_latest_flight_owns_the_scope():
     assert got & set(added2[1]), (got, added2[1])
     # (The flight handles still own their own scope -- asserted above on
     # results[1] / results[3]: an event is not a query.)
+
+
+def _sheds():
+    """Two surveyed sheds north of the depot (prior_7), which a flight keeps."""
+    return {f"prior_{20 + i}": GraphNode((40.0 + 5 * i, 60.0), "shed") for i in range(2)}
+
+
+def test_a_handle_re_derived_after_a_flight_reads_the_watchlist():
+    """A side cut emptied before look_for advises looking; re-derived after
+    the class is watched and a flight moves the surface, it drops that advice."""
+    res, _g, _a = grow_drive(
+        [
+            [run('r = find("shed", south_of="prior_7")\nr\n')],
+            [run('look_for("shed")\ngo_to("prior_1")\n')],
+            [run("r\n")],
+            "done",
+        ],
+        extra_priors=_sheds(),
+    )
+    before = res[0]["result"]["results"]["r"]["cut_stats"]["nothing_on_that_side"]
+    after = res[2]["result"]["results"]["r"]["cut_stats"]["nothing_on_that_side"]
+    assert "look_for the class" in before, before
+    assert after == "nothing in the world state lies on that side", after
+
+
+def test_a_flight_mints_past_the_refs_its_block_s_programs_took():
+    """A flight's handle numbers past every rN a program minted, so the
+    handles a chain bound keep their rows when they are re-derived."""
+    res, _g, _a = grow_drive(
+        [
+            [
+                run(
+                    'a = find("shed")\nb = a.order(nearest="prior_7")\n'
+                    'c = b.filter(near="prior_7", dwithin=500)\ngo_to("prior_1")\n'
+                )
+            ],
+            [run('go_to("prior_7")\nd = find("shed")\n')],
+            [run("a\nb\nc\nd\n")],
+            "done",
+        ],
+        extra_priors=_sheds(),
+    )
+    out = res[2]
+    assert "error" not in out, out
+    envs = out["result"]["results"]
+    assert {k: v.get("fids") for k, v in envs.items()} == {
+        h: ["prior_20", "prior_21"] for h in "abcd"
+    }, envs
