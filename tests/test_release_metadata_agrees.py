@@ -1,12 +1,13 @@
 """The package metadata, the citation file and the README's BibTeX name one release.
 
-``CITATION.cff``'s version and license are the package's, and the README's
-BibTeX entry carries the citation file's title, authors, version and
-repository.
+``CITATION.cff``'s version and license are the package's, it carries a
+release date, and the README's BibTeX entry carries the citation file's
+title, authors, version and repository.
 """
 
 from __future__ import annotations
 
+import datetime
 import re
 import tomllib
 from pathlib import Path
@@ -28,6 +29,7 @@ def test_citation_pyproject_and_readme_agree():
     bib = _bibtex()
     assert cff["cff-version"] == "1.2.0"
     assert str(cff["version"]) == project["version"] == bib["version"]
+    assert isinstance(cff["date-released"], datetime.date)  # CFF 1.2.0's YYYY-MM-DD
     assert cff["license"] == project["license"]["text"] == "MIT"
     assert cff["title"] == bib["title"] == "MAPS"
     assert cff["repository-code"] == bib["url"]
