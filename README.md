@@ -223,17 +223,12 @@ authentication by default, so any host that reaches its port can use the GPU
 behind it. On a shared network, start it with `--host 127.0.0.1` and reach it
 through an SSH tunnel.
 
-## Reproduce the paper
+## Experiments
 
-- The main branch reproduces the CityNav and Cal City runs of the full
-  method. For the commands and readers, see
+- The CityNav and Cal City runs of the method: the commands and readers are in
   [`docs/experiments.md`](docs/experiments.md).
 - The flight campaign's counts, exclusions and compute locations are in
   [`docs/flight.md`](docs/flight.md#flight-campaign).
-- The ablation arms, the comparison against the baselines, and the as-flown
-  replay reproduce from the tag
-  [`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1)
-  (`git checkout paper-v1`).
 
 ## Fly the twin
 

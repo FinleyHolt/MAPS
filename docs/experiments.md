@@ -1,13 +1,8 @@
 # Experiments
 
-This page lists the experiments that the main branch reproduces directly: the
-CityNav and Cal City runs of the full method, with the command that flies
-each run and the reader that derives each number.
-
-The ablation arms, the comparison against the baselines, and the as-flown
-replay reproduce from the tag
-[`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1)
-(`git checkout paper-v1`), which freezes the tree that produced the paper.
+This page lists the experiments this repository runs: the CityNav and Cal
+City runs of the method, with the command that flies each run and the reader
+that derives each number.
 
 Before you run an experiment, prepare the data ([`data.md`](data.md)) and
 start the two services ([`endpoints.md`](endpoints.md)).
