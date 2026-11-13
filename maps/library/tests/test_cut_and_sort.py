@@ -643,6 +643,13 @@ def test_a_side_cut_find_over_a_loop_variable_is_labelled_with_the_query_it_ran(
             'for s in ["prior_7", "prior_1"]:\n    print(find("car", east_of=s))\n',
             ["find('car', east_of='prior_7')", "find('car', east_of='prior_1')"],
         ),
+        (
+            'for c in ["red", "blue"]:\n    print(find("car", color=c, north_of="prior_7"))\n',
+            [
+                "find('car', color='red', north_of='prior_7')",
+                "find('car', color='blue', north_of='prior_7')",
+            ],
+        ),
     ],
 )
 def test_a_side_cut_find_over_a_computed_keyword_is_labelled_with_the_value_it_ran(block, labels):
@@ -651,6 +658,20 @@ def test_a_side_cut_find_over_a_computed_keyword_is_labelled_with_the_value_it_r
     printed = tr["printed"].splitlines()
     assert [line.split(":")[0].lstrip("<") for line in printed] == labels, printed
     assert list(tr["result"]["results"]) == labels[-1:], tr["result"]["results"]
+
+
+def test_a_side_cut_find_over_a_computed_name_is_labelled_with_the_name_it_ran():
+    from maps.mission.tests.fakes import CANDS
+
+    cands = [dict(c) for c in CANDS]
+    cands[3]["name"], cands[4]["name"] = "Acme", "Zed"
+    block = 'for n in ["Acme", "Zed"]:\n    print(find("car", name=n, north_of="prior_7"))\n'
+    _r, fr, _f, _d = drive([[run(block)], "done"], cands=cands)
+    printed = tool_results(fr)[0]["printed"].splitlines()
+    assert [line.split(":")[0].lstrip("<") for line in printed] == [
+        "find('car', name='Acme', north_of='prior_7')",
+        "find('car', name='Zed', north_of='prior_7')",
+    ], printed
 
 
 def test_a_printed_window_of_an_emptied_dwithin_chain_serves_the_cuts_stats():
