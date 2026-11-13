@@ -723,3 +723,83 @@ def test_a_set_of_footprints_and_points_names_both():
     _r, fr, _f, _d = drive([[run(code)], "done"], cands=cands + anchors)
     err = tool_results(fr)[0]["error"]
     assert err.startswith("prior_9 (A Shed) is a footprint and [100, 100] is a point, "), err
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        'find("Cross Street", nearest="end_0")',
+        'find("Cross Street", near="end_0", dwithin=500)',
+        'find("Cross Street", north_of="end_0")',
+        'find("Cross Street").order(nearest="end_0")',
+        'find("Cross Street").filter(near="end_0", dwithin=500)',
+    ],
+)
+def test_a_quoted_terminus_fid_in_a_place_slot_is_the_row_it_names(call):
+    def printed(c):
+        return _ends_block(f'x = {c}\nprint([[r["fid"], r.get("distance to end_0")] for r in x])\n')
+
+    quoted, bare = printed(call), printed(call.replace('"end_0"', "end_0"))
+    assert "error" not in quoted, quoted
+    assert quoted["printed"] == bare["printed"] == "[['road_2', 20.51]]", (quoted, bare)
+
+
+def test_a_quoted_terminus_fid_is_refused_by_ends_of_as_the_point_it_is():
+    err = _ends_block('ends_of("end_0")\n')["error"]
+    assert "'end_0' is a point " + _POINT in err, err
+
+
+@pytest.mark.parametrize(
+    "code, fids, skipped",
+    [
+        ('ends_of(["Long Road", [5, 5]])\n', ["end_0", "end_1"], "1 point skipped ([5, 5])"),
+        (
+            'ends_of([find("Long Road")[0], "Cross Street"])\n',
+            ["end_0", "end_1", "end_2", "end_3"],
+            None,
+        ),
+        ('ends_of(["Long Road", "Cross Street"])\n', ["end_0", "end_1", "end_2", "end_3"], None),
+    ],
+)
+def test_a_name_in_a_written_list_grounds_as_a_lone_name_does(code, fids, skipped):
+    out = _ends_block(code)
+    assert "error" not in out, out
+    (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
+    assert env["fids"] == fids, env
+    assert skipped is None or skipped in env["hint"], env
+
+
+@pytest.mark.parametrize(
+    "code, printed",
+    [
+        ('go_to("END_1")\n', None),
+        ('print(distance("END_0", [80, 100]))\n', "0.0"),
+    ],
+)
+def test_a_typed_terminus_fid_is_read_in_either_case_as_a_stop_id_is(code, printed):
+    out = _ends_block(code)
+    assert "error" not in out, out
+    if printed is None:
+        assert out["flown"]["flown"][0]["target"] == "[120, 100]", out
+    else:
+        assert out["printed"] == printed, out
+
+
+def test_find_refuses_an_end_fid_no_road_end_carries_as_it_refuses_a_prior_fid():
+    err = _ends_block('find("end_7")\n')["error"]
+    assert err == "line 2: there is no end_7 on this surface; say a fid off a served row.", err
+
+
+def test_an_act_hands_a_quoted_terminus_fid_on_as_said():
+    # The act verbs resolve an end fid themselves; only a program slot binds it.
+    from maps.mission.tests.fakes import record_block
+
+    end = {"fid": "end_1", "xy": [120.0, 100.0], "name": "Long Road end1"}
+    code = (
+        'look("end_1", marks="end_1")\ngo_to("end_1")\nexplore("end_1")\n'
+        'show_map(around="end_1")\nstand(at="end_1", facing="end_1")\n'
+    )
+    # the recording stand serves no stance, so the block stops after it
+    calls, _out = record_block(code, row_of_fid=lambda f: end if f == "end_1" else None)
+    assert [c[0] for c in calls] == ["crops", "move", "cover", "map", "stand"], calls
+    assert "[120, 100]" not in repr(calls), calls

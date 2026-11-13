@@ -590,6 +590,15 @@ def test_a_side_cut_over_a_find_that_matched_nothing_says_nothing_of_a_side():
     assert "nothing_on_that_side" not in env["cut_stats"], env
 
 
+def test_a_facing_cut_over_a_find_that_matched_nothing_says_nothing_of_the_words():
+    _r, fr, _f, _d = drive(
+        [[run('find("zzz").filter(facing="prior_7", direction="north")\n')], "done"]
+    )
+    (env,) = tool_results(fr)[0]["result"]["results"].values()
+    assert env["cut_stats"]["cut"] == "0->0", env
+    assert "nothing_reads_those_words" not in env["cut_stats"], env
+
+
 def test_a_tier_of_a_find_a_side_cut_emptied_names_the_cut():
     _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7").exact\n')], "done"])
     err = tool_results(fr)[0]["error"]
@@ -613,6 +622,14 @@ def test_a_side_cut_find_that_keeps_rows_serves_under_the_call_as_written(block,
     _r, fr, _f, _d = drive([[run(block)], "done"])
     keys = list(tool_results(fr)[0]["result"]["results"])
     assert keys == [key], keys
+
+
+def test_a_side_cut_find_over_a_loop_variable_is_labelled_with_the_query_it_ran():
+    block = 'for k in ["car", "zzz"]:\n    print(find(k, north_of="prior_7"))\n'
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    printed = tool_results(fr)[0]["printed"].splitlines()
+    assert printed[0].startswith("<find('car', north_of='prior_7'): 2 row(s)"), printed
+    assert printed[1] == "<find('zzz', north_of='prior_7'): 0 rows>", printed
 
 
 def test_a_printed_window_of_an_emptied_dwithin_chain_serves_the_cuts_stats():

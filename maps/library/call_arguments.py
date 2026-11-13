@@ -38,7 +38,7 @@ class _Stop(Exception):
 
 
 def no_such_fid(fid: str) -> CodeError:
-    """The refusal of a prior_/detected_ fid no surface row carries."""
+    """The refusal of a prior_/detected_/end_ fid no row carries."""
     return CodeError(f"there is no {fid} on this surface; say a fid off a served row.")
 
 

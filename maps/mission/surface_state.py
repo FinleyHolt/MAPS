@@ -166,15 +166,16 @@ class Surface:
     def terminus(self, tok: str) -> dict | None:
         """The carried row a typed terminus fid (``end_N``) names, or None. A
         road end keeps one fid for the mission, so any carried row holding it
-        is that end."""
-        if not END_RE.fullmatch(tok.strip()):
+        is that end. Case folds, as a stop id's and a viewpoint's do."""
+        end = tok.strip().lower()
+        if not END_RE.fullmatch(end):
             return None
         return next(
             (
                 r
                 for rows in reversed(self.carry.rows.values())
                 for r in rows or ()
-                if r.get("fid") == tok.strip()
+                if r.get("fid") == end
             ),
             None,
         )
