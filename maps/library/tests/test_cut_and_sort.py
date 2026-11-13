@@ -590,6 +590,15 @@ def test_a_side_cut_over_a_find_that_matched_nothing_says_nothing_of_a_side():
     assert "nothing_on_that_side" not in env["cut_stats"], env
 
 
+def test_a_facing_cut_over_a_find_that_matched_nothing_says_nothing_of_the_words():
+    _r, fr, _f, _d = drive(
+        [[run('find("zzz").filter(facing="prior_7", direction="north")\n')], "done"]
+    )
+    (env,) = tool_results(fr)[0]["result"]["results"].values()
+    assert env["cut_stats"]["cut"] == "0->0", env
+    assert "nothing_reads_those_words" not in env["cut_stats"], env
+
+
 def test_a_tier_of_a_find_a_side_cut_emptied_names_the_cut():
     _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7").exact\n')], "done"])
     err = tool_results(fr)[0]["error"]

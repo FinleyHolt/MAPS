@@ -174,7 +174,7 @@ def run_filter_items(cx, a):
             "reads_another_word_dropped": len(items) - len(on),
             "unmeasured_kept": blank,
         }
-        if not (len(on) - blank):
+        if cut_had_input(stats) and not (len(on) - blank):
             stats["nothing_reads_those_words"] = (
                 f"no surveyed row reads "
                 f"any of {want} in {quote_value(key)}; "
