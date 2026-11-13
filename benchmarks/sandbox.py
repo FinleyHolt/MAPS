@@ -371,6 +371,13 @@ def _cache_tokenizer(log: Callable[[str], None]) -> str | None:
     return None
 
 
+def _cached(tokenizer: str) -> bool:
+    """Whether ``tokenizer`` (a hub repo or a local directory) is on disk where an
+    offline load reads it."""
+    repo = Path(hf_hub_cache()) / ("models--" + tokenizer.replace("/", "--"))
+    return repo.is_dir() or Path(tokenizer).is_dir()
+
+
 def tokenizer_refusal(environ, process: str, again: str) -> str | None:
     """Why a mission in this ``process`` (``station``, ``twin``) cannot discover the
     reasoner under ``environ`` and load its tokenizer, or None: asked only in a process
@@ -383,14 +390,14 @@ def tokenizer_refusal(environ, process: str, again: str) -> str | None:
 
     try:
         endpoint_spec.discover_from_settings(from_environ(environ), probe_sam=False)
-    except endpoint_spec.TokenizerUnavailable as exc:
-        # The loader's own message advises a connection and a second remedy, both
-        # beside the point offline; the repo name and the one remedy are what helps.
-        return (
-            f"the reasoner's tokenizer {exc.tokenizer!r} is not in the hub cache this "
-            f"sandboxed {process} reads offline: {TOKENIZER_REMEDY}, then {again}"
-        )
     except Exception as exc:
+        if isinstance(exc, endpoint_spec.TokenizerUnavailable) and not _cached(exc.tokenizer):
+            # The loader's own message advises a connection and a second remedy, both
+            # beside the point offline; the repo name and the one remedy are what helps.
+            return (
+                f"the reasoner's tokenizer {exc.tokenizer!r} is not in the hub cache this "
+                f"sandboxed {process} reads offline: {TOKENIZER_REMEDY}, then {again}"
+            )
         why = " ".join(str(exc).split())  # a refusal is one line
         return (
             f"the reasoner's discovery failed ({type(exc).__name__}: {why}); this sandboxed "
