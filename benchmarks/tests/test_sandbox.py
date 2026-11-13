@@ -248,6 +248,8 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
     the hub is offline, after the launcher cached the reasoner's tokenizer."""
     monkeypatch.setenv("FAKE_SECRET", "s")
     monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
+    monkeypatch.setenv("CALCITY_ROOT", "/data/calcity")
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/data/hub")
     monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
     monkeypatch.setattr(sandbox, "cap_memory", lambda gib: None)
     monkeypatch.setattr(sandbox, "bwrap_refusal", lambda: None if bwrap else "bwrap is absent")
@@ -262,6 +264,7 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
     ((argv, env),) = seen
     assert "FAKE_SECRET" not in env and env["SEARCH_REASONER_API_KEY"] == "k"
     assert env["OPENBLAS_NUM_THREADS"] == "1"
+    assert env["CALCITY_ROOT"] == "/data/calcity" and env["HUGGINGFACE_HUB_CACHE"] == "/data/hub"
     if bwrap:
         assert env["HF_HUB_OFFLINE"] == "1" and cached == [1]
         binds = [argv[i - 1] for i, a in enumerate(argv) if a == str(hub) and argv[i - 1] != a]

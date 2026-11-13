@@ -69,8 +69,8 @@ REPO = Path(__file__).resolve().parents[1]
 
 #: The environment model code runs under keeps these names and prefixes alone, so a
 #: token in the launching shell stays out of a block's reach: MAPS's own variables
-#: (the run flags the manifest records, the endpoints, the reasoner's key), the
-#: Hugging Face settings, the locale, and what the interpreter, the proxies and the
+#: (the run flags the manifest records, the endpoints, the reasoner's key, Cal City's
+#: data root), the Hugging Face settings under both prefixes, the locale, and what the interpreter, the proxies and the
 #: native thread pools read.
 _ENV_NAMES = frozenset(
     [
@@ -105,9 +105,9 @@ _ENV_NAMES = frozenset(
         "ALL_PROXY",
     ]
 )
-_ENV_PREFIXES = ("SEARCH_", "CITYNAV_", "SAM_", "MAPS_", "HF_", "LC_")
+_ENV_PREFIXES = ("SEARCH_", "CITYNAV_", "CALCITY_", "SAM_", "MAPS_", "HF_", "HUGGINGFACE_", "LC_")
 #: Hugging Face's token variables, dropped though they match ``HF_``.
-_ENV_SECRETS = frozenset({"HF_TOKEN", "HF_TOKEN_PATH", "HUGGING_FACE_HUB_TOKEN"})
+_ENV_SECRETS = frozenset({"HF_TOKEN", "HF_TOKEN_PATH"})
 
 
 #: What ``systemd-run --user`` and ``systemctl --user`` find the user manager by.
