@@ -1187,7 +1187,7 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="a north-up picture of a map's whole bake extent, or a directory of them named "
-        "<map>.jpg or <map>.png: the basemap of a map with no raster pair, and the first "
+        "<map>.jpg, <map>.jpeg or <map>.png: the basemap of a map with no raster pair, and the first "
         "choice of a reviewing station",
     )
     ap.add_argument(
