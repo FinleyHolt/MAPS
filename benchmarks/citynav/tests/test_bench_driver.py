@@ -453,7 +453,7 @@ def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
     assert not (tmp_path / "r").exists()
     assert (
-        f"  Missing {rgbd / 'blk_rgb.tif'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
+        f"  Missing {rgbd / 'blk.png'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
         in capsys.readouterr().err.splitlines()
     )
     (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
@@ -1101,7 +1101,7 @@ def test_the_runner_refuses_a_block_without_its_raster_pair_before_its_out(
     assert cli.main() == 2
     assert not (tmp_path / "r").exists()
     assert (
-        f"  Missing {rgbd / 'birmingham_block_1_rgb.tif'} (built by "
+        f"  Missing {rgbd / 'birmingham_block_1.png'} (built by "
         "benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
         in capsys.readouterr().err.splitlines()
     )

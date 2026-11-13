@@ -80,14 +80,18 @@ def missing_bake(stem: str) -> str | None:
 
 def block_asset_refusal(bench: Bench, map_names: Iterable[str]) -> str | None:
     """Why ``bench`` cannot fly the blocks ``map_names``, or None: each block's bake
-    (:func:`missing_bake`) and its raster pair, ``<map>.tif`` beside ``<map>_rgb.tif``
-    or ``<map>.png``, each missing raster on a line with the command that builds it.
-    The runners and the station refuse on it, since an episode on such a block books a
-    miss whatever the model writes."""
-    build = (
-        "python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
+    (:func:`missing_bake`) and its raster pair, ``<map>.tif`` beside the bench's picture
+    (``<map>_rgb.tif`` for Cal City, ``<map>.png`` for CityNav), each missing raster on
+    a line with the command that builds it. The runners and the station refuse on it,
+    since an episode on such a block books a miss whatever the model writes."""
+    # Each bench's builder writes its own picture beside the height plane.
+    build, picture = (
+        (
+            "python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>",
+            "_rgb.tif",
+        )
         if bench.name == "calcity"
-        else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh"
+        else ("benchmarks/citynav/data_prep/rasterize_citynav_native.sh", ".png")
     )
     rgbd, missing = Path(bench.rgbd_dir), []
     for map_name in sorted(set(map_names)):
@@ -96,7 +100,7 @@ def block_asset_refusal(bench: Bench, map_names: Iterable[str]) -> str | None:
         if not (rgbd / f"{map_name}.tif").is_file():
             missing.append(f"Missing {rgbd / f'{map_name}.tif'} (built by {build})")
         if not any((rgbd / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png")):
-            missing.append(f"Missing {rgbd / f'{map_name}_rgb.tif'} (built by {build})")
+            missing.append(f"Missing {rgbd / f'{map_name}{picture}'} (built by {build})")
     if not missing:
         return None
     return (
