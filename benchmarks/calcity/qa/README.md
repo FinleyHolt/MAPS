@@ -43,7 +43,7 @@ In scoring, a linked object's contour wins over a drawn `target_mask`
    | `mask`, drawn shape | Edit `target_mask`: a list of `[x, y]` vertices in metres, in the task frame (x east, y north). |
    | `mask`, `object` row | Point `object_ids` at the right object, or empty `object_ids` and draw a `target_mask`. |
    | `prompt` | Edit `descriptions[0]`. |
-   | `drop` | Remove the row's key from `data_prep/authoring/ground_truth.json`, and lower `REVIEWED_N` in `tests/test_reviewed_episodes.py` to match. Some targets carry several prompts (1,100 prompts over 982 targets), and removing a key drops every row on that target. |
+   | `drop` | Remove the row's key from `benchmarks/calcity/data_prep/authoring/ground_truth.json`, and lower `REVIEWED_N` in `benchmarks/calcity/tests/test_reviewed_episodes.py` to match. Some targets carry several prompts (1,100 prompts over 982 targets), and removing a key drops every row on that target. |
 
 2. If the fix moves the target point, update its key in `ground_truth.json`
    to match. A row is in the reviewed set only while its
