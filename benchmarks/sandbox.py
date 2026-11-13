@@ -23,6 +23,11 @@ can set it itself) and can lift its own ``MemoryMax`` with ``systemctl --user
 set-property`` or start units outside the scope with ``systemd-run``; closing
 that takes bubblewrap's empty ``/run``.
 
+ponytail: without bubblewrap the environment allowlist binds a cooperative block
+only: with no PID namespace the launcher's process stays visible, and a block reads
+its environment from ``/proc/<pid>/environ``; hiding it takes bubblewrap's own
+PID namespace.
+
 ponytail: an allocation failure in native code (a Rust tokenizer's abort, the
 scope's OOM kill) ends the attempt with a signal, which the driver books as a
 crash and re-queues as infrastructure, though a block pinned the memory;

@@ -181,3 +181,4 @@ records.
 |---|---|
 | Serve failed before the run's first report (the bench's infra rule) | Out of every rate, and named. |
 | Ends after a report without another (the crew's Stop, a harness ending, a failure) | Scored at that report: its end, time, and flights. |
+| Stopped before its first report (the crew's Stop) | Kept in every rate, `end` `stopped`: a miss for SR, SPL 0, OSR off the track it flew; NE and time to identification read null. |

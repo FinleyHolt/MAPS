@@ -165,7 +165,7 @@ model on the library; a hostile block reaches `os`, `subprocess`, and the file
 system through Python's reflection.
 
 Each entry point that runs model code isolates it as far as its host allows
-and logs one `sandbox:` line (`benchmarks/sandbox.py`). The entry points are
+and logs a `sandbox:` line (`benchmarks/sandbox.py`). The entry points are
 the bench driver's attempts, and the station, the twin CLI, and the runner
 started from the command line.
 
@@ -192,8 +192,8 @@ The layers that apply depend on the host:
 |---|---|
 | `bwrap` runs and a systemd user manager starts scopes (a desktop Linux) | All |
 | `bwrap` runs, no user manager | All but the scope: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap |
-| User namespaces blocked, systemd user manager present (Ubuntu 24.04's AppArmor default) | Memory cap, environment, and scope. The scope binds a cooperative block only: a block reaches the user manager and can lift its own `MemoryMax` or start units outside the scope. |
-| No `bwrap`, no user manager (a typical HPC compute node) | Memory cap and environment: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap |
+| User namespaces blocked, systemd user manager present (Ubuntu 24.04's AppArmor default) | Memory cap and scope. The scope binds a cooperative block only: a block reaches the user manager and can lift its own `MemoryMax` or start units outside the scope. The environment allowlist binds a cooperative block only: with no PID namespace, a block reads the launching shell's environment from its ancestors in `/proc`. |
+| No `bwrap`, no user manager (a typical HPC compute node) | Memory cap: shared memory, a child process, and a daemon that leaves the attempt's session escape the cap. The environment allowlist binds a cooperative block only, as above. |
 
 A block that allocates past the cap gets `MemoryError` as its block error, and
 the mission continues. A `MemoryError` raised outside a block, in the
