@@ -95,7 +95,10 @@ stand, and the steps name each one.
    (`benchmarks/flight/live_source.py`) and the result to `Mission`, as
    `twin.py`'s `main` does. The station builds its twin in `Station`
    (`station/serve.py`); to watch your aircraft there, hand your vehicle to
-   `open_live` in its place. See [`station/README.md`](../station/README.md).
+   `open_live` in its place. The station's sandbox gives a vehicle the
+   network and its bound paths only: serial devices, `/run` sockets, and
+   files in home stay outside it, so a vehicle that needs them runs from
+   your own entry point. See [`station/README.md`](../station/README.md).
 
 6. Score the runs. `measures.py` takes the OSR footprint width from
    `airframe.C12_SENSOR`; a camera of your own needs its rig there.
