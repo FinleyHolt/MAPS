@@ -33,6 +33,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
+from maps.llm import tokenizer
 from maps.llm.model_cards import card_for, check_effort, effort, speaks_openai
 from maps.settings import Endpoint, Settings, sam_endpoints
 
@@ -323,12 +324,10 @@ def _require_tokenizer(model_id: str, override: str = "") -> str:
     """Load the tokenizer for ``model_id`` (``override``, the run's
     ``SEARCH_COMPACT_TOKENIZER_NAME``, in the card's place) and render its
     chat template over :data:`_TEMPLATE_PROBE`; either failing raises naming
-    the repo. The import is local so spec readers never load transformers."""
-    from maps.llm.tokenizer import hf_tokenizer_name, load_tokenizer
-
-    tokenizer_name = hf_tokenizer_name(model_id, override)
+    the repo."""
+    tokenizer_name = tokenizer.hf_tokenizer_name(model_id, override)
     try:
-        tok = load_tokenizer(model_id, override)
+        tok = tokenizer.load_tokenizer(model_id, override)
     except RuntimeError as exc:
         raise EndpointDiscoveryError(str(exc)) from exc
     try:
