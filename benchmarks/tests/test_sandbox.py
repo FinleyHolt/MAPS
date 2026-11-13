@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import pytest
 
@@ -267,3 +268,25 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
         assert binds == ["--ro-bind"], binds
     else:
         assert argv[0] == sys.executable
+
+
+def test_the_hugging_face_token_is_masked_where_slash_exposes_it(tmp_path, monkeypatch):
+    """``/`` comes back read-only, so a token file under an ``HF_HOME`` outside the emptied
+    directories is masked; one under ``/tmp`` or home is gone already and needs no mask."""
+    import shutil
+    import tempfile
+
+    from huggingface_hub import constants
+
+    outside = Path(tempfile.mkdtemp(dir="/var/tmp"))
+    try:
+        for home, masked in ((outside, True), (tmp_path, False)):
+            token = home / "token"
+            token.write_text("t")
+            monkeypatch.setattr(constants, "HF_TOKEN_PATH", str(token))
+            argv = sandbox.bwrap_argv([])
+            mask = ["--ro-bind", "/dev/null", os.path.realpath(token)]
+            got = any(argv[i : i + 3] == mask for i in range(len(argv)))
+            assert got is masked, (home, argv)
+    finally:
+        shutil.rmtree(outside)

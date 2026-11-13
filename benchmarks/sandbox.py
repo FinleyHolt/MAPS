@@ -274,7 +274,14 @@ def bwrap_argv(
         readable = [os.path.dirname(resolver), *readable]
     readable, writable = [REPO, sys.prefix, sys.base_prefix, *readable], list(writable)
     ro, rw = _existing(readable), _existing(writable, make=True)
-    masked = _secret_files()
+    # A secret in an emptied directory is gone already, unless a bind brings it back.
+    binds = [*ro, *rw]
+    masked = [
+        p
+        for p in _secret_files()
+        if not any(p.startswith(d + "/") for d in empty)
+        or any(p.startswith(b + "/") for b in binds)
+    ]
     # Each path is bound at its real location; a symlink on the way that lies in an
     # emptied directory is made again, so the path as named still resolves.
     links = {
