@@ -53,6 +53,7 @@ from benchmarks.bench import Bench, missing_bake
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, open_live
 from benchmarks.flight.mission import (
+    END_WAIT_S,
     STATE_AWAITING,
     STATE_ENDED,
     STATE_FAILED,
@@ -77,7 +78,7 @@ from maps.llm import endpoint_spec, model_cards
 from maps.llm.http import TRANSCRIPT_JSONL
 from maps.perception.geometry.sensor_spec import resolve_sensor
 from maps.settings import from_environ
-from station.bench_seat import END_WAIT_S, BenchMission, with_words
+from station.bench_seat import BenchMission, with_words
 from station.placement import OSM_CACHE_DIR, Placement, placement
 
 log = logging.getLogger("station")

@@ -633,22 +633,33 @@ class Mission:
                 f.write("\n".join(lines) + "\n")
 
 
+#: How long ending a mission waits for its row to land before going on anyway.
+END_WAIT_S = 60.0
+
+
 def converse(mission: Mission, taskings: list[str]) -> None:
     """Fly ``mission`` to its end, speaking the next of ``taskings`` at each
-    report and stopping when none is left, then close the live source."""
+    report and stopping when none is left, then close the live source. A Ctrl-C
+    ends the mission and waits for its row before it goes on."""
     mission.start()
     pending, heard = list(taskings), 0
-    while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
-        if mission.status == STATE_AWAITING and mission.replies > heard:
-            heard = mission.replies
-            if pending:
-                mission.tasking(pending.pop(0))
-            else:
-                mission.stop()
-                break
-        time.sleep(0.2)
-    mission.wait()
-    mission.live.close()
+    try:
+        while mission.status in (STATE_IDLE, STATE_FLYING, STATE_AWAITING):
+            if mission.status == STATE_AWAITING and mission.replies > heard:
+                heard = mission.replies
+                if pending:
+                    mission.tasking(pending.pop(0))
+                else:
+                    mission.stop()
+                    break
+            time.sleep(0.2)
+        mission.wait()
+    except KeyboardInterrupt:
+        mission.stop()
+        mission.wait(END_WAIT_S)
+        raise
+    finally:
+        mission.live.close()
 
 
 def summary_line(mission: Mission) -> str:

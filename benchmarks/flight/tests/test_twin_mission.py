@@ -814,3 +814,29 @@ def test_the_command_line_twin_confines_itself_before_it_flies(tmp_path, monkeyp
     assert gib == sandbox.STATION_MEMORY_GIB and kw == {"flies": True}
     assert writable == [tmp_path / "out", rgbd / "ortho", tmp_path / "o" / "ortho"]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)
+
+
+def test_ctrl_c_mid_mission_ends_it_and_waits_for_its_row(monkeypatch):
+    """The twin's Ctrl-C ends the mission the way the station's clear does: stop, wait for
+    the row to land, close the live source, then the interrupt goes on."""
+    from types import SimpleNamespace
+
+    from benchmarks.flight import mission as m
+
+    calls: list = []
+    mission = SimpleNamespace(
+        status=m.STATE_FLYING,
+        replies=0,
+        start=lambda: None,
+        stop=lambda: calls.append("stop"),
+        wait=lambda timeout=None: calls.append(("wait", timeout)),
+        live=SimpleNamespace(close=lambda: calls.append("close")),
+    )
+
+    def interrupted(_s):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(m.time, "sleep", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        m.converse(mission, [])
+    assert calls == ["stop", ("wait", m.END_WAIT_S), "close"], calls
