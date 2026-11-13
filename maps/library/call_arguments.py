@@ -69,8 +69,10 @@ class MissionEnv:
     counter, ``widened`` the paging ledger, ``take_minted()`` the handles
     the call's flights minted, ``say_err(ack, msg)`` the refusal format,
     ``row_of_fid(fid)`` a live-row reader (None when absent),
-    ``tied_of_ref(ref)`` whether a ref holds a tied view and ``version()``
-    the surface version."""
+    ``tied_of_ref(ref)`` whether a ref holds a tied view, ``version()``
+    the surface version, ``world_names()`` the world state's names
+    (lowered) and ``past_cap(classes)`` the watchlist's cap refusal (None
+    when the classes fit)."""
 
     rows_of_ref: Callable
     plan_rn: list
@@ -90,6 +92,8 @@ class MissionEnv:
     row_of_fid: Callable
     tied_of_ref: Callable
     version: Callable
+    world_names: Callable
+    past_cap: Callable
 
 
 def place_token(v, why: str):

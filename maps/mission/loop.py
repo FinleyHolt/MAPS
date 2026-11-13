@@ -212,6 +212,8 @@ class _Mission:
                 map=self.pictures.show_map,
                 watch=self.watchlist.watch,
                 boost=self.watchlist.boost,
+                world_names=self.watchlist.world_names,
+                past_cap=self.watchlist.past_cap,
             )
         )
 

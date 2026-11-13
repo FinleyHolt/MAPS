@@ -60,7 +60,18 @@ class Watchlist:
                 counts[cls] = counts.get(cls, 0) + 1
         return [f"{c} ({counts.get(c, 0)} detected)" for c in self.classes]
 
-    def _past_cap(self, adds: list[str]) -> str | None:
+    def world_names(self) -> set[str]:
+        """The world state's feature names, lowered."""
+        return {
+            s
+            for s in (
+                str(n.name or "").strip().lower()
+                for n in self.surface.ctx.graph.nodes.copy().values()
+            )
+            if s
+        }
+
+    def past_cap(self, adds: list[str]) -> str | None:
         """The refusal when ``adds`` would take the watchlist past
         MAX_WATCHED classes; a class already watched adds nothing."""
         new = [a for a in dict.fromkeys(adds) if a not in self.classes]
@@ -87,15 +98,7 @@ class Watchlist:
         ack: dict = {"now": [f"{c} (target)" for c in self.classes]}
         if err:
             ack["error"] = err
-        names = {
-            s
-            for s in (
-                str(n.name or "").strip().lower()
-                for n in self.surface.ctx.graph.nodes.copy().values()
-            )
-            if s
-        }
-        note = _named_feature_note(list(adds), names)
+        note = _named_feature_note(list(adds), self.world_names())
         if note:
             ack["note"] = note
         log.info("%s SAY watch: +%s -> %s", self.progress.rid_tag, adds, self.classes)
@@ -103,9 +106,6 @@ class Watchlist:
 
     def boost(self, where: str, concepts: list) -> dict:
         """look_for(..., at=) -- the targeted boost."""
-        refused = self._past_cap([str(c) for c in concepts if c])
-        if refused:
-            return self.rejections.error({}, refused)
         res = self.boost_queue(list(concepts), [where]) or {}
         if "error" not in res:
             # The placed form also arms the class it names.
@@ -127,7 +127,4 @@ class Watchlist:
 
     def watch(self, concepts: list) -> dict:
         """look_for(): the classes join the watchlist."""
-        refused = self._past_cap(list(concepts))
-        if refused:
-            return self.rejections.error({}, refused)
         return self.rejections.acked("watching", self._arm(list(concepts)))
