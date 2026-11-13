@@ -412,7 +412,11 @@ class Library:
     def ends_of(self, x):
         x = self._slot(x)
         p = self._program(x)
-        return Rows(self._analyze(p, p.add("ends", {"refs": [p.ref_of(x)]})), self)
+        el = p.ref_of(x, points=True)
+        if isinstance(el, dict) and any(is_xy(m) for m in el["ref"]) and not is_xy(el["ref"]):
+            # a written list holding a point is quoted as written
+            el["as"] = self.names.call_arg("ends_of") or el["as"]
+        return Rows(self._analyze(p, p.add("ends", {"refs": [el]})), self)
 
     def more_of(self, x):
         if not isinstance(x, Rows) or x._spec:

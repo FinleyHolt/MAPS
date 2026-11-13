@@ -689,3 +689,15 @@ def test_a_crossing_refusal_quotes_a_point_as_its_xy_token():
 def test_a_crossing_name_with_a_side_naming_no_row_names_no_row():
     err = _ends_block('ends_of("Long Road x Nowhere")\n')["error"]
     assert err.startswith("'Long Road x Nowhere' names no row on this surface."), err
+
+
+def test_a_written_list_with_a_point_skips_the_point():
+    out = _ends_block('ends_of([find("Long Road")[0], [100, 100]])\n')
+    assert "error" not in out, out
+    (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
+    assert env["len"] == 2 and "1 point skipped ([100, 100]): a point has no ends." in env["hint"]
+
+
+def test_a_written_list_of_points_is_refused_as_written():
+    err = _ends_block("ends_of([[100, 100], [80, 100]])\n")["error"]
+    assert err.startswith("'[[100, 100], [80, 100]]' holds points " + _POINT), err
