@@ -62,7 +62,7 @@ benchmark.
 | Requirement | Details |
 |---|---|
 | Reasoner | An OpenAI-compatible endpoint, self-hosted or hosted, that serves a model with a card in [`maps/llm/model_cards.py`](maps/llm/model_cards.py). |
-| Segmenter | SAM 3.1 on one GPU. The checkpoint `facebook/sam3.1` is gated on Hugging Face. Meta's SAM License covers the checkpoint and the `sam3` package, and bars use "for any activities subject to the International Traffic in Arms Regulations (ITAR)" ([`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md#used-and-not-redistributed)). |
+| Segmenter | SAM 3.1 on one GPU. The checkpoint `facebook/sam3.1` is gated on Hugging Face. Meta's SAM License covers the checkpoint and the `sam3` package; its section 1.b.v bars ITAR-regulated and military end uses (text in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md#used-and-not-redistributed)). |
 | CityNav annotations | Downloaded by the setup script. |
 | SensatUrban point clouds | Requested from the authors' [form](https://github.com/QingyongHu/SensatUrban), under CC BY-NC-SA. For the terms, see [`docs/data.md`](docs/data.md#citynav). |
 
