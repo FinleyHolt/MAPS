@@ -85,3 +85,48 @@ def test_a_raster_off_the_blocks_grid_is_refused_by_name(tmp_path: Path):
         dst.write(np.zeros((3, H, W + 3), np.uint8))
     with pytest.raises(ValueError, match="the block's frame at that cell"):
         build_block(tmp_path / "root", "patch", BBOX, tmp_path / "wrong.tif")
+
+
+def _write(path: Path, crs, transform, H: int, W: int) -> Path:
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        width=W,
+        height=H,
+        count=3,
+        dtype="uint8",
+        crs=crs,
+        transform=transform,
+    ) as dst:
+        dst.write(np.zeros((3, H, W), np.uint8))
+    return path
+
+
+def test_a_raster_in_another_crs_is_refused_naming_both(tmp_path: Path):
+    """A right-sized raster in degrees would shift every crop off its target."""
+    lf = build_local_frame(BBOX)
+    H, W = grid_shape(lf, PX)
+    path = _write(tmp_path / "wgs84.tif", "EPSG:4326", from_origin(-117.97, 35.12, PX, PX), H, W)
+    with pytest.raises(ValueError, match=r"EPSG:4326.*EPSG:32611"):
+        build_block(tmp_path / "root", "patch", BBOX, path)
+    assert not (tmp_path / "root").exists()
+
+
+def test_a_raster_shifted_off_the_frame_is_refused_naming_both_bounds(tmp_path: Path):
+    lf = build_local_frame(BBOX)
+    H, W = grid_shape(lf, PX)
+    west = from_origin(lf.origin_e - 100_000, lf.origin_n + lf.height_m, PX, PX)
+    path = _write(tmp_path / "west.tif", lf.crs_utm, west, H, W)
+    with pytest.raises(ValueError, match=rf"{lf.origin_e - 100_000:,.2f}.*{lf.origin_e:,.2f}"):
+        build_block(tmp_path / "root", "patch", BBOX, path)
+    assert not (tmp_path / "root").exists()
+
+
+def test_a_raster_within_a_cell_of_the_frame_is_accepted(tmp_path: Path):
+    """gdalwarp snaps the extent to whole cells; that sub-cell offset is the frame."""
+    lf = build_local_frame(BBOX)
+    H, W = grid_shape(lf, PX)
+    nudged = from_origin(lf.origin_e + 0.4 * PX, lf.origin_n + lf.height_m - 0.4 * PX, PX, PX)
+    path = _write(tmp_path / "nudged.tif", "EPSG:32611", nudged, H, W)
+    build_block(tmp_path / "root", "patch", BBOX, path)
