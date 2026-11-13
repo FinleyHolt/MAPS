@@ -551,6 +551,19 @@ def test_an_interrupted_driver_exits_with_its_workers(sig, code, tmp_path) -> No
         proc.wait()
 
 
+def test_after_an_interrupt_no_worker_claims_another_episode(driver, monkeypatch) -> None:
+    """Workers are daemon threads that run on until the process exits: once the driver
+    is interrupted, the next claim is none, so no START lands without its END."""
+    d = driver(selection=["ep0", "ep1"])
+
+    def interrupted():
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(d, "_run", interrupted)
+    assert d.run() == 130
+    assert d._next_claimed_episode() is None
+
+
 def test_the_split_defaults_to_the_benchmarks_own() -> None:
     assert bf._build_parser(citynav_bench({})).parse_args([]).split == "val_seen"
     assert bf._build_parser(calcity_bench({})).parse_args([]).split == "calcity"

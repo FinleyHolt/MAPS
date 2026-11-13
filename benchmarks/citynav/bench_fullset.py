@@ -668,6 +668,8 @@ class Driver:
             return self._run()
         except KeyboardInterrupt as exc:
             sig = getattr(exc, "signal", signal.SIGINT)
+            # The daemon workers run until the process exits: none claims another episode.
+            self._abort = self._abort or f"interrupted ({sig.name})"
             # The ledger keeps every landed row, so a relaunch into this root resumes.
             self.log(f"interrupted ({sig.name}): stopping; relaunch into this root to resume")
             if self._scope:
