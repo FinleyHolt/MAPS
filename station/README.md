@@ -157,11 +157,12 @@ For the twin and the run's records, see [`docs/flight.md`](../docs/flight.md).
 | `--ortho <dir>` | Cal City: raster directory that the twin's frames and the basemap are cut from. Unset, the station reviews runs only. |
 | `--register <dir>` | Cal City: raster directory that each frame is registered against. Unset, nothing is registered. |
 | `--host`, `--port` | Listening address. Default `127.0.0.1:8788`. |
-| `--memory-gib <n>` | The station's memory cap, GiB, at least 1. Default 16. |
+| `--memory-gib <GiB>` | Process's memory cap, GiB: a finite number of at least 1. Default 16. A block that allocates past it raises `MemoryError`, served as the block's error. |
 
 The station has no login. `run/file` and every path a request names are
 confined to `--out`. A map name is a file stem and nothing else. The station
-runs its missions sandboxed; see [Security](../README.md#security).
+runs its missions under the isolation its host allows; see
+[Security](../README.md#security).
 
 ## Console
 
