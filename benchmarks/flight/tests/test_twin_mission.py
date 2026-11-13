@@ -883,3 +883,31 @@ def test_ctrl_c_ends_the_twin_with_its_summary_line_and_exit_130(
     argv = ["--episode", "calcity::0#0", "--ortho", str(calcity.rgbd), "--out", str(tmp_path)]
     assert twin.main(argv) == 130
     assert "ended by" in capsys.readouterr().out
+
+
+def test_a_sandboxed_twin_without_the_reasoner_s_tokenizer_refuses_in_one_line(
+    calcity, tmp_path, monkeypatch, capsys
+):
+    """The twin's launcher could not cache the reasoner's tokenizer before it confined
+    itself: the confined twin refuses naming endpoint_preflight, with no traceback and
+    no run booked."""
+    import sys
+
+    from benchmarks import sandbox
+    from benchmarks.flight import twin
+    from maps.llm import endpoint_spec
+
+    def down(settings, **kw):
+        raise endpoint_spec.EndpointUnreachable("reasoner at http://r/v1 did not answer")
+
+    monkeypatch.setenv(sandbox.TOKENIZER_ENV, "EndpointUnreachable")
+    monkeypatch.setattr(sandbox, "confine_cli", lambda *a, **kw: None)
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", down)
+    out = tmp_path / "out"
+    argv = ["twin", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd), "--out", str(out)]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert twin.main() == 2
+    (line,) = capsys.readouterr().err.splitlines()
+    assert "reasoner at http://r/v1 did not answer" in line
+    assert line.endswith(f"{sandbox.TOKENIZER_REMEDY}, then run the twin again"), line
+    assert not out.exists() or not any(out.iterdir())

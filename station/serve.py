@@ -292,29 +292,19 @@ class Station:
         return None
 
     def tokenizer_refusal(self) -> str | None:
-        """Why a mission cannot discover the reasoner and load its tokenizer, or None: asked
-        only in a process confined offline after its launcher could not cache it
-        (:data:`sandbox.TOKENIZER_ENV`); a discovery that loads it clears the mark."""
+        """Why a mission cannot discover the reasoner and load its tokenizer, or None
+        (:func:`sandbox.tokenizer_refusal`)."""
         if sandbox.TOKENIZER_ENV not in os.environ:
             return None
-        try:
-            endpoint_spec.discover_from_settings(from_environ(self.bench.environ), probe_sam=False)
-        except Exception as exc:
-            # The hub cache is bound read-only at its own path, so the host's writes show
-            # through a directory that existed when the station started; one made after is
-            # out of the sandbox's reach until a restart binds it.
-            then = (
-                "send the mission again"
-                if os.path.isdir(sandbox.hf_hub_cache())
-                else "restart the station"
-            )
-            return (
-                f"the reasoner's discovery failed ({type(exc).__name__}: {exc}); this sandboxed "
-                f"station reads the reasoner's tokenizer from the hub cache offline: "
-                f"{sandbox.TOKENIZER_REMEDY}, then {then}"
-            )
-        os.environ.pop(sandbox.TOKENIZER_ENV, None)
-        return None
+        # The hub cache is bound read-only at its own path, so the host's writes show
+        # through a directory that existed when the station started; one made after is
+        # out of the sandbox's reach until a restart binds it.
+        again = (
+            "send the mission again"
+            if os.path.isdir(sandbox.hf_hub_cache())
+            else "restart the station"
+        )
+        return sandbox.tokenizer_refusal(self.bench.environ, "station", again)
 
     def shown_split(self) -> str:
         """The split the mission list opens on: the newest run's under the output root, so its

@@ -371,6 +371,28 @@ def _cache_tokenizer(log: Callable[[str], None]) -> str | None:
     return None
 
 
+def tokenizer_refusal(environ, process: str, again: str) -> str | None:
+    """Why a mission in this ``process`` (``station``, ``twin``) cannot discover the
+    reasoner under ``environ`` and load its tokenizer, or None: asked only in a process
+    confined offline after its launcher could not cache it (:data:`TOKENIZER_ENV`); a
+    discovery that loads it clears the mark. ``again`` is the step after the remedy."""
+    if TOKENIZER_ENV not in os.environ:
+        return None
+    from maps.llm import endpoint_spec
+    from maps.settings import from_environ
+
+    try:
+        endpoint_spec.discover_from_settings(from_environ(environ), probe_sam=False)
+    except Exception as exc:
+        return (
+            f"the reasoner's discovery failed ({type(exc).__name__}: {exc}); this sandboxed "
+            f"{process} reads the reasoner's tokenizer from the hub cache offline: "
+            f"{TOKENIZER_REMEDY}, then {again}"
+        )
+    os.environ.pop(TOKENIZER_ENV, None)
+    return None
+
+
 def confine(
     writable: list[Path],
     gib: float,
