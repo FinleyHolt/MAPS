@@ -89,6 +89,7 @@ def test_each_child_outcome_lands_its_row(driver, monkeypatch) -> None:
     assert not (d.out_root / "w0" / "maps_20260101_000000_citynav_sleep" / "episode.json").exists()
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RLIMIT_DATA binds on Linux only")
 def test_a_block_past_the_attempt_cap_is_the_model_s_error_not_a_crash(driver, monkeypatch):
     """Under the cap the block's allocation raises MemoryError inside the block: the attempt
     lands its row and is scored, where an uncapped child is OOM-killed and re-queued as infra.
@@ -505,6 +506,7 @@ def _alive(pid: int) -> bool:
         return f.read().split()[2] != "Z"
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="PR_SET_PDEATHSIG is Linux only")
 def test_a_sigkilled_driver_takes_its_attempt_with_it() -> None:
     """The attempt sits in its own session, so nothing else reaps it."""
     parent = subprocess.Popen(

@@ -289,6 +289,7 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
         assert argv[0] == sys.executable
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="bubblewrap is Linux only")
 def test_the_hugging_face_token_is_masked_where_slash_exposes_it(tmp_path, monkeypatch):
     """``/`` comes back read-only, so a token file under an ``HF_HOME`` outside the emptied
     directories is masked; one under ``/tmp`` or home is gone already and needs no mask."""

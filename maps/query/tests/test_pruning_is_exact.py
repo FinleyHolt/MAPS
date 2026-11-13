@@ -124,10 +124,11 @@ def test_set_gap_is_the_plain_member_scan_with_its_witness(monkeypatch):
     rng = np.random.default_rng(19)
     members, items = _boxes(rng, 400), _boxes(rng, 60)
     want = [_plain(members, item) for item in items]
-    # One member's box bound sits an ulp ABOVE its own gap: the slack keeps it.
+    # One member's box bound sits at or an ulp above its own gap (the platform's libm
+    # decides which): the slack keeps it.
     bounds = G.bbox_bounds(G.stack_bboxes(members), items[6])
     j = int(bounds.argmin())
-    assert 0 < bounds[j] - G.gap_witness(members[j], items[6])[0] < G.BOUND_SLACK_M
+    assert 0 <= bounds[j] - G.gap_witness(members[j], items[6])[0] < G.BOUND_SLACK_M
     calls = [0]
     real = G.gap_witness
 
