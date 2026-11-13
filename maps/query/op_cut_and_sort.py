@@ -61,13 +61,6 @@ def _attach_color_column(items, canon):
     return out
 
 
-def _emptying_stats(items):
-    """The stats of the cut that emptied ``items``, carried by an op over the
-    empty set so the answer that shows it (an ordering, a bare-name window)
-    still says why nothing is there; None over rows."""
-    return None if items else getattr(items, "cut_stats", None)
-
-
 def run_score_by(cx, a):
     """The sort: a signed, key-normalized composite over exactly the
     columns the emphasis names."""
@@ -123,7 +116,6 @@ def run_score_by(cx, a):
         ordered=True,
         op_cols=keys,
         notes=notes,
-        cut_stats=_emptying_stats(items),
     )
 
 
@@ -200,14 +192,17 @@ def run_filter_items(cx, a):
             "no_side_kept": blank,
         }
         if not (len(on) - blank):
-            stats["nothing_on_that_side"] = (
-                "the prior map holds nothing on that side"
-                " -- what is there has to be SEEN"
-                ": look_for the class, then explore the place to "
-                "segment it"
+            dropped = [it for it in items if it not in on]
+            seen = any(str(it.get("fid") or "").startswith("detected_") for it in dropped)
+            watched = any(str(it.get("class") or "").lower() in cx.watched for it in dropped)
+            stats["nothing_on_that_side"] = "nothing in the world state lies on that side" + (
+                ""
+                if seen or watched
+                else " -- what is there has to be SEEN: look_for the class, then "
+                "explore the place to segment it"
             )
     else:  # truthy
-        on, stats = [it for it in items if it.get(key)], _emptying_stats(items)
+        on, stats = [it for it in items if it.get(key)], None
     # A cut that keeps every way of a name's tied set is still that set.
     return Result(
         on,

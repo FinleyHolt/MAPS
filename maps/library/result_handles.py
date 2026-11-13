@@ -55,6 +55,7 @@ def run_ops(
             seed_results=seed_results,
             staged=ns.get("staged"),
             standing=ns.get("standing"),
+            watched=ns.get("watched") or (),
         )
     except ProgramError as exc:
         err = str(exc)

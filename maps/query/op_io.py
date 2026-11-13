@@ -156,8 +156,9 @@ class ProgramRun:
     """One ``run_program`` call: the surface, the seed, the results so far
     and the op running."""
 
-    def __init__(self, cands, anchors, seed=None, staged=None, standing=None):
+    def __init__(self, cands, anchors, seed=None, staged=None, standing=None, watched=()):
         self.cands, self.anchors = cands, anchors
+        self.watched = {str(c).lower() for c in watched}
         self.by_fid = {c["fid"]: c for c in cands}
         self.by_fid.update({a["fid"]: a for a in anchors})
         self.seed = seed or {}
@@ -220,7 +221,13 @@ def _window(cur, win):
     lo, hi = window_span("[" + win)
     rows = cur[lo:hi]
     if isinstance(cur, Result):
-        rows = Result(rows, cur.kind, ordered=cur.ordered, op_cols=cur.op_cols)
+        rows = Result(
+            rows,
+            cur.kind,
+            ordered=cur.ordered,
+            op_cols=cur.op_cols,
+            cut_stats=None if rows else cur.cut_stats,
+        )
     if not rows and cur:
         raise ProgramError(empty_window_refusal("[" + win, len(cur)))
     return rows

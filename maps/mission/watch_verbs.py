@@ -80,6 +80,9 @@ class Watchlist:
         for add in adds:
             self.classes[:] = [c for c in self.classes if c != add]
             self.classes.append(add)
+        # the query layer reads it: a side cut's note skips look_for advice
+        # for a class already watched
+        self.surface.ns["watched"] = list(self.classes)
         err = self.spec.declare_concepts(list(self.classes))
         ack: dict = {"now": [f"{c} (target)" for c in self.classes]}
         if err:
