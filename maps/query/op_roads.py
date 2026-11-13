@@ -16,7 +16,7 @@ from maps.query.op_io import (
     refuse_if_empty,
 )
 from maps.query.row_geometry import chains_of
-from maps.xy_token import format_xy_token
+from maps.xy_token import format_xy_token, parse_xy_token
 
 
 def _x_label(nodes, el):
@@ -160,6 +160,11 @@ def run_crossings(cx, a):
     return Result(rows, ordered=True, notes=notes, set_notes=notes)
 
 
+def _first_four(said: list) -> str:
+    """The first four of ``said``, and how many more."""
+    return ", ".join(said[:4]) + (f" (+{len(said) - 4} more)" if len(said) > 4 else "")
+
+
 def run_ends(cx, a):
     """A road's termini (end0_xy / end1_xy) as rows."""
     rows = []
@@ -168,6 +173,12 @@ def run_ends(cx, a):
     footprints: list = []
     for el in a["refs"]:
         nodes = named_rows(cx, el, "centerline")
+        if not nodes and isinstance(el, str) and parse_xy_token(el):
+            # a crossing's fid is its [x, y] token
+            raise ProgramError(
+                f"{quote_value(el)} is a point (a crossing or an [x, y]), and a point "
+                "has no ends -- ends_of reads a road."
+            )
         if not nodes:
             refuse_if_empty(cx, el, "take the ends of")
             raise ProgramError(
@@ -190,17 +201,13 @@ def run_ends(cx, a):
                 rows.append({"fid": f"end_{n_end}", "xy": xy, "name": f"{lab} {which}"})
                 n_end += 1
     if not rows and footprints:
-        named = ", ".join(footprints[:4]) + (
-            f" (+{len(footprints) - 4} more)" if len(footprints) > 4 else ""
-        )
+        named = _first_four(footprints)
         raise ProgramError(
             f"{named} {'is a footprint' if len(footprints) == 1 else 'are footprints'}, "
             f"and a footprint has no ends -- ends_of reads a road."
         )
     if not rows:
-        named = ", ".join(no_line[:4]) + (
-            f" (+{len(no_line) - 4} more)" if len(no_line) > 4 else ""
-        )
+        named = _first_four(no_line)
         raise ProgramError(
             f"none of those rows carries a recorded centerline -- "
             f"{named} have no line geometry on this surface, so "
@@ -212,4 +219,10 @@ def run_ends(cx, a):
         f"{len(rows)} terminus rows; each is its OWN row with its "
         f"own fid, so index the one you mean."
     ]
+    if footprints:
+        named = _first_four(footprints)
+        notes.append(
+            f"{len(footprints)} footprint{'s' if len(footprints) > 1 else ''} skipped "
+            f"({named}): a footprint has no ends."
+        )
     return Result(rows, ordered=True, notes=notes, set_notes=notes)

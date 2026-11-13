@@ -434,6 +434,15 @@ def test_a_footprint_with_a_mask_axis_is_still_refused():
     prog["ops"][0]["args"]["refs"] = [["prior_9", "prior_1"]]
     rows = run_program([], [shed, road], prog)["results"]["r0"]
     assert [r["name"] for r in rows] == ["Walker Court end0", "Walker Court end1"]
+    assert "1 footprint skipped (prior_9 (A Shed)): a footprint has no ends" in rows.notes[-1]
+
+
+def test_a_crossing_is_a_point_with_no_ends():
+    prog = {"ops": [{"ref": "r0", "op": "ends", "args": {"refs": ["[960, 960]"]}}]}
+    with pytest.raises(
+        ProgramError, match=r"'\[960, 960\]' is a point \(a crossing or an \[x, y\]\)"
+    ):
+        run_program([], [], prog)
 
 
 def test_a_sibling_segment_that_crosses_is_named():
