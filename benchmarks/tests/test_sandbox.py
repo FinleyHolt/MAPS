@@ -125,16 +125,17 @@ def test_under_bubblewrap_writes_land_only_in_the_binds_and_localhost_answers(tm
         assert not os.path.exists(p), p
 
 
-@pytest.mark.parametrize("raw", ["-1", "nan", "inf", "0", "0.5"])
+@pytest.mark.parametrize("raw", ["-1", "nan", "inf", "0", "0.5", "1e30", "8589934592"])
 def test_a_memory_cap_that_is_no_cap_or_starves_the_process_is_refused(raw, capsys):
-    """-1 lifts the cap, nan books every attempt infra, a tiny cap crashes every child."""
+    """-1 lifts the cap, nan books every attempt infra, a tiny cap crashes every child,
+    and a cap of 2**63 bytes or more overflows setrlimit and systemd's MemoryMax."""
     import argparse
 
     ap = argparse.ArgumentParser()
     sandbox.add_memory_flag(ap)
     with pytest.raises(SystemExit):
         ap.parse_args(["--memory-gib", raw])
-    assert "at least 1 GiB" in capsys.readouterr().err
+    assert "a finite number of at least 1 GiB" in capsys.readouterr().err
     assert ap.parse_args(["--memory-gib", "2.5"]).memory_gib == 2.5
 
 

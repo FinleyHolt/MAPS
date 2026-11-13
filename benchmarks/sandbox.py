@@ -389,10 +389,13 @@ MIN_MEMORY_GIB = 1.0
 
 def gib(raw: str) -> float:
     """An argparse type for a memory cap: a finite number of GiB, at least
-    :data:`MIN_MEMORY_GIB` (-1 or 0 would lift or zero the cap, nan fails every check)."""
+    :data:`MIN_MEMORY_GIB` (-1 or 0 would lift or zero the cap, nan fails every check)
+    and under 2**63 bytes (``setrlimit`` and systemd's ``MemoryMax`` overflow there)."""
     value = float(raw)
-    if not math.isfinite(value) or value < MIN_MEMORY_GIB:
-        raise argparse.ArgumentTypeError(f"must be at least {MIN_MEMORY_GIB:g} GiB, got {raw}")
+    if not (math.isfinite(value) and value >= MIN_MEMORY_GIB and value * 2**30 < 2**63):
+        raise argparse.ArgumentTypeError(
+            f"must be a finite number of at least {MIN_MEMORY_GIB:g} GiB, got {raw}"
+        )
     return value
 
 
