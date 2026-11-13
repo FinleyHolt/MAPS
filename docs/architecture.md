@@ -97,7 +97,7 @@ Rows enter the graph in two ways:
   `maps/world_state/upsert.py` folds it onto the node carrying that
   `track_id` or mints one.
 
-The model doesn't read the graph directly. It reads the surface
+The model reads the graph through the surface
 (`maps/query/surface.py`), which serves each node as a row: `fid`, `xy` (the
 point a flight to it targets), `name` and `tags` or `class`, the colour
 fields, and the mask. Relating calls attach measured columns to the rows they

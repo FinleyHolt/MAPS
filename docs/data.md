@@ -17,9 +17,9 @@ come from their upstream sources. This repository redistributes none of them.
 1. Request the point clouds through the SensatUrban authors'
    [form](https://github.com/QingyongHu/SensatUrban) (name, email,
    institution; no account). Its confirmation page links `data_release.zip`.
-   The terms are CC BY-NC-SA, non-commercial research use, and no
-   redistribution, so this repository ships no point cloud, raster, or
-   picture made from one.
+   The dataset is licensed CC BY-NC-SA, and the form adds a no-redistribution
+   term ("I will not redistribute the dataset in any way and in any format"),
+   so this repository ships no point cloud, raster, or picture made from one.
 
 2. Fetch the annotations, rasterize the blocks, and bake the prior:
 

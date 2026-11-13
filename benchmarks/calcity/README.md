@@ -104,8 +104,8 @@ Cal City data exits 2 with the preparation recipe before the out-root exists.
 Read a root with [`benchmarks/citynav/analysis`](../citynav/analysis/README.md).
 
 Each launcher builds its bench once, from the process environment, and passes
-it down. Nothing selects a bench for the process, so one process can hold a
-CityNav bench and a Cal City bench side by side. An attempt child of the
+it down as a value, so one process can hold a CityNav bench and a Cal City
+bench side by side. An attempt child of the
 driver learns its bench from the environment the bench carries
 (`SEARCH_BENCHMARK_NAME` and the roots under the runner's `SEARCH_CITYNAV_*`
 names), which every run manifest also records.

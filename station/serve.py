@@ -1186,8 +1186,9 @@ def main(argv: list[str] | None = None) -> int:
         "--basemap",
         type=Path,
         default=None,
-        help="for a map with no raster: a north-up picture of its bake's whole extent, or a "
-        "directory of them named <map>.jpg or <map>.png",
+        help="a north-up picture of a map's whole bake extent, or a directory of them named "
+        "<map>.jpg or <map>.png: the basemap of a map with no raster pair, and the first "
+        "choice of a reviewing station",
     )
     ap.add_argument(
         "--osm-cache",
