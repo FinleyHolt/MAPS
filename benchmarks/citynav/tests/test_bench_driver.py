@@ -912,14 +912,14 @@ def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monke
     from benchmarks.citynav.run_benchmark import cli
 
     confined: list = []
-    monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append((*a, kw)))
     monkeypatch.setattr(sandbox, "cap_memory", lambda gib: confined.append(gib))
     monkeypatch.setenv("SEARCH_CITYNAV_DATA", str(tmp_path / "absent"))
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
     assert cli.main() == 1
-    ((writable, gib, _log, readable),) = confined
+    ((writable, gib, _log, readable, kw),) = confined
     assert writable[0] == tmp_path / "out" and gib == sandbox.ATTEMPT_MEMORY_GIB
-    assert sandbox.hf_hub_cache() in writable and str(tmp_path / "absent") in map(str, readable)
+    assert kw == {"flies": True} and str(tmp_path / "absent") in map(str, readable)
     confined.clear()
     monkeypatch.setattr(
         sys, "argv", ["run_benchmark", "--attempt-root", str(tmp_path), "--episode-id", "e"]
@@ -929,12 +929,26 @@ def test_the_runner_run_directly_confines_itself_before_it_flies(tmp_path, monke
     assert confined == [sandbox.ATTEMPT_MEMORY_GIB]
 
 
+def test_the_cal_city_runner_run_directly_confines_itself(tmp_path, monkeypatch) -> None:
+    """``python -m benchmarks.calcity.run_benchmark`` hands the shared main its bench and
+    flies model code in its own process: it confines itself like the CityNav runner."""
+    from benchmarks.calcity import run_benchmark
+
+    confined: list = []
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append(a))
+    monkeypatch.setenv("SEARCH_CALCITY_DATA", str(tmp_path / "absent"))
+    monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "out")])
+    assert run_benchmark.main() == 1
+    assert len(confined) == 1 and confined[0][0][0] == tmp_path / "out", confined
+
+
 def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
     tmp_path, monkeypatch, capsys
 ) -> None:
     from benchmarks.citynav.run_benchmark import cli
 
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
-    assert cli.main(citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})) == 1
+    bench = citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})
+    assert cli.main(bench, confine=False) == 1
     err = capsys.readouterr().err
     assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err

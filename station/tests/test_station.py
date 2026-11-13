@@ -218,14 +218,14 @@ def test_a_mission_is_picked_flown_and_reviewed(calcity, serves, tmp_path, monke
 @pytest.mark.parametrize("flies", [True, False])
 def test_the_command_line_station_confines_itself_before_it_serves(flies, tmp_path, monkeypatch):
     """Missions fly in the station's own threads: the process takes the memory cap and,
-    where bubblewrap runs, writes only its runs and, when it flies, the ortho caches and
-    the hub cache. A station that reviews runs only writes ``--out`` alone."""
+    where bubblewrap runs, writes only its runs and, when it flies, the ortho caches, and
+    reads the hub cache offline. A station that reviews runs only writes ``--out`` alone."""
     import uvicorn
 
     from benchmarks import sandbox
 
     confined: list = []
-    monkeypatch.setattr(sandbox, "confine", lambda *a: confined.append(a))
+    monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: confined.append((*a, kw)))
     monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: confined.append("served"))
     # The station itself is the other tests' subject; this one asks only what it is started under.
     monkeypatch.setattr(
@@ -239,9 +239,9 @@ def test_the_command_line_station_confines_itself_before_it_serves(flies, tmp_pa
         "sys.argv", ["serve", "--out", str(tmp_path / "out"), "--ortho", str(tmp_path / "o")]
     )
     assert serve.main() == 0
-    (writable, gib, _log, readable), served = confined
+    (writable, gib, _log, readable, kw), served = confined
     bench = serve.bench_named("citynav", os.environ)
-    assert served == "served" and gib == sandbox.STATION_MEMORY_GIB
-    caches = [Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho", sandbox.hf_hub_cache()]
+    assert served == "served" and gib == sandbox.STATION_MEMORY_GIB and kw == {"flies": flies}
+    caches = [Path(bench.rgbd_dir) / "ortho", tmp_path / "o" / "ortho"]
     assert writable == [tmp_path / "out", *(caches if flies else [])]
     assert {bench.tiles_dir, bench.splits_dir, tmp_path / "out"} <= set(readable)

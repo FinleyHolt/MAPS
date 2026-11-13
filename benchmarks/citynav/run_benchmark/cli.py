@@ -118,18 +118,18 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     return parser
 
 
-def main(bench: Bench | None = None) -> int:
+def main(bench: Bench | None = None, *, confine: bool = True) -> int:
     """The runner's CLI, for ``bench``; unset, for the bench the environment
     selects (``paths.selected_bench``), which is how an attempt child of
-    either driver learns its bench."""
+    either driver learns its bench. A run flies model code in this process, so
+    it confines itself unless a driver spawned it (``--attempt-root``: the
+    driver sandboxes it) or an in-process caller that owns its process passes
+    ``confine=False``."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt="%H:%M:%S",
     )
-    # A command-line run flies model code in this process and confines it; a caller
-    # handing the bench owns its process.
-    command_line = bench is None
     if bench is None:
         bench = selected_bench(os.environ)
     # A direct run records the bench it flew by name.
@@ -144,16 +144,13 @@ def main(bench: Bench | None = None) -> int:
         # The driver sandboxes its attempts; the child takes the memory cap itself.
         sandbox.cap_memory(args.memory_gib)
         _die_with_parent(bench.environ)
-    elif command_line:
+    elif confine:
         sandbox.confine(
-            [
-                Path(args.out or f"output/{bench.name}"),
-                *sandbox.ortho_caches([bench.rgbd_dir]),
-                sandbox.hf_hub_cache(),
-            ],
+            [Path(args.out or f"output/{bench.name}"), *sandbox.ortho_caches([bench.rgbd_dir])],
             args.memory_gib,
             log.info,
             [*sandbox.bench_inputs(bench), *([args.config] if args.config else [])],
+            flies=True,
         )
     if args.seed_base is not None:
         bench = bench.with_environ({"SEARCH_SEED_BASE": str(args.seed_base)})

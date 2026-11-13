@@ -188,7 +188,7 @@ def bench_root(citynav, serves, tmp_path, monkeypatch):  # noqa: F811
                 str(root),
             ],
         )
-        assert cli.main(citynav) == 0
+        assert cli.main(citynav, confine=False) == 0
     (row,) = [json.loads(line) for line in (root / "episodes.jsonl").read_text().splitlines()]
     (root / "w3").mkdir()
     (root / row["workdir"]).rename(root / "w3" / row["workdir"])

@@ -34,6 +34,9 @@ def test_an_inherited_marker_outside_the_sandbox_is_not_trusted(monkeypatch):
     monkeypatch.setenv(sandbox.SANDBOXED_ENV, "1")
     monkeypatch.setattr(sandbox, "cap_memory", lambda gib: None)
     monkeypatch.setattr(sandbox, "bwrap_refusal", lambda: "bwrap is not installed")
+    # An environment already the allowlist: the process is not restarted.
+    monkeypatch.setattr(sandbox, "child_env", lambda environ: dict(environ))
+    _catch_exec(monkeypatch)
     sandbox.confine([], 1.0, lines.append)
     assert lines == [sandbox.mode_line("bwrap is not installed", 1.0)]
     assert sandbox.SANDBOXED_ENV not in os.environ
@@ -186,3 +189,80 @@ def test_a_failed_attempt_scope_leaves_no_unit_behind():
     ).stdout
     subprocess.run(["systemctl", "--user", "reset-failed", f"{unit}.scope"], capture_output=True)
     assert left == "", left
+
+
+_POOL_VARS = (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "OPENCV_FOR_THREADS_NUM",
+    "MALLOC_ARENA_MAX",
+)
+
+
+def test_a_capped_process_imports_its_native_libraries_on_any_core_count(monkeypatch):
+    """``RLIMIT_DATA`` counts each thread's reserved stack and OpenBLAS's per-thread
+    buffers: on a 32-core node numpy, OpenCV and SciPy reserve 6.7 GiB at import with
+    0.1 GiB resident, so the environment model code runs under starts one thread per
+    pool, and the shell's own setting wins."""
+    for name in _POOL_VARS:
+        monkeypatch.delenv(name, raising=False)
+    env = sandbox.child_env(os.environ)
+    assert {k: env[k] for k in _POOL_VARS} == dict.fromkeys(_POOL_VARS[:3], "1") | {
+        "MALLOC_ARENA_MAX": "2"
+    }
+    monkeypatch.setenv("OMP_NUM_THREADS", "8")
+    assert sandbox.child_env(os.environ)["OMP_NUM_THREADS"] == "8"
+    probe = (
+        "from benchmarks import sandbox; sandbox.cap_memory(1.0); import numpy, cv2, scipy.ndimage"
+    )
+    subprocess.run([sys.executable, "-c", probe], env=env, cwd=sandbox.REPO, check=True)
+
+
+class _Execed(Exception):
+    pass
+
+
+def _catch_exec(monkeypatch) -> list:
+    """Every exec this process asks for, as ``(argv, env)``, without exec'ing."""
+    seen: list = []
+
+    def execed(file, argv, env=None):
+        seen.append((list(argv), dict(os.environ if env is None else env)))
+        raise _Execed
+
+    monkeypatch.setattr(os, "execvp", lambda f, a: execed(f, a))
+    monkeypatch.setattr(os, "execvpe", execed)
+    monkeypatch.setattr(os, "execve", execed)
+    return seen
+
+
+@pytest.mark.parametrize("bwrap", [True, False])
+def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
+    bwrap, tmp_path, monkeypatch
+):
+    """The station, the twin CLI and the runner re-execute themselves with the
+    allowlisted environment (a launcher's FAKE_SECRET gone, the reasoner key kept, one
+    thread per native pool); under bubblewrap the hub cache is bound read-only and
+    the hub is offline, after the launcher cached the reasoner's tokenizer."""
+    monkeypatch.setenv("FAKE_SECRET", "s")
+    monkeypatch.setenv("SEARCH_REASONER_API_KEY", "k")
+    monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+    monkeypatch.setattr(sandbox, "cap_memory", lambda gib: None)
+    monkeypatch.setattr(sandbox, "bwrap_refusal", lambda: None if bwrap else "bwrap is absent")
+    cached: list = []
+    monkeypatch.setattr(sandbox, "_cache_tokenizer", lambda log: cached.append(1), raising=False)
+    hub = tmp_path / "hub"
+    hub.mkdir()
+    monkeypatch.setattr(sandbox, "hf_hub_cache", lambda: str(hub))
+    seen = _catch_exec(monkeypatch)
+    with pytest.raises(_Execed):
+        sandbox.confine([tmp_path / "out"], 1.0, lambda line: None, flies=True)
+    ((argv, env),) = seen
+    assert "FAKE_SECRET" not in env and env["SEARCH_REASONER_API_KEY"] == "k"
+    assert env["OPENBLAS_NUM_THREADS"] == "1"
+    if bwrap:
+        assert env["HF_HUB_OFFLINE"] == "1" and cached == [1]
+        binds = [argv[i - 1] for i, a in enumerate(argv) if a == str(hub) and argv[i - 1] != a]
+        assert binds == ["--ro-bind"], binds
+    else:
+        assert argv[0] == sys.executable

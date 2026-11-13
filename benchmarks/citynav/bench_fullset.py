@@ -84,24 +84,11 @@ def _enumerate_split(bench: Bench, split: str) -> list[str]:
     return episode_ids(enumerate(load_split(bench.split_path(split))))
 
 
-# One thread per native pool (BLAS, OpenCV, Rayon) and two malloc arenas per
-# attempt child: uncapped, every child starts a thread per core, and a thread
-# that fails to start crashes its episode. A value the shell set wins.
-RUNNER_THREAD_ENV = {
-    "OMP_NUM_THREADS": "1",
-    "OPENBLAS_NUM_THREADS": "1",
-    "MKL_NUM_THREADS": "1",
-    "OPENCV_FOR_THREADS_NUM": "1",
-    "RAYON_NUM_THREADS": "1",
-    "MALLOC_ARENA_MAX": "2",
-}
-
-
 def _runner_env(bench: Bench) -> dict[str, str]:
     """The environment an attempt child of ``bench`` is spawned under: this
     process's, under the run's own (the bench's selection, the settled effort), cut
     to :func:`sandbox.child_env`'s allowlist."""
-    env = sandbox.child_env({**RUNNER_THREAD_ENV, **os.environ, **bench.environ})
+    env = sandbox.child_env({**os.environ, **bench.environ})
     # Unbuffered, so a child that dies fast still leaves its lines in server.log.
     env["PYTHONUNBUFFERED"] = "1"
     env[episodes.PARENT_PID_ENV] = str(os.getpid())
