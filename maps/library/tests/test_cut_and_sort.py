@@ -581,3 +581,10 @@ def test_a_find_near_a_side_cut_emptied_set_names_the_cut():
     )
     err = tool_results(fr)[0]["error"]
     assert "find_car is empty" not in err, err
+
+
+def test_a_side_cut_over_a_find_that_matched_nothing_says_nothing_of_a_side():
+    _r, fr, _f, _d = drive([[run('find("zzz", south_of="prior_7")\n')], "done"])
+    (env,) = tool_results(fr)[0]["result"]["results"].values()
+    assert env["cut_stats"]["cut"] == "0->0", env
+    assert "nothing_on_that_side" not in env["cut_stats"], env
