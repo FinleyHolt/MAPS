@@ -1,8 +1,9 @@
 # Flight: harness, twin, and your own aircraft
 
-This page is the short guide to the flight harness. MAPS flew 87 closed-loop
-runs on a C-12 over California City, CA, from 11 to 18 September 2026, at
-about 3,000 to 6,500 ft above ground. The reasoner and SAM 3.1 ran on ground
+This page is the short guide to the flight harness. MAPS flew 91 closed-loop
+runs on a C-12 over California City, CA, on six days from 11 to 18 September
+2026, at about 3,000 to 6,500 ft above ground. A run counts when the model
+wrote at least one block in it. The reasoner and SAM 3.1 ran on ground
 compute over the datalink; a computer aboard held the mission.
 [`benchmarks/flight`](../benchmarks/flight/README.md) is the method half of
 the station that flew them. Its README is the reference: the flown chain step
