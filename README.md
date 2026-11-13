@@ -153,6 +153,33 @@ python -m maps.mission.contract --sensor oryx_orx32_25mm_nadir
 For the code behind each part, see [`maps/README.md`](maps/README.md) and
 [`docs/architecture.md`](docs/architecture.md).
 
+## Security
+
+The `run` tool executes model-written Python inside the process that flies the
+mission. The interpreter's block scan and line ceilings keep a cooperative
+model on the library; a hostile block reaches `os`, `subprocess`, and the file
+system through Python's reflection.
+
+The bench driver starts each attempt, and the station and the twin CLI start
+themselves, under OS isolation (`benchmarks/sandbox.py`):
+
+| Layer | Bench attempt | Station, twin CLI |
+|---|---|---|
+| Memory cap (`RLIMIT_DATA`) | 4 GiB, `--attempt-memory-gib` | 16 GiB, `--memory-gib` |
+| File system (bubblewrap) | `/` read-only; writable: the worker's attempt root, the ortho cache, TMPDIR, the Hugging Face cache | `/` read-only; writable: `--out`, the ortho caches, TMPDIR, the Hugging Face cache |
+| Processes (bubblewrap) | Own PID namespace and session | Own PID namespace |
+| Network | Shared with the host | Shared with the host |
+
+A block that allocates past the cap gets `MemoryError` as its block error, and
+the mission continues. Bubblewrap needs `bwrap` and unprivileged user
+namespaces; on a host without them (Ubuntu 24.04's AppArmor default blocks the
+namespaces), the launcher logs one line saying so and runs under the memory
+cap alone. The network stays shared because the mission calls the reasoner and
+the segmenter over HTTP.
+
+To fly a model you don't trust, run MAPS in a container or a virtual machine
+whose egress reaches only the reasoner and the segmenter.
+
 ## Reproduce the paper
 
 - The main branch reproduces the CityNav and Cal City runs of the full
