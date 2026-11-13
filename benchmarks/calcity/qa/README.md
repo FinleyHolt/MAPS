@@ -2,7 +2,11 @@
 
 This folder audits the prompt and mask pairs of the reviewed Cal City
 episodes, the set that `data_prep/reviewed.py` derives and every Cal City
-experiment flies.
+experiment flies. A row is in that set when its target position is one
+`ground_truth.json` lists (see
+[Reviewed episodes](../README.md#reviewed-episodes)). This worksheet is a
+second pass over the set's masks and prompts: a blank `verdict` is a line this
+pass has not reached yet.
 
 | File | Contents |
 |---|---|
