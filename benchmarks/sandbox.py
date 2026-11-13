@@ -35,7 +35,9 @@ container or a virtual machine that scores outside it.
 
 from __future__ import annotations
 
+import argparse
 import contextlib
+import math
 import os
 import resource
 import shutil
@@ -244,11 +246,25 @@ def confine(
     os.execvp(argv[0], argv)
 
 
+#: The smallest memory cap a flag takes, GiB: an attempt's interpreter and imports
+#: alone come near it.
+MIN_MEMORY_GIB = 1.0
+
+
+def gib(raw: str) -> float:
+    """An argparse type for a memory cap: a finite number of GiB, at least
+    :data:`MIN_MEMORY_GIB` (-1 or 0 would lift or zero the cap, nan fails every check)."""
+    value = float(raw)
+    if not math.isfinite(value) or value < MIN_MEMORY_GIB:
+        raise argparse.ArgumentTypeError(f"must be at least {MIN_MEMORY_GIB:g} GiB, got {raw}")
+    return value
+
+
 def add_memory_flag(ap, default: float = STATION_MEMORY_GIB) -> None:
     """``--memory-gib`` on a mission CLI's parser."""
     ap.add_argument(
         "--memory-gib",
-        type=float,
+        type=gib,
         default=default,
         help="the process's memory cap in GiB (default %(default)s): a block that allocates "
         "past it raises MemoryError, served as the block's error",

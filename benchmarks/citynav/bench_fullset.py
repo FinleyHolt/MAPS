@@ -778,7 +778,7 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--attempt-memory-gib",
-        type=float,
+        type=sandbox.gib,
         default=sandbox.ATTEMPT_MEMORY_GIB,
         help="each attempt's memory cap in GiB (default %(default)s): a block that allocates "
         "past it raises MemoryError, served as the block's error",

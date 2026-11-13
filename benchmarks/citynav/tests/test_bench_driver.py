@@ -701,6 +701,12 @@ def test_the_parser_refuses_a_count_below_one(flag, capsys) -> None:
     assert done.value.code == 2 and flag in capsys.readouterr().err
 
 
+def test_the_parser_refuses_an_attempt_memory_cap_that_is_no_cap(capsys) -> None:
+    with pytest.raises(SystemExit) as done:
+        bf._build_parser(citynav_bench({})).parse_args(["--attempt-memory-gib", "nan"])
+    assert done.value.code == 2 and "at least 1 GiB" in capsys.readouterr().err
+
+
 def test_an_allowlist_that_cannot_be_read_is_refused_fatal(driver, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a"])
     d = driver()

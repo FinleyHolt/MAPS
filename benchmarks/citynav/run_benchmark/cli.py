@@ -109,7 +109,7 @@ def _build_parser(bench: Bench) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--memory-gib",
-        type=float,
+        type=sandbox.gib,
         default=None,
         help="cap this process's data segment at this many GiB before anything loads "
         "(bench_fullset passes its --attempt-memory-gib)",
