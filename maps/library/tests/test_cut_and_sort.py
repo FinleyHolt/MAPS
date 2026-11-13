@@ -594,3 +594,9 @@ def test_a_tier_of_a_find_a_side_cut_emptied_names_the_cut():
     _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7").exact\n')], "done"])
     err = tool_results(fr)[0]["error"]
     assert "A pass's minted rows" not in err and "before the cut" in err, err
+
+
+def test_a_tier_of_a_side_cut_over_a_find_that_matched_nothing_keeps_the_finds_wording():
+    _r, fr, _f, _d = drive([[run('find("zzz", south_of="prior_7").exact\n')], "done"])
+    err = tool_results(fr)[0]["error"]
+    assert err.startswith("these rows carry no match tiers"), err

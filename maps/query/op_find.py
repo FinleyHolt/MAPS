@@ -13,6 +13,7 @@ from maps.query.op_io import (
     Result,
     as_rows,
     attach_standing_columns,
+    cut_had_input,
     keeps_order,
     quote_value,
 )
@@ -317,7 +318,7 @@ def run_stratum(cx, a):
     order."""
     items = as_rows(cx, a["items"])
     tier = a["tier"]
-    if not items and getattr(items, "cut_stats", None):
+    if not items and cut_had_input(getattr(items, "cut_stats", None)):
         raise ProgramError(
             "a cut left these rows empty, so there is no match tier to take: take "
             ".exact/.tagged/.fuzzy on the find before the cut."

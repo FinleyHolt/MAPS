@@ -58,6 +58,12 @@ class Result(list):
         self.cut_stats, self.empty_condition = cut_stats, empty_condition
 
 
+def cut_had_input(stats) -> bool:
+    """Whether the cut ``stats`` describe started from rows: a cut of no rows
+    says nothing the input's own miss does not."""
+    return bool(stats) and not str(stats.get("cut", "")).startswith("0->")
+
+
 def keeps_order(rows) -> bool:
     """Whether an op's input rows carry a real order its output keeps."""
     return bool(getattr(rows, "ordered", False))
