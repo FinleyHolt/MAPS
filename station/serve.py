@@ -292,17 +292,26 @@ class Station:
         return None
 
     def tokenizer_refusal(self) -> str | None:
-        """Why a mission cannot load the reasoner's tokenizer, or None: asked only in a
-        process confined offline after its launcher could not cache it
+        """Why a mission cannot discover the reasoner and load its tokenizer, or None: asked
+        only in a process confined offline after its launcher could not cache it
         (:data:`sandbox.TOKENIZER_ENV`); a discovery that loads it clears the mark."""
         if sandbox.TOKENIZER_ENV not in os.environ:
             return None
         try:
             endpoint_spec.discover_from_settings(from_environ(self.bench.environ), probe_sam=False)
         except Exception as exc:
+            # The hub cache is bound read-only at its own path, so the host's writes show
+            # through a directory that existed when the station started; one made after is
+            # out of the sandbox's reach until a restart binds it.
+            then = (
+                "send the mission again"
+                if os.path.isdir(sandbox.hf_hub_cache())
+                else "restart the station"
+            )
             return (
-                "the reasoner's tokenizer is not in the hub cache this sandboxed station reads "
-                f"offline ({type(exc).__name__}): {sandbox.TOKENIZER_REMEDY} the station"
+                f"the reasoner's discovery failed ({type(exc).__name__}: {exc}); this sandboxed "
+                f"station reads the reasoner's tokenizer from the hub cache offline: "
+                f"{sandbox.TOKENIZER_REMEDY}, then {then}"
             )
         os.environ.pop(sandbox.TOKENIZER_ENV, None)
         return None

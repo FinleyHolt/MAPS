@@ -361,6 +361,39 @@ def test_a_sandboxed_station_without_its_tokenizer_refuses_a_mission_naming_the_
     assert station.tokenizer_refusal() is None and sandbox.TOKENIZER_ENV not in os.environ
 
 
+def test_a_sandboxed_station_serves_the_discovery_s_own_failure_and_the_step_it_needs(
+    calcity,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+):
+    """A reasoner that does not answer yet is served as itself, not as a missing
+    tokenizer. A hub cache the sandbox binds shows the host's writes, so the remedy
+    asks for the mission again; a cache made after the station started needs a restart."""
+    from benchmarks import sandbox
+
+    monkeypatch.setenv(sandbox.TOKENIZER_ENV, "EndpointUnreachable")
+    station = serve.Station(
+        bench=calcity.bench,
+        config="configs/calcity.yaml",
+        out=tmp_path / "out",
+        ortho_dir=calcity.rgbd,
+    )
+
+    def down(settings, **kw):
+        raise endpoint_spec.EndpointUnreachable("reasoner at http://r/v1 did not answer")
+
+    monkeypatch.setattr(endpoint_spec, "discover_from_settings", down)
+    monkeypatch.setattr(sandbox, "hf_hub_cache", lambda: str(tmp_path))
+    why = station.tokenizer_refusal()
+    assert why is not None and "reasoner at http://r/v1 did not answer" in why
+    assert "not in the hub cache" not in why
+    assert why.endswith(f"{sandbox.TOKENIZER_REMEDY}, then send the mission again")
+    monkeypatch.setattr(sandbox, "hf_hub_cache", lambda: str(tmp_path / "absent"))
+    assert station.tokenizer_refusal().endswith(
+        f"{sandbox.TOKENIZER_REMEDY}, then restart the station"
+    )
+
+
 def test_a_station_whose_ortho_lacks_the_raster_exits_2_with_no_out(calcity, tmp_path, monkeypatch):  # noqa: F811
     """A bad --ortho is refused before the station confines itself, so --out is not made,
     with the twin's exit code."""

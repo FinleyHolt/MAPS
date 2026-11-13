@@ -72,9 +72,7 @@ SANDBOXED_ENV = "MAPS_SANDBOXED"
 #: launcher could not cache the reasoner's tokenizer.
 TOKENIZER_ENV = "MAPS_TOKENIZER_UNCACHED"
 #: What caches the tokenizer a confined process reads offline.
-TOKENIZER_REMEDY = (
-    "run python -m maps.mission.endpoint_preflight once the reasoner answers, then restart"
-)
+TOKENIZER_REMEDY = "run python -m maps.mission.endpoint_preflight once the reasoner answers"
 #: The repository root: code and configs an attempt reads.
 REPO = Path(__file__).resolve().parents[1]
 

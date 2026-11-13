@@ -339,4 +339,4 @@ def test_a_tokenizer_left_uncached_names_the_remedy(monkeypatch):
     lines: list[str] = []
     assert sandbox._cache_tokenizer(lines.append) == "ConnectionError"
     (line,) = lines
-    assert "python -m maps.mission.endpoint_preflight" in line and "restart" in line, line
+    assert line.endswith(sandbox.TOKENIZER_REMEDY), line
