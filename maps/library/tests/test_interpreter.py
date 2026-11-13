@@ -1295,6 +1295,32 @@ def test_a_models_own_error_inside_a_flight_is_served():
     assert "line 1: KeyError" in (tool_results(fr)[0].get("error") or "")
 
 
+@pytest.mark.parametrize(
+    "code", ['d["b"] = 1 / 0', "d.x = 1 / 0", 'd["b"], e = 1 / 0', 'd[k := "b"] = 1 / 0']
+)
+def test_a_failed_item_or_attribute_assignment_keeps_its_container(code):
+    """``d["b"] = <raises>`` leaves ``d`` as it was: only a Name the
+    assignment rebinds is stale."""
+    from types import SimpleNamespace
+
+    from maps.library.interpreter import MissionPython
+
+    mp = MissionPython(quiet_env())
+    mp.ns["d"] = SimpleNamespace() if code.startswith("d.") else {"a": 1}
+    assert "ZeroDivisionError" in mp.run_block(code).get("error", "")
+    assert "error" not in mp.run_block("print(d)")
+
+
+def test_a_failed_starred_unpacking_unbinds_each_name():
+    from maps.library.interpreter import MissionPython
+
+    mp = MissionPython(quiet_env())
+    mp.run_block("a, b = 1, 2")
+    assert "ZeroDivisionError" in mp.run_block("[a, *b] = 1 / 0").get("error", "")
+    for n in ("a", "b"):
+        assert "its assignment failed" in mp.run_block(f"print({n})").get("error", "")
+
+
 def test_a_failed_assignment_unbinds_only_its_own_targets_on_a_shared_line():
     """``a = 5; b = 1 / 0``: b's assignment failed, a's stands."""
     from maps.library.interpreter import MissionPython

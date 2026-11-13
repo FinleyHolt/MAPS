@@ -120,6 +120,21 @@ class MissionNamespace(dict):
         raise KeyError(k)
 
 
+def _rebound_names(targets) -> list[str]:
+    """The Names an assignment rebinds: bare, or inside tuple/list/starred
+    unpacking (`a, *b = <raises>` unbinds both). A subscript or attribute
+    target mutates its container in place, so the container stays bound."""
+    out: list[str] = []
+    for t in targets:
+        if isinstance(t, ast.Name):
+            out.append(t.id)
+        elif isinstance(t, ast.Starred):
+            out += _rebound_names([t.value])
+        elif isinstance(t, (ast.Tuple, ast.List)):
+            out += _rebound_names(t.elts)
+    return out
+
+
 class MissionPython:
     """The persistent interpreter for one mission's run channel: the
     namespace the model's blocks run in, the library its calls are
@@ -270,16 +285,11 @@ class MissionPython:
                     < (node.end_lineno, node.end_col_offset)
                 )
             if failed:
-                for t in node.targets:
-                    # ast.walk reaches Names inside tuple/list unpacking
-                    # too -- `a, b = <raises>` must unbind BOTH.
-                    for n in ast.walk(t):
-                        if isinstance(n, ast.Name):
-                            self.ns.pop(n.id, None)
-                            self.ns.unbound[n.id] = (
-                                "its assignment failed, so the stale "
-                                "value was removed -- re-derive it"
-                            )
+                for n in _rebound_names(node.targets):
+                    self.ns.pop(n, None)
+                    self.ns.unbound[n] = (
+                        "its assignment failed, so the stale value was removed -- re-derive it"
+                    )
 
     def _finish(self, out: dict) -> dict:
         if self._printed:

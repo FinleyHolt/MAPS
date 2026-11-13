@@ -28,9 +28,9 @@ EMPTY_TURN_NUDGE = (
 )
 
 TRUNCATED_TURN_NUDGE = (
-    "Your last turn ran out of output tokens while thinking, so nothing "
-    "arrived and nothing executed. Act on what you have: send the one tool "
-    "call you settled on, or your plain-text reply."
+    "Your last turn hit the output cap and was cut off; nothing in it "
+    "executed. Send the one tool call you settled on, or your plain-text "
+    "reply."
 )
 
 #: A turn the output cap cut off (empty, cut prose or a cut call, which never

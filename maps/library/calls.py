@@ -6,6 +6,7 @@ reads them, the grounding that opens it and the ack that closes it."""
 
 from __future__ import annotations
 
+import ast
 import re
 
 from maps.library.block_scan import MOVE_SAYS
@@ -49,26 +50,27 @@ from maps.xy_token import is_xy
 MEASURE_CALL_CEILING = 20_000
 
 
-def _refuse_unplain_class(cls: str) -> None:
-    """Refuse a look_for class the served text rules out: one carrying a
-    colour word, or a proper noun (a capitalised word past the first; a
-    capitalised first word is how a sentence starts)."""
+def _refuse_unplain_class(cls: str, names: set[str]) -> None:
+    """Refuse a look_for class the served text rules out: a proper noun (a
+    world-state name written with a capital, ``names`` lowered), or one
+    carrying a colour word. The name check runs first: "Green Street" is a
+    street, never a colour."""
     words = cls.replace("_", " ").split()
+    # ponytail: a lowercase class a feature happens to be named ("car",
+    # "pitch") is watched as said, with the receipt's NAMED feature note.
+    if cls != cls.lower() and " ".join(words).lower() in names:
+        raise CodeError(
+            f'look_for takes plain visual classes, no proper nouns: "{cls}" is a proper noun. '
+            f'A named place is already a world-state row: find("{cls}").'
+        )
     # ponytail: any palette word refuses, so "orange tree" does too; a
     # head-noun parse if a real class ever needs a colour word.
-    colour = next(
-        (w for w in words if w.lower() == "grey" or normalize_color(w) in COLOR_ENUM), None
-    )
+    colour = next((w for w in words if normalize_color(w) in COLOR_ENUM), None)
     if colour:
         raise CodeError(
             f'look_for takes plain visual classes, each naming a THING, never a colour: "{cls}" '
             f'carries the colour "{colour}". A colour ORDERS the rows once they exist: '
             f'find("<class>", color="{colour.lower()}").'
-        )
-    if any(w[:1].isupper() and not w.isupper() for w in words[1:]):
-        raise CodeError(
-            f'look_for takes plain visual classes, no proper nouns: "{cls}" is a proper noun. '
-            f'A named place is already a world-state row: find("{cls}").'
         )
 
 
@@ -203,11 +205,12 @@ class Library:
     def _analyze(self, p: Program, ref: str, *, shown=None, page=None) -> str:
         """Ground the program's named anchors and run it, ``ref``'s envelope
         the answer (served under ``shown`` when given)."""
-        if shown is not None:
-            self._show_as(ref, shown)
         ties = self._ground((PlaceName(n), "anchor") for n in p.anchor_names())
         p.ground(ties)
         ack = self.env.analyze(p.ops, p.rn, ref, page)
+        if shown is not None and "error" not in ack:
+            # a refused call's ref is minted again by the next program
+            self._show_as(ref, shown)
         if "results" not in ack.get("result", {"results": None}):
             # deduped: its note says so, while the surface stands
             self.unrendered[ref] = self.env.version()
@@ -305,6 +308,11 @@ class Library:
         self._near_miss_note(ref, query)
         if q:
             self.names.labels[ref] = f"find({query!r})"
+            node = self.names.running_node()
+            if cards and not self.env.rows_of_ref(ref) and isinstance(node, ast.Call):
+                # a side cut emptied what the find matched: the bare
+                # find('<q>') label would say the find matched nothing
+                self.names.labels[ref] = ast.unparse(node)
         return Rows(ref, self, label=f"find({query!r})" if q else "")
 
     _NEAR_MISS_M = 500.0
@@ -403,7 +411,7 @@ class Library:
     def more_of(self, x):
         if not isinstance(x, Rows) or x._spec:
             raise CodeError("more_of pages a RESULT a find or an ordering left")
-        name = self.names.said_name(x, "more_of")
+        name = self.names.own_name(x) or self.names.said_name(x, "more_of")
         if x._tied():
             x._refuse_tied(name, "has no next block")
         lo = BROAD_HEAD_ROWS + int(self.env.widened.get(x._ref) or 0)
@@ -546,12 +554,16 @@ class Library:
             raise CodeError('look_for takes the classes to watch: look_for("house", "pool")')
         if not all(isinstance(c, str) for c in classes):
             raise CodeError('look_for takes class names as strings: look_for("house", "pool")')
+        names = self.env.world_names()
         for c in classes:
-            _refuse_unplain_class(c)
+            _refuse_unplain_class(c, names)
         # THE SEGMENTER CHANNEL: it arms perception and moves nothing. The
         # segmenter reads WORDS, so look_for("parking_lot") and
         # look_for("parking lot") arm the same class.
         words = [w.strip().lower().replace("_", " ") for w in classes if w.strip()]
+        refused = self.env.past_cap(words)
+        if refused:
+            raise CodeError(refused)
         if isinstance(at, Rows):
             raise CodeError(self.names.not_one_place("at", at) + ".")
         at = self._slot(at)

@@ -69,8 +69,10 @@ class MissionEnv:
     counter, ``widened`` the paging ledger, ``take_minted()`` the handles
     the call's flights minted, ``say_err(ack, msg)`` the refusal format,
     ``row_of_fid(fid)`` a live-row reader (None when absent),
-    ``tied_of_ref(ref)`` whether a ref holds a tied view and ``version()``
-    the surface version."""
+    ``tied_of_ref(ref)`` whether a ref holds a tied view, ``version()``
+    the surface version, ``world_names()`` the world state's names
+    (lowered) and ``past_cap(classes)`` the watchlist's cap refusal (None
+    when the classes fit)."""
 
     rows_of_ref: Callable
     plan_rn: list
@@ -90,6 +92,8 @@ class MissionEnv:
     row_of_fid: Callable
     tied_of_ref: Callable
     version: Callable
+    world_names: Callable
+    past_cap: Callable
 
 
 def place_token(v, why: str):
@@ -190,6 +194,12 @@ class Names:
             if v is obj and not k.startswith("__"):
                 return k
         return getattr(obj, "_label", "") or None
+
+    def own_name(self, x: Rows) -> str | None:
+        """The name the model bound ``x`` to, over the rN a flight minted for
+        the same set (``e = explore(...)`` binds both); None when unbound."""
+        keys = [k for k, v in self.ns.items() if v is x and not k.startswith("__")]
+        return next((k for k in keys if k != x._ref), keys[0] if keys else None)
 
     def spelling(self, x: Rows) -> str | None:
         """The model's spelling of a set, the one name every served label

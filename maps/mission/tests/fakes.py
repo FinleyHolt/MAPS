@@ -156,6 +156,7 @@ def drive(
     retask=None,
     look_renderer=None,
     reasoner=None,
+    graph=None,
     **loop_kw,
 ):
     """One operator turn over a still surface. Returns (reply, reasoner,
@@ -196,7 +197,7 @@ def drive(
     loop_kw.setdefault("boost_queue", unarmed_boost)
     mission = _Mission(
         reasoner=fr,
-        ctx=bare_ctx(),
+        ctx=bare_ctx(graph),
         rid_tag="m0",
         transcript=transcript,
         compute_namespace={
@@ -559,6 +560,8 @@ def quiet_env(**kw):
         row_of_fid=lambda fid: None,
         tied_of_ref=lambda ref: False,
         version=lambda: 0,
+        world_names=set,
+        past_cap=lambda classes: None,
     )
     fields.update(kw)
     return MissionEnv(**fields)

@@ -1646,6 +1646,42 @@ def test_more_of_on_a_one_block_handle_says_there_is_no_further_block():
     ), err
 
 
+def _explore_then(monkeypatch, *blocks):
+    """A pass over prior_7 adds five cars (an unordered set it mints), then
+    ``blocks``: their tool results."""
+    from maps.mission import surface_state
+
+    added = [
+        {"fid": f"detected_{i}", "xy": [50.0 + i, 60.0], "class": "car", "search_text": "car"}
+        for i in range(5)
+    ]
+    monkeypatch.setattr(
+        surface_state,
+        "surface_from_ctx",
+        lambda ctx: {"cands": CANDS + added, "anchors": [], "cell_m": 1.0},
+    )
+    script = [[run('e = explore("prior_7")\n')], *[[run(b)] for b in blocks], "done"]
+    return explore_drive(script)[1]
+
+
+def test_more_of_on_a_one_block_unordered_set_says_an_ordering_serves_its_rows(monkeypatch):
+    """A bare line of an unordered set displays census + len, never its
+    rows: more_of says so, under the model's own name for the set."""
+    err = _explore_then(monkeypatch, "more_of(e)\n")[1]["error"]
+    assert err == (
+        "e holds 5 row(s), one block, and no order: a bare `e` line displays its "
+        'census and len, and an ordering serves its rows (e.order(nearest="<fid>")). '
+        "There is no further block."
+    ), err
+
+
+def test_a_refused_more_of_lends_its_label_to_no_later_result(monkeypatch):
+    out = _explore_then(
+        monkeypatch, "more_of(e)\n", 'more_of(find("car").order(nearest="prior_7"))\n'
+    )[2]
+    assert "more_of(" not in json.dumps(out.get("result")), out
+
+
 def test_a_block_that_calls_one_kind_twice_serves_both_parts():
     """Two flights and two stances in one block: the receipt keeps the
     first call's part beside the second's."""

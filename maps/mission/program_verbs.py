@@ -150,7 +150,7 @@ class Programs:
 
     def _call_minted(self):
         """The handle this call's last flight minted, or None."""
-        return (self.carry.minted[self._call.get("minted", 0) :] or [None])[-1]
+        return (self.carry.minted or [None])[-1]
 
     def ground(self, names: dict) -> dict:
         """Open a call and ground its names (``{name: why}``) under the
@@ -158,7 +158,7 @@ class Programs:
         refusal."""
         self._call.clear()
         self._call["notes"] = notes = []
-        self._call["minted"] = len(self.carry.minted)  # this call's flights mint past it
+        self.carry.take_minted()  # a mint no call bound is stale
         ties: dict = {}
         if not names:
             return {"ties": ties}
@@ -233,7 +233,17 @@ class Programs:
         if page:
             # Paging a handle with nothing left to page is refused here.
             ref, lo, h = page
-            held = len(self.carry.read(ref) or [])
+            rows = self.carry.read(ref) or []
+            held = len(rows)
+            if held and held <= BROAD_DUMP_SOFT_ROWS and not getattr(rows, "ordered", False):
+                return self.rejections.error(
+                    {},
+                    (
+                        f"{h} holds {held} row(s), one block, and no order: a bare `{h}` "
+                        "line displays its census and len, and an ordering serves its "
+                        f'rows ({h}.order(nearest="<fid>")). There is no further block.'
+                    ),
+                )
             if held and held <= BROAD_DUMP_SOFT_ROWS:
                 return self.rejections.error(
                     {},
@@ -257,7 +267,7 @@ class Programs:
         out = self._run(ops, answer_ref=str(answer or ""))
         if "error" in out:
             return {"error": out["error"]}
-        self.carry.next_rn[0] = max(self.carry.next_rn[0], int(rn_end or 0))
+        self.carry.advance_rn(rn_end)
         # The columns this call ordered by, so finish can say when the
         # ordering separated nothing.
         sb = next((o for o in reversed(ops) if o["op"] == "score_by"), None)

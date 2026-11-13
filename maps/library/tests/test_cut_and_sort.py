@@ -484,4 +484,72 @@ def test_a_side_cut_that_empties_says_nothing_is_on_that_side(block):
     assert "error" not in out, out
     (env,) = out["result"]["results"].values()
     assert env["len"] == 0, env
-    assert "the prior map holds nothing on that side" in env["cut_stats"]["nothing_on_that_side"]
+    assert (
+        "nothing in the world state lies on that side" in env["cut_stats"]["nothing_on_that_side"]
+    )
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        'find("car").filter(south_of="prior_7").order(nearest="prior_7")\n',
+        'find("car").filter(south_of="prior_7").order(color="red")\n',
+        'find("car").filter(south_of="prior_7")[0:3]\n',
+        'r = find("car").filter(south_of="prior_7")\nr.order(nearest="prior_7")\n',
+        'r = find("car").filter(south_of="prior_7")\nr[0:3]\n',
+        'find("car", south_of="prior_7", color="red")\n',
+        'find("car").filter(south_of="prior_7").filter(near="prior_7", dwithin=50)\n',
+        'find("car", south_of="prior_7").order(nearest="prior_7")[0:2]\n',
+    ],
+)
+def test_an_op_over_an_emptied_side_cut_keeps_its_why(block):
+    """An op whose input a side cut emptied serves that cut's stats: an
+    ordering, a window, a distance cut and a find's colour sort alike."""
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    out = tool_results(fr)[0]
+    assert "error" not in out, out
+    (env,) = out["result"]["results"].values()
+    assert env["len"] == 0, env
+    assert env["cut_stats"]["cut"] == "2->0", env
+    assert "nothing_on_that_side" in env["cut_stats"], env
+
+
+def _side_note(block: str, cands=None) -> str:
+    _r, fr, _f, _d = drive([[run(block)], "done"], cands=cands)
+    (env,) = tool_results(fr)[-1]["result"]["results"].values()
+    return env["cut_stats"]["nothing_on_that_side"]
+
+
+def test_the_side_note_names_the_world_state_and_the_look_for_remedy_for_an_unseen_class():
+    note = _side_note('find("car", south_of="prior_7")\n')
+    assert note.startswith("nothing in the world state lies on that side"), note
+    assert "look_for the class" in note, note
+
+
+def test_the_side_note_drops_the_look_for_remedy_for_a_watched_class():
+    note = _side_note('look_for("car")\nfind("car", south_of="prior_7")\n')
+    assert note == "nothing in the world state lies on that side", note
+
+
+def test_the_side_note_drops_the_look_for_remedy_when_a_detection_was_dropped():
+    from maps.mission.tests.fakes import CANDS
+
+    seen = [*CANDS, {"fid": "detected_3", "xy": [5.0, 25.0], "class": "car", "search_text": "car"}]
+    note = _side_note('find("car", south_of="prior_7")\n', cands=seen)
+    assert note == "nothing in the world state lies on that side", note
+
+
+def test_grey_is_gray_on_the_palette():
+    """look_for("grey roof") answers find("<class>", color="grey"); find takes it."""
+    _r, fr, _f, _d = drive([[run('find("car", color="grey")\n')], "done"])
+    err = tool_results(fr)[0].get("error", "")
+    # the fake rows carry no perceived colour, so the gray column orders nothing
+    assert "not a color on the closed palette" not in err and "'color_gray'" in err, err
+
+
+def test_a_find_a_side_cut_emptied_is_never_said_to_have_matched_nothing():
+    """find("car", south_of=...) matched two cars and the cut dropped both:
+    no step line says find('car') returned no rows."""
+    _r, fr, _f, _d = drive([[run('find("car", south_of="prior_7")\n')], "done"])
+    (env,) = tool_results(fr)[0]["result"]["results"].values()
+    assert "find('car'): this call returned no rows" not in env["hint"], env

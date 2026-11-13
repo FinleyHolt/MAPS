@@ -212,6 +212,8 @@ class _Mission:
                 map=self.pictures.show_map,
                 watch=self.watchlist.watch,
                 boost=self.watchlist.boost,
+                world_names=self.watchlist.world_names,
+                past_cap=self.watchlist.past_cap,
             )
         )
 
@@ -440,6 +442,8 @@ class _Mission:
                 # already capped (interpreter.PRINT_CHAR_CAP)
                 printed=str(out.get("printed") or ""),
                 errored="error" in out,
+                # the error text the model was served ("" when none)
+                error=str(out.get("error") or ""),
                 # stops this block flew, an errored block's included
                 flights=self.progress.flights - flights_before,
                 # every image this block showed, by sha

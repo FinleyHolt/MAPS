@@ -55,6 +55,7 @@ def run_ops(
             seed_results=seed_results,
             staged=ns.get("staged"),
             standing=ns.get("standing"),
+            watched=ns.get("watched") or (),
         )
     except ProgramError as exc:
         err = str(exc)
@@ -175,6 +176,7 @@ class Carry:
                 seed_results={h: v for h, v in self.rows.items() if h not in need},
                 staged=ns.get("staged"),
                 standing=ns.get("standing"),
+                watched=ns.get("watched") or (),
             )
         except Exception as exc:
             bad = getattr(exc, "ref", None)
@@ -214,6 +216,10 @@ class Carry:
         taken = list(self.minted)
         self.minted.clear()
         return taken
+
+    def advance_rn(self, rn_end) -> None:
+        """A program minted refs up to ``rn_end``: the next rN is past them."""
+        self.next_rn[0] = max(self.next_rn[0], int(rn_end or 0))
 
     def mint(self, rows: list) -> str:
         """An event handle over ``rows`` (the rows a flight added), never

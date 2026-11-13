@@ -301,13 +301,14 @@ class Reasoner:
                 f"(finish_reason={finish_reason!r}, "
                 f"reasoning_chars={len(reasoning_text)})"
             )
-        if finish_reason == "length":
-            # A call the output cap cut off is no call: it never runs, and the
-            # loop nudges the turn as truncated.
-            calls = []
         # A Responses card's reasoning comes back encrypted: the turn carries it
         # to the next request, and its size, for the compactor to price.
         carried = msg.get("reasoning_items") or []
+        if finish_reason == "length":
+            # A call the output cap cut off is no call: it never runs, and the
+            # loop nudges the turn as truncated. Its reasoning items go with
+            # it: the Responses wire refuses one without its following item.
+            calls, carried = [], []
         reasoning_tokens = ((resp.get("usage") or {}).get("completion_tokens_details") or {}).get(
             "reasoning_tokens"
         )

@@ -93,6 +93,7 @@ COLOR_ENUM = [
 ]
 
 _COLOR_SYNONYMS = {
+    "grey": "gray",
     "silver": "gray",
     "charcoal": "gray",
     "slate": "gray",

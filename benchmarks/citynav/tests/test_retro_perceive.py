@@ -64,3 +64,34 @@ def test_an_unposed_stop_or_a_failing_segmenter_is_a_tool_fact(monkeypatch):
     assert er.retro_perceive(h, {"pose_xy": (1.0, 2.0), "alt_m": 120.0}, ["car"]) == {
         "error": "segment failed: ConnectionError: sam down"
     }
+
+
+def test_a_segmenter_outage_on_a_retro_boost_leaves_the_block(monkeypatch):
+    """look_for(at=) a flown stop re-segments its recorded view; an outage
+    there ends the mission as one inside a flight does (the attempt is
+    infra), never a served retro error."""
+    import functools
+
+    import pytest
+
+    from maps.mission.tests.fakes import drive, run
+    from maps.perception.sam.detect_client import SamServerOutage
+    from maps.perception.watchlist import SegmenterTasking
+
+    monkeypatch.setattr(
+        er,
+        "crop_observation",
+        lambda xy, **kw: SimpleNamespace(rgb="px", ortho_view_corners_xy=[(0, 0)] * 4),
+    )
+
+    def outage(obs, concepts):
+        raise SamServerOutage("no tile of the frame got a /segment answer")
+
+    h, _ = _h(outage)
+    tasking = SegmenterTasking(retro_perceiver=functools.partial(er.retro_perceive, h))
+    tasking.record_flown({"pose_xy": (1.0, 2.0), "alt_m": 100.0, "stop_id": "stop_000"})
+    with pytest.raises(SamServerOutage):
+        drive(
+            [[run('look_for("car", at="stop_000")')], "done"],
+            boost_queue=tasking.boost_queue,
+        )

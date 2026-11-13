@@ -27,6 +27,7 @@ from benchmarks.citynav.run_benchmark.mission_engine import (
 from benchmarks.citynav.run_benchmark.trajectory import synthesize_compliant_trajectory
 from benchmarks.run_record.config import RunConfig
 from benchmarks.run_record.episode_workdir import LiveRecorder
+from maps.harness_faults import HARNESS_FAULTS
 from maps.llm import flight_summary
 from maps.mission.episode_world import EpisodeWorld
 from maps.perception.geometry.geolocate import TileFrame
@@ -239,6 +240,8 @@ def retro_perceive(h: Hydrated, flown_entry: dict, concepts: list) -> dict:
         return {"error": f"re-render failed: {type(exc).__name__}: {exc}"}
     try:
         dets = h.perception.segment(obs, list(concepts))
+    except HARNESS_FAULTS:
+        raise  # the serve's fault: the attempt is infra, never a tool fact
     except Exception as exc:
         log.exception("retro segment failed")
         return {"error": f"segment failed: {type(exc).__name__}: {exc}"}

@@ -184,25 +184,62 @@ def test_a_placed_fifth_class_queues_no_boost():
     assert boosts == [] and declared == [["car", "house", "pool", "tree"]], (boosts, declared)
 
 
+def _named(*names):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        nodes={
+            f"prior_{i}": SimpleNamespace(name=n, provenance="prebaked")
+            for i, n in enumerate(names)
+        }
+    )
+
+
 @pytest.mark.parametrize(
     "said, rule",
     [
         ('look_for("red car")', 'never a colour: "red car" carries the colour "red"'),
         ('look_for("car", "Grey van")', 'never a colour: "Grey van" carries the colour "Grey"'),
         ('look_for("First Church")', 'no proper nouns: "First Church" is a proper noun'),
+        ('look_for("Green Street")', 'no proper nouns: "Green Street" is a proper noun'),
         ('look_for("pool", at="the depot")', None),
     ],
 )
 def test_a_colour_or_a_proper_noun_is_refused_and_arms_nothing(said, rule):
     _, fr, _, declared = drive(
-        [[run(said + "\n")], "done"], boost_queue=lambda concepts, where: {"queued": True}
+        [[run(said + "\n")], "done"],
+        boost_queue=lambda concepts, where: {"queued": True},
+        # the surface rebuilds from the graph on an accepted boost
+        graph=_named("First Church", "Green Street") if rule else None,
     )
     out = tool_results(fr)[0]
     if rule is None:
         assert "error" not in out, out
         return
+    assert out["error"].startswith("line 1: look_for takes plain visual classes"), out
     assert rule in out["error"], out
     assert declared == [], declared
+
+
+@pytest.mark.parametrize("said", ["Swimming Pool", "Parking_Lot", "car"])
+def test_a_title_case_class_no_feature_is_named_is_watched(said):
+    """A proper noun is a world-state name written as one; a Title-Case
+    common class, or a lowercase class a feature happens to be named, is
+    watched as said."""
+    _, fr, _, declared = drive(
+        [[run(f'look_for("{said}")\n')], "done"], graph=_named("car", "First Church")
+    )
+    assert "error" not in tool_results(fr)[0], tool_results(fr)[0]
+    assert declared == [[said.lower().replace("_", " ")]], declared
+
+
+def test_the_cap_refusal_names_its_line():
+    _, fr, _, _ = drive(
+        [[run('look_for("car", "house")\nlook_for("pool", "tree", "shed")\n')], "done"]
+    )
+    assert tool_results(fr)[0]["error"].startswith("line 2: look_for watches up to four"), (
+        tool_results(fr)[0]
+    )
 
 
 def test_a_capitalised_first_word_is_a_class():

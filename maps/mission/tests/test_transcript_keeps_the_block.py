@@ -44,4 +44,6 @@ def test_a_long_block_that_flies_then_errors_keeps_its_code_and_flight():
     assert len(runs) == 1, tr
     assert runs[0]["said"] == code
     assert runs[0]["errored"] is True, runs[0]
+    # the error text the model was served, so a reader of the row sees it
+    assert runs[0]["error"].startswith("line 3: NameError"), runs[0]
     assert runs[0]["flights"] == 1, runs[0]
