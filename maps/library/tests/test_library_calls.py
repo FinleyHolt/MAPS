@@ -62,7 +62,9 @@ def test_the_watchlist_and_the_loud_errors_are_the_same_ones():
     )
     out = tool_results(fr)
     assert "error" in out[0] and "nothing named" in out[0]["error"], out[0]
-    assert out[0]["error"].endswith("or look_for + fly more first"), out[0]
+    # A name is no class, so the remedy never says look_for.
+    assert out[0]["error"].endswith("; say it differently, or say a fid off a served row"), out[0]
+    assert "look_for" not in out[0]["error"], out[0]
     assert out[0]["watching"], out[0]
 
 

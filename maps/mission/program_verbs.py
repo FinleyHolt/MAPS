@@ -189,8 +189,7 @@ class Programs:
                     (
                         f'nothing named "{what}" is on '
                         f"this surface{self._closest_names(what)}; say it "
-                        "differently, say a fid off a served row, or "
-                        "look_for + fly more first"
+                        "differently, or say a fid off a served row"
                     ),
                 )
             # every name keeps only its top name_match tie group
