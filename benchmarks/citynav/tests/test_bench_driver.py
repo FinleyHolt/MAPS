@@ -883,6 +883,7 @@ def test_a_dry_run_into_a_root_of_another_selection_is_refused_as_the_launch_is(
 ) -> None:
     """The dry run checks the root's run identity as the launch does, so it previews
     nothing the launch would refuse."""
+    from maps.llm import endpoint_spec
     from maps.llm.endpoint_spec import EndpointSpec
 
     monkeypatch.setattr(bf, "_enumerate_split", lambda bench, split: ["a", "b"])
@@ -898,7 +899,10 @@ def test_a_dry_run_into_a_root_of_another_selection_is_refused_as_the_launch_is(
     )  # fmt: skip
     rm.emit_or_verify(root, flown, log=lambda line: None)
     before = (root / "run_manifest.json").read_text()
+    installed: list = []
+    monkeypatch.setattr(endpoint_spec, "log_spec", installed.append)
     assert bf.main(["--out-root", str(root), "--dry-run"]) == 0
+    assert installed == []  # the manifest's spec stands in for a serve; none is installed
     assert bf.main(["--out-root", str(root), "--dry-run", "--limit", "1"]) == 2
     err = capsys.readouterr().err
     assert err.startswith("FATAL: ") and "identity drift" in err and "selection_sha" in err, err

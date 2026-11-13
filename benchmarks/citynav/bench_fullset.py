@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import io
 import json
 import logging
@@ -651,7 +652,9 @@ class Driver:
             )  # fmt: skip
         except (OSError, ValueError, KeyError, TypeError) as exc:
             return f"{path} unreadable: {exc!r}"
-        drift = _rm.identity_drift(prior, self._manifest(_rm.with_endpoint(self.bench, spec)))
+        # The spec is the manifest's own, rebuilt: settled as discovery's would be, unlogged.
+        flown = _rm.settle_effort(dataclasses.replace(self.bench, endpoint_spec=spec))
+        drift = _rm.identity_drift(prior, self._manifest(flown))
         if not drift:
             return None
         return "run_manifest identity drift: the launch refuses this root:\n  " + "\n  ".join(drift)
