@@ -486,7 +486,7 @@ def test_at_one_angle_the_area_s_frame_stamped_later_is_fused_first():
 
 def test_the_datasheet_camera_is_warned_of_for_a_live_vehicle_alone(make_live, make_twin, caplog):
     """The twin renders through the datasheet camera, so a run with no boresight.json warns
-    only for an aircraft whose calibration the integrator hands open_live."""
+    only for a vehicle that is not the twin."""
     import logging
     from types import SimpleNamespace
 

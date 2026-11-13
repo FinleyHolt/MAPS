@@ -1,7 +1,7 @@
 # Architecture
 
-This page follows one mission through the code, describes the world state,
-and lists where another system connects. For the overview, see
+This page follows one mission through the code, describes the world state.
+For the overview, see
 [How it works](../README.md#how-it-works). For every module, see
 [`maps/README.md`](../maps/README.md).
 
@@ -111,19 +111,6 @@ return (`distance to <place>`, `facing <place>`, `<dir> of <place>`).
 | `go_to`, `explore` | Row or set flown to. | Detected nodes for every watched class in view; perceived colour on in-view priors. |
 | `look` | Pixels flights have collected at a row. | Nothing: it returns a picture. |
 | `show_map` | Graph around a place. | Nothing: it returns a picture. |
-
-## Where another system connects
-
-The world state is the interface between the reasoner and everything else.
-Each side of it has one seam.
-
-| You have | Seam | What you implement |
-|---|---|---|
-| Aircraft with a camera | `Vehicle` (`benchmarks/flight/vehicle.py`) | `post(leg)`, `pose(t)`, `index(since)`, `frame(seq)`, `now()`, `sleep(s)`. The flight harness does the rest. See [`flight.md`](flight.md#bring-your-own-aircraft). |
-| Planner or autonomy stack that executes moves and returns imagery | `MissionSpec` (`maps/mission/spec.py`) | `fly(item)`: execute one move to `item["target_fid"]`, obtain an observation, and return the flight report, which carries `pose_xy` and `stop_id` (`maps/mission/fly_verbs.py`). `declare_concepts(classes)`: arm the watchlist and return an error string or `None`. `MissionSession` in `mission_engine.py` is the reference: it segments the observation and folds the detections through `EpisodeWorld`. |
-| Another detector | `make_perception(settings)` (`benchmarks/citynav/run_benchmark/episode_runner.py`), which `build_episode` calls | An object with `set_concepts(classes)`, `detect(observation)`, and `segment(observation, classes)` returning `DetectedObject`s (`maps/perception/detection.py`), as `SamDetectClient` does. |
-| Another map source | The bake (`<block>_features.json`, `<block>_meta.json`) | Features with OSM-style tags and a `world_contour` in the block's local metres; `build_object_graph` (`maps/world_state/prior_graph.py`) seeds the graph from them. |
-| Another reasoner | Model card (`maps/llm/model_cards.py`) | A card for the served model name on an OpenAI-compatible endpoint. See [`endpoints.md`](endpoints.md). |
 
 ## Bench and flight
 

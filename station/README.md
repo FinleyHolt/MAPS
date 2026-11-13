@@ -225,10 +225,6 @@ A run's `path` is `<root>/<workdir>`: the root's folder name under `--out`
 | `bench_seat.py` | One bench episode in the seat, flown through the engine's `fly_attempt` with the conversation held open for the operator. |
 | `placement.py` | A map's local metres to WGS84 and back, from its bake's georef or its city's OSM cache. |
 
-To run the console over your own aircraft, implement
-`benchmarks.flight.vehicle.Vehicle` and hand it to `open_live` where `Station`
-builds the twin.
-
 ## Build the console
 
 `web/dist` is committed, so the station needs no Node. After you change

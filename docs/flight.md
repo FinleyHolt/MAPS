@@ -1,4 +1,4 @@
-# Flight: harness, twin, and your own aircraft
+# Flight: harness and twin
 
 This page is the short guide to the flight harness. MAPS flew 75 searches
 on a C-12 over California City, CA, on six days from 11 to 18 September 2026,
@@ -17,7 +17,6 @@ measures.
 | Fly a mission without an aircraft | Twin. See [Fly the twin](#fly-the-twin). | The Cal City bake and raster pair ([`data.md`](data.md#cal-city)), a reasoner, and the SAM serve ([`endpoints.md`](endpoints.md)). |
 | Watch or re-task a twin mission in a browser, or review finished runs | Station. See [`station/README.md`](../station/README.md). | To fly: what the twin needs. To review: the run folders. |
 | Score runs | [`benchmarks/flight/measures.py`](../benchmarks/flight/measures.py). See [`experiments.md`](experiments.md#closed-loop-measures). | Sortie folders and truth for their targets. |
-| Fly your own aircraft | A `Vehicle`. See [Bring your own aircraft](#bring-your-own-aircraft). | Your aircraft, its camera recording, and a bake of your area. |
 
 ## Harness
 
@@ -51,60 +50,3 @@ tasking or type your own, watch the model reason turn by turn on the map, and
 re-task it while it flies. Every finished run under the output root opens as
 a review with a scrubber. For the command and flags, see the station's
 README.
-
-## Bring your own aircraft
-
-The harness reaches an aircraft through one protocol, `Vehicle`. On the C-12,
-the crew flew each leg off a cockpit display; an autopilot can take the same
-hand-off. These parts of the harness carry the C-12 and Cal City as they
-stand, and the steps name each one.
-
-| Part | C-12 or Cal City value | Read by |
-|---|---|---|
-| Antenna-to-camera lever arm | `airframe.C12_LEVER_M` | `LiveSource.camera_pose` (`live_source.py`) and the twin |
-| Camera of the OSR footprint width | `airframe.C12_SENSOR` | `measures.py` |
-| Bench | `calcity_bench(os.environ)` | The twin, `measures.py`, and the station's twin |
-| Floor heights | The `calcity` entries of `GROUND_LEVEL` and `tile_georef.FLOOR_MSL_M` | `open_live` |
-
-1. Implement `Vehicle` (`benchmarks/flight/vehicle.py`). For its members,
-   see [Vehicle protocol](../benchmarks/flight/README.md#vehicle-protocol).
-   `benchmarks/flight/twin.py` is the implementation in the tree.
-
-2. Describe the camera. A config's `sensor` names a rig in
-   `maps/perception/geometry/sensor_spec.py`. `open_live` takes the
-   calibration (boresight, GNSS bias, timing offset) as `boresight_path`, a
-   `boresight.json`; the twin and the station pass none and fly the
-   datasheet camera. The lever arm from the GNSS antenna to the camera is
-   `airframe.C12_LEVER_M`; an airframe of your own needs its own value
-   there.
-
-3. Bake your area. The harness reads a tile bake with a georef
-   (`<map>_meta.json`, `<map>_features.json`) and the block's floor heights
-   (`GROUND_LEVEL` in `maps/perception/ortho/ground_level.py`,
-   `tile_georef.FLOOR_MSL_M`). The
-   [Cal City build steps](../benchmarks/calcity/README.md#build-the-bench)
-   are the worked example; an area of your own needs its own bundle, raster,
-   and floor entries.
-
-4. Build a bench over the bake. `Mission` takes a `Bench`
-   (`benchmarks/bench.py`); `calcity_bench` (`benchmarks/calcity/paths.py`)
-   is the worked example, and the twin, the measures, and the station build
-   that one. A mission over a row of the bench's split takes the row's
-   episode ID; a mission with no row takes `start_xy` and `instruction`
-   (the twin's `--start-xy` and `--instruction`).
-
-5. Open the mission. Hand the vehicle to `open_live`
-   (`benchmarks/flight/live_source.py`) and the result to `Mission`, as
-   `twin.py`'s `main` does. The station builds its twin in `Station`
-   (`station/serve.py`); to watch your aircraft there, hand your vehicle to
-   `open_live` in its place. Where bubblewrap runs, the station's sandbox
-   gives a vehicle the network and its bound paths only: serial devices, `/run` sockets, and
-   files in home stay outside it, so a vehicle that needs them runs from
-   your own entry point. See [`station/README.md`](../station/README.md).
-
-6. Score the runs. `measures.py` takes the OSR footprint width from
-   `airframe.C12_SENSOR`; a camera of your own needs its rig there.
-
-A planner or autonomy stack that executes moves itself, without the leg and
-recording chain, connects one layer down, at `MissionSpec`. See
-[`architecture.md`](architecture.md#where-another-system-connects).

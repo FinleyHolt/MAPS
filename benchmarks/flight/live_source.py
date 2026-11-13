@@ -5,8 +5,8 @@ the recording holds (the arrival rule); :meth:`LiveSource.observe_area` fuses
 the frames that saw it nearest nadir into one north-up orthophoto on the map
 grid, each frame registered into the pose graph as it arrives
 (:meth:`LiveSource.start_corrector`) and placed through the calibration:
-the ``boresight.json`` an integrator solves for a real aircraft and passes
-:func:`open_live` as ``boresight_path``, else the datasheet camera (the twin's).
+the ``boresight.json`` a calibration solve writes, passed to :func:`open_live`
+as ``boresight_path``, else the datasheet camera (the twin's).
 """
 
 from __future__ import annotations
@@ -895,8 +895,8 @@ def open_live(
     register_raster: str | Path | None = None,
 ) -> LiveSource:
     """A live source over ``vehicle``, failing on the ramp rather than on the
-    first flight. ``boresight_path`` is the integrator's calibration of a real
-    aircraft; with ``register_raster`` (the raster each frame is registered
+    first flight. ``boresight_path`` is a calibration solve's
+    ``boresight.json``; with ``register_raster`` (the raster each frame is registered
     against) the corrector starts."""
     check_map(tiles_dir, map_name)
     boresight = Boresight.load(boresight_path) if boresight_path else Boresight(sensor=sensor)

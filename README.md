@@ -232,16 +232,10 @@ through an SSH tunnel.
   [`paper-v1`](https://github.com/FinleyHolt/MAPS/tree/paper-v1)
   (`git checkout paper-v1`).
 
-## Use your own aircraft
+## Fly the twin
 
-The flight harness reaches an aircraft through one protocol, `Vehicle`
-([`benchmarks/flight/vehicle.py`](benchmarks/flight/vehicle.py)): post a leg,
-read poses, and read recorded frames. Implement it, and the mission and the
-observation chain run over your aircraft. The harness keeps the C-12's
-antenna-to-camera lever arm and camera (`benchmarks/flight/airframe.py`), and
-the twin, the measures, and the station build the Cal City bench; the steps
-in [`docs/flight.md`](docs/flight.md#bring-your-own-aircraft) name each. The
-kinematic twin flies a Cal City mission through the same harness:
+The kinematic twin flies a Cal City mission through the flight harness
+without an aircraft:
 
 ```sh
 python -m benchmarks.flight.twin --config configs/calcity.yaml --episode 'calcity::6#6' --ortho <root>/data/rgbd_upstream

@@ -76,7 +76,7 @@ episodes than its manifest selected, see
 
 [`benchmarks/flight/measures.py`](../benchmarks/flight/measures.py) reads SR,
 OSR, NE, time to identification, and SPL from sortie folders: a twin's
-([`flight.md`](flight.md)) or your own aircraft's.
+([`flight.md`](flight.md)) or a flown sortie's.
 
 ```sh
 python -m benchmarks.flight.measures --root <sorties>/* --truth <truth>...

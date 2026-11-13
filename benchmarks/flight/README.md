@@ -7,8 +7,7 @@ fuses each observation from the frames the aircraft recorded. It reaches the
 aircraft through one protocol, `Vehicle`. The package also holds a kinematic
 twin of the aircraft and the closed-loop measures.
 
-This README is the reference. For a short guide to the twin and an aircraft
-of your own, see [`docs/flight.md`](../../docs/flight.md).
+This README is the reference. For a short guide to the twin, see [`docs/flight.md`](../../docs/flight.md).
 
 A mission receives its bench as a value (`benchmarks.bench.Bench`). The twin
 and the measures build the Cal City bench from the environment at startup
@@ -58,7 +57,7 @@ stop to the observation it reads:
 
 | Input | Source |
 |---|---|
-| Calibration (boresight, GNSS bias, timing offset) | `open_live`'s `boresight_path`, a `boresight.json` the integrator supplies, applied in `live_source.py` alone. The twin and the station pass none and fly the datasheet camera. |
+| Calibration (boresight, GNSS bias, timing offset) | `open_live`'s `boresight_path`, a `boresight.json` from a calibration solve, applied in `live_source.py` alone. The twin and the station pass none and fly the datasheet camera. |
 | Antenna-to-camera geometry of the C-12 | `airframe.py` |
 | Bake's local metres to WGS84 | `tile_georef.py` |
 | Ground under each frame | The block's bare-earth surface where the bake carries one: `<map>_dem.tif` beside `<map>_meta.json` (`map_render.terrain`, read through `map_render.ground_msl` by the twin and the live source). Otherwise the block's floor (`tile_georef.FLOOR_MSL_M`). |
@@ -93,9 +92,8 @@ class Vehicle(Protocol):
 One implementation is in the tree: the twin (`twin.py`).
 
 A `Leg` carries `point` and `ahead`, which the twin flies, and `target`,
-`step`, `area`, `revision`, and `note`: the hand-off that a vehicle for your
-own aircraft reads to show the crew (on the C-12, the cockpit display) or to
-drive an autopilot.
+`step`, `area`, `revision`, and `note`: the hand-off the
+C-12's crew read off the cockpit display.
 
 ## Fly the twin
 
