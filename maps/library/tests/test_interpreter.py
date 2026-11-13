@@ -1255,19 +1255,6 @@ def test_a_move_to_an_empty_set_says_there_is_nothing_there(code, said):
 # --------------------------------------------------------------------------
 
 
-def _harness_faults():
-    import httpx
-
-    from maps.perception.sam.detect_client import SamServerOutage
-
-    return [
-        SamServerOutage("no tile of the frame got a /segment answer"),
-        httpx.ConnectError("segmenter refused"),
-        httpx.ReadTimeout("segmenter timed out"),
-    ]
-
-
-@pytest.mark.parametrize("fault", _harness_faults(), ids=type)
 @pytest.mark.parametrize(
     "code",
     [
@@ -1276,14 +1263,15 @@ def _harness_faults():
     ],
     ids=["bare", "caught"],
 )
-def test_a_harness_fault_inside_a_flight_leaves_the_block(fault, code):
-    """A segmenter outage or transport fault ends the mission (the model's
-    own ``except`` included); it never reaches the model as a line error."""
+def test_a_harness_fault_inside_a_flight_leaves_the_block(code):
+    """A segmenter outage ends the mission (the model's own ``except``
+    included); it never reaches the model as a line error."""
+    from maps.perception.sam.detect_client import SamServerOutage
 
     def fly(item):
-        raise fault
+        raise SamServerOutage("no tile of the frame got a /segment answer")
 
-    with pytest.raises(type(fault)):
+    with pytest.raises(SamServerOutage):
         drive([[run(code)], "done"], fly=fly)
 
 

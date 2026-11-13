@@ -85,3 +85,15 @@ def test_a_retry_steps_off_the_failed_replica_while_other_tiles_pick(monkeypatch
     with SegmentServe([(503, {}, {})] * 4) as failing, SegmentServe() as healthy:
         assert _post(failing, healthy) == SegmentServe.default[1]
     assert (len(failing.bodies), len(healthy.bodies)) == (1, 1)
+
+
+@pytest.mark.parametrize("fault", [dc.httpx.ConnectError, dc.httpx.ReadError, dc.httpx.PoolTimeout])
+def test_a_transport_fault_stays_in_the_poster(monkeypatch, fault):
+    """A block's run re-raises only a ``HarnessFault``: every transport fault ends here, and a
+    whole-frame one surfaces as ``SamServerOutage``."""
+
+    def post(*a, **k):
+        raise fault("down")
+
+    monkeypatch.setattr(dc.httpx, "post", post)
+    assert _post("http://127.0.0.1:9") is None

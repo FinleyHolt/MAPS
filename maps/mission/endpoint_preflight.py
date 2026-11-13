@@ -72,7 +72,7 @@ def _conversation(
 ) -> dict:
     """Two turns at ``reasoning_effort``, recorded under ``workdir``: each
     reply's shape and the conversation's token meter."""
-    # The mission stack loads transformers: not at --help.
+    # The reasoner brings httpx (with its click and rich CLI, ~0.1 s): not at --help.
     from maps.llm.flight_summary import summarize
     from maps.mission.reasoner import Reasoner
 

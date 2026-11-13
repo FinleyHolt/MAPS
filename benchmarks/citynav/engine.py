@@ -3,9 +3,9 @@
 
 Reading a split row or a bake needs none of the mission stack, so those
 methods bind at import. The methods that build or fly an episode import
-their module when first called: the episode runner brings the mission loop
-and its tokenizer (``transformers``), which a row reader, a report or a
-``--help`` never pays for. Every method reads its module's name at call
+their module when first called: the episode runner brings the mission loop,
+``cv2``, ``PIL``, ``scipy`` and ``httpx`` (about 0.5 s), which a row reader, a
+report or a ``--help`` never pays for. Every method reads its module's name at call
 time, so the engine follows a module global a test swaps.
 """
 
