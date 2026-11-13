@@ -251,7 +251,8 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
     monkeypatch.setenv("CALCITY_ROOT", "/data/calcity")
     monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/data/hub")
     monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
-    monkeypatch.setattr(sandbox, "cap_memory", lambda gib: None)
+    capped: list = []
+    monkeypatch.setattr(sandbox, "cap_memory", capped.append)
     monkeypatch.setattr(sandbox, "bwrap_refusal", lambda: None if bwrap else "bwrap is absent")
     cached: list = []
     monkeypatch.setattr(sandbox, "_cache_tokenizer", lambda log: cached.append(1), raising=False)
@@ -262,6 +263,7 @@ def test_a_confined_process_restarts_under_the_allowlist_and_a_read_only_hub(
     with pytest.raises(_Execed):
         sandbox.confine([tmp_path / "out"], 1.0, lambda line: None, flies=True)
     ((argv, env),) = seen
+    assert capped == [], "the launcher restarts uncapped; the restarted process caps itself"
     assert "FAKE_SECRET" not in env and env["SEARCH_REASONER_API_KEY"] == "k"
     assert env["OPENBLAS_NUM_THREADS"] == "1"
     assert env["CALCITY_ROOT"] == "/data/calcity" and env["HUGGINGFACE_HUB_CACHE"] == "/data/hub"
@@ -293,3 +295,32 @@ def test_the_hugging_face_token_is_masked_where_slash_exposes_it(tmp_path, monke
             assert got is masked, (home, argv)
     finally:
         shutil.rmtree(outside)
+
+
+# A launcher whose private mappings already pass the cap (per-core native pools on a
+# many-core host), probing before it restarts; the restarted process maps nothing.
+_LARGE_LAUNCHER = r"""
+import mmap, os, resource
+from benchmarks import sandbox
+if "MAPS_TEST_RESTARTED" not in os.environ:
+    held = mmap.mmap(-1, 3 << 30, flags=mmap.MAP_PRIVATE)
+    os.environ["MAPS_TEST_RESTARTED"] = "1"
+    os.environ["FAKE_SECRET"] = "s"
+# The probe allocates as bwrap_refusal's subprocess does.
+sandbox.bwrap_refusal = lambda: (bytearray(64 << 20), "bwrap is not installed")[1]
+sandbox.confine([], 1.0, print)
+print("cap", resource.getrlimit(resource.RLIMIT_DATA)[0])
+"""
+
+
+def test_a_launcher_past_the_cap_restarts_and_caps_the_process_that_keeps_running():
+    """The cap lands in the process that keeps running, after the allowlist's one
+    thread per pool applies: a launcher past it still probes and restarts."""
+    out = subprocess.run(
+        [sys.executable, "-c", _LARGE_LAUNCHER],
+        cwd=sandbox.REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines()[-1] == f"cap {2**30}", out.stdout

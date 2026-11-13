@@ -362,10 +362,12 @@ def confine(
     *,
     flies: bool = False,
 ) -> None:
-    """Confine this process before it serves or flies anything: cap its memory,
-    restart it under :func:`child_env`'s environment and, where bubblewrap runs,
-    under bubblewrap with ``writable`` its writable directories and ``readable``
-    besides the repo and interpreter; log which mode it runs in. A process that
+    """Confine this process before it serves or flies anything: restart it under
+    :func:`child_env`'s environment and, where bubblewrap runs, under bubblewrap with
+    ``writable`` its writable directories and ``readable`` besides the repo and
+    interpreter; cap the memory of the process that keeps running, and log which mode
+    it runs in. The launcher stays uncapped, since its native pools hold a thread per
+    core until the restart applies :data:`THREAD_ENV`. A process that
     ``flies`` caches the reasoner's tokenizer first and reads the hub cache read-only
     and offline. The restarted process keeps the terminal, so the operator's Ctrl-C
     still shuts it down cleanly. An inherited marker without the sandbox around it is
@@ -375,14 +377,15 @@ def confine(
     inject keystrokes into its terminal; run it under a supervisor with no terminal
     there. Relative paths resolve inside the sandbox only from a bound working
     directory (the repo root)."""
-    cap_memory(gib)
     if os.environ.pop(SANDBOXED_ENV, None) == "1" and _confined():
+        cap_memory(gib)
         log(mode_line(None, gib))
         return
     env, argv = child_env(os.environ), [sys.executable, *sys.orig_argv[1:]]
     if (why := bwrap_refusal()) is not None:
         if env != dict(os.environ):
             os.execve(sys.executable, argv, env)
+        cap_memory(gib)
         log(mode_line(why, gib))
         return
     if flies:
