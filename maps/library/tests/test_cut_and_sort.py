@@ -632,6 +632,27 @@ def test_a_side_cut_find_over_a_loop_variable_is_labelled_with_the_query_it_ran(
     assert printed[1] == "<find('zzz', north_of='prior_7'): 0 rows>", printed
 
 
+@pytest.mark.parametrize(
+    "block, labels",
+    [
+        (
+            'for k in ["car", "zzz"]:\n    print(find(query=k, north_of="prior_7"))\n',
+            ["find(query='car', north_of='prior_7')", "find(query='zzz', north_of='prior_7')"],
+        ),
+        (
+            'for s in ["prior_7", "prior_1"]:\n    print(find("car", east_of=s))\n',
+            ["find('car', east_of='prior_7')", "find('car', east_of='prior_1')"],
+        ),
+    ],
+)
+def test_a_side_cut_find_over_a_computed_keyword_is_labelled_with_the_value_it_ran(block, labels):
+    _r, fr, _f, _d = drive([[run(block)], "done"])
+    tr = tool_results(fr)[0]
+    printed = tr["printed"].splitlines()
+    assert [line.split(":")[0].lstrip("<") for line in printed] == labels, printed
+    assert list(tr["result"]["results"]) == labels[-1:], tr["result"]["results"]
+
+
 def test_a_printed_window_of_an_emptied_dwithin_chain_serves_the_cuts_stats():
     # calcity::3260#3259 request 7: a lambda-kept set, a dwithin cut that
     # empties it (42->0 there), side cuts over nothing and an order, then a

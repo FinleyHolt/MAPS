@@ -250,7 +250,19 @@ def run_find(cx, a):
     empty_cond = None
     surface = rows = cx.cands + cx.anchors
     query = a.get("query")
-    fid_hit = cx.by_fid.get(str(query or "").strip()) if query else None
+    fid = str(query or "").strip()
+    fid_hit = cx.by_fid.get(fid) if query else None
+    if fid_hit is None and fid in cx.ends.values():
+        # a road end is a row of the result that minted it, run or carried
+        fid_hit = next(
+            (
+                r
+                for rows in (*reversed(cx.results.values()), *reversed(cx.seed.values()))
+                for r in rows or ()
+                if r.get("fid") == fid
+            ),
+            None,
+        )
     if fid_hit is not None:
         # The fuzzy scorer matches text, never ids.
         rows, matched = [fid_hit], True

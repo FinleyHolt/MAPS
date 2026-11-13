@@ -6,7 +6,7 @@ experiment flies.
 
 | File | Contents |
 |---|---|
-| `mask_qa.csv` | One line per reviewed episode: corpus row, episode ID, where its shape comes from, the prompt, and blank `verdict` and `note` columns |
+| `mask_qa.csv` | One line per reviewed episode: corpus row, episode ID, where its shape comes from, the prompt, and the `verdict` and `note` columns, blank until checked |
 | `../data/calcity.json` | Corpus. Row `row` of this array is the pair: `descriptions[0]` is the prompt, and the shape is `target_mask` or a linked object |
 | `objects.json` | Linked object contours, under `$SEARCH_CALCITY_DATA/data/cityrefer/` (built by `data_prep/build_objects_json.py`; not in git) |
 

@@ -683,7 +683,7 @@ def test_a_point_is_quoted_as_its_xy_token(code, said):
 
 def test_a_crossing_refusal_quotes_a_point_as_its_xy_token():
     err = _ends_block('intersection([100, 100], "Cross Street")\n')["error"]
-    assert err.startswith("'[100, 100]' names no geometry"), err
+    assert err.startswith("'[100, 100]' is a point (a crossing, a road's end or an [x, y])"), err
 
 
 def test_a_crossing_name_with_a_side_naming_no_row_names_no_row():
@@ -803,3 +803,34 @@ def test_an_act_hands_a_quoted_terminus_fid_on_as_said():
     calls, _out = record_block(code, row_of_fid=lambda f: end if f == "end_1" else None)
     assert [c[0] for c in calls] == ["crops", "move", "cover", "map", "stand"], calls
     assert "[120, 100]" not in repr(calls), calls
+
+
+@pytest.mark.parametrize("code", ['find("END_7")\n', 'find(" end_7 ")\n'])
+def test_find_refuses_an_unborne_end_fid_in_either_case(code):
+    err = _ends_block(code)["error"]
+    assert err.startswith("line 2: there is no ") and "end_7" in err.lower(), err
+
+
+@pytest.mark.parametrize(
+    "code, fid",
+    [('find("end_0")', "end_0"), ('find("END_1")', "end_1"), ('find("PRIOR_1")', "prior_1")],
+)
+def test_find_returns_a_borne_fid_s_row_directly_in_either_case(code, fid):
+    out = _ends_block(f"print({code})\n")
+    assert "error" not in out, out
+    assert f"): 1 row(s): {fid} [" in out["printed"], out
+
+
+def test_a_written_list_skips_a_road_end_under_its_fid():
+    out = _ends_block('ends_of(["Long Road", "end_0"])\n')
+    (env,) = [v for k, v in out["result"]["results"].items() if k != "e"]
+    assert "1 point skipped (end_0): a point has no ends." in env["hint"], env
+
+
+@pytest.mark.parametrize(
+    "code", ['intersection("end_0", "Long Road")\n', 'intersection(end_0, "Long Road")\n']
+)
+def test_a_crossing_refuses_a_road_end_as_a_point(code):
+    err = _ends_block(code)["error"]
+    assert err.startswith("'end_0' is a point (a crossing, a road's end or an [x, y])"), err
+    assert "Say a fid off a served row" not in err, err

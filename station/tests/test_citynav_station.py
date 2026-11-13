@@ -441,7 +441,7 @@ def test_a_row_on_a_block_without_its_raster_pair_is_refused_before_its_sortie(c
     refused = client.post("/mission/next", json={"episode_id": EPISODE, "instruction": ""})
     assert refused.status_code == 409
     assert (
-        f"  Missing {citynav.rgbd_dir / f'{BLOCK}_rgb.tif'} (built by "
+        f"  Missing {citynav.rgbd_dir / f'{BLOCK}.png'} (built by "
         "benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
         in refused.json()["detail"].splitlines()
     )

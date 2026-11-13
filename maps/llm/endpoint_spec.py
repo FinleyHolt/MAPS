@@ -75,6 +75,14 @@ class EndpointUnreachable(EndpointDiscoveryError):
     """The endpoint did not answer: the serve's fault, not the config's."""
 
 
+class TokenizerUnavailable(EndpointDiscoveryError):
+    """The reasoner answered and its ``tokenizer`` repo did not load."""
+
+    def __init__(self, message: str, tokenizer: str):
+        super().__init__(message)
+        self.tokenizer = tokenizer
+
+
 @dataclass(frozen=True)
 class EndpointOverride:
     """``SEARCH_ENDPOINT_SPEC_OVERRIDE=<model_id>:<max_model_len>``, parsed."""
@@ -329,7 +337,7 @@ def _require_tokenizer(model_id: str, override: str = "") -> str:
     try:
         tok = tokenizer.load_tokenizer(model_id, override)
     except RuntimeError as exc:
-        raise EndpointDiscoveryError(str(exc)) from exc
+        raise TokenizerUnavailable(str(exc), tokenizer_name) from exc
     try:
         tok.apply_chat_template(
             _TEMPLATE_PROBE["messages"],

@@ -152,7 +152,7 @@ def main(bench: Bench | None = None) -> int:
         bench.assert_available(args.split)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
-        return 1
+        return 2
     raw_rows = load_split(bench.split_path(args.split))
     # Pair each row with its absolute split index so the row_index is
     # stable across filter / limit and parse_episode produces the same

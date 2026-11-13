@@ -453,7 +453,7 @@ def test_missing_block_assets_are_refused_before_discovery_and_any_out_root(
     assert bf.main(["--out-root", str(tmp_path / "r"), *dry]) == 2
     assert not (tmp_path / "r").exists()
     assert (
-        f"  Missing {rgbd / 'blk_rgb.tif'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
+        f"  Missing {rgbd / 'blk.png'} (built by benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
         in capsys.readouterr().err.splitlines()
     )
     (rgbd / "blk.png").write_bytes(b"")  # the CityNav raster pair
@@ -1033,7 +1033,7 @@ def test_the_runner_run_directly_confines_itself_before_it_flies(
         sys, "argv", ["run_benchmark", "--attempt-root", str(tmp_path), "--episode-id", "e"]
     )
     monkeypatch.setattr(cli, "_die_with_parent", lambda environ: None)
-    assert cli.main() == 1
+    assert cli.main() == 2
     assert confined == [sandbox.ATTEMPT_MEMORY_GIB]
 
 
@@ -1066,7 +1066,7 @@ def test_the_cal_city_runner_run_directly_confines_itself(tmp_path, monkeypatch)
     assert len(confined) == 1 and confined[0][0][0] == tmp_path / "out", confined
 
 
-def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
+def test_the_runner_without_its_data_exits_2_with_the_recipe_alone(
     tmp_path, monkeypatch, capsys
 ) -> None:
     from benchmarks.citynav.run_benchmark import cli
@@ -1074,7 +1074,7 @@ def test_the_runner_without_its_data_exits_1_with_the_recipe_alone(
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
     monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: None)
     bench = citynav_bench({"SEARCH_CITYNAV_DATA": str(tmp_path / "absent")})
-    assert cli.main(bench) == 1
+    assert cli.main(bench) == 2
     err = capsys.readouterr().err
     assert err.startswith("FATAL: CityNav data not found under ") and "Traceback" not in err
 
@@ -1101,7 +1101,7 @@ def test_the_runner_refuses_a_block_without_its_raster_pair_before_its_out(
     assert cli.main() == 2
     assert not (tmp_path / "r").exists()
     assert (
-        f"  Missing {rgbd / 'birmingham_block_1_rgb.tif'} (built by "
+        f"  Missing {rgbd / 'birmingham_block_1.png'} (built by "
         "benchmarks/citynav/data_prep/rasterize_citynav_native.sh)"
         in capsys.readouterr().err.splitlines()
     )
@@ -1120,7 +1120,7 @@ def test_a_missing_split_file_is_refused_with_the_fetch_recipe(
     assert bf.main(["--out-root", str(tmp_path / "r")]) == 2
     monkeypatch.setattr(sandbox, "confine", lambda *a, **kw: pytest.fail("confined"))
     monkeypatch.setattr(sys, "argv", ["run_benchmark", "--out", str(tmp_path / "r")])
-    assert cli.main() == 1
+    assert cli.main() == 2
     assert not (tmp_path / "r").exists()
     driver_err, runner_err = capsys.readouterr().err.split("FATAL: ")[1:]
     for err in (driver_err, runner_err):

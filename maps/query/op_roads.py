@@ -79,6 +79,14 @@ def run_crossings(cx, a):
         nodes = named_rows(cx, el, "xy")
         members.append((nodes, el))
         polys = [p for n in nodes for p in chains_of(n)]
+        ref = el.get("ref") if isinstance(el, dict) else el
+        if not nodes and (is_xy(ref) or isinstance(ref, str) and parse_xy_token(ref)):
+            # a road end or a crossing is a served point: it names a place, not a shape
+            raise ProgramError(
+                f"{quote_value(as_said(el))} is a point (a crossing, a road's end or an "
+                f"[x, y]), and a point has no shape to cross -- a crossing needs two "
+                f"features that HAVE a shape."
+            )
         if not polys:
             refuse_if_empty(cx, el, "cross")
             raise ProgramError(
@@ -175,10 +183,11 @@ def _points_held(cx, el) -> list:
     handles hold that are points (a crossing or a road's end, a row off the
     surface with no line)."""
     ref = el.get("ref") if isinstance(el, dict) else el
+    names = el.get("said") if isinstance(el, dict) else None
     said: list = []
-    for t in ref if isinstance(ref, list) else [ref]:
+    for i, t in enumerate(ref if isinstance(ref, list) else [ref]):
         if is_xy(t):
-            said.append(format_xy_token(*t))
+            said.append(names[i] if names and names[i] else format_xy_token(*t))
         elif isinstance(t, str) and parse_xy_token(t):
             said.append(t)
         elif isinstance(t, str) and t not in cx.by_fid and cx.is_ref(t):

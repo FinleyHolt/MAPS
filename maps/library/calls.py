@@ -297,13 +297,12 @@ class Library:
         if name is not None and query == "":
             raise CodeError(f"the name IS the query: find({name!r})")
         q = str(query)
-        # A fid is no name to search for: one no row carries is refused.
-        if (
-            q.startswith(("prior_", "detected_", "end_"))
-            and fid_like(q)
-            and self.env.row_of_fid(q) is None
-        ):
-            raise no_such_fid(q)
+        # A fid is no name to search for: it reads in either case, as a stop
+        # id does, and one no row carries is refused.
+        if fid_like(q) and q.strip().lower().startswith(("prior_", "detected_", "end_")):
+            if self.env.row_of_fid(q.strip().lower()) is None:
+                raise no_such_fid(q)
+            q = q.strip().lower()
         refuse_metres_in_within(within)
         nearest = self._slot(nearest)
         near = self._slot(near)
@@ -329,11 +328,28 @@ class Library:
             # what the find matched before the cut
             node = self.names.running_node()
             if isinstance(node, ast.Call):
-                if node.args and not isinstance(node.args[0], ast.Constant):
-                    # a query the block computed (a loop variable) is
-                    # labelled with the value it ran, so each set keeps its own
-                    node = ast.Call(node.func, [ast.Constant(query), *node.args[1:]], node.keywords)
-                label = ast.unparse(node)
+                # a query or a named side the block computed (a loop variable)
+                # is labelled with the value it ran, so each set keeps its own;
+                # a row or set argument keeps its spelling
+                ran = {
+                    "query": query,
+                    "north_of": north_of,
+                    "south_of": south_of,
+                    "east_of": east_of,
+                    "west_of": west_of,
+                }
+                args = list(node.args)
+                if args and not isinstance(args[0], ast.Constant):
+                    args[0] = ast.Constant(query)
+                keywords = [
+                    ast.keyword(k.arg, ast.Constant(ran[k.arg]))
+                    if k.arg in ran
+                    and not isinstance(k.value, ast.Constant)
+                    and isinstance(ran[k.arg], str)
+                    else k
+                    for k in node.keywords
+                ]
+                label = ast.unparse(ast.Call(node.func, args, keywords))
         if q:
             self.names.labels[ref] = label
         return Rows(ref, self, label=label)
@@ -437,8 +453,10 @@ class Library:
         p = self._program(x)
         el = p.ref_of(x, points=True)
         if isinstance(el, dict) and any(is_xy(m) for m in el["ref"]) and not is_xy(el["ref"]):
-            # a written list holding a point is quoted as written
+            # a written list holding a point is quoted as written, and a row
+            # among them that binds its point (a road end) skips as said
             el["as"] = self.names.call_arg("ends_of") or el["as"]
+            el["said"] = [m.label if isinstance(m, Bind) else None for m in x]
         return Rows(self._analyze(p, p.add("ends", {"refs": [el]})), self)
 
     def more_of(self, x):

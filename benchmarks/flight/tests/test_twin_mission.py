@@ -911,3 +911,50 @@ def test_a_sandboxed_twin_without_the_reasoner_s_tokenizer_refuses_in_one_line(
     assert "reasoner at http://r/v1 did not answer" in line
     assert line.endswith(f"{sandbox.TOKENIZER_REMEDY}, then run the twin again"), line
     assert not out.exists() or not any(out.iterdir())
+
+
+#: What transformers raises offline for a repo absent from the hub cache: internet
+#: advice, a second remedy and a newline, none of which belongs in a one-line refusal.
+_UNCACHED = (
+    "tokenizer 'org/tok' for served model 'm' failed to load: We couldn't connect to "
+    "'https://huggingface.co' to load the files.\nCheck your internet connection. "
+    "Set SEARCH_COMPACT_TOKENIZER_NAME to the HF repo or local directory that carries it."
+)
+
+
+def uncached_tokenizer(monkeypatch):
+    """Discovery reaches the reasoner and fails loading tokenizer ``org/tok`` offline."""
+    from maps.llm import endpoint_spec, tokenizer
+
+    def load(model, name=""):
+        raise RuntimeError(_UNCACHED)
+
+    monkeypatch.setattr(tokenizer, "load_tokenizer", load)
+    monkeypatch.setattr(
+        endpoint_spec,
+        "discover_from_settings",
+        lambda settings, **kw: endpoint_spec._require_tokenizer("m", "org/tok"),
+    )
+
+
+def test_a_sandboxed_twin_whose_reasoner_answers_names_the_uncached_tokenizer_in_one_line(
+    calcity, tmp_path, monkeypatch, capsys
+):
+    """The reasoner answers but its tokenizer is absent from the hub cache: the twin
+    names the tokenizer and the remedy on one line, without the loader's own advice."""
+    import sys
+
+    from benchmarks import sandbox
+    from benchmarks.flight import twin
+
+    uncached_tokenizer(monkeypatch)
+    monkeypatch.setenv(sandbox.TOKENIZER_ENV, "EndpointDiscoveryError")
+    monkeypatch.setattr(sandbox, "confine_cli", lambda *a, **kw: None)
+    out = tmp_path / "out"
+    argv = ["twin", "--episode", "calcity::0#0", "--ortho", str(calcity.rgbd), "--out", str(out)]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert twin.main() == 2
+    (line,) = capsys.readouterr().err.splitlines()
+    assert "the reasoner's tokenizer 'org/tok' is not in the hub cache" in line, line
+    assert "internet" not in line and "SEARCH_COMPACT_TOKENIZER_NAME" not in line, line
+    assert line.endswith(f"{sandbox.TOKENIZER_REMEDY}, then run the twin again"), line
