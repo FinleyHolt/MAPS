@@ -259,7 +259,7 @@ def crop_requests(
         return any(math.dist(point, stop) <= reach for stop in stops.values())
 
     # A handle is a legal mark (a street is its ways), each row placed by
-    # its token_of token (a terminus by its xy, its end_N being per call).
+    # its token_of token (a terminus by its xy: its end_N names no surface row).
     token_of: dict = {}
     for mark in marks or []:
         if HANDLE_RE.fullmatch(mark):
