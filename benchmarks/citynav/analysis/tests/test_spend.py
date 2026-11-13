@@ -152,3 +152,9 @@ def test_attempts_are_read_where_the_ledger_places_them(tmp_path: Path) -> None:
     out = spend.spend(tmp_path)
     assert out["usd"] == {"scored": 10.0, "infra": 0.0, "flying": 5.0}
     assert out["scored_episodes"] == 2
+
+
+def test_a_root_that_does_not_exist_is_refused(tmp_path: Path) -> None:
+    """A mistyped root is no run: it reads as an error, never as zero spend."""
+    with pytest.raises(SystemExit, match=r": not a run root \(no such directory\)"):
+        spend.main([str(tmp_path / "nowhere")])

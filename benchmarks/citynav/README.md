@@ -85,7 +85,7 @@ The driver refuses or records faults as follows:
 | Infrastructure fault (a serve or segmenter outage, an image-store refusal, a runner that died) | Status `infra`. The episode flies again, up to `--max-infra-attempts` attempts, and past that is reported as persistent infra with its errors. |
 | `MemoryError` outside a block (in the harness, past `--attempt-memory-gib`) | Status `infra`, re-queued as any infrastructure fault. A block's own `MemoryError` is its served block error. |
 | Segmenter outage inside a flight (no tile answered) | Leaves the model's block and ends the mission, unserved. Status `infra`, re-queued as any infrastructure fault. |
-| Episode past its wall cap (`--episode-timeout-s`) | The mission stops flying at 90% of the cap so the model can still reply, and the driver ends the attempt at the cap. Status `timed_out`: scored as recorded, a miss without metrics, and counted apart in the readers. |
+| Episode past its wall cap (`--episode-timeout-s`) | The mission stops flying at 90% of the cap so the model can still reply, and the driver ends the attempt at the cap. Status `timed_out`, counted apart in the readers: scored on the metrics its record carries, and a miss where it carries none. |
 | Ctrl-C (SIGINT), or SIGTERM from `kill`, systemd, or SLURM | `driver.log` records the signal, the attempts are killed, and the driver exits 130 (SIGINT) or 143 (SIGTERM). The ledger keeps every landed row, so a relaunch into the root resumes. |
 
 ### Run root

@@ -152,7 +152,7 @@ For the twin and the run's records, see [`docs/flight.md`](../docs/flight.md).
 | `--bench citynav\|calcity` | Bench whose catalog, maps, and runs the station serves. Default `citynav`. |
 | `--out <dir>` | Where runs land and are reviewed from: one run root, or a directory of them. Default `output/station`. |
 | `--config <yaml>` | Run config. Default `configs/<bench>.yaml`. |
-| `--basemap <picture or dir>` | For a map with no raster: a north-up picture of its bake's whole extent, or a directory of them named `<map>.jpg` or `<map>.png`. |
+| `--basemap <picture or dir>` | North-up picture of a map's whole bake extent, or a directory of them named `<map>.jpg` or `<map>.png`: the basemap of a map with no raster pair, and the first choice of a reviewing station. |
 | `--osm-cache <dir>` | OSM caches that place a CityNav block. Default `tiles/osm_cache`. |
 | `--ortho <dir>` | Cal City: raster directory that the twin's frames and the basemap are cut from. Unset, the station reviews runs only. |
 | `--register <dir>` | Cal City: raster directory that each frame is registered against. Unset, nothing is registered. |
@@ -187,7 +187,7 @@ prior again.
 | Per map | Source |
 |---|---|
 | Georeference (local metres to WGS84 and back) | Cal City: the bake's own `georef` (`benchmarks/flight/tile_georef.py`). CityNav: the city's shipped OSM cache, `tiles/osm_cache/<city>_osm_local.geojson`, whose `citynav_osm_cache.georef` states `osm_crs` and `citynav_from_osm_affine`; `placement.py` inverts that transform at run time. The station reads the CityNav bake and its files and never changes them. |
-| Basemap | Web-mercator tiles cut from the map's raster pair, loaded on first use (three maps held at a time), else from the `--basemap` picture; a reviewing station tries the picture first. The raster pair lies under `--ortho` on Cal City and under the bench's raster directory on CityNav. The first view of a CityNav block builds the bench's ortho cache beside the rasters, which takes a few seconds. |
+| Basemap | Web-mercator tiles cut from the map's raster pair, loaded on first use (three maps held at a time), else from the `--basemap` picture; a reviewing station tries the picture first. The raster pair lies under `--ortho` on Cal City and under the bench's raster directory on CityNav. The first view of a CityNav block builds the bench's ortho cache beside the rasters, which takes a few seconds. A reviewing station under bubblewrap reads that cache read-only, so a block whose cache is not built loads from its rasters in memory on each first view. |
 | Prior | The map's `<map>_features.json` under the bake. |
 
 A map with no georeference reviews with its transcript, pictures, report, and

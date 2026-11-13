@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -78,6 +78,33 @@ def missing_bake(stem: str) -> str | None:
     return None
 
 
+def block_asset_refusal(bench: Bench, map_names: Iterable[str]) -> str | None:
+    """Why ``bench`` cannot fly the blocks ``map_names``, or None: each block's bake
+    (:func:`missing_bake`) and its raster pair, ``<map>.tif`` beside ``<map>_rgb.tif``
+    or ``<map>.png``, each missing raster on a line with the command that builds it.
+    The runners and the station refuse on it, since an episode on such a block books a
+    miss whatever the model writes."""
+    build = (
+        "python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
+        if bench.name == "calcity"
+        else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh"
+    )
+    rgbd, missing = Path(bench.rgbd_dir), []
+    for map_name in sorted(set(map_names)):
+        if why := missing_bake(bench.tile_stem(map_name)):
+            missing.append(why)
+        if not (rgbd / f"{map_name}.tif").is_file():
+            missing.append(f"Missing {rgbd / f'{map_name}.tif'} (built by {build})")
+        if not any((rgbd / f"{map_name}{s}").is_file() for s in ("_rgb.tif", ".png")):
+            missing.append(f"Missing {rgbd / f'{map_name}_rgb.tif'} (built by {build})")
+    if not missing:
+        return None
+    return (
+        "block assets missing (every episode on these blocks would book a miss whatever "
+        "the model writes):\n" + "\n".join(f"  {p}" for p in missing)
+    )
+
+
 class EpisodeEngine(Protocol):
     """The episode build a bench flies: what turns a split row into a hydrated
     search stack and a mission conversation over it. The flight harness and the
@@ -118,6 +145,9 @@ class EpisodeEngine(Protocol):
     def load_objects(self, objects_json: Path) -> dict:
         """The scorer's answer key: map name -> its catalog objects (``id``, ``contour``)."""
 
+    def success_shape(self, episode: Any, objects_by_map: dict) -> Any:
+        """The shape the scorer tests for ``episode``: its linked object's contour, else its mask."""
+
     def fly_attempt(self, **attempt: Any) -> dict:
         """One attempt flown, scored and written as the bench's runner
         dispatches it (its ``dispatch_one``, whose keywords these are), and
@@ -155,8 +185,9 @@ class Bench:
     #: (:attr:`engine`). Named, not held: describing a bench, checking its data
     #: and reading its bake need the standard library alone.
     engine_module: str
-    #: Raises with the bench's preparation recipe when its runtime data is absent.
-    availability: Callable[[Bench], None]
+    #: Raises with the bench's preparation recipe when its runtime data is absent, the
+    #: named split's file (when one is named) included.
+    availability: Callable[[Bench, str | None], None]
     #: The environment of the bench's runs: the mapping it was built from, plus
     #: the variables the bench itself exports and what an entry point settles
     #: (:meth:`with_environ`). A run's manifest and rows record it, the engine's
@@ -181,8 +212,8 @@ class Bench:
         """Stem path of a block's bake files (no suffix)."""
         return str(self.tiles_dir / map_name)
 
-    def assert_available(self) -> None:
-        self.availability(self)
+    def assert_available(self, split: str | None = None) -> None:
+        self.availability(self, split)
 
     def bake_sha256(self) -> str | None:
         """The content identity of this bench's tile bake (:func:`bake_sha256`)."""

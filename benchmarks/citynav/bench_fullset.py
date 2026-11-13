@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import io
 import json
 import logging
@@ -29,7 +30,7 @@ from collections import Counter, deque
 from pathlib import Path
 
 from benchmarks import sandbox
-from benchmarks.bench import Bench, missing_bake
+from benchmarks.bench import Bench, block_asset_refusal
 from benchmarks.citynav.adapter import episode_ids, load_split
 from benchmarks.citynav.analysis import run_report
 from benchmarks.citynav.paths import selected_bench
@@ -123,27 +124,6 @@ def _answers(url: str, bearer: str | None = None) -> bool:
             return 200 <= resp.status < 400
     except (OSError, ValueError):
         return False
-
-
-def _missing_block_assets(bench: Bench, episode_ids: list[str]) -> list[str]:
-    """What the selected episodes' blocks need and do not have: the bake
-    (``bench.missing_bake``), and ``<map>.tif`` beside ``<map>_rgb.tif`` or
-    ``<map>.png``, each raster line with the command that builds it."""
-    build = (
-        "python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>"
-        if bench.name == "calcity"
-        else "benchmarks/citynav/data_prep/rasterize_citynav_native.sh"
-    )
-    missing: list[str] = []
-    for map_name in sorted({e.split("::", 1)[0] for e in episode_ids}):
-        if why := missing_bake(bench.tile_stem(map_name)):
-            missing.append(why)
-        rgbd = Path(bench.rgbd_dir)
-        if not (rgbd / f"{map_name}.tif").exists():
-            missing.append(f"Missing {rgbd / f'{map_name}.tif'} (built by {build})")
-        if not any((rgbd / f"{map_name}{s}").exists() for s in ("_rgb.tif", ".png")):
-            missing.append(f"Missing {rgbd / f'{map_name}_rgb.tif'} (built by {build})")
-    return missing
 
 
 class _Signalled(KeyboardInterrupt):
@@ -672,7 +652,9 @@ class Driver:
             )  # fmt: skip
         except (OSError, ValueError, KeyError, TypeError) as exc:
             return f"{path} unreadable: {exc!r}"
-        drift = _rm.identity_drift(prior, self._manifest(_rm.with_endpoint(self.bench, spec)))
+        # The spec is the manifest's own, rebuilt: settled as discovery's would be, unlogged.
+        flown = _rm.settle_effort(dataclasses.replace(self.bench, endpoint_spec=spec))
+        drift = _rm.identity_drift(prior, self._manifest(flown))
         if not drift:
             return None
         return "run_manifest identity drift: the launch refuses this root:\n  " + "\n  ".join(drift)
@@ -878,14 +860,11 @@ def main(argv: list[str] | None = None, *, bench: Bench | None = None) -> int:
     # unreachable or wrong one fails before any worker spawns.
     try:
         resolve_config(config)
-        bench.assert_available()
+        bench.assert_available(args.split)
         driver = Driver(args, bench, config)
         driver._selection = driver._select_episodes()
-        if missing := _missing_block_assets(bench, driver._selection):
-            raise ValueError(
-                "block assets missing for the selection (every episode on these blocks would "
-                "land infra):\n" + "\n".join(f"  {p}" for p in missing)
-            )
+        if why := block_asset_refusal(bench, (e.split("::", 1)[0] for e in driver._selection)):
+            raise ValueError(why)
         if args.dry_run:
             return driver.dry_run()
         driver.bench = _rm.install_endpoint(bench, from_environ(bench.environ))

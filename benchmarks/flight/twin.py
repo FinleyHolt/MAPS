@@ -315,6 +315,9 @@ def main(argv: list[str] | None = None) -> int:
         # A command-line twin runs model code in this process, so it confines itself once
         # the refusals pass (its --out is made then); a caller handing argv owns its process.
         sandbox.confine_cli(args, bench, logging.getLogger("twin").info)
+        if why := sandbox.tokenizer_refusal(bench.environ, "twin", "run the twin again"):
+            print(why, file=sys.stderr)
+            return 2
     ortho = map_render.load_raster(args.ortho, map_name)
     if ortho is None:
         print(raster_refusal(args.ortho, map_name) or f"{map_name}: no raster", file=sys.stderr)

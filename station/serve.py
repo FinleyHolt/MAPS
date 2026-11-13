@@ -50,7 +50,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from benchmarks import sandbox
-from benchmarks.bench import Bench, missing_bake
+from benchmarks.bench import Bench, block_asset_refusal
 from benchmarks.flight import map_render
 from benchmarks.flight.live_source import check_map, open_live
 from benchmarks.flight.mission import (
@@ -292,20 +292,19 @@ class Station:
         return None
 
     def tokenizer_refusal(self) -> str | None:
-        """Why a mission cannot load the reasoner's tokenizer, or None: asked only in a
-        process confined offline after its launcher could not cache it
-        (:data:`sandbox.TOKENIZER_ENV`); a discovery that loads it clears the mark."""
+        """Why a mission cannot discover the reasoner and load its tokenizer, or None
+        (:func:`sandbox.tokenizer_refusal`)."""
         if sandbox.TOKENIZER_ENV not in os.environ:
             return None
-        try:
-            endpoint_spec.discover_from_settings(from_environ(self.bench.environ), probe_sam=False)
-        except Exception as exc:
-            return (
-                "the reasoner's tokenizer is not in the hub cache this sandboxed station reads "
-                f"offline ({type(exc).__name__}): {sandbox.TOKENIZER_REMEDY} the station"
-            )
-        os.environ.pop(sandbox.TOKENIZER_ENV, None)
-        return None
+        # The hub cache is bound read-only at its own path, so the host's writes show
+        # through a directory that existed when the station started; one made after is
+        # out of the sandbox's reach until a restart binds it.
+        again = (
+            "send the mission again"
+            if os.path.isdir(sandbox.hf_hub_cache())
+            else "restart the station"
+        )
+        return sandbox.tokenizer_refusal(self.bench.environ, "station", again)
 
     def shown_split(self) -> str:
         """The split the mission list opens on: the newest run's under the output root, so its
@@ -355,16 +354,14 @@ class Station:
 
     def target(self, split: str | None, episode_id: str | None) -> tuple[list | None, list | None]:
         """``(footprint ring, centre point)`` of an episode's target in WGS84, each None where it draws none.
-        The footprint is the row's own mask, else its linked catalog object's contour."""
+        The footprint is the shape the scorer tests (``success_shape``): the linked catalog
+        object's contour, else the row's own mask."""
         e = self.catalog(split)[1].get(episode_id) if split in self.bench.split_files else None
         if e is None:
             return None, None
         key = (split, episode_id)
         if key not in self._targets:
-            ids = set(e.target_object_ids)
-            shape = e.target_mask or next(
-                (o.contour for o in self.objects.get(e.map_name) or [] if o.id in ids), None
-            )
+            shape = self.bench.engine.success_shape(e, self.objects)
             ring = [self.lonlat(e.map_name, p) for p in shape or ()]
             self._targets[key] = ring if ring and all(ring) else None
         return self._targets[key], self.lonlat(e.map_name, e.target_xy)
@@ -835,14 +832,8 @@ class Station:
         episode = self.catalog(split)[1].get(episode_id)
         if episode is None:
             raise HTTPException(404, f"{split} holds no episode {episode_id}")
-        if (why := missing_bake(self.bench.tile_stem(episode.map_name))) is not None:
+        if (why := block_asset_refusal(self.bench, [episode.map_name])) is not None:
             raise HTTPException(409, why)
-        if not map_render.holds_raster(self.bench.rgbd_dir, episode.map_name):
-            raise HTTPException(
-                409,
-                f"no {episode.map_name} raster under {self.bench.rgbd_dir}: "
-                f"the flights of this episode have nothing to see",
-            )
         self._sortie = self.out / stamp
         ep = open_episode_dir(self._sortie, episode_id=episode_id, benchmark=self.bench.name)
         return BenchMission(
@@ -1195,8 +1186,9 @@ def main(argv: list[str] | None = None) -> int:
         "--basemap",
         type=Path,
         default=None,
-        help="for a map with no raster: a north-up picture of its bake's whole extent, or a "
-        "directory of them named <map>.jpg or <map>.png",
+        help="a north-up picture of a map's whole bake extent, or a directory of them named "
+        "<map>.jpg or <map>.png: the basemap of a map with no raster pair, and the first "
+        "choice of a reviewing station",
     )
     ap.add_argument(
         "--osm-cache",

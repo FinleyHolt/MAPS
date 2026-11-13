@@ -49,7 +49,7 @@ def bake_meta(tiles_dir: Path) -> dict:
     return json.loads(path.read_text())
 
 
-def _assert_available(bench: Bench) -> None:
+def _assert_available(bench: Bench, split: str | None = None) -> None:
     """Fail with the Cal City preparation recipe when runtime data is absent."""
     # The tile bake is checked by its meta file, not the directory: the
     # directory is gitignored, so a tree can carry it empty (an interrupted
@@ -64,6 +64,7 @@ def _assert_available(bench: Bench) -> None:
             f"Cal City data is incomplete under {bench.root}.\n"
             "Build it with:\n"
             "  python -m benchmarks.calcity.data_prep.build_objects_json\n"
+            "  python -m benchmarks.calcity.data_prep.build_rgbd_ortho --raster <calcity_rgb.tif>\n"
             "  python -m benchmarks.calcity.data_prep.bake_tiles\n"
             "Override locations with SEARCH_CALCITY_DATA, "
             "SEARCH_CALCITY_SPLITS, and SEARCH_CALCITY_TILES.\n\n"

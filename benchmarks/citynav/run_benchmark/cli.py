@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from benchmarks import sandbox
-from benchmarks.bench import Bench
+from benchmarks.bench import Bench, block_asset_refusal
 from benchmarks.citynav.adapter import (
     episode_ids,
     find_row,
@@ -147,7 +147,32 @@ def main(bench: Bench | None = None) -> int:
         # The driver sandboxes its attempts; the child takes the memory cap itself.
         sandbox.cap_memory(args.memory_gib)
         _die_with_parent(bench.environ)
-    else:
+
+    try:
+        bench.assert_available(args.split)
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
+    raw_rows = load_split(bench.split_path(args.split))
+    # Pair each row with its absolute split index so the row_index is
+    # stable across filter / limit and parse_episode produces the same
+    # disambiguated episode_id whatever the filter.
+    indexed_rows: list[tuple[int, dict]] = list(enumerate(raw_rows))
+    if args.episode_id:
+        found = find_row(raw_rows, args.episode_id)
+        if found is None:
+            log.error("No episode with id=%s in split=%s", args.episode_id, args.split)
+            return 2
+        indexed_rows = [found]
+    if args.limit > 0:
+        indexed_rows = indexed_rows[: args.limit]
+    if not args.attempt_root:
+        # The driver checks its selection's blocks before it spawns an attempt; a direct
+        # run checks its own before its --out exists.
+        maps = (e.split("::", 1)[0] for e in episode_ids(indexed_rows))
+        if (why := block_asset_refusal(bench, maps)) is not None:
+            print(f"FATAL: {why}", file=sys.stderr)
+            return 2
         sandbox.confine(
             [Path(args.out or f"output/{bench.name}"), *sandbox.ortho_caches([bench.rgbd_dir])],
             args.memory_gib,
@@ -158,12 +183,6 @@ def main(bench: Bench | None = None) -> int:
     if args.seed_base is not None:
         bench = bench.with_environ({"SEARCH_SEED_BASE": str(args.seed_base)})
         log.info("Deterministic seed base: SEARCH_SEED_BASE=%d", args.seed_base)
-
-    try:
-        bench.assert_available()
-    except (OSError, RuntimeError) as exc:
-        print(f"FATAL: {exc}", file=sys.stderr)
-        return 1
     cfg = load_config(args.config)
     # The engine's settings, built once from the run's environment.
     settings = from_environ(bench.environ)
@@ -179,19 +198,6 @@ def main(bench: Bench | None = None) -> int:
         "deterministic discrete 6-action replay over the flown stops "
         "produces the submittable CityNav trajectory (OSR/SPL/NE)."
     )
-    raw_rows = load_split(bench.split_path(args.split))
-    # Pair each row with its absolute split index so the row_index is
-    # stable across filter / limit and parse_episode produces the same
-    # disambiguated episode_id whatever the filter.
-    indexed_rows: list[tuple[int, dict]] = list(enumerate(raw_rows))
-    if args.episode_id:
-        found = find_row(raw_rows, args.episode_id)
-        if found is None:
-            log.error("No episode with id=%s in split=%s", args.episode_id, args.split)
-            return 2
-        indexed_rows = [found]
-    if args.limit > 0:
-        indexed_rows = indexed_rows[: args.limit]
     log.info("Loaded %d episodes from split=%s", len(indexed_rows), args.split)
 
     objects_by_map = load_objects(bench.objects_json)

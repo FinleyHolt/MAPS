@@ -27,11 +27,12 @@ The `shape` column says where each target's shape comes from:
 
 | `shape` | Lines | Source |
 |---|---|---|
-| `target_mask` | 1,074 | Polygon drawn in the row |
-| `object <ids>` | 26 | Contour of the linked object in `objects.json` (the "house on the corner of" prompts) |
+| `target_mask` | 1,072 | Polygon drawn in the row |
+| `object <ids>` | 28 | Contour of the linked object in `objects.json` |
 
 In scoring, a linked object's contour wins over a drawn `target_mask`
-(`benchmarks/citynav/eval.py`).
+(`success_shape` in `benchmarks/citynav/run_benchmark/episode_runner.py`), so
+rows 620 and 769, which carry both, are `object` lines.
 
 ## Fix a row
 
