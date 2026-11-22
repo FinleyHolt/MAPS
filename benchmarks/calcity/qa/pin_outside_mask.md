@@ -1,0 +1,43 @@
+# Cal City rows saved as "the pin is wrong"
+
+The reviewer's mask is on the place the sentence names and the row's pin (target_positions[0]) lies outside it.
+34 rows, all capacity-study session reports. Distance is from the pin to the nearest edge of the saved mask, in metres
+(WORLDSInternal ground_truth.json, pin_outside_mask, 2026-11-21). The map link opens the pin. Mask column: whether the
+mask is the reviewer's redraw or the one calcity.json already held.
+
+| MAPS id | dashboard id | pin outside mask (m) | mask | map | sentence |
+|---|---|---|---|---|---|
+| calcity::47#46 | calcity::47#-48 | 36.1 | kept | [map](https://www.google.com/maps?q=35.132913,-117.962163) | Small parking lot at the California City Family Health Center. South of North Loop Boulevard, east of Hacienda Boulevard. This is the west parking lot out of the two. |
+| calcity::46#45 | calcity::46#-47 | 34.5 | redrawn | [map](https://www.google.com/maps?q=35.132920,-117.962643) | One of two small parking lot at the California City Family Health Center, south of North Loop Boulevard, east of Hacienda Boulevard. This lot is on the east side. |
+| calcity::45#44 | calcity::45#-46 | 23.5 | redrawn | [map](https://www.google.com/maps?q=35.131169,-117.965604) | The red car out front of the north-facing house off of Quezon Avenue, east of 90th Street, west of 94th Street. |
+| calcity::433#432 | calcity::215#227 | 17.6 | redrawn | [map](https://www.google.com/maps?q=35.125441,-117.989815) | A swimming pool in the backyard of a house at the corner of 77th Street and California City Boulevard. |
+| calcity::100#99 | calcity::100#-101 | 12.2 | redrawn | [map](https://www.google.com/maps?q=35.120207,-117.939064) | Small round pool in the backyard of the house off of California City Boulevard, across the street from Yale Avenue. |
+| calcity::88#87 | calcity::88#-89 | 10.1 | kept | [map](https://www.google.com/maps?q=35.119040,-117.953333) | The first empty cul-de-sac off of Emily Lynn Avenue called American Way Court. |
+| calcity::13#13 | calcity::13#-14 | 7.5 | kept | [map](https://www.google.com/maps?q=35.126715,-117.959063) | The angled parking lot between City Hall and the building just north of it. |
+| calcity::192#191 | calcity::192#-193 | 6.3 | redrawn | [map](https://www.google.com/maps?q=35.131018,-117.971395) | A south east facing house at the corner of Lupine Loop Drive and Poppy Boulevard with a small pool in the backyard. |
+| calcity::49#48 | calcity::49#-50 | 6.1 | redrawn | [map](https://www.google.com/maps?q=35.134637,-117.961613) | Small circular and round light blue swimming pool outside the back of a little house, south-facing, on Sally Avenue, west of 95th Street, east of Lyn Street. |
+| calcity::199#198 | calcity::199#-200 | 5.5 | redrawn | [map](https://www.google.com/maps?q=35.132466,-117.974107) | A blue parked car outside a house off of Poppy Boulevard. |
+| calcity::298#297 | calcity::107#92 | 5.3 | redrawn | [map](https://www.google.com/maps?q=35.114309,-117.968837) | One of three swimming pools in the backyard of a south-facing house on Nipa Avenue. This one is small and round and in between the two other swimming pools. |
+| calcity::79#78 | calcity::79#-80 | 4.9 | redrawn | [map](https://www.google.com/maps?q=35.126758,-117.956885) | Small solar panel grid off of Village Parkway, North of California City Boulevard, next to the Family Dollar and AutoZone. |
+| calcity::495#494 | calcity::170#289 | 4.5 | redrawn | [map](https://www.google.com/maps?q=35.104882,-117.979593) | A small round swimming pool in the backyard of a north-facing house on Sherwood Avenue. |
+| calcity::70#69 | calcity::70#-71 | 3.7 | redrawn | [map](https://www.google.com/maps?q=35.118101,-117.957759) | One of two lone homes, north-facing on South Loop Boulevard. They're surrounded by a lot of dead grass. This one is more western and has a swimming pool in the backyard. Both houses are east of Hacienda Boulevard and west of 97th Street. |
+| calcity::194#193 | calcity::194#-195 | 3.6 | redrawn | [map](https://www.google.com/maps?q=35.131007,-117.972195) | Solar panels on top of a red roof house on North Loop Boulevard. |
+| calcity::34#33 | calcity::34#-35 | 3.5 | kept | [map](https://www.google.com/maps?q=35.131465,-117.976207) | A blue parked car outside the house on Quezon Avenue. South facing house. east of 85th Street and west of Orchid Drive. |
+| calcity::55#54 | calcity::55#-56 | 3.5 | redrawn | [map](https://www.google.com/maps?q=35.139761,-117.949862) | Red-roofed house west facing on Conklin Boulevard, the third house from Mendiburu Road. |
+| calcity::395#394 | calcity::119#189 | 3.5 | redrawn | [map](https://www.google.com/maps?q=35.122554,-117.978935) | A house at the corner of Dogwood Avenue and 84th Street. This house is west of 84th Street. |
+| calcity::488#487 | calcity::163#282 | 2.8 | redrawn | [map](https://www.google.com/maps?q=35.111830,-117.980211) | A small round swimming pool in the backyard of a south-facing house on Redwood Boulevard. If you keep heading north from the swimming pool, you get to Peach Avenue. |
+| calcity::539#538 | calcity::214#333 | 2.5 | redrawn | [map](https://www.google.com/maps?q=35.113444,-117.979301) | Solar panels on top of a rectangular white-roofed house on Manzanita Avenue. The house the satellites belong to is west-facing. |
+| calcity::195#194 | calcity::195#-196 | 2.4 | redrawn | [map](https://www.google.com/maps?q=35.131452,-117.972774) | A south-east facing house at the corner of Poppy Boulevard and North Loop Boulevard with a small round swimming pool in the backyard. The house has a gray roof with several roof sections. |
+| calcity::148#147 | calcity::148#-149 | 2.1 | redrawn | [map](https://www.google.com/maps?q=35.120698,-117.984200) | House on Fernwood Avenue, north facing, with a small rectangular turf field in the backyard. |
+| calcity::176#175 | calcity::176#-177 | 1.7 | redrawn | [map](https://www.google.com/maps?q=35.127797,-117.996088) | House on Columbine Avenue, south facing, almost at the corner of Columbine and 74th Street. It has no immediate neighbors towards the left or right. It has a swimming pool in the backyard and solar panels on top. |
+| calcity::464#463 | calcity::136#258 | 1.5 | redrawn | [map](https://www.google.com/maps?q=35.111708,-117.976758) | A rectangular south facing house with one roof section on Redwood Boulevard looking into 85th Street. |
+| calcity::299#298 | calcity::108#93 | 1.5 | redrawn | [map](https://www.google.com/maps?q=35.114289,-117.971962) | One of three swimming pools in the backyard of a south-facing house on Nipa Avenue. This one is rectangular in shape and is in the backyard of the house furthest to the west. |
+| calcity::170#169 | calcity::170#-171 | 1.2 | redrawn | [map](https://www.google.com/maps?q=35.126565,-118.000352) | Solar panels on top of a house on Hugo Way, south of Columbine Avenue. |
+| calcity::364#363 | calcity::176#158 | 1.0 | redrawn | [map](https://www.google.com/maps?q=35.114536,-117.971457) | A north facing house at the south ending of 88th Street. |
+| calcity::149#148 | calcity::149#-150 | 0.5 | redrawn | [map](https://www.google.com/maps?q=35.120698,-117.983819) | House on Fernwood Avenue, north facing with a small round light blue swimming pool in the backyard. |
+| calcity::366#365 | calcity::83#160 | 0.5 | redrawn | [map](https://www.google.com/maps?q=35.117380,-117.985204) | A west facing house on Neuralia Road. This house is the northern most house on Neuralia Road that is still south of Great Circle Drive. |
+| calcity::123#122 | calcity::123#-124 | 0.5 | redrawn | [map](https://www.google.com/maps?q=35.103216,-117.966589) | Solar panels on top of west-facing house on Lasky Street. |
+| calcity::44#43 | calcity::44#-45 | 0.4 | redrawn | [map](https://www.google.com/maps?q=35.131057,-117.965811) | One of two identical houses with three roof sections and small solar panels at the top, north-facing off of Quezon Avenue, east of 90th Street and west of 94th Street. This is the one to the left. |
+| calcity::165#164 | calcity::165#-166 | 0.3 | redrawn | [map](https://www.google.com/maps?q=35.123985,-117.997040) | A house south-facing on Catalpa Avenue with a rectangular swimming pool in the backyard. East of 72nd Street. |
+| calcity::135#134 | calcity::135#-136 | 0.1 | redrawn | [map](https://www.google.com/maps?q=35.102189,-117.974823) | Small round light blue swimming pool in the backyard of a house on Moss Avenue, south-facing. |
+| calcity::151#150 | calcity::151#-152 | 0.0 | redrawn | [map](https://www.google.com/maps?q=35.117236,-117.988674) | Solar panels on top of a house with a red roof on Ironwood Avenue. |
