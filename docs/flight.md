@@ -2,8 +2,8 @@
 
 This page is the short guide to the flight harness. MAPS flew 87 closed-loop
 runs on a C-12 over California City, CA, from 11 to 18 September 2026, at
-about 3,000 to 6,500 ft above ground. The reasoner ran off board over the
-datalink; SAM 3.1 ran on board.
+about 3,000 to 6,500 ft above ground. The reasoner and SAM 3.1 ran off board,
+on the ground, over the datalink.
 [`benchmarks/flight`](../benchmarks/flight/README.md) is the method half of
 the station that flew them. Its README is the reference: the flown chain step
 by step, the `Vehicle` protocol, the run's records, and the closed-loop
